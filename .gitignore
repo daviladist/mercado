@@ -1,0 +1,14 @@
+# NUNCA subir dados reais: backups, planilhas e exportações ficam fora do repositório
+*.json
+!vercel.json
+!package.json
+*.xlsx
+*.csv
+*.pdf
+backup*/
+dados/
+.env
+.env.*
+.vercel
+node_modules/
+.DS_Store
