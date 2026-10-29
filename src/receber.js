@@ -214,6 +214,9 @@ function fatPrecView(app,F){const n=rcPend().length;
   app.querySelectorAll('[data-ft]').forEach(b=>b.onclick=()=>{F.tab=b.dataset.ft;F.sel={};renderFat()});
   precScreen($('#precwrap'))}
 /* aviso fixo no painel do administrador enquanto houver nota sem preço aprovado */
-function rcAlert(){const n=rcPend().length,c=$('#tabc');if(!n||!c||ui.tab==='precnotas')return;
+function rcAlert(){const c0=$('#tabc'),sj=(S.stariaJobs||[]).filter(j=>j.status==='pendente');
+  if(c0&&sj.length&&ui.tab==='produtos'){const d=document.createElement('div');d.className='notice';d.style.marginBottom='12px';const n=sj.reduce((a,j)=>a+(j.terms||[]).length,0);
+    d.innerHTML=`<b>${n} código${n>1?'s':''} aguardando o Claude consultar o StarIA.</b> <span class="small">Peça no Claude: "processa as consultas do StarIA". O resultado aparece aqui sozinho.</span>`;c0.prepend(d)}
+  const n=rcPend().length,c=$('#tabc');if(!n||!c||ui.tab==='precnotas')return;
   const d=document.createElement('div');d.className='rcalert';d.innerHTML=`<span><b>${n} nota${n>1?'s':''} de entrada esperando preço.</b> O estoque já entrou; aprove os preços em Produtos › Precificação de notas.</span><button type="button" class="btn dlb">Precificar agora</button>`;
   c.prepend(d);d.querySelector('button').onclick=()=>{ui.tab='precnotas';renderAdmin();window.scrollTo(0,0)}}

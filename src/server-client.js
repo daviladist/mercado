@@ -5,7 +5,7 @@
 /* /cliente: link só para clientes (sem textos da equipe; só aceita login de cliente) */
 const CLIENT_ONLY=/^\/cliente\/?$/.test(location.pathname);
 const SRV={me:null,V:{meta:{}},base:{meta:{}},ord:{},t:null,busy:false,again:false,ver:'',poll:null,lastPass:'',offline:false,retry:null,rej:{},nPend:0};
-const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins','suppliers','receipts'];
+const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins','suppliers','receipts','stariaJobs'];
 const SRV_ORDERED=['suppliers','products','customers','sellers','checkers','billers','vehicles','cities','categories','combos','admins','payables','receivables'];
 const SRV_WRITE={cliente:['orders','customers'],vendedor:['orders'],conferente:['orders','counts','receipts'],faturamento:['orders','receipts'],entregador:['orders','romaneios']};
 const ROLE_VIEW={admin:'admin',cliente:'cliente',vendedor:'vend',conferente:'conf',faturamento:'fat',entregador:'ent'};
@@ -16,7 +16,7 @@ async function api(path,body){
   let j={};try{j=await r.json()}catch(e){}
   if(!r.ok){const e=new Error(j.error||('Erro '+r.status));e.status=r.status;e.data=j;throw e}
   return j}
-function emptyState(){return {store:{name:'ATACADO DAVILA',pickupDisc:0,pickV:1,onerV:2,pickupOner:false},payments:[],cashPays:[],payDays:{},products:[],customers:[],orders:[],receivables:[],payables:[],sellers:[],checkers:[],billers:[],vehicles:[],cities:[],categories:[],combos:[],counts:[],commPayouts:[],trips:[],romaneios:[],admins:[],suppliers:[],receipts:[],seq:1001,catTreeV1:true}}
+function emptyState(){return {store:{name:'ATACADO DAVILA',pickupDisc:0,pickV:1,onerV:2,pickupOner:false},payments:[],cashPays:[],payDays:{},products:[],customers:[],orders:[],receivables:[],payables:[],sellers:[],checkers:[],billers:[],vehicles:[],cities:[],categories:[],combos:[],counts:[],commPayouts:[],trips:[],romaneios:[],admins:[],suppliers:[],receipts:[],stariaJobs:[],seq:1001,catTreeV1:true}}
 function srvFix(){const E=emptyState();Object.keys(E).forEach(k=>{if(S[k]==null)S[k]=E[k]});S.store=Object.assign({},E.store,S.store||{});
   (S.products||[]).forEach(p=>{if(p.perPack===undefined)p.perPack=parsePack(p.unit);if(p.code==null)p.code='';if(p.ean==null)p.ean='';p.rules=Object.assign(emptyRules(),p.rules||{})})}
 function srvSnap(){SRV.base={meta:{}};SRV.ord={};

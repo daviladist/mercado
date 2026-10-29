@@ -23,7 +23,7 @@ const uid=()=>Math.random().toString(36).slice(2,9);
 /* /cliente: link só para clientes (sem textos da equipe; só aceita login de cliente) */
 const CLIENT_ONLY=/^\/cliente\/?$/.test(location.pathname);
 const SRV={me:null,V:{meta:{}},base:{meta:{}},ord:{},t:null,busy:false,again:false,ver:'',poll:null,lastPass:'',offline:false,retry:null,rej:{},nPend:0};
-const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins','suppliers','receipts'];
+const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins','suppliers','receipts','stariaJobs'];
 const SRV_ORDERED=['suppliers','products','customers','sellers','checkers','billers','vehicles','cities','categories','combos','admins','payables','receivables'];
 const SRV_WRITE={cliente:['orders','customers'],vendedor:['orders'],conferente:['orders','counts','receipts'],faturamento:['orders','receipts'],entregador:['orders','romaneios']};
 const ROLE_VIEW={admin:'admin',cliente:'cliente',vendedor:'vend',conferente:'conf',faturamento:'fat',entregador:'ent'};
@@ -34,7 +34,7 @@ async function api(path,body){
   let j={};try{j=await r.json()}catch(e){}
   if(!r.ok){const e=new Error(j.error||('Erro '+r.status));e.status=r.status;e.data=j;throw e}
   return j}
-function emptyState(){return {store:{name:'ATACADO DAVILA',pickupDisc:0,pickV:1,onerV:2,pickupOner:false},payments:[],cashPays:[],payDays:{},products:[],customers:[],orders:[],receivables:[],payables:[],sellers:[],checkers:[],billers:[],vehicles:[],cities:[],categories:[],combos:[],counts:[],commPayouts:[],trips:[],romaneios:[],admins:[],suppliers:[],receipts:[],seq:1001,catTreeV1:true}}
+function emptyState(){return {store:{name:'ATACADO DAVILA',pickupDisc:0,pickV:1,onerV:2,pickupOner:false},payments:[],cashPays:[],payDays:{},products:[],customers:[],orders:[],receivables:[],payables:[],sellers:[],checkers:[],billers:[],vehicles:[],cities:[],categories:[],combos:[],counts:[],commPayouts:[],trips:[],romaneios:[],admins:[],suppliers:[],receipts:[],stariaJobs:[],seq:1001,catTreeV1:true}}
 function srvFix(){const E=emptyState();Object.keys(E).forEach(k=>{if(S[k]==null)S[k]=E[k]});S.store=Object.assign({},E.store,S.store||{});
   (S.products||[]).forEach(p=>{if(p.perPack===undefined)p.perPack=parsePack(p.unit);if(p.code==null)p.code='';if(p.ean==null)p.ean='';p.rules=Object.assign(emptyRules(),p.rules||{})})}
 function srvSnap(){SRV.base={meta:{}};SRV.ord={};
@@ -508,7 +508,10 @@ function fatPrecView(app,F){const n=rcPend().length;
   app.querySelectorAll('[data-ft]').forEach(b=>b.onclick=()=>{F.tab=b.dataset.ft;F.sel={};renderFat()});
   precScreen($('#precwrap'))}
 /* aviso fixo no painel do administrador enquanto houver nota sem preço aprovado */
-function rcAlert(){const n=rcPend().length,c=$('#tabc');if(!n||!c||ui.tab==='precnotas')return;
+function rcAlert(){const c0=$('#tabc'),sj=(S.stariaJobs||[]).filter(j=>j.status==='pendente');
+  if(c0&&sj.length&&ui.tab==='produtos'){const d=document.createElement('div');d.className='notice';d.style.marginBottom='12px';const n=sj.reduce((a,j)=>a+(j.terms||[]).length,0);
+    d.innerHTML=`<b>${n} código${n>1?'s':''} aguardando o Claude consultar o StarIA.</b> <span class="small">Peça no Claude: "processa as consultas do StarIA". O resultado aparece aqui sozinho.</span>`;c0.prepend(d)}
+  const n=rcPend().length,c=$('#tabc');if(!n||!c||ui.tab==='precnotas')return;
   const d=document.createElement('div');d.className='rcalert';d.innerHTML=`<span><b>${n} nota${n>1?'s':''} de entrada esperando preço.</b> O estoque já entrou; aprove os preços em Produtos › Precificação de notas.</span><button type="button" class="btn dlb">Precificar agora</button>`;
   c.prepend(d);d.querySelector('button').onclick=()=>{ui.tab='precnotas';renderAdmin();window.scrollTo(0,0)}}
 
@@ -4137,6 +4140,23 @@ function collect(){
 }
 /* ---------- busca de produto no StarIA (sistema do supermercado) ---------- */
 const STARIA='StarIA';
+/* ---------- StarIA pelo site: o site deixa um pedido; o Claude consulta o StarIA e devolve o resultado ---------- */
+function stariaWeb(){return typeof SRV!=='undefined'&&!(window.claude&&window.claude.use)}
+const stNorm=t=>String(t||'').trim().replace(/[\s.\-]/g,'');
+/* resultado já devolvido pelo Claude nas últimas 24 h: objeto, null (não achou) ou undefined (ainda não consultado) */
+function stariaCached(t){t=stNorm(t);const lim=new Date(Date.now()-24*3600e3).toISOString();let best;
+  (S.stariaJobs||[]).filter(j=>j.status==='pronta'&&String(j.doneAt||'')>=lim&&j.results&&Object.prototype.hasOwnProperty.call(j.results,t)).sort((a,b)=>String(a.doneAt).localeCompare(String(b.doneAt))).forEach(j=>{best=j.results[t]});
+  return best}
+function stariaMissing(terms){return [...new Set(terms.map(stNorm).filter(t=>/^\d+$/.test(t)))].filter(t=>stariaCached(t)===undefined)}
+function stariaQueue(terms){S.stariaJobs=S.stariaJobs||[];const pend=new Set();S.stariaJobs.filter(j=>j.status==='pendente').forEach(j=>(j.terms||[]).forEach(t=>pend.add(t)));
+  const novos=[...new Set(terms.map(stNorm))].filter(t=>t&&!pend.has(t));if(!novos.length)return;
+  for(let i=0;i<novos.length;i+=50)S.stariaJobs.push({id:uid(),kind:'lookup',terms:novos.slice(i,i+50),status:'pendente',createdAt:new Date().toISOString(),by:ui.adminName||''});
+  save()}
+/* espera a resposta do Claude (o app recarrega os dados de tempos em tempos) e continua sozinho */
+let ST_WAIT=null;
+function stariaWait(terms,go){clearInterval(ST_WAIT);let n=0;ST_WAIT=setInterval(()=>{n++;
+  if(terms.every(t=>stariaCached(t)!==undefined)){clearInterval(ST_WAIT);ST_WAIT=null;go();return}
+  if(n%2===0&&typeof srvRefresh==='function')srvRefresh(false);if(n>720){clearInterval(ST_WAIT);ST_WAIT=null}},5000)}
 let mcpP=null;
 function getMcp(){if(!mcpP)mcpP=(window.claude&&window.claude.use?window.claude.use('mcp'):Promise.resolve(null)).catch(()=>null);return mcpP}
 function stariaErr(e){
@@ -4153,6 +4173,7 @@ function stariaErr(e){
     tool_error:'O StarIA recusou a consulta. Confira se o código está certo.',
     bad_term:'Use só números: o código interno ou o EAN.',
     not_granted:'A busca no StarIA só funciona com o app aberto no claude.ai.',
+    queued:'Pedido enviado ao Claude para consultar o StarIA. Assim que ele responder, a busca continua sozinha aqui.',
     capability_disabled:'A busca no StarIA só funciona com o app aberto no claude.ai.'
   })[c]||'Não consegui consultar o StarIA agora. Tente de novo.';
 }
@@ -4168,6 +4189,8 @@ async function stariaCall(tool,input){
 async function stariaLookup(term){
   const t=String(term||'').trim().replace(/[\s.\-]/g,'');if(!t)return null;
   if(!/^\d+$/.test(t))throw {code:'bad_term'};
+  /* no site (fora do claude.ai) a consulta vai por um pedido que o Claude atende e devolve */
+  if(stariaWeb()){const c=stariaCached(t);if(c!==undefined)return c;stariaQueue([t]);throw {code:'queued'}}
   const tries=[];
   if(t.length>=8&&t.length<=14)tries.push({ean:t});
   if(t.length<=9&&Number(t)>=1&&Number(t)<=2147483647)tries.push({codigoMercadoria:Number(t)});
@@ -4232,7 +4255,8 @@ function bindStaria(){
         const pp=$('#pp');if(pp)pp.focus();
       };
       const op=$('#stopen');if(op)op.onclick=()=>{ui.edit=JSON.parse(JSON.stringify(dup));renderAdmin()};
-    }catch(e){res.innerHTML=`<div class="err">${esc(stariaErr(e))}</div>`}
+    }catch(e){if(e&&e.code==='queued'){res.innerHTML=`<div class="notice">${esc(stariaErr(e))}</div>`;stariaWait([term.replace(/[\s.\-]/g,'')],()=>{const g=$('#stgo'),qq=$('#stq');if(g&&qq&&qq.value.trim()===term)g.click()});return}
+      res.innerHTML=`<div class="err">${esc(stariaErr(e))}</div>`}
     finally{go.disabled=false}
   };
 }
@@ -4507,7 +4531,7 @@ function readBulkFile(f){
   rd.readAsArrayBuffer(f);
 }
 /* ---------- importação em massa pelo StarIA: busca todos os códigos e aprova um por um ---------- */
-const STOP_CODES=['server_not_connected','needs_reauth','not_in_manifest','blocked_by_policy','not_granted','capability_disabled','selection_required'];
+const STOP_CODES=['queued','server_not_connected','needs_reauth','not_in_manifest','blocked_by_policy','not_granted','capability_disabled','selection_required'];
 /* condições de preço na aprovação do StarIA (valores por unidade) */
 function condFrom(ex,dv){const R=(ex&&ex.rules)||emptyRules(),u=v=>Number(v)>0?money(Math.round(Number(v)/dv*100)/100):'',T=(R.qty&&R.qty.tiers)||[];
   return {q:!!(R.qty&&R.qty.on),t:[0,1].map(k=>({min:T[k]&&T[k].min?String(T[k].min):'',price:u(T[k]&&T[k].price)})),v:!!(R.vista&&R.vista.on),vp:u(R.vista&&R.vista.price),r:!!(R.retira&&R.retira.on),rp:u(R.retira&&R.retira.price),ie:!!(ex&&Number(ex.iePrice)>0),iep:u(ex&&ex.iePrice)}}
@@ -4540,6 +4564,8 @@ function stBulkView(){
       const terms=[...new Set(B.text.split(/[\s,;]+/).map(t=>t.trim()).filter(Boolean))];
       if(!terms.length){$('#sbErr').textContent='Informe pelo menos um código.';return}
       if(terms.length>200){$('#sbErr').textContent='Até 200 códigos por vez.';return}
+      if(stariaWeb()){const miss=stariaMissing(terms);if(miss.length){stariaQueue(miss);B.phase='waiting';B.waitN=miss.length;stBulkView();
+        stariaWait(miss,()=>{if(ui.stBulk!==B||B.phase!=='waiting')return;B.phase='input';stBulkView();const g=$('#sbGo');if(g)g.click()});return}}
       B.items=terms.map(t=>({term:t,status:'pend'}));B.phase='loading';B.idx=0;stBulkView();
       for(let k=0;k<B.items.length;k++){
         const it=B.items[k];
@@ -4554,6 +4580,12 @@ function stBulkView(){
     };
     return;
   }
+  if(B.phase==='waiting'){
+    c.innerHTML=`<div class="sectionhead"><h2>Importar do StarIA em massa</h2><button class="btn ghost" id="sbBack">Voltar</button></div>
+      <div class="panel" style="display:grid;gap:10px;max-width:760px"><b>Pedido enviado ao Claude (${B.waitN} código${B.waitN>1?'s':''}).</b>
+        <span class="small muted">O Claude consulta o StarIA e devolve para cá. Assim que chegar, a revisão abre sozinha nesta tela. Se sair, o resultado fica guardado: é só importar os mesmos códigos de novo.</span>
+        <div class="pbar"><span style="width:35%" class="pulse"></span></div></div>`;
+    $('#sbBack').onclick=()=>{ui.stBulk=null;if(weekBack())return;admProducts()};return}
   if(B.phase==='loading'){
     c.innerHTML=`<div class="sectionhead"><h2>Importar do StarIA em massa</h2></div>
       <div class="panel" style="display:grid;gap:10px;max-width:760px"><b>Consultando o StarIA…</b><div class="pbar"><span id="sbProg" style="width:0%"></span></div><span class="small muted" id="sbProgT">0 de ${B.items.length} consultados</span></div>`;
@@ -4658,6 +4690,8 @@ function stCostView(){
       </div>`;
     $('#ucBack').onclick=()=>{ui.stCost=null;admProducts()};
     $('#ucGo').onclick=async()=>{
+      if(stariaWeb()){const miss=stariaMissing(withCode.map(p=>String(p.code||'').trim()||String(p.ean||'').trim()));if(miss.length){stariaQueue(miss);$('#ucErr').textContent='Pedido enviado ao Claude ('+miss.length+' produtos). Assim que ele consultar o StarIA, a busca continua sozinha aqui.';
+        stariaWait(miss,()=>{if(ui.stCost===U&&U.phase==='input'){const g=$('#ucGo');if(g)g.click()}});return}}
       U.phase='loading';U.rows=[];U.miss=[];stCostView();
       for(let k=0;k<withCode.length;k++){const p=withCode[k];
         try{const r=await stariaLookup(String(p.code||'').trim()||String(p.ean||'').trim());
