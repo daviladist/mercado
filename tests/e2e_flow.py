@@ -112,6 +112,8 @@ with sync_playwright() as pw:
     say('admin pula faturamento:', toast(adm))
     # ---------- faturamento
     ft = device('faturamento'); login(ft, '#faturamento', ('#fblu', '#fblp', '#fbl'), 'm', CR['m'])
+    try: ft.wait_for_selector('[data-fnf]', timeout=15000)
+    except Exception: pass
     n = ft.locator('[data-fnf]').count(); say('faturamento a faturar:', n)
     for i in range(n):
         ft.locator('[data-fnf]').first.fill(str(12345 + i)); ft.locator('[data-fok]').first.click(); wait_sync(ft, 800)
