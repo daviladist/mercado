@@ -136,4 +136,6 @@ const bad = ['1208' + '10', "pass:'1234'", '__SEED=', 'x.pass===p', 'a.pass===p'
 if (bad.length) { console.error('Ainda há trechos proibidos no app:', bad); process.exit(1); }
 fs.mkdirSync(path.join(ROOT, 'public'), { recursive: true });
 fs.writeFileSync(path.join(ROOT, 'public/index.html'), html);
+// /cliente: o mesmo app, aberto no modo "só clientes" (a página percebe pelo endereço)
+fs.writeFileSync(path.join(ROOT, 'public/cliente.html'), html);
 console.log('public/index.html:', Math.round(html.length / 1024), 'KB ·', n, 'trocas aplicadas');
