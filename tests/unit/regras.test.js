@@ -144,3 +144,73 @@ test('pnum do app: ponto ou vírgula como decimal', () => {
   const cases = { '4.5': 4.5, '4,50': 4.5, '1.234,56': 1234.56, '1,234.56': 1234.56, '1.000': 1000, 'R$ 12,30': 12.3, 'abc': '', '-5': '', '': '' };
   for (const [k, v] of Object.entries(cases)) assert.equal(pnum(k), v, k);
 });
+
+/* ---------------- entrada de mercadoria e precificação de notas ---------------- */
+function rbase() { const S = base(); S.suppliers = [{ id: 'f1', code: '10', name: 'Distribuidora Teste', active: true }]; S.receipts = []; return S; }
+const recv = (over) => Object.assign({ id: 'r1', status: 'aberta', nf: '555', supplierId: 'f1', items: [{ k: 'a', pid: 'p1', q: 10, valor: 48.5 }] }, over || {});
+function syncOne(S, user, c, doc, ver) {
+  const eff = policy.newEffects();
+  const V = { meta: {} }; V[c] = {}; (S[c] || []).forEach(d => { V[c][d.id] = 1; });
+  const r = policy.applySync(S, V, user, [{ c, id: doc.id, op: 'put', doc, ver: ver === undefined ? V[c][doc.id] : ver }], eff);
+  return { w: r.writes[0], eff };
+}
+
+test('conferente lança e confere a nota: estoque soma na hora (relativo), uma vez só', () => {
+  const S = rbase();
+  let { w, eff } = syncOne(S, U.conferente, 'receipts', recv());
+  assert.equal(w.doc.status, 'aberta'); assert.equal(w.doc.supplierName, 'Distribuidora Teste'); assert.equal(eff.stockIn.size, 0);
+  ({ w, eff } = syncOne(S, U.conferente, 'receipts', recv({ status: 'conferida' })));
+  assert.equal(w.doc.status, 'conferida'); assert.equal(w.doc.conferidaBy, 'Conferente Teste');
+  assert.equal(eff.stockIn.get('p1'), 10); assert.equal(w.doc.totalNota, 485);
+  // conferente não mexe mais depois de conferida
+  assert.throws(() => syncOne(S, U.conferente, 'receipts', recv({ status: 'conferida', items: [{ k: 'a', pid: 'p1', q: 99, valor: 1 }] })), /já foi conferida/);
+});
+
+test('nota repetida do mesmo fornecedor é recusada; sem fornecedor ou número também', () => {
+  const S = rbase(); syncOne(S, U.conferente, 'receipts', recv());
+  assert.throws(() => syncOne(S, U.conferente, 'receipts', recv({ id: 'r2' })), /já foi lançada/);
+  assert.throws(() => syncOne(S, U.conferente, 'receipts', recv({ id: 'r3', nf: '' })), /número da nota/);
+  assert.throws(() => syncOne(S, U.conferente, 'receipts', recv({ id: 'r4', nf: '9', supplierId: 'x' })), /fornecedor/);
+});
+
+test('faturamento corrige quantidade (estoque acompanha), precifica e aprova: preços e custo vão para o produto', () => {
+  const S = rbase(); syncOne(S, U.conferente, 'receipts', recv({ status: 'conferida' }));
+  const r = clone(S.receipts[0]);
+  r.items[0].q = 12; r.items[0].perPack = 12; r.items[0].trib = true; r.items[0].ieOn = true; r.items[0].price = 66; r.items[0].iePrice = 62;
+  let { w, eff } = syncOne(S, U.faturamento, 'receipts', r);
+  assert.equal(eff.stockIn.get('p1'), 2); assert.equal(w.doc.status, 'conferida'); assert.equal(eff.prodPatch.size, 0);
+  const r2 = clone(S.receipts[0]); r2.status = 'aprovada';
+  ({ w, eff } = syncOne(S, U.faturamento, 'receipts', r2));
+  assert.equal(w.doc.status, 'aprovada'); assert.equal(w.doc.aprovadaBy, 'Fatura Teste');
+  const patch = eff.prodPatch.get('p1');
+  assert.deepEqual([patch.cost, patch.perPack, patch.trib, patch.price, patch.iePrice], [48.5, 12, true, 66, 62]);
+  // depois de aprovada, faturamento não muda mais
+  assert.throws(() => syncOne(S, U.faturamento, 'receipts', Object.assign(clone(S.receipts[0]), { status: 'aprovada' })), /já foi aprovada/);
+});
+
+test('aprovação exige preço, IE menor que o normal e produto ligado (ou criar novo)', () => {
+  const S = rbase(); syncOne(S, U.conferente, 'receipts', recv({ status: 'conferida', items: [{ k: 'a', pid: 'p1', q: 1, valor: 10 }, { k: 'b', name: 'Produto novo', ean: '7890000000017', q: 3, valor: 5 }] }));
+  const ok = () => clone(S.receipts[0]);
+  let r = ok(); r.status = 'aprovada'; r.items[0].price = 20;
+  assert.throws(() => syncOne(S, U.faturamento, 'receipts', r), /ligue a um produto/);
+  r = ok(); r.status = 'aprovada'; r.items[0].price = 20; r.items[0].ieOn = true; r.items[0].iePrice = 25; r.items[1].newProd = true; r.items[1].price = 9;
+  assert.throws(() => syncOne(S, U.faturamento, 'receipts', r), /menor que o preço normal/);
+  r.items[0].iePrice = 19;
+  const { w, eff } = syncOne(S, U.faturamento, 'receipts', r);
+  assert.equal(eff.prodNew.length, 1); assert.equal(eff.prodNew[0].name, 'Produto novo'); assert.equal(eff.prodNew[0].stock, 3); assert.equal(eff.prodNew[0].price, 9);
+  assert.equal(w.doc.items[1].pid, eff.prodNew[0].id);
+});
+
+test('quem não é conferente/faturamento/loja não mexe em notas; HTML é recusado', () => {
+  const S = rbase();
+  for (const r of ['cliente', 'vendedor', 'entregador']) assert.throws(() => syncOne(S, U[r], 'receipts', recv()), e => e.status === 403, r);
+  assert.throws(() => syncOne(S, U.faturamento, 'receipts', recv()), e => e.status === 403);
+  assert.throws(() => syncOne(S, U.conferente, 'receipts', recv({ items: [{ k: 'a', name: '<img src=x onerror=1>', q: 1, valor: 1 }] })), /caractere/);
+});
+
+test('loja cancela nota conferida: estoque volta', () => {
+  const S = rbase(); syncOne(S, U.conferente, 'receipts', recv({ status: 'conferida' }));
+  const r = clone(S.receipts[0]); r.status = 'cancelada';
+  const { eff } = syncOne(S, U.admin, 'receipts', r);
+  assert.equal(eff.stockIn.get('p1'), -10);
+});

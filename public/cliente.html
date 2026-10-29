@@ -794,6 +794,37 @@ a.mi{display:block;text-decoration:none;color:var(--fg)}
 .repseg button{font-size:14px;padding:7px 14px}
 .buyq{color:var(--accent);font-size:16px}
 .catbar{display:flex;gap:10px;align-items:flex-start;margin-bottom:12px}
+/* entrada de mercadoria e precificação de notas */
+.rclist{display:grid;gap:8px;margin-bottom:14px}
+.rcalert{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:var(--surface);border:2px solid var(--warn);border-radius:12px;padding:10px 12px;margin-bottom:14px}
+.rccard{display:grid;gap:2px;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:10px;padding:10px 12px;color:var(--fg);font:inherit}
+.rccard.pend{border-left-color:var(--warn)}
+.rcnew{display:grid;gap:10px;margin-bottom:16px;max-width:720px}
+.rcsups{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;max-height:220px;overflow:auto}
+.rcsel{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--accent);border-radius:10px}
+.rchead{display:grid;gap:2px;margin-bottom:12px}
+.rcscan{display:grid;gap:8px;margin-bottom:12px}
+.rchits{display:grid;gap:6px}
+.rchit{display:grid;gap:1px;text-align:left;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--fg);font:inherit;min-height:44px}
+.rcgrid{display:grid;gap:6px}
+.rcgh,.rcline{display:grid;grid-template-columns:minmax(0,1fr) 74px 96px 40px;gap:8px;align-items:center}
+.rcgh{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;padding:0 4px}
+.rcline{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px}
+.rcline .rcn{display:grid;min-width:0}.rcline .rcn b{overflow:hidden;text-overflow:ellipsis}
+.rcline input{min-height:44px;text-align:right;padding:6px 8px}
+.rcx{min-width:40px;min-height:44px;border:1px solid var(--line);border-radius:8px;background:none;color:var(--muted);font-size:16px}
+.rcfoot{display:grid;gap:10px;margin-top:12px}
+.pclist{display:grid;gap:10px}
+.pcline{display:grid;gap:10px;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--warn);border-radius:10px;padding:12px}
+.pcname{display:grid;gap:2px}.pclink{display:grid;gap:6px;margin-top:6px}
+.pcnums,.pcprices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}
+.pcnums label,.pcprices label{display:grid;gap:4px;font-size:12px;font-weight:700;color:var(--muted)}
+.pcnums input,.pcprices input{min-height:44px;text-align:right}
+.pcunit{grid-column:1/-1}
+.pcprices{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr)}
+.pcflags{display:flex;flex-wrap:wrap;gap:8px 18px}
+.pcmg{align-self:center}.mgok{color:var(--ok);font-weight:700}
+@media (max-width:420px){.rcgh,.rcline{grid-template-columns:minmax(0,1fr) 62px 84px 40px;gap:6px}}
 /* 2ª linha de navegação (subabas do painel, categorias do catálogo): fica presa logo abaixo das abas, sem ficar escondida */
 .subnavwrap,.navband{position:sticky;top:calc(var(--sat) + var(--toph,66px) + var(--tabsh,0px));z-index:17;background:var(--bg);margin:0 -16px 18px;padding:24px 16px 14px;box-shadow:0 6px 10px -8px rgba(0,0,0,.35)}
 .subnavwrap .subnav,.navband>.seg{margin:0!important}
@@ -1033,6 +1064,6 @@ h2{color:var(--fg)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="/app.js?v=4f40c05ff8"></script>
+<script src="/app.js?v=94cea0661f"></script>
 
 </body></html>

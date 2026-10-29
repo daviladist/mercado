@@ -22,6 +22,13 @@ App de pedidos de atacado do ATACADO D'ÁVILA. Seis acessos: cliente, administra
 
 Não há pacotes npm para instalar: tudo usa só o Node 20+.
 
+## Entrada de mercadoria (notas de fornecedor)
+
+- **Cadastros › Fornecedores:** código, nome, CNPJ, telefone, contato.
+- **Receber mercadoria** (conferente, aba própria; administrador em Produtos): fornecedor por código ou nome, número da nota, produtos bipados ou digitados, com **quantidade** (embalagens) e **valor unitário da nota**. Ao tocar em **Conferido**, o estoque soma na hora (no servidor, sem atropelar vendas ao mesmo tempo).
+- **Precificação de notas** (administrador em Produtos; faturamento em "Precificar notas"): por linha, quantidade, fardo com quantas unidades, valor unitário, **tributado** e **preço com IE**, com margem/markup ao lado (tributado: ICMS de saída 17% sem IE ou 7% com IE + PIS/COFINS 9,25%, conforme Configurações). Ao **aprovar**, custo, embalagem, tributação e preços vão para os produtos. Enquanto houver nota sem aprovação, um aviso fica fixo no painel.
+- Não é integração fiscal: as notas continuam sendo lançadas também no ERP.
+
 ## Segurança: o que mudou
 
 - **Login no servidor.** O navegador manda usuário e senha; o servidor confere contra o hash e devolve um cookie `HttpOnly`, `Secure` e `SameSite=Strict`. O navegador nunca recebe senha de ninguém.

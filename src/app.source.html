@@ -792,6 +792,37 @@ a.mi{display:block;text-decoration:none;color:var(--fg)}
 .repseg button{font-size:14px;padding:7px 14px}
 .buyq{color:var(--accent);font-size:16px}
 .catbar{display:flex;gap:10px;align-items:flex-start;margin-bottom:12px}
+/* entrada de mercadoria e precificação de notas */
+.rclist{display:grid;gap:8px;margin-bottom:14px}
+.rcalert{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:var(--surface);border:2px solid var(--warn);border-radius:12px;padding:10px 12px;margin-bottom:14px}
+.rccard{display:grid;gap:2px;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:10px;padding:10px 12px;color:var(--fg);font:inherit}
+.rccard.pend{border-left-color:var(--warn)}
+.rcnew{display:grid;gap:10px;margin-bottom:16px;max-width:720px}
+.rcsups{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;max-height:220px;overflow:auto}
+.rcsel{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--accent);border-radius:10px}
+.rchead{display:grid;gap:2px;margin-bottom:12px}
+.rcscan{display:grid;gap:8px;margin-bottom:12px}
+.rchits{display:grid;gap:6px}
+.rchit{display:grid;gap:1px;text-align:left;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--fg);font:inherit;min-height:44px}
+.rcgrid{display:grid;gap:6px}
+.rcgh,.rcline{display:grid;grid-template-columns:minmax(0,1fr) 74px 96px 40px;gap:8px;align-items:center}
+.rcgh{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;padding:0 4px}
+.rcline{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px}
+.rcline .rcn{display:grid;min-width:0}.rcline .rcn b{overflow:hidden;text-overflow:ellipsis}
+.rcline input{min-height:44px;text-align:right;padding:6px 8px}
+.rcx{min-width:40px;min-height:44px;border:1px solid var(--line);border-radius:8px;background:none;color:var(--muted);font-size:16px}
+.rcfoot{display:grid;gap:10px;margin-top:12px}
+.pclist{display:grid;gap:10px}
+.pcline{display:grid;gap:10px;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--warn);border-radius:10px;padding:12px}
+.pcname{display:grid;gap:2px}.pclink{display:grid;gap:6px;margin-top:6px}
+.pcnums,.pcprices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}
+.pcnums label,.pcprices label{display:grid;gap:4px;font-size:12px;font-weight:700;color:var(--muted)}
+.pcnums input,.pcprices input{min-height:44px;text-align:right}
+.pcunit{grid-column:1/-1}
+.pcprices{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr)}
+.pcflags{display:flex;flex-wrap:wrap;gap:8px 18px}
+.pcmg{align-self:center}.mgok{color:var(--ok);font-weight:700}
+@media (max-width:420px){.rcgh,.rcline{grid-template-columns:minmax(0,1fr) 62px 84px 40px;gap:6px}}
 /* 2ª linha de navegação (subabas do painel, categorias do catálogo): fica presa logo abaixo das abas, sem ficar escondida */
 .subnavwrap,.navband{position:sticky;top:calc(var(--sat) + var(--toph,66px) + var(--tabsh,0px));z-index:17;background:var(--bg);margin:0 -16px 18px;padding:24px 16px 14px;box-shadow:0 6px 10px -8px rgba(0,0,0,.35)}
 .subnavwrap .subnav,.navband>.seg{margin:0!important}
@@ -1908,8 +1939,8 @@ function renderConf(){
   const prontos=S.orders.filter(x=>['separado','pronto','saiu'].includes(x.status)||(x.status==='concluido'&&String(x.doneAt||'').slice(0,10)===t)).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
   const list=T==='fila'?fila:prontos;
   app.innerHTML=`<div class="sectionhead"><h2>Conferência</h2><button class="btn ghost dlb" id="cfRef">Atualizar</button></div>
-    <div class="seg repseg" role="group" aria-label="Lista"><button data-ct="fila" aria-pressed="${T==='fila'}">A conferir (${fila.length})</button><button data-ct="prontos" aria-pressed="${T==='prontos'}">Prontos (${prontos.length})</button><button data-ct="hist" aria-pressed="${T==='hist'}">Histórico</button><button data-ct="cont" aria-pressed="${T==='cont'}">Contagem${countOpen()?' ●':''}</button></div>
-    ${T==='cont'?'<div id="cntwrap"></div>':T==='hist'?confHistory(app):`
+    <div class="seg repseg" role="group" aria-label="Lista"><button data-ct="fila" aria-pressed="${T==='fila'}">A conferir (${fila.length})</button><button data-ct="prontos" aria-pressed="${T==='prontos'}">Prontos (${prontos.length})</button><button data-ct="hist" aria-pressed="${T==='hist'}">Histórico</button><button data-ct="cont" aria-pressed="${T==='cont'}">Contagem${countOpen()?' ●':''}</button><button data-ct="rec" aria-pressed="${T==='rec'}">Receber mercadoria${(S.receipts||[]).some(r=>r.status==='aberta')?' ●':''}</button></div>
+    ${T==='rec'?'<div id="recwrap"></div>':T==='cont'?'<div id="cntwrap"></div>':T==='hist'?confHistory(app):`
     ${list.length?`<div class="cflist">${list.map(x=>{const pr=confProgress(x),pend=sugPending(x).length,d=new Date(x.date);return `<button class="cfcard os-${x.status}" data-cfo="${x.id}">
       <span class="cfno num">nº ${x.no}</span>
       <span class="cfinfo"><b>${esc(x.customer)}</b><span class="small muted">${x.mode==='entrega'?'Entrega'+(orderCityName(x)?' · '+esc(orderCityName(x)):''):'Retirada no depósito'} · ${d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>
@@ -1917,6 +1948,7 @@ function renderConf(){
       <span class="status s-${x.status}">${stShort(x.status,x.mode)}</span></button>`}).join('')}</div>`:`<div class="empty">${T==='fila'?'Nenhum pedido para conferir agora.':'Nenhum pedido pronto.'}</div>`}`}`;
   if(T==='hist')bindConfHistory(app);
   if(T==='cont')confCount();
+  if(T==='rec')recScreen($('#recwrap'));
   app.querySelectorAll('[data-ct]').forEach(b=>b.onclick=async()=>{if(scanCam)await stopScanCam();ui.confTab=b.dataset.ct;renderConf()});
   app.querySelectorAll('[data-cfo]').forEach(b=>b.onclick=()=>{ui.confOrder=b.dataset.cfo;ui.confSug=null;renderConf();window.scrollTo(0,0)});
   $('#cfRef').onclick=()=>{reloadState();renderConf();toast('Lista atualizada')};
@@ -2318,15 +2350,15 @@ function renderAdmin(){
   const novos=S.orders.filter(o=>o.status==='novo').length,nsug=S.orders.reduce((n,o)=>n+(OPEN.includes(o.status)?sugPending(o).length:0),0);
   const nan=S.orders.filter(o=>o.appr==='pendente'&&o.status!=='cancelado').length,ncnt=(S.counts||[]).filter(x=>x.status==='finalizada').length,venc=(S.receivables||[]).filter(r=>recStatus(r)==='vencido').length,crit=S.products.filter(isCritical).length;
   /* menu em grupos: poucas abas em cima, micro abas dentro */
-  const G=[['Dashboard',[['hoje','Visão geral'],['relatorios','Relatórios']]],['Pedidos',[['pedidos','Pedidos'],['decisoes','Decisões'],['entregas','Entregas']]],['Ofertas',[['semana','Ofertas da semana']]],['Produtos',[['produtos','Produtos']]],['Financeiro',[['receber','Financeiro']]],['Cadastros',[['cadastros','Cadastros'],['clientes',''],['config','']]]];
-  const BD={pedidos:novos?{n:novos,c:''}:null,decisoes:(nan+nsug)?{n:nan+nsug,c:''}:null,entregas:nprog?{n:nprog,c:'var(--accent)'}:null,semana:ncnt?{n:ncnt,c:'var(--accent)'}:null,receber:venc?{n:venc,c:''}:null,produtos:crit?{n:crit,c:'var(--warn)'}:null};
+  const G=[['Dashboard',[['hoje','Visão geral'],['relatorios','Relatórios']]],['Pedidos',[['pedidos','Pedidos'],['decisoes','Decisões'],['entregas','Entregas']]],['Ofertas',[['semana','Ofertas da semana']]],['Produtos',[['produtos','Produtos'],['recmerc','Receber mercadoria'],['precnotas','Precificação de notas']]],['Financeiro',[['receber','Financeiro']]],['Cadastros',[['cadastros','Cadastros'],['clientes',''],['config','']]]];
+  const BD={pedidos:novos?{n:novos,c:''}:null,decisoes:(nan+nsug)?{n:nan+nsug,c:''}:null,entregas:nprog?{n:nprog,c:'var(--accent)'}:null,semana:ncnt?{n:ncnt,c:'var(--accent)'}:null,receber:venc?{n:venc,c:''}:null,produtos:crit?{n:crit,c:'var(--warn)'}:null,precnotas:(S.receipts||[]).some(r=>r.status==='conferida')?{n:(S.receipts||[]).filter(r=>r.status==='conferida').length,c:''}:null};
   const cnt=b=>b?`<span class="cnt" ${b.c?`style="background:${b.c}"`:''}>${b.n}</span>`:'';
   const grp=G.find(g=>g[1].some(x=>x[0]===ui.tab))||G[0];ui.lastSub=ui.lastSub||{};ui.lastSub[grp[0]]=ui.tab;
   const tabs=G.map(g=>{const k=g===grp?g[1][0][0]:(ui.lastSub[g[0]]||g[1][0][0]),tot=g[1].reduce((a,x)=>a+(BD[x[0]]?BD[x[0]].n:0),0),red=g[1].some(x=>BD[x[0]]&&!BD[x[0]].c);return {k,label:g[0],sel:g===grp,b:tot?{n:tot,c:red?'':(g[1].map(x=>BD[x[0]]).find(Boolean)||{}).c}:null}});
   const subs=grp[1].filter(x=>x[1]);
   app.innerHTML=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" data-tab="${t.k}" aria-selected="${t.sel}">${t.label}${cnt(t.b)}</button>`).join('')}</div>${subs.length>1?`<div class="subnavwrap"><div class="seg repseg subnav" role="group" aria-label="${grp[0]}">${subs.map(([k,v])=>`<button data-tab="${k}" aria-pressed="${ui.tab===k}">${v}${cnt(BD[k])}</button>`).join('')}</div></div>`:''}<div id="tabc"></div>`;
   app.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ui.tab=b.dataset.tab;ui.backWeek=false;ui.romView=false;ui.lanc=null;ui.stBulk=null;ui.stCost=null;ui.combosView=false;ui.comboEdit=null;ui.adj=null;ui.recNew=null;ui.edit=null;ui.bulk=null;ui.confirmDel=null;renderAdmin()});
-  ({entregas:admEntregas,decisoes:admDecisoes,separacao:admSep,cadastros:admCadastros,hoje:admHoje,pedidos:admOrders,receber:admFin,relatorios:admRelatorios,produtos:admProducts,semana:admSemana,analise:admAnalise,clientes:admClients,config:admConfig})[ui.tab]();
+  ({recmerc:()=>recScreen($('#tabc')),precnotas:()=>precScreen($('#tabc')),entregas:admEntregas,decisoes:admDecisoes,separacao:admSep,cadastros:admCadastros,hoje:admHoje,pedidos:admOrders,receber:admFin,relatorios:admRelatorios,produtos:admProducts,semana:admSemana,analise:admAnalise,clientes:admClients,config:admConfig})[ui.tab]();rcAlert();
 }
 /* ---------- baixar pedidos em PDF ou Excel ---------- */
 const FILTER_NAME={ativos:'em-aberto',concluido:'concluidos',cancelado:'cancelados',todos:'todos'};
@@ -3244,14 +3276,14 @@ function admCategorias(){
 }
 function admCadastros(){
   /* três grupos: Clientes, Usuários (equipe que entra no app) e Configurações */
-  const GR=[['clientes','Clientes',[['clientes','Clientes']]],['usuarios','Usuários',[['vendedores','Vendedores'],['conferentes','Conferentes'],['faturamento','Faturamento'],['veiculos','Motoristas']]],['config','Configurações',[['loja','Loja e regras'],['categorias','Categorias'],['pagamentos','Pagamento'],['cidades','Cidades de entrega']]]];
+  const GR=[['clientes','Clientes',[['clientes','Clientes']]],['fornecedores','Fornecedores',[['fornecedores','Fornecedores']]],['usuarios','Usuários',[['vendedores','Vendedores'],['conferentes','Conferentes'],['faturamento','Faturamento'],['veiculos','Motoristas']]],['config','Configurações',[['loja','Loja e regras'],['categorias','Categorias'],['pagamentos','Pagamento'],['cidades','Cidades de entrega']]]];
   const k=ui.cadSub||'clientes',g=GR.find(x=>x[2].some(y=>y[0]===k))||GR[0];ui.cadLast=ui.cadLast||{};ui.cadLast[g[0]]=k;
   $('#tabc').innerHTML=`<div class="seg repseg cadg" role="group" aria-label="Cadastros">${GR.map(x=>`<button data-cadg="${x[0]}" aria-pressed="${x===g}">${x[1]}</button>`).join('')}</div>
     ${g[2].length>1?`<div class="seg cadsub" role="group" aria-label="${g[1]}">${g[2].map(([a,b])=>`<button data-cad="${a}" aria-pressed="${k===a}">${b}</button>`).join('')}</div>`:''}<div id="cadc"></div>`;
   const go=v=>{ui.cadSub=v;ui.selEdit=null;ui.edit=null;ui.payEdit=null;ui.confirmDel=null;ui.catMove=null;admCadastros()};
   document.querySelectorAll('[data-cadg]').forEach(b=>b.onclick=()=>{const x=GR.find(y=>y[0]===b.dataset.cadg);go(x===g?x[2][0][0]:(ui.cadLast[x[0]]||x[2][0][0]))});
   document.querySelectorAll('[data-cad]').forEach(b=>b.onclick=()=>go(b.dataset.cad));
-  ({conferentes:admConferentes,faturamento:admFaturamento,categorias:admCategorias,vendedores:admVendedores,clientes:admClients,pagamentos:admPagamentos,cidades:admCidades,veiculos:admVeiculos,loja:admConfig})[k]();
+  ({fornecedores:admFornecedores,conferentes:admConferentes,faturamento:admFaturamento,categorias:admCategorias,vendedores:admVendedores,clientes:admClients,pagamentos:admPagamentos,cidades:admCidades,veiculos:admVeiculos,loja:admConfig})[k]();
 }
 /* formas de pagamento com prazo próprio, reconhecido no pedido e no contas a receber */
 function admPagamentos(){
@@ -4098,6 +4130,7 @@ function renderFat(){
   if(!ui.biller){app.innerHTML=fatLoginForm();$('#fbl').onsubmit=e=>{e.preventDefault();const u=$('#fblu').value.trim().toLowerCase(),p=$('#fblp').value;
     const k=(S.billers||[]).find(x=>x.login.toLowerCase()===u&&x.pass===p);if(!k){$('#fble').textContent='Usuário ou senha incorretos.';return}ui.biller=k.name||k.login;render()};return}
   const F=ui.fat=ui.fat||{tab:'fat',per:'7',q:'',sel:{},nf:{}};
+  if(F.tab==='prec')return fatPrecView(app,F);
   const base=S.orders.filter(o=>o.status!=='cancelado'),t=today();
   const aFat=base.filter(o=>!o.billed&&['separado','pronto','saiu','concluido'].includes(o.status)),emSep=base.filter(o=>!o.billed&&!apprHold(o)&&['novo','separando'].includes(o.status));
   const r=F.per==='hoje'?[t,t]:F.per==='7'?[addDays(t,-6),t]:F.per==='30'?[addDays(t,-29),t]:null;
@@ -4121,7 +4154,7 @@ function renderFat(){
         <div class="row" style="gap:4px;justify-content:flex-end"><button class="iconpdf" data-fpdf="${o.id}" title="PDF do pedido" aria-label="PDF do pedido nº ${o.no}">${PDF_ICON}</button><button class="btn ghost dlb" data-fpick="${o.id}" title="Folha de separação, sem valores">Separação</button><button class="btn ghost dlb" data-fcsv="${o.id}" title="Arquivo para importar no sistema">Arquivo</button></div>
         ${b?'':`<div class="row fatgo" style="gap:4px;flex-wrap:nowrap"><input type="text" inputmode="numeric" data-fnf="${o.id}" value="${esc(F.nf[o.id]||'')}" placeholder="${o.nf?'Nº NF (obrigatório)':'Nº NF (opcional)'}" aria-label="Número da nota do pedido ${o.no}"><button class="btn dlb" data-fok="${o.id}">Faturado</button></div>`}</div></div>`};
   app.innerHTML=`<div class="sectionhead"><h2>Faturamento</h2><button class="btn ghost dlb" id="fRef">Atualizar</button></div>
-    <div class="seg repseg" role="group" aria-label="Lista"><button data-ft="fat" aria-pressed="${F.tab==='fat'}">A faturar (${aFat.length})</button><button data-ft="sep" aria-pressed="${F.tab==='sep'}">Em separação (${emSep.length})</button><button data-ft="feitos" aria-pressed="${F.tab==='feitos'}">Faturados</button></div>
+    <div class="seg repseg" role="group" aria-label="Lista"><button data-ft="fat" aria-pressed="${F.tab==='fat'}">A faturar (${aFat.length})</button><button data-ft="sep" aria-pressed="${F.tab==='sep'}">Em separação (${emSep.length})</button><button data-ft="feitos" aria-pressed="${F.tab==='feitos'}">Faturados</button><button data-ft="prec" aria-pressed="false">Precificar notas${(S.receipts||[]).some(r=>r.status==='conferida')?' ('+(S.receipts||[]).filter(r=>r.status==='conferida').length+')':''}</button></div>
     <div class="panel fattools">
       <div class="row" style="gap:8px"><input type="text" id="fq" value="${esc(F.q)}" placeholder="Buscar por cliente, nº ou CNPJ" style="flex:1;min-width:180px" aria-label="Buscar pedido">
         ${F.tab==='feitos'?`<select id="fper" style="width:auto" aria-label="Período">${[['hoje','Hoje'],['7','Últimos 7 dias'],['30','Últimos 30 dias'],['tudo','Tudo']].map(([k,v])=>`<option value="${k}" ${F.per===k?'selected':''}>${v}</option>`).join('')}</select>`:''}</div>
