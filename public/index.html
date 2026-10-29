@@ -787,6 +787,10 @@ a.mi{display:block;text-decoration:none;color:var(--fg)}
 .repseg button{font-size:14px;padding:7px 14px}
 .buyq{color:var(--accent);font-size:16px}
 .catbar{display:flex;gap:10px;align-items:flex-start;margin-bottom:12px}
+/* 2ª linha de navegação (subabas do painel, categorias do catálogo): fica presa logo abaixo das abas, sem ficar escondida */
+.subnavwrap{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--toph,66px) + var(--tabsh,46px));z-index:17;background:var(--bg);margin:-6px -16px 14px;padding:8px 16px}
+.subnavwrap .subnav{margin:0}
+.catbar{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--toph,66px) + var(--cnavh,48px));z-index:16;background:var(--bg);margin-inline:-16px;padding:8px 16px}
 .catbar .chips{flex:1;min-width:0;margin-bottom:0}
 .viewseg{flex:none}
 .validity .viewseg{margin-left:auto}
@@ -1022,6 +1026,6 @@ h2{color:var(--fg)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="/app.js?v=40657f6a83"></script>
+<script src="/app.js?v=649df82e9e"></script>
 
 </body></html>

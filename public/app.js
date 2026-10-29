@@ -282,9 +282,12 @@ document.addEventListener('change',e=>{const i=e.target;if(!i||!i.matches||!i.ma
   const n=pnum(v);if(n===''){toast('Valor inválido: "'+v+'". Use números, por exemplo 4,50.');return}
   const old=pnum(i.defaultValue);if(old!==''&&old>0&&n>old*3&&i.matches('.lnpr,[data-lp],[data-sgp],[data-anp],[data-apr]')&&!confirm('Confere o valor? Antes: '+brl(old)+' · agora: '+brl(n)+' (mais de 3 vezes maior).')){i.value=i.defaultValue;i.dispatchEvent(new Event('input',{bubbles:true}))}},true);
 /* barras que grudam no topo (abas do painel, menu do cliente) ficam logo abaixo do cabeçalho, seja qual for a altura dele no celular */
-(function(){const set=()=>{const h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--toph',Math.ceil(h.getBoundingClientRect().height)+'px')};
-  set();window.addEventListener('resize',set);window.addEventListener('orientationchange',()=>setTimeout(set,300));
-  try{const h=document.querySelector('header.top');if(h&&window.ResizeObserver)new ResizeObserver(set).observe(h)}catch(e){}})();
+(function(){const R=document.documentElement.style,hgt=sel=>{const e=document.querySelector(sel);return e?Math.ceil(e.getBoundingClientRect().height):0};
+  const set=()=>{R.setProperty('--toph',hgt('header.top')+'px');R.setProperty('--tabsh',hgt('#app .tabs')+'px');R.setProperty('--cnavh',hgt('.cnav')+'px')};
+  let q=0;const later=()=>{if(!q){q=1;requestAnimationFrame(()=>{q=0;set()})}};
+  set();window.addEventListener('resize',later);window.addEventListener('orientationchange',()=>setTimeout(set,300));
+  try{const h=document.querySelector('header.top');if(h&&window.ResizeObserver)new ResizeObserver(later).observe(h)}catch(e){}
+  try{new MutationObserver(later).observe(document.body,{childList:true,subtree:true})}catch(e){}})();
 
 
 /* foto provisória: etiqueta colorida com as iniciais do produto */
@@ -1550,7 +1553,7 @@ function renderAdmin(){
   const grp=G.find(g=>g[1].some(x=>x[0]===ui.tab))||G[0];ui.lastSub=ui.lastSub||{};ui.lastSub[grp[0]]=ui.tab;
   const tabs=G.map(g=>{const k=g===grp?g[1][0][0]:(ui.lastSub[g[0]]||g[1][0][0]),tot=g[1].reduce((a,x)=>a+(BD[x[0]]?BD[x[0]].n:0),0),red=g[1].some(x=>BD[x[0]]&&!BD[x[0]].c);return {k,label:g[0],sel:g===grp,b:tot?{n:tot,c:red?'':(g[1].map(x=>BD[x[0]]).find(Boolean)||{}).c}:null}});
   const subs=grp[1].filter(x=>x[1]);
-  app.innerHTML=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" data-tab="${t.k}" aria-selected="${t.sel}">${t.label}${cnt(t.b)}</button>`).join('')}</div>${subs.length>1?`<div class="seg repseg subnav" role="group" aria-label="${grp[0]}">${subs.map(([k,v])=>`<button data-tab="${k}" aria-pressed="${ui.tab===k}">${v}${cnt(BD[k])}</button>`).join('')}</div>`:''}<div id="tabc"></div>`;
+  app.innerHTML=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" data-tab="${t.k}" aria-selected="${t.sel}">${t.label}${cnt(t.b)}</button>`).join('')}</div>${subs.length>1?`<div class="subnavwrap"><div class="seg repseg subnav" role="group" aria-label="${grp[0]}">${subs.map(([k,v])=>`<button data-tab="${k}" aria-pressed="${ui.tab===k}">${v}${cnt(BD[k])}</button>`).join('')}</div></div>`:''}<div id="tabc"></div>`;
   app.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ui.tab=b.dataset.tab;ui.backWeek=false;ui.romView=false;ui.lanc=null;ui.stBulk=null;ui.stCost=null;ui.combosView=false;ui.comboEdit=null;ui.adj=null;ui.recNew=null;ui.edit=null;ui.bulk=null;ui.confirmDel=null;renderAdmin()});
   ({entregas:admEntregas,decisoes:admDecisoes,separacao:admSep,cadastros:admCadastros,hoje:admHoje,pedidos:admOrders,receber:admFin,relatorios:admRelatorios,produtos:admProducts,semana:admSemana,analise:admAnalise,clientes:admClients,config:admConfig})[ui.tab]();
 }

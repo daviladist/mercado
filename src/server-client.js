@@ -264,6 +264,9 @@ document.addEventListener('change',e=>{const i=e.target;if(!i||!i.matches||!i.ma
   const n=pnum(v);if(n===''){toast('Valor inválido: "'+v+'". Use números, por exemplo 4,50.');return}
   const old=pnum(i.defaultValue);if(old!==''&&old>0&&n>old*3&&i.matches('.lnpr,[data-lp],[data-sgp],[data-anp],[data-apr]')&&!confirm('Confere o valor? Antes: '+brl(old)+' · agora: '+brl(n)+' (mais de 3 vezes maior).')){i.value=i.defaultValue;i.dispatchEvent(new Event('input',{bubbles:true}))}},true);
 /* barras que grudam no topo (abas do painel, menu do cliente) ficam logo abaixo do cabeçalho, seja qual for a altura dele no celular */
-(function(){const set=()=>{const h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--toph',Math.ceil(h.getBoundingClientRect().height)+'px')};
-  set();window.addEventListener('resize',set);window.addEventListener('orientationchange',()=>setTimeout(set,300));
-  try{const h=document.querySelector('header.top');if(h&&window.ResizeObserver)new ResizeObserver(set).observe(h)}catch(e){}})();
+(function(){const R=document.documentElement.style,hgt=sel=>{const e=document.querySelector(sel);return e?Math.ceil(e.getBoundingClientRect().height):0};
+  const set=()=>{R.setProperty('--toph',hgt('header.top')+'px');R.setProperty('--tabsh',hgt('#app .tabs')+'px');R.setProperty('--cnavh',hgt('.cnav')+'px')};
+  let q=0;const later=()=>{if(!q){q=1;requestAnimationFrame(()=>{q=0;set()})}};
+  set();window.addEventListener('resize',later);window.addEventListener('orientationchange',()=>setTimeout(set,300));
+  try{const h=document.querySelector('header.top');if(h&&window.ResizeObserver)new ResizeObserver(later).observe(h)}catch(e){}
+  try{new MutationObserver(later).observe(document.body,{childList:true,subtree:true})}catch(e){}})();
