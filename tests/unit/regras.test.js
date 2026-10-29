@@ -214,3 +214,18 @@ test('loja cancela nota conferida: estoque volta', () => {
   const { eff } = syncOne(S, U.admin, 'receipts', r);
   assert.equal(eff.stockIn.get('p1'), -10);
 });
+
+test('acerto: entrega em dinheiro/PIX fica aguardando até o faturamento confirmar; motorista não confirma sozinho', () => {
+  for (const how of ['dinheiro', 'pix']) {
+    const S = base(); const o = order(S, { status: 'saiu', pay: 'Pix', deliv: { drv: 'v1' } });
+    const d = upd(S, U.entregador, o, Object.assign(clone(o), { status: 'concluido', delivered: { name: 'F', photo: PHOTO, how, settled: true } }));
+    assert.equal(d.delivered.settled, false, how);
+    S.orders[0] = d;
+    assert.throws(() => upd(S, U.faturamento, d, Object.assign(clone(d), { delivered: Object.assign(clone(d.delivered), { collect: 1, settled: true }) })), /só pode confirmar/);
+    const f = upd(S, U.faturamento, d, Object.assign(clone(d), { delivered: Object.assign(clone(d.delivered), { settled: true }) }));
+    assert.equal(f.delivered.settled, true); assert.equal(f.delivered.settledBy, 'Fatura Teste');
+  }
+  const S = base(); const o = order(S, { status: 'saiu', pay: 'Boleto 28 dias', deliv: { drv: 'v1' } });
+  const d = upd(S, U.entregador, o, Object.assign(clone(o), { status: 'concluido', delivered: { name: 'F', photo: PHOTO, how: '' } }));
+  assert.equal(d.delivered.settled, true);   // boleto/prazo: vira conta a receber, não precisa de acerto
+});

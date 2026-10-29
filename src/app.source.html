@@ -794,6 +794,7 @@ a.mi{display:block;text-decoration:none;color:var(--fg)}
 .catbar{display:flex;gap:10px;align-items:flex-start;margin-bottom:12px}
 /* entrada de mercadoria e precificação de notas */
 .rclist{display:grid;gap:8px;margin-bottom:14px}
+.acsec{display:grid;gap:8px;margin-bottom:12px}.acrow{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:8px}.acrow>span{display:grid;min-width:0}
 @keyframes stpulse{0%{margin-left:0}50%{margin-left:65%}100%{margin-left:0}}.pbar .pulse{animation:stpulse 2.4s ease-in-out infinite}
 .rcalert{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:var(--surface);border:2px solid var(--warn);border-radius:12px;padding:10px 12px;margin-bottom:14px}
 .rccard{display:grid;gap:2px;text-align:left;width:100%;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:10px;padding:10px 12px;color:var(--fg);font:inherit}
@@ -1180,7 +1181,9 @@ const STATUS={novo:'Novo',separando:'Separando',separado:'Separado · a faturar'
 const billGate=()=>(S.store&&S.store.billGate)||'todos';
 function needsBill(o){const g=billGate();return g==='todos'||(g==='nf'&&!!(o&&o.nf))}
 function stName(st,mode){if(st==='separado')return 'Separado · aguardando faturamento';if(st==='pronto')return mode==='entrega'?'Separado / pronto':'Pronto para retirada';return STATUS[st]||st}
-function stLabel(o){return stName(o.status,o.mode)}
+/* entregue com dinheiro ou PIX: só fica concluído de verdade quando a loja/faturamento confirma que recebeu */
+const pendSettle=o=>!!(o&&o.status==='concluido'&&o.delivered&&!o.delivered.pickup&&['dinheiro','pix'].includes(o.delivered.how)&&!o.delivered.settled);
+function stLabel(o){return pendSettle(o)&&ui.view!=='cliente'?'Entregue · aguardando acerto ('+(o.delivered.how==='pix'?'PIX':'dinheiro')+')':stName(o.status,o.mode)}
 function stFlow(o){const f=o.mode==='entrega'?['novo','separando','pronto','saiu','concluido','cancelado']:['novo','separando','pronto','concluido','cancelado'];if(needsBill(o)||o.status==='separado')f.splice(2,0,'separado');return f}
 const ST_ICON={
   novo:'<path d="M4 13h4l2 3h4l2-3h4"/><path d="M5.5 5h13L21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/>',
@@ -1533,7 +1536,7 @@ function orderRow(o){
         <span class="ortot num">${brl(o.total)}</span>
         <svg class="orchev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
       </button>
-      <div class="orst" role="group" aria-label="Situação do pedido nº ${o.no}">${fl.map((k,i)=>`<button type="button" class="stmini st-${k} ${k===o.status?'on':''} ${k!=='cancelado'&&cur>=0&&i<cur&&o.status!=='cancelado'?'past':''}" data-stb="${o.id}" data-v="${k}" aria-pressed="${k===o.status}" aria-label="${esc(stName(k,o.mode))}" data-tip="${esc(stTip(k,o.mode,k===o.status))}">${stIcon(k,o.mode)}</button>`).join('')}<span class="orstl s-${o.status}">${stShort(o.status,o.mode)}</span>${drvCan(o)?drvPickHtml(o):''}</div>
+      <div class="orst" role="group" aria-label="Situação do pedido nº ${o.no}">${fl.map((k,i)=>`<button type="button" class="stmini st-${k} ${k===o.status?'on':''} ${k!=='cancelado'&&cur>=0&&i<cur&&o.status!=='cancelado'?'past':''}" data-stb="${o.id}" data-v="${k}" aria-pressed="${k===o.status}" aria-label="${esc(stName(k,o.mode))}" data-tip="${esc(stTip(k,o.mode,k===o.status))}">${stIcon(k,o.mode)}</button>`).join('')}<span class="orstl s-${o.status}">${(pendSettle(o)?'Aguardando acerto':stShort(o.status,o.mode))}</span>${drvCan(o)?drvPickHtml(o):''}</div>
     </div>
     ${open?`<div class="orbody">${orderCard(o,true)}</div>`:''}
   </div>`;
@@ -1852,7 +1855,7 @@ function confRowHtml(o,attr){const s=confStats(o);
   return `<button class="cfcard os-${o.status}" ${attr}="${o.id}"><span class="cfno num">nº ${o.no}</span>
     <span class="cfinfo"><b>${esc(o.customer)}</b><span class="small muted">${new Date(o.checkedAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} · ${hm(s.start)||'?'} → ${hm(s.end)} · ${fmtDur(s.dur)} · ${esc(o.checker||'')}</span>
       <span class="small">${s.items} ${s.items===1?'item':'itens'}${s.volumes?' · '+s.volumes+' volume'+(s.volumes>1?'s':''):''}${s.faltas?` · <b style="color:var(--warn)">${s.faltas} falta${s.faltas>1?'s':''}</b>`:''}${s.trocas+s.incl?` · ${s.trocas+s.incl} troca/inclusão`:''}${s.bipErr?` · <b style="color:var(--danger)">${s.bipErr} bipe${s.bipErr>1?'s':''} errado${s.bipErr>1?'s':''}</b>`:''}</span></span>
-    <span class="status s-${o.status}">${stShort(o.status,o.mode)}</span></button>`}
+    <span class="status s-${o.status}">${(pendSettle(o)?'Aguardando acerto':stShort(o.status,o.mode))}</span></button>`}
 /* aba Histórico do conferente */
 function confHistory(app){
   const P=ui.cfH||(ui.cfH={per:'hoje',from:today(),to:today(),mine:true,q:''}),[from,to]=periodRange(P);
@@ -1976,7 +1979,7 @@ function confOrderView(o){
   const its=o.items.filter(i=>i.q>0);
   const canReady=open&&started&&!pend.length&&pr.done===pr.total;
   app.innerHTML=`<button class="btn ghost dlb" id="cfBack">← Pedidos</button>
-    <div class="cfhead"><div><span class="cfno num">Pedido nº ${o.no}</span> <span class="status s-${o.status}">${stShort(o.status,o.mode)}</span></div>
+    <div class="cfhead"><div><span class="cfno num">Pedido nº ${o.no}</span> <span class="status s-${o.status}">${(pendSettle(o)?'Aguardando acerto':stShort(o.status,o.mode))}</span></div>
       <div><b>${esc(o.customer)}</b></div><div class="small muted">${o.mode==='entrega'?'Entrega: '+esc([o.addr,orderBairro(o),orderCityName(o)].filter(Boolean).join(' · ')):'Retirada no depósito'}</div>
       ${o.note?`<div class="small"><b>Obs.:</b> ${esc(o.note)}</div>`:''}
       <div class="cfbar"><span style="width:${pr.total?Math.round(pr.done/pr.total*100):0}%"></span></div><div class="small">${pr.done} de ${pr.total} itens conferidos${o.checker?' · conferente: '+esc(o.checker):''}</div></div>
@@ -2185,7 +2188,9 @@ function entregasHtml(drvId){const isDrv=!!drvId,t=today(),F=ui.dForm||{};
   const sec=(title,cnt,html,empty)=>`<section class="entsec"><h3 class="dech">${title}${cnt?` <span class="cnt2">${cnt}</span>`:''}</h3>${html||`<div class="small muted">${empty}</div>`}</section>`;
   const bol=isDrv?[]:S.orders.filter(o=>o.occ&&o.occ.reboleto);
   const cashOut={};S.orders.forEach(o=>{const D=o.delivered;if(D&&D.how==='dinheiro'&&!D.settled&&D.drv&&(!isDrv||D.drv===drvId)){(cashOut[D.drv]=cashOut[D.drv]||[]).push(o)}});
+  const pixOut=S.orders.filter(o=>pendSettle(o)&&o.delivered.how==='pix'&&(!isDrv||o.delivered.drv===drvId));
   return `${Object.keys(cashOut).length?sec(isDrv?'Dinheiro com você':'Dinheiro com os motoristas',0,Object.keys(cashOut).map(v=>{const L=cashOut[v],t=L.reduce((s,o)=>s+o.delivered.collect,0);return `<div class="entc"><div class="enth"><b>🚚 ${esc(drvName(v))}</b><b class="num">${brl(t)}</b></div><div class="small muted">${L.map(o=>'nº '+o.no+' '+esc(o.customer)+' '+brl(o.delivered.collect)).join(' · ')}</div>${isDrv?'<div class="small">Entregue esse valor na loja.</div>':`<div class="row"><button class="btn dlb" data-dset="${v}">Recebi o dinheiro do motorista</button></div>`}</div>`}).join(''),''):''}
+    ${pixOut.length?sec(isDrv?'PIX aguardando a loja conferir':'PIX a conferir',pixOut.length,pixOut.map(o=>`<div class="entc"><div class="enth"><b>nº ${o.no} · ${esc(o.customer)}</b><b class="num">${brl(o.delivered.collect||o.total)}</b></div><div class="small muted">Entregue ${dBR(String(o.delivered.at).slice(0,10))} · ${esc(drvName(o.delivered.drv))}</div>${isDrv?'<div class="small">Mostre o comprovante do PIX na loja.</div>':`<div class="row"><button class="btn dlb" data-dsetpix="${o.id}">Conferi o PIX na conta</button></div>`}</div>`).join(''),''):''}
     ${bol.length?sec('Boletos a refazer (ocorrência na entrega)',bol.length,bol.map(o=>entCard(o,`<div class="small">Pedido ${brl(o.occ.from)} → <b>${brl(o.occ.to)}</b> · ${o.occ.items.map(x=>esc(x.q)+'× '+esc(x.name)+' ('+esc(occLbl(x.t).toLowerCase())+')').concat((o.occ.extras||[]).map(x=>esc(x.q)+'× '+esc(x.name)+' (a mais)')).join(', ')}</div><div class="row"><button class="btn dlb" data-occbol="${o.id}">Boleto refeito</button></div>`,'rota')).join(''),''):''}
     ${isDrv?'':sec('Escolher o motorista',sem.length,sem.map(o=>entCard(o,`<div class="row" style="gap:8px;align-items:center">${drvPickHtml(o)}<span class="small ${o.status==='separado'?'warn':'muted'}">${o.status==='separado'?'aguardando faturamento':'faturado, pronto para sair'}</span></div>`)).join(''),'Nenhum pedido de entrega sem motorista.'+(drvList().length?'':' Cadastre os motoristas em Cadastros › Usuários › Motoristas.'))}
     ${sec(isDrv?'Pedidos com você':'Com o motorista',ag.length,Object.keys(groups).map(v=>{const L=groups[v],ok=L.filter(o=>o.status==='pronto'),nsel=ok.filter(o=>SEL[o.id]).length;return `<div class="entgrp"><div class="entgh"><b>🚚 ${esc(drvName(v))}</b> · ${L.length} pedido${L.length>1?'s':''} · ${brl(L.reduce((s,o)=>s+o.total,0))}</div>
@@ -2225,13 +2230,14 @@ function bindEntregas(root,drvId,rer){const F=ui.dForm=ui.dForm||{};bindDrvPick(
     const how=(ui.dPay||{})[o.id];if(isCash(o.pay)&&!how){toast('Toque em como o cliente pagou: Dinheiro, PIX ou Não pagou agora.');return}
     let oc=null;if(F[o.id]==='occ'){const C=occCalc(o);if(!C.O.list.length&&!C.O.extras.length){toast('Lance pelo menos uma ocorrência ou produto a mais. Se não teve, use Confirmar entrega.');return}oc=occApply(o)}
     const coll=isCash(o.pay)?(oc?oc.collect:o.total):0;
-    o.delivered={at:now(),name:nm,photo:ui.dPhoto[o.id]||'',note:((($('#dno-'+o.id)||{}).value)||'').trim(),by:who,drv:o.deliv&&o.deliv.drv||'',pickup:pk,occ:!!oc,collect:coll,how:how||'',settled:how!=='dinheiro'};
+    o.delivered={at:now(),name:nm,photo:ui.dPhoto[o.id]||'',note:((($('#dno-'+o.id)||{}).value)||'').trim(),by:who,drv:o.deliv&&o.deliv.drv||'',pickup:pk,occ:!!oc,collect:coll,how:how||'',settled:pk||!['dinheiro','pix'].includes(how||'')};
     if(isCash(o.pay)&&how==='nao'&&coll>0)(S.receivables=S.receivables||[]).push({id:uid(),group:uid(),orderId:o.id,customerId:o.customerId,customer:o.customer,orderNo:String(o.no),desc:'Não pagou na entrega ('+o.pay+')',parcel:'1/1',amount:coll,due:today(),paidAt:'',created:now()});
     if(ui.dPay)delete ui.dPay[o.id];
     const m=setOrderStatus(o,'concluido');delete F[o.id];delete ui.dPhoto[o.id];delete ui.dName[o.id];save();toast('Pedido nº '+o.no+(pk?' retirado':' entregue')+(oc&&!oc.cash?' · boleto vai ser refeito':'')+(how==='dinheiro'?' · '+brl(coll)+' em dinheiro com você':how==='nao'?' · ficou em aberto':'')+(m?' · '+m:''));rer()});
   root.querySelectorAll('[data-dpay]').forEach(b=>b.onclick=()=>{const [id,k]=b.dataset.dpay.split('|');ui.dPay=ui.dPay||{};ui.dPay[id]=k;rer()});
   root.querySelectorAll('[data-dfr]').forEach(b=>b.onclick=()=>{const [id,t]=b.dataset.dfr.split('|'),i=document.getElementById('dfr-'+id);if(i)i.value=t});
-  root.querySelectorAll('[data-dset]').forEach(b=>b.onclick=()=>{const v=b.dataset.dset;S.orders.forEach(o=>{if(o.delivered&&!o.delivered.settled&&o.delivered.how==='dinheiro'&&o.delivered.drv===v){o.delivered.settled=true;o.delivered.settledAt=now()}});save();toast('Acerto com '+drvName(v)+' registrado');rer()});
+  root.querySelectorAll('[data-dsetpix]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.dsetpix);if(!o||!o.delivered)return;o.delivered.settled=true;o.delivered.settledAt=now();o.delivered.settledBy=ui.adminName||ui.biller||'';save();toast('PIX do pedido nº '+o.no+' conferido · pedido concluído');rer()});
+  root.querySelectorAll('[data-dset]').forEach(b=>b.onclick=()=>{const v=b.dataset.dset;S.orders.forEach(o=>{if(o.delivered&&!o.delivered.settled&&o.delivered.how==='dinheiro'&&o.delivered.drv===v){o.delivered.settled=true;o.delivered.settledAt=now();o.delivered.settledBy=ui.adminName||ui.biller||''}});save();toast('Acerto com '+drvName(v)+' registrado');rer()});
   root.querySelectorAll('[data-dfailok]').forEach(b=>b.onclick=()=>{const o=byId(b.dataset.dfailok);if(!o)return;const r=((($('#dfr-'+o.id)||{}).value)||'').trim();if(!r){toast('Diga o motivo.');return}
     o.deliv=o.deliv||{};(o.deliv.fails=o.deliv.fails||[]).push({at:now(),reason:r,by:who});o.status='pronto';addEvent(o,'Seu pedido nº '+o.no+' não pôde ser entregue ('+r+'). Vamos reagendar.');delete F[o.id];save();toast('Pedido nº '+o.no+' voltou para programar');rer()});
   root.querySelectorAll('[data-rq]').forEach(i=>i.oninput=()=>{const R=ui.dRet[i.dataset.rq]=ui.dRet[i.dataset.rq]||{};R[i.dataset.k]=i.value});
@@ -3837,7 +3843,7 @@ function admOrders(){
   if(ui.lanc){admLancar();return}
   if(ui.romView){romView();return}
   const c=$('#tabc');
-  const F={ativos:o=>OPEN.includes(o.status),todos:()=>true,concluido:o=>o.status==='concluido',cancelado:o=>o.status==='cancelado'};
+  const F={ativos:o=>OPEN.includes(o.status)||pendSettle(o),todos:()=>true,concluido:o=>o.status==='concluido',cancelado:o=>o.status==='cancelado'};
   const OF=ui.oF||(ui.oF={per:'tudo',from:'',to:'',q:'',vmin:'',vmax:'',mode:'',city:'',pay:'',sel:'',nf:'',open:false});
   const list=S.orders.filter(F[ui.ofilter]).filter(o=>oFilterOk(o,OF));
   const totalAtivos=S.orders.filter(F.ativos).reduce((s,o)=>s+o.total,0);
@@ -4132,6 +4138,7 @@ function renderFat(){
     const k=(S.billers||[]).find(x=>x.login.toLowerCase()===u&&x.pass===p);if(!k){$('#fble').textContent='Usuário ou senha incorretos.';return}ui.biller=k.name||k.login;render()};return}
   const F=ui.fat=ui.fat||{tab:'fat',per:'7',q:'',sel:{},nf:{}};
   if(F.tab==='prec')return fatPrecView(app,F);
+  if(F.tab==='acerto')return fatAcertoView(app,F);
   const base=S.orders.filter(o=>o.status!=='cancelado'),t=today();
   const aFat=base.filter(o=>!o.billed&&['separado','pronto','saiu','concluido'].includes(o.status)),emSep=base.filter(o=>!o.billed&&!apprHold(o)&&['novo','separando'].includes(o.status));
   const r=F.per==='hoje'?[t,t]:F.per==='7'?[addDays(t,-6),t]:F.per==='30'?[addDays(t,-29),t]:null;
@@ -4155,7 +4162,7 @@ function renderFat(){
         <div class="row" style="gap:4px;justify-content:flex-end"><button class="iconpdf" data-fpdf="${o.id}" title="PDF do pedido" aria-label="PDF do pedido nº ${o.no}">${PDF_ICON}</button><button class="btn ghost dlb" data-fpick="${o.id}" title="Folha de separação, sem valores">Separação</button><button class="btn ghost dlb" data-fcsv="${o.id}" title="Arquivo para importar no sistema">Arquivo</button></div>
         ${b?'':`<div class="row fatgo" style="gap:4px;flex-wrap:nowrap"><input type="text" inputmode="numeric" data-fnf="${o.id}" value="${esc(F.nf[o.id]||'')}" placeholder="${o.nf?'Nº NF (obrigatório)':'Nº NF (opcional)'}" aria-label="Número da nota do pedido ${o.no}"><button class="btn dlb" data-fok="${o.id}">Faturado</button></div>`}</div></div>`};
   app.innerHTML=`<div class="sectionhead"><h2>Faturamento</h2><button class="btn ghost dlb" id="fRef">Atualizar</button></div>
-    <div class="seg repseg" role="group" aria-label="Lista"><button data-ft="fat" aria-pressed="${F.tab==='fat'}">A faturar (${aFat.length})</button><button data-ft="sep" aria-pressed="${F.tab==='sep'}">Em separação (${emSep.length})</button><button data-ft="feitos" aria-pressed="${F.tab==='feitos'}">Faturados</button><button data-ft="prec" aria-pressed="false">Precificar notas${(S.receipts||[]).some(r=>r.status==='conferida')?' ('+(S.receipts||[]).filter(r=>r.status==='conferida').length+')':''}</button></div>
+    <div class="seg repseg" role="group" aria-label="Lista"><button data-ft="fat" aria-pressed="${F.tab==='fat'}">A faturar (${aFat.length})</button><button data-ft="sep" aria-pressed="${F.tab==='sep'}">Em separação (${emSep.length})</button><button data-ft="feitos" aria-pressed="${F.tab==='feitos'}">Faturados</button><button data-ft="acerto" aria-pressed="false">Acerto${S.orders.some(pendSettle)?' ('+S.orders.filter(pendSettle).length+')':''}</button><button data-ft="prec" aria-pressed="false">Precificar notas${(S.receipts||[]).some(r=>r.status==='conferida')?' ('+(S.receipts||[]).filter(r=>r.status==='conferida').length+')':''}</button></div>
     <div class="panel fattools">
       <div class="row" style="gap:8px"><input type="text" id="fq" value="${esc(F.q)}" placeholder="Buscar por cliente, nº ou CNPJ" style="flex:1;min-width:180px" aria-label="Buscar pedido">
         ${F.tab==='feitos'?`<select id="fper" style="width:auto" aria-label="Período">${[['hoje','Hoje'],['7','Últimos 7 dias'],['30','Últimos 30 dias'],['tudo','Tudo']].map(([k,v])=>`<option value="${k}" ${F.per===k?'selected':''}>${v}</option>`).join('')}</select>`:''}</div>

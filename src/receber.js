@@ -210,13 +210,35 @@ function precEdit(el,r){const P=ui.prc;P.lk=P.lk||{};
 /* faturamento: aba "Precificar notas" dentro da tela dela */
 function fatPrecView(app,F){const n=rcPend().length;
   app.innerHTML=`<div class="sectionhead"><h2>Faturamento</h2></div>
-    <div class="seg repseg" role="group" aria-label="Lista"><button data-ft="fat" aria-pressed="false">A faturar</button><button data-ft="sep" aria-pressed="false">Em separação</button><button data-ft="feitos" aria-pressed="false">Faturados</button><button data-ft="prec" aria-pressed="true">Precificar notas${n?' ('+n+')':''}</button></div><div id="precwrap"></div>`;
+    <div class="seg repseg" role="group" aria-label="Lista"><button data-ft="fat" aria-pressed="false">A faturar</button><button data-ft="sep" aria-pressed="false">Em separação</button><button data-ft="feitos" aria-pressed="false">Faturados</button><button data-ft="acerto" aria-pressed="false">Acerto${S.orders.some(pendSettle)?' ('+S.orders.filter(pendSettle).length+')':''}</button><button data-ft="prec" aria-pressed="true">Precificar notas${n?' ('+n+')':''}</button></div><div id="precwrap"></div>`;
   app.querySelectorAll('[data-ft]').forEach(b=>b.onclick=()=>{F.tab=b.dataset.ft;F.sel={};renderFat()});
   precScreen($('#precwrap'))}
 /* aviso fixo no painel do administrador enquanto houver nota sem preço aprovado */
 function rcAlert(){const c0=$('#tabc'),sj=(S.stariaJobs||[]).filter(j=>j.status==='pendente');
   if(c0&&sj.length&&ui.tab==='produtos'){const d=document.createElement('div');d.className='notice';d.style.marginBottom='12px';const n=sj.reduce((a,j)=>a+(j.terms||[]).length,0);
     d.innerHTML=`<b>${n} código${n>1?'s':''} aguardando o Claude consultar o StarIA.</b> <span class="small">Peça no Claude: "processa as consultas do StarIA". O resultado aparece aqui sozinho.</span>`;c0.prepend(d)}
+  {const pa=S.orders.filter(pendSettle);if(c0&&pa.length&&ui.tab!=='entregas'){const d=document.createElement('div');d.className='rcalert';const t=pa.reduce((a,o)=>a+(Number(o.delivered.collect)||o.total),0);
+    d.innerHTML=`<span><b>${pa.length} entrega${pa.length>1?'s':''} aguardando acerto</b> (dinheiro/PIX, ${brl(t)}). Só concluem quando você ou o faturamento confirmar que recebeu.</span><button type="button" class="btn dlb">Ver acertos</button>`;
+    c0.prepend(d);d.querySelector('button').onclick=()=>{ui.tab='entregas';renderAdmin();window.scrollTo(0,0)}}}
   const n=rcPend().length,c=$('#tabc');if(!n||!c||ui.tab==='precnotas')return;
   const d=document.createElement('div');d.className='rcalert';d.innerHTML=`<span><b>${n} nota${n>1?'s':''} de entrada esperando preço.</b> O estoque já entrou; aprove os preços em Produtos › Precificação de notas.</span><button type="button" class="btn dlb">Precificar agora</button>`;
   c.prepend(d);d.querySelector('button').onclick=()=>{ui.tab='precnotas';renderAdmin();window.scrollTo(0,0)}}
+/* ---------- ACERTO DO MOTORISTA: dinheiro e PIX recebidos na entrega (faturamento) ---------- */
+function fatAcertoView(app,F){const L=S.orders.filter(pendSettle).sort((a,b)=>String(a.delivered.at).localeCompare(String(b.delivered.at))),n=rcPend().length;
+  const byDrv={};L.forEach(o=>{(byDrv[o.delivered.drv||'']=byDrv[o.delivered.drv||'']||[]).push(o)});
+  app.innerHTML=`<div class="sectionhead"><h2>Faturamento</h2></div>
+    <div class="seg repseg" role="group" aria-label="Lista"><button data-ft="fat" aria-pressed="false">A faturar</button><button data-ft="sep" aria-pressed="false">Em separação</button><button data-ft="feitos" aria-pressed="false">Faturados</button><button data-ft="acerto" aria-pressed="true">Acerto${L.length?' ('+L.length+')':''}</button><button data-ft="prec" aria-pressed="false">Precificar notas${n?' ('+n+')':''}</button></div>
+    <p class="small muted" style="margin:0 0 12px">Entregas pagas em <b>dinheiro</b> ou <b>PIX</b> só ficam concluídas quando você confirma que o dinheiro chegou na loja ou que o PIX caiu na conta.</p>
+    ${L.length?Object.keys(byDrv).map(v=>{const os=byDrv[v],din=os.filter(o=>o.delivered.how==='dinheiro'),tot=din.reduce((a,o)=>a+(Number(o.delivered.collect)||0),0);
+      return `<section class="panel acsec"><div class="enth"><b>🚚 ${esc(drvName(v)||'Motorista')}</b>${din.length?`<span class="small">Dinheiro com ele: <b class="num">${brl(tot)}</b></span>`:''}</div>
+        ${os.map(o=>`<div class="acrow"><span><b>nº ${o.no} · ${esc(o.customer)}</b><span class="small muted">${o.delivered.how==='pix'?'PIX':'Dinheiro'} · ${brl(Number(o.delivered.collect)||o.total)} · entregue ${dBR(String(o.delivered.at).slice(0,10))}</span></span>
+          <button class="btn dlb" data-acok="${o.id}">${o.delivered.how==='pix'?'Conferi o PIX':'Recebi o dinheiro'}</button></div>`).join('')}
+        ${din.length>1?`<div class="row"><button class="btn ghost dlb" data-acall="${v}">Recebi todo o dinheiro (${brl(tot)})</button></div>`:''}</section>`}).join('')
+      :'<div class="empty">Nenhuma entrega aguardando acerto.</div>'}`;
+  app.querySelectorAll('[data-ft]').forEach(b=>b.onclick=()=>{F.tab=b.dataset.ft;F.sel={};renderFat()});
+  const done=o=>{o.delivered.settled=true;o.delivered.settledAt=new Date().toISOString();o.delivered.settledBy=ui.biller||ui.adminName||''};
+  app.querySelectorAll('[data-acok]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.acok);if(!o||!pendSettle(o))return;
+    if(!confirm((o.delivered.how==='pix'?'Confirma que o PIX de ':'Confirma que recebeu em dinheiro ')+brl(Number(o.delivered.collect)||o.total)+' do pedido nº '+o.no+'?'))return;done(o);save();toast('Pedido nº '+o.no+' concluído');renderFat()});
+  app.querySelectorAll('[data-acall]').forEach(b=>b.onclick=()=>{const os=(byDrv[b.dataset.acall]||[]).filter(o=>o.delivered.how==='dinheiro');const tot=os.reduce((a,o)=>a+(Number(o.delivered.collect)||0),0);
+    if(!confirm('Confirma que recebeu '+brl(tot)+' em dinheiro de '+(drvName(b.dataset.acall)||'motorista')+' ('+os.length+' pedidos)?'))return;os.forEach(done);save();toast('Acerto registrado');renderFat()});
+}

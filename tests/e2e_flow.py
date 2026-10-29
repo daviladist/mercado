@@ -158,6 +158,11 @@ with sync_playwright() as pw:
         say('canhoto no admin:', src[:40], 'largura', nat)
     if adm.locator('[data-dset]').count(): adm.locator('[data-dset]').first.click(); wait_sync(adm, 800); say('acerto:', toast(adm))
     adm.screenshot(path=f'{OUT}/f08_admin_entregas.png', full_page=True)
+    # ---------- faturamento confirma o PIX (acerto)
+    ft.on('dialog', lambda d: d.accept()); ft.reload(); ft.wait_for_timeout(1800); ft.click('[data-ft="acerto"]'); ft.wait_for_timeout(500)
+    say('acerto pendente:', ft.locator('#app .acrow').all_inner_texts())
+    for _ in range(ft.locator('[data-acok]').count()): ft.locator('[data-acok]').first.click(); wait_sync(ft, 800)
+    say('acerto depois:', ft.locator('#app').inner_text()[:200].replace('\n', ' / '))
     # ---------- nada guardado nos aparelhos
     for nm, pg in [('cliente', cli), ('vendedor', ven), ('conferente', cf), ('faturamento', ft), ('entregador', ent), ('admin', adm)]:
         ls = pg.evaluate('()=>Object.keys(localStorage).map(k=>k+"="+String(localStorage.getItem(k)).length)')
@@ -181,6 +186,7 @@ chk(all(o.get('billed') and o['billed'].get('nf') for o in (k, v)), 'os dois ped
 chk(all(abs(o['total'] * 100 - round(o['total'] * 100)) < 1e-6 for o in S['orders']), 'totais sem resíduo de arredondamento')
 recs = [r for r in S['receivables'] if r.get('orderId') in (k['id'], v['id'])]
 chk(len({r['id'] for r in recs}) == len(recs), f'contas a receber sem duplicata ({len(recs)})')
+chk(k.get('delivered', {}).get('settled') is True and v.get('delivered', {}).get('settled') is True, f"acerto feito: dinheiro e PIX confirmados ({k.get('delivered', {}).get('settledBy')}, {v.get('delivered', {}).get('settledBy')})")
 chk(not errs, 'nenhum erro de tela nem resposta de erro da API: ' + '; '.join(errs[:5]))
 print('ERROS', errs)
 sys.exit(1 if fails else 0)
