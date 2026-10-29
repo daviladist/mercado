@@ -48,7 +48,7 @@ function save(){clearTimeout(SRV.t);SRV.t=setTimeout(srvSync,120)}
 async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
   const {ch,order}=srvDiff();if(!ch.length&&!Object.keys(order).length)return;
   SRV.busy=true;srvBadge(true);
-  try{const sent={};ch.forEach(x=>{if(x.op==='put')sent[x.c+':'+x.id]=JSON.stringify(x.doc)});const r=await api('/api/sync',{changes:ch,order});const t=srvApply(r,order,sent);if(t.has('orders')||t.has('receivables')||(ui.admin&&['customers','sellers','checkers','billers','vehicles','admins'].some(c=>t.has(c))))srvSoftRender()}
+  try{const sent={};ch.forEach(x=>{if(x.op==='put')sent[x.c+':'+x.id]=JSON.stringify(x.doc)});const r=await api('/api/sync',{changes:ch,order});const t=srvApply(r,order,sent);if(ui.admin&&['customers','sellers','checkers','billers','vehicles','admins'].some(c=>t.has(c)))srvSoftRender();else if(t.has('orders')||t.has('receivables'))srvSoftRender()}
   catch(e){if(e.status===401){toast('Sua sessão terminou. Entre de novo.');setTimeout(()=>location.reload(),1200);return}
     if(e.data&&e.data.mustReset){srvResetScreen();return}
     if(e.status===409){/* alguém gravou o mesmo registro antes: junta as mudanças quando foram em campos diferentes */
@@ -61,7 +61,7 @@ async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
   finally{SRV.busy=false;srvBadge(false);if(SRV.again){SRV.again=false;srvSync()}}}
 function srvBadge(on){let b=document.getElementById('srvbadge');if(!b){b=document.createElement('div');b.id='srvbadge';b.className='srvbadge';b.textContent='Salvando…';document.body.appendChild(b)}b.hidden=!on}
 /* atualiza a tela atual sem perder o que a pessoa está digitando */
-function srvSoftRender(force){const typing=document.activeElement&&document.activeElement.matches('input,textarea,select');if(typing&&!force)return;const y=window.scrollY;
+function srvSoftRender(force){const typing=(document.activeElement&&document.activeElement.matches('input,textarea,select'))||(ui.tab==='cadastros'&&[...document.querySelectorAll('#cadc input[type=text],#cadc input[type=password]')].some(i=>i.value&&!i.closest('.pwbox')));if(typing&&!force)return;const y=window.scrollY;
   try{renderTop();if(ui.view==='conf'){if(!ui.confSug)renderConf()}else if(ui.view==='vend'){if(!ui.lanc||force)renderVend()}else if(ui.view==='fat')renderFat();else if(ui.view==='ent')renderEnt();else if(ui.view==='cliente'){if(ui.cliPage!=='catalogo'||force)renderClient()}else if(ui.admin&&(force||((ui.tab==='pedidos'&&!ui.lanc&&!ui.adj&&!ui.romView)||ui.tab==='hoje'||(ui.tab==='cadastros'&&!ui.edit&&!ui.selEdit))))renderAdmin()}catch(e){}
   window.scrollTo(0,y)}
 function reloadState(){srvRefresh(true)}
@@ -84,7 +84,7 @@ function srvAfterLogin(){const me=SRV.me;SRV.lastPass='';ui.view=ROLE_VIEW[me.ro
   if(me.role==='entregador')ui.driver=me.refId;
   try{history.replaceState(null,'',location.pathname+(me.role==='cliente'?'':'#'+me.role))}catch(e){}
   render();srvStartPoll()}
-async function srvLogout(){try{await api('/api/logout',{})}catch(e){}try{location.hash=SRV.me&&SRV.me.role!=='cliente'?SRV.me.role:''}catch(e){}location.reload()}
+async function srvLogout(){try{await api('/api/logout',{})}catch(e){}try{history.replaceState(null,'',location.pathname)}catch(e){}location.reload()}
 /* primeira entrada com senha provisória: a pessoa cria a senha dela */
 function srvResetScreen(){ui.view=ROLE_VIEW[SRV.me.role]||'cliente';const app=$('#app');try{renderTop()}catch(e){}$('#topbar').innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name||'ATACADO DAVILA')}</span><small>Crie sua senha</small></span></div>`;
   app.innerHTML=`<div class="loginhero"><img src="${LOGO}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="rsf"><h2>Crie a sua senha</h2>
@@ -106,7 +106,7 @@ function srvPassScreen(){const app=$('#app');app.innerHTML=`<form class="login p
   $('#psf').onsubmit=async e=>{e.preventDefault();if($('#psn').value!==$('#psn2').value){$('#pse').textContent='As senhas não conferem.';return}
     try{await api('/api/password',{current:$('#pso').value,next:$('#psn').value});toast('Senha trocada.');render()}catch(er){$('#pse').textContent=er.message}}}
 /* links de acesso da equipe na tela de login do cliente (cada pessoa entra pelo seu) */
-function srvTeamLinks(cur){return `<div class="teamlinks small">${cur==='cliente'?'Acesso da equipe:':'Outros acessos:'} ${[['cliente','Cliente'],['admin','Administrador'],['vend','Vendedor'],['conf','Conferente'],['fat','Faturamento'],['ent','Entregador']].filter(([k])=>k!==cur).map(([k,v])=>`<a href="#${VIEW_ROLE[k]}" data-goview="${k}">${v}</a>`).join(' · ')}</div>`}
+function srvTeamLinks(cur){return cur==='cliente'?'<div class="teamlinks small">Equipe da loja (vendedor, conferente, faturamento, motorista e administrador) também entra por aqui, com o usuário e a senha que a loja passou.</div>':''}
 function srvBindTeamLinks(){document.querySelectorAll('[data-goview]').forEach(a=>a.onclick=e=>{e.preventDefault();ui.view=a.dataset.goview;try{history.replaceState(null,'','#'+VIEW_ROLE[ui.view])}catch(_){}render()})}
 function srvHashView(){const h=String(location.hash||'').replace('#','');const k=Object.keys(VIEW_ROLE).find(v=>VIEW_ROLE[v]===h);return k||'cliente'}
 /* trava de margem do vendedor: o cálculo é feito no servidor (o vendedor não recebe custo) */
@@ -126,7 +126,7 @@ async function srvTempPasswords(box){try{const r=await api('/api/temp-passwords'
   box.innerHTML=`<div class="notice"><b>Anote ou imprima agora:</b> estas senhas aparecem só esta vez. Cada pessoa cria a própria senha no primeiro acesso.</div>
     <div class="tablewrap"><table class="btable"><thead><tr><th>Função</th><th>Nome</th><th>Usuário</th><th>Senha provisória</th></tr></thead><tbody>${r.list.map(x=>`<tr><td>${R[x.role]||x.role}</td><td>${esc(x.name||'')}</td><td>${esc(x.login)}</td><td><b class="num">${esc(x.pass)}</b></td></tr>`).join('')}</tbody></table></div>
     <div class="row"><button type="button" class="btn ghost" onclick="window.print()">Imprimir</button></div>`;await loadState()}catch(e){box.innerHTML='<div class="err">'+esc(e.message)+'</div>'}}
-function srvPassLabel(x){if(x.pass)return 'senha nova (salvando…)';return x.hasPass?(x.mustReset?'senha provisória (troca no 1º acesso)':'com senha'):'sem senha'}
+function srvPassLabel(x){return x.pass?'senha base (salvando…)':x.hasPass?(x.mustReset?'senha base · aguardando 1º acesso':'senha própria definida'):'sem senha'}
 /* primeiro acesso ao sistema novo: criar o administrador (exige o código de instalação) */
 async function srvMaybeSetup(){try{const r=await api('/api/setup-status');if(!r.needsSetup||SRV.me)return}catch(e){return}
   const app=$('#app');app.innerHTML=`<div class="loginhero"><img src="${LOGO}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="stf"><h2>Criar o administrador</h2>
@@ -152,3 +152,20 @@ function srvMerge(P){let applied=0,lost=0;
     if(clash){lost++;return}
     Object.entries(p.keys).forEach(([k,v])=>{if(v===undefined)delete d[k];else d[k]=v});applied++});
   return {applied,lost}}
+/* administrador: redefinir a senha de alguém (nova senha base; a pessoa cria a dela no próximo acesso) */
+function srvResetBtn(coll,x){return (x&&(x.login||(coll==='customers'&&x.doc)))?`<button type="button" class="btn ghost dlb" data-pwreset="${coll}|${x.id}">${x.hasPass?'Redefinir senha':'Definir senha base'}</button>`:''}
+function srvSuggestPass(){const a='abcdefghjkmnpqrstuvwxyz23456789',b=new Uint8Array(8);crypto.getRandomValues(b);let p='';b.forEach(v=>p+=a[v%a.length]);return p.slice(0,4)+'-'+p.slice(4)}
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-pwreset]');if(!b||!SRV.me||SRV.me.role!=='admin')return;e.preventDefault();
+  const [coll,id]=b.dataset.pwreset.split('|'),d=(S[coll]||[]).find(x=>x.id===id);if(!d)return;const row=b.closest('.prow')||b.parentElement;
+  const old=row.parentElement.querySelector('.pwbox[data-for="'+id+'"]');if(old){old.remove();return}
+  const box=document.createElement('div');box.className='pwbox';box.dataset.for=id;const nm=d.name||d.driver||d.login||'';
+  box.innerHTML=`<b>Senha base para ${esc(nm)}</b><div class="small muted">Usuário de entrada: <b>${esc(d.login||String(d.doc||''))}</b>. A pessoa entra com esta senha e o app pede para ela criar a própria. Você não fica sabendo a senha nova.</div>
+    <div class="row" style="gap:6px;align-items:center;flex-wrap:wrap"><input type="text" class="pwin" value="${srvSuggestPass()}" aria-label="Senha base" style="max-width:200px" autocomplete="off"><button type="button" class="btn dlb pwok">Salvar senha base</button><button type="button" class="btn ghost dlb pwx">Cancelar</button></div><div class="err pwerr"></div>`;
+  row.after(box);const inp=box.querySelector('.pwin');inp.focus();inp.select();
+  box.querySelector('.pwx').onclick=()=>box.remove();
+  box.querySelector('.pwok').onclick=async()=>{const pass=inp.value.trim(),er=box.querySelector('.pwerr');er.textContent='';
+    if(pass.length<8){er.textContent='Mínimo de 8 caracteres.';return}
+    try{await api('/api/users/reset',{coll,id,pass});d.hasPass=true;d.mustReset=true;if(SRV.base[coll])SRV.base[coll][id]=JSON.stringify(d);
+      box.innerHTML=`<div class="notice"><b>Pronto.</b> Passe para ${esc(nm)}: usuário <b>${esc(d.login||String(d.doc||''))}</b> e senha base <b class="num">${esc(pass)}</b>. No primeiro acesso o app pede uma senha nova. Se a pessoa estava logada em algum aparelho, foi desconectada.</div>`;
+      const lbl=row.querySelector('.pwlbl');if(lbl)lbl.textContent=srvPassLabel(d)}
+    catch(er2){er.textContent=er2.message}}});

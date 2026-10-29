@@ -149,7 +149,7 @@ print('\n== 3. Sessão, CSRF e força bruta')
 s, r = Client().req('/api/state'); check(s == 401, 'sem login não recebe nada')
 s, r = cli.req('/api/sync', {'changes': []}, headers={'Content-Type': 'application/json'}); check(s == 403, 'envio sem o cabeçalho do app (CSRF): recusado')
 s, r = cli.req('/api/sync', {'changes': []}, headers={'Content-Type': 'application/json', 'X-App': '1', 'Origin': 'https://site-malicioso.com'}); check(s == 403, 'envio vindo de outro site: recusado')
-s, r = Client().login('admin', 'kesfi', CREDS['kesfi']); check(s == 401, 'cliente tenta entrar como administrador: recusado')
+s, r = Client().login('admin', 'kesfi', CREDS['kesfi']); check(s == 200 and r.get('role') == 'cliente', f"cliente na tela do administrador: entra só como cliente ({r.get('role')})")
 s, r = Client().login('cliente', "' or 1=1 --", 'x'); check(s == 401, 'tentativa de SQL injection no login: recusada')
 bf = Client(); codes = [bf.login('faturamento', 'm', 'errada%d' % i)[0] for i in range(6)]
 check(codes[:5] == [401] * 5 and codes[5] == 429, f'6ª senha errada seguida: usuário bloqueado 15 min ({codes})')

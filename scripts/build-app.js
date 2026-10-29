@@ -78,14 +78,27 @@ R("<span class=\"small muted\">Usuário: ${esc(k.login)} · Senha: ${esc(k.pass)
 R("${v.login?' · acesso de entregador: '+esc(v.login)+' / '+esc(v.pass):' · sem acesso ao app'}", "${v.login?' · acesso de entregador: '+esc(v.login)+' · '+srvPassLabel(v):' · sem acesso ao app'}");
 R("Acesso: <b>${esc(x.login)}</b> · senha ${esc(x.pass||'')}", "Acesso: <b>${esc(x.login)}</b> · ${srvPassLabel(x)}");
 R("<span class=\"small muted\">Usuário: ${esc(x.login)} · Senha: ${esc(x.pass)}${x.phone?", "<span class=\"small muted\">Usuário: ${esc(x.login)} · ${srvPassLabel(x)}${x.phone?");
-R(`<input type="text" id="cp" value="\${esc(e.pass)}" required>`, `<input type="password" id="cp" value="" autocomplete="new-password" placeholder="\${e.id&&e.hasPass?'Em branco = manter a senha atual':'Senha provisória (mínimo 8)'}">`);
+R(`<input type="text" id="cp" value="\${esc(e.pass)}" required>`, `<input type="password" id="cp" value="" autocomplete="new-password" placeholder="\${e.id&&e.hasPass?'Em branco = manter a senha atual':'Senha base (mín. 8): a pessoa troca no 1º acesso'}">`);
 R("pass:Math.floor(1000+Math.random()*9000).toString(),phone:''", "pass:'',phone:''");
 R("const cu={...e,id:e.id||uid(),name,login,pass:$('#cp').value,", "if($('#cp').value&&$('#cp').value.length<8){$('#cerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}\n      const cu={...e,id:e.id||uid(),name,login,pass:$('#cp').value,");
-R(`<input type="text" id="slpw" value="\${esc(E.pass||(E.id?'':String(Math.floor(1000+Math.random()*9000))))}">`, `<input type="password" id="slpw" value="" autocomplete="new-password" placeholder="\${E.id&&E.hasPass?'Em branco = manter a senha atual':'Senha provisória (mínimo 8)'}">`);
+R(`<input type="text" id="slpw" value="\${esc(E.pass||(E.id?'':String(Math.floor(1000+Math.random()*9000))))}">`, `<input type="password" id="slpw" value="" autocomplete="new-password" placeholder="\${E.id&&E.hasPass?'Em branco = manter a senha atual':'Senha base (mín. 8): a pessoa troca no 1º acesso'}">`);
 R("if(lg&&!pw){$('#slerr').textContent='Informe a senha do vendedor.';return}", "if(lg&&!pw&&!E.hasPass){$('#slerr').textContent='Informe a senha do vendedor.';return}if(pw&&pw.length<8){$('#slerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}");
 R("if(!n||!l||!p){$('#ckerr').textContent='Preencha nome, usuário e senha.';return}", "if(!n||!l||!p){$('#ckerr').textContent='Preencha nome, usuário e senha.';return}if(p.length<8){$('#ckerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}");
 R("if(!n||!l||!p){$('#fkerr').textContent='Preencha nome, usuário e senha.';return}", "if(!n||!l||!p){$('#fkerr').textContent='Preencha nome, usuário e senha.';return}if(p.length<8){$('#fkerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}");
 R("if(lg&&S.vehicles.some(x=>x.login===lg)){toast('Esse usuário já existe.');return}", "if(lg&&S.vehicles.some(x=>x.login===lg)){toast('Esse usuário já existe.');return}if(lg&&($('#vpas').value||'').trim().length<8){toast('A senha do motorista precisa ter pelo menos 8 caracteres.');return}");
+
+
+// ---------- 6b. botão "Redefinir senha" em cada pessoa e senha base nos formulários
+R("data-ckdel=\"${k.id}\">Excluir</button>`}</div>`).join('')", "data-ckdel=\"${k.id}\">Excluir</button>`}</div></div>`).join('')");
+R("      ${ui.confirmDel==='ck'+k.id?", "      <div class=\"row\" style=\"gap:6px\">${srvResetBtn('checkers',k)}${ui.confirmDel==='ck'+k.id?");
+R("data-fkdel=\"${k.id}\">Excluir</button>`}</div>`).join('')", "data-fkdel=\"${k.id}\">Excluir</button>`}</div></div>`).join('')");
+R("      ${ui.confirmDel==='fk'+k.id?", "      <div class=\"row\" style=\"gap:6px\">${srvResetBtn('billers',k)}${ui.confirmDel==='fk'+k.id?");
+R("data-vdel=\"${v.id}\">Excluir</button>`}</div>`).join('')", "data-vdel=\"${v.id}\">Excluir</button>`}</div></div>`).join('')");
+R("      ${ui.confirmDel==='veh'+v.id?", "      <div class=\"row\" style=\"gap:6px\">${srvResetBtn('vehicles',v)}${ui.confirmDel==='veh'+v.id?");
+R("data-sle=\"${x.id}\">Editar</button>${ui.confirmDel==='sl'+x.id?", "data-sle=\"${x.id}\">Editar</button>${srvResetBtn('sellers',x)}${ui.confirmDel==='sl'+x.id?");
+R("<button class=\"btn ghost\" data-ce=\"${x.id}\" style=\"min-height:40px;padding:8px 12px\">Editar</button></div>`).join('')", "<div class=\"row\" style=\"gap:6px;justify-content:flex-end\">${srvResetBtn('customers',x)}<button class=\"btn ghost\" data-ce=\"${x.id}\" style=\"min-height:40px;padding:8px 12px\">Editar</button></div></div>`).join('')");
+
+R("<h2>${isAdmin?'Acesso do administrador':'Entrar para fazer pedido'}</h2>", "<h2>${isAdmin?'Acesso do administrador':'Entrar'}</h2>");
 
 // ---------- 7. trava de margem e negociação: resposta do servidor
 R("function lnLock(R2,cli,L){const me=SVme();if(!me||!R2.items.length)return null;", "function lnLock(R2,cli,L){const me=SVme();if(!me||!R2.items.length)return null;if(SRV.me&&SRV.me.role==='vendedor')return srvLock(R2,cli,L);");
@@ -110,7 +123,7 @@ R("function markSeen(c){const t=new Date().toISOString();S.orders.forEach(o=>{if
   "function markSeen(c){const t=new Date().toISOString();let ch=false;S.orders.forEach(o=>{if(o.customerId===c.id&&(o.events||[]).some(e=>!o.seenAt||e.at>o.seenAt)){o.seenAt=t;ch=true}});if(ch)save()}");
 
 // ---------- 9. visual: barra de demonstração some; aviso de "salvando"
-R('.demo{background:var(--surface-2);border-bottom:1px solid var(--line);font-size:13px}', '.demo{display:none!important}.teamlinks{margin-top:12px;color:var(--muted);line-height:1.8}.teamlinks a{color:var(--accent);font-weight:600}.srvbadge{position:fixed;right:12px;bottom:12px;background:var(--fg);color:var(--bg);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;z-index:99;opacity:.85}.srvbadge[hidden]{display:none}');
+R('.demo{background:var(--surface-2);border-bottom:1px solid var(--line);font-size:13px}', '.demo{display:none!important}.teamlinks{margin-top:12px;color:var(--muted);line-height:1.8}.teamlinks a{color:var(--accent);font-weight:600}.srvbadge{position:fixed;right:12px;bottom:12px;background:var(--fg);color:var(--bg);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;z-index:99;opacity:.85}.srvbadge[hidden]{display:none}.pwbox{display:grid;gap:8px;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;margin:2px 0 10px;background:var(--surface)}');
 R('<title>Pedidos Atacado</title>', "<title>D'Ávila Pedidos</title>");
 
 // ---------- documento final

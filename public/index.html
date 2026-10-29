@@ -33,7 +33,7 @@ button{cursor:pointer}
 .num{font-variant-numeric:tabular-nums}
 
 /* barra de demonstração */
-.demo{display:none!important}.teamlinks{margin-top:12px;color:var(--muted);line-height:1.8}.teamlinks a{color:var(--accent);font-weight:600}.srvbadge{position:fixed;right:12px;bottom:12px;background:var(--fg);color:var(--bg);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;z-index:99;opacity:.85}.srvbadge[hidden]{display:none}
+.demo{display:none!important}.teamlinks{margin-top:12px;color:var(--muted);line-height:1.8}.teamlinks a{color:var(--accent);font-weight:600}.srvbadge{position:fixed;right:12px;bottom:12px;background:var(--fg);color:var(--bg);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;z-index:99;opacity:.85}.srvbadge[hidden]{display:none}.pwbox{display:grid;gap:8px;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;margin:2px 0 10px;background:var(--surface)}
 .demo .wrap{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding-block:8px}
 .demo b{font-weight:600}
 .seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px}
@@ -1088,7 +1088,7 @@ function save(){clearTimeout(SRV.t);SRV.t=setTimeout(srvSync,120)}
 async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
   const {ch,order}=srvDiff();if(!ch.length&&!Object.keys(order).length)return;
   SRV.busy=true;srvBadge(true);
-  try{const sent={};ch.forEach(x=>{if(x.op==='put')sent[x.c+':'+x.id]=JSON.stringify(x.doc)});const r=await api('/api/sync',{changes:ch,order});const t=srvApply(r,order,sent);if(t.has('orders')||t.has('receivables')||(ui.admin&&['customers','sellers','checkers','billers','vehicles','admins'].some(c=>t.has(c))))srvSoftRender()}
+  try{const sent={};ch.forEach(x=>{if(x.op==='put')sent[x.c+':'+x.id]=JSON.stringify(x.doc)});const r=await api('/api/sync',{changes:ch,order});const t=srvApply(r,order,sent);if(ui.admin&&['customers','sellers','checkers','billers','vehicles','admins'].some(c=>t.has(c)))srvSoftRender();else if(t.has('orders')||t.has('receivables'))srvSoftRender()}
   catch(e){if(e.status===401){toast('Sua sessão terminou. Entre de novo.');setTimeout(()=>location.reload(),1200);return}
     if(e.data&&e.data.mustReset){srvResetScreen();return}
     if(e.status===409){/* alguém gravou o mesmo registro antes: junta as mudanças quando foram em campos diferentes */
@@ -1101,7 +1101,7 @@ async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
   finally{SRV.busy=false;srvBadge(false);if(SRV.again){SRV.again=false;srvSync()}}}
 function srvBadge(on){let b=document.getElementById('srvbadge');if(!b){b=document.createElement('div');b.id='srvbadge';b.className='srvbadge';b.textContent='Salvando…';document.body.appendChild(b)}b.hidden=!on}
 /* atualiza a tela atual sem perder o que a pessoa está digitando */
-function srvSoftRender(force){const typing=document.activeElement&&document.activeElement.matches('input,textarea,select');if(typing&&!force)return;const y=window.scrollY;
+function srvSoftRender(force){const typing=(document.activeElement&&document.activeElement.matches('input,textarea,select'))||(ui.tab==='cadastros'&&[...document.querySelectorAll('#cadc input[type=text],#cadc input[type=password]')].some(i=>i.value&&!i.closest('.pwbox')));if(typing&&!force)return;const y=window.scrollY;
   try{renderTop();if(ui.view==='conf'){if(!ui.confSug)renderConf()}else if(ui.view==='vend'){if(!ui.lanc||force)renderVend()}else if(ui.view==='fat')renderFat();else if(ui.view==='ent')renderEnt();else if(ui.view==='cliente'){if(ui.cliPage!=='catalogo'||force)renderClient()}else if(ui.admin&&(force||((ui.tab==='pedidos'&&!ui.lanc&&!ui.adj&&!ui.romView)||ui.tab==='hoje'||(ui.tab==='cadastros'&&!ui.edit&&!ui.selEdit))))renderAdmin()}catch(e){}
   window.scrollTo(0,y)}
 function reloadState(){srvRefresh(true)}
@@ -1124,7 +1124,7 @@ function srvAfterLogin(){const me=SRV.me;SRV.lastPass='';ui.view=ROLE_VIEW[me.ro
   if(me.role==='entregador')ui.driver=me.refId;
   try{history.replaceState(null,'',location.pathname+(me.role==='cliente'?'':'#'+me.role))}catch(e){}
   render();srvStartPoll()}
-async function srvLogout(){try{await api('/api/logout',{})}catch(e){}try{location.hash=SRV.me&&SRV.me.role!=='cliente'?SRV.me.role:''}catch(e){}location.reload()}
+async function srvLogout(){try{await api('/api/logout',{})}catch(e){}try{history.replaceState(null,'',location.pathname)}catch(e){}location.reload()}
 /* primeira entrada com senha provisória: a pessoa cria a senha dela */
 function srvResetScreen(){ui.view=ROLE_VIEW[SRV.me.role]||'cliente';const app=$('#app');try{renderTop()}catch(e){}$('#topbar').innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name||'ATACADO DAVILA')}</span><small>Crie sua senha</small></span></div>`;
   app.innerHTML=`<div class="loginhero"><img src="${LOGO}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="rsf"><h2>Crie a sua senha</h2>
@@ -1146,7 +1146,7 @@ function srvPassScreen(){const app=$('#app');app.innerHTML=`<form class="login p
   $('#psf').onsubmit=async e=>{e.preventDefault();if($('#psn').value!==$('#psn2').value){$('#pse').textContent='As senhas não conferem.';return}
     try{await api('/api/password',{current:$('#pso').value,next:$('#psn').value});toast('Senha trocada.');render()}catch(er){$('#pse').textContent=er.message}}}
 /* links de acesso da equipe na tela de login do cliente (cada pessoa entra pelo seu) */
-function srvTeamLinks(cur){return `<div class="teamlinks small">${cur==='cliente'?'Acesso da equipe:':'Outros acessos:'} ${[['cliente','Cliente'],['admin','Administrador'],['vend','Vendedor'],['conf','Conferente'],['fat','Faturamento'],['ent','Entregador']].filter(([k])=>k!==cur).map(([k,v])=>`<a href="#${VIEW_ROLE[k]}" data-goview="${k}">${v}</a>`).join(' · ')}</div>`}
+function srvTeamLinks(cur){return cur==='cliente'?'<div class="teamlinks small">Equipe da loja (vendedor, conferente, faturamento, motorista e administrador) também entra por aqui, com o usuário e a senha que a loja passou.</div>':''}
 function srvBindTeamLinks(){document.querySelectorAll('[data-goview]').forEach(a=>a.onclick=e=>{e.preventDefault();ui.view=a.dataset.goview;try{history.replaceState(null,'','#'+VIEW_ROLE[ui.view])}catch(_){}render()})}
 function srvHashView(){const h=String(location.hash||'').replace('#','');const k=Object.keys(VIEW_ROLE).find(v=>VIEW_ROLE[v]===h);return k||'cliente'}
 /* trava de margem do vendedor: o cálculo é feito no servidor (o vendedor não recebe custo) */
@@ -1166,7 +1166,7 @@ async function srvTempPasswords(box){try{const r=await api('/api/temp-passwords'
   box.innerHTML=`<div class="notice"><b>Anote ou imprima agora:</b> estas senhas aparecem só esta vez. Cada pessoa cria a própria senha no primeiro acesso.</div>
     <div class="tablewrap"><table class="btable"><thead><tr><th>Função</th><th>Nome</th><th>Usuário</th><th>Senha provisória</th></tr></thead><tbody>${r.list.map(x=>`<tr><td>${R[x.role]||x.role}</td><td>${esc(x.name||'')}</td><td>${esc(x.login)}</td><td><b class="num">${esc(x.pass)}</b></td></tr>`).join('')}</tbody></table></div>
     <div class="row"><button type="button" class="btn ghost" onclick="window.print()">Imprimir</button></div>`;await loadState()}catch(e){box.innerHTML='<div class="err">'+esc(e.message)+'</div>'}}
-function srvPassLabel(x){if(x.pass)return 'senha nova (salvando…)';return x.hasPass?(x.mustReset?'senha provisória (troca no 1º acesso)':'com senha'):'sem senha'}
+function srvPassLabel(x){return x.pass?'senha base (salvando…)':x.hasPass?(x.mustReset?'senha base · aguardando 1º acesso':'senha própria definida'):'sem senha'}
 /* primeiro acesso ao sistema novo: criar o administrador (exige o código de instalação) */
 async function srvMaybeSetup(){try{const r=await api('/api/setup-status');if(!r.needsSetup||SRV.me)return}catch(e){return}
   const app=$('#app');app.innerHTML=`<div class="loginhero"><img src="${LOGO}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="stf"><h2>Criar o administrador</h2>
@@ -1192,6 +1192,23 @@ function srvMerge(P){let applied=0,lost=0;
     if(clash){lost++;return}
     Object.entries(p.keys).forEach(([k,v])=>{if(v===undefined)delete d[k];else d[k]=v});applied++});
   return {applied,lost}}
+/* administrador: redefinir a senha de alguém (nova senha base; a pessoa cria a dela no próximo acesso) */
+function srvResetBtn(coll,x){return (x&&(x.login||(coll==='customers'&&x.doc)))?`<button type="button" class="btn ghost dlb" data-pwreset="${coll}|${x.id}">${x.hasPass?'Redefinir senha':'Definir senha base'}</button>`:''}
+function srvSuggestPass(){const a='abcdefghjkmnpqrstuvwxyz23456789',b=new Uint8Array(8);crypto.getRandomValues(b);let p='';b.forEach(v=>p+=a[v%a.length]);return p.slice(0,4)+'-'+p.slice(4)}
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-pwreset]');if(!b||!SRV.me||SRV.me.role!=='admin')return;e.preventDefault();
+  const [coll,id]=b.dataset.pwreset.split('|'),d=(S[coll]||[]).find(x=>x.id===id);if(!d)return;const row=b.closest('.prow')||b.parentElement;
+  const old=row.parentElement.querySelector('.pwbox[data-for="'+id+'"]');if(old){old.remove();return}
+  const box=document.createElement('div');box.className='pwbox';box.dataset.for=id;const nm=d.name||d.driver||d.login||'';
+  box.innerHTML=`<b>Senha base para ${esc(nm)}</b><div class="small muted">Usuário de entrada: <b>${esc(d.login||String(d.doc||''))}</b>. A pessoa entra com esta senha e o app pede para ela criar a própria. Você não fica sabendo a senha nova.</div>
+    <div class="row" style="gap:6px;align-items:center;flex-wrap:wrap"><input type="text" class="pwin" value="${srvSuggestPass()}" aria-label="Senha base" style="max-width:200px" autocomplete="off"><button type="button" class="btn dlb pwok">Salvar senha base</button><button type="button" class="btn ghost dlb pwx">Cancelar</button></div><div class="err pwerr"></div>`;
+  row.after(box);const inp=box.querySelector('.pwin');inp.focus();inp.select();
+  box.querySelector('.pwx').onclick=()=>box.remove();
+  box.querySelector('.pwok').onclick=async()=>{const pass=inp.value.trim(),er=box.querySelector('.pwerr');er.textContent='';
+    if(pass.length<8){er.textContent='Mínimo de 8 caracteres.';return}
+    try{await api('/api/users/reset',{coll,id,pass});d.hasPass=true;d.mustReset=true;if(SRV.base[coll])SRV.base[coll][id]=JSON.stringify(d);
+      box.innerHTML=`<div class="notice"><b>Pronto.</b> Passe para ${esc(nm)}: usuário <b>${esc(d.login||String(d.doc||''))}</b> e senha base <b class="num">${esc(pass)}</b>. No primeiro acesso o app pede uma senha nova. Se a pessoa estava logada em algum aparelho, foi desconectada.</div>`;
+      const lbl=row.querySelector('.pwlbl');if(lbl)lbl.textContent=srvPassLabel(d)}
+    catch(er2){er.textContent=er2.message}}});
 
 
 /* foto provisória: etiqueta colorida com as iniciais do produto */
@@ -1405,7 +1422,7 @@ function renderTop(bump){
 /* ---------- cliente ---------- */
 function loginForm(isAdmin){
   return `<div class="loginhero"><img src="${LOGO}" alt="${esc(S.store.name)}"><div>${isAdmin?'Painel do administrador':'Compras de atacado com preço de distribuidor'}</div></div><form class="login panel" id="lf">
-    <h2>${isAdmin?'Acesso do administrador':'Entrar para fazer pedido'}</h2>
+    <h2>${isAdmin?'Acesso do administrador':'Entrar'}</h2>
     <div class="field"><label for="lu">${isAdmin?'Usuário':'Usuário ou CNPJ/CPF'}</label><input type="text" id="lu" autocomplete="username" autocapitalize="none" required></div>
     <div class="field"><label for="lp">Senha</label><input type="password" id="lp" autocomplete="current-password" required></div>
     <div class="err" id="le"></div>
@@ -2422,7 +2439,7 @@ function admConferentes(){
       <div class="small muted">O conferente entra pela visão "Conferente": vê os pedidos novos e em separação, marca cada item conferido, sugere trocas ou inclusões (você aprova em Pedidos) e marca o pedido como pronto/separado. Ele não vê preços.</div>
     </div>
     ${S.checkers.length?`<div class="list" style="max-width:720px">${S.checkers.map(k=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(k.name||k.login)}</b><span class="small muted">Usuário: ${esc(k.login)} · ${srvPassLabel(k)}</span></div>
-      ${ui.confirmDel==='ck'+k.id?`<button class="btn danger dlb" data-ckok="${k.id}">Confirmar</button>`:`<button class="btn ghost dlb" data-ckdel="${k.id}">Excluir</button>`}</div>`).join('')}</div>`:'<div class="empty">Nenhum conferente cadastrado.</div>'}`;
+      <div class="row" style="gap:6px">${srvResetBtn('checkers',k)}${ui.confirmDel==='ck'+k.id?`<button class="btn danger dlb" data-ckok="${k.id}">Confirmar</button>`:`<button class="btn ghost dlb" data-ckdel="${k.id}">Excluir</button>`}</div></div>`).join('')}</div>`:'<div class="empty">Nenhum conferente cadastrado.</div>'}`;
   $('#ckadd').onclick=()=>{const n=$('#ckn').value.trim(),l=$('#ckl').value.trim().toLowerCase(),p=$('#ckp').value.trim();
     if(!n||!l||!p){$('#ckerr').textContent='Preencha nome, usuário e senha.';return}if(p.length<8){$('#ckerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}
     if(S.checkers.some(x=>x.login.toLowerCase()===l)){$('#ckerr').textContent='Esse usuário já existe.';return}
@@ -3446,7 +3463,7 @@ function admVeiculos(){
       <div class="small muted">Aparecem para escolher no romaneio e na aba Entregas. Com usuário e senha, o motorista entra pela visão "Entregador" e confirma as entregas pelo celular, com o nome de quem recebeu e a foto do canhoto.</div>
     </div>
     ${(S.vehicles||[]).length?`<div class="list" style="max-width:720px">${S.vehicles.map(v=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(v.driver||'Sem motorista')}</b><span class="small muted">${esc(v.car||'Sem veículo')}${v.login?' · acesso de entregador: '+esc(v.login)+' · '+srvPassLabel(v):' · sem acesso ao app'}</span></div>
-      ${ui.confirmDel==='veh'+v.id?`<button class="btn danger dlb" data-vdok="${v.id}">Confirmar</button>`:`<button class="btn ghost dlb" data-vdel="${v.id}">Excluir</button>`}</div>`).join('')}</div>`:'<div class="empty">Nenhum motorista cadastrado.</div>'}`;
+      <div class="row" style="gap:6px">${srvResetBtn('vehicles',v)}${ui.confirmDel==='veh'+v.id?`<button class="btn danger dlb" data-vdok="${v.id}">Confirmar</button>`:`<button class="btn ghost dlb" data-vdel="${v.id}">Excluir</button>`}</div></div>`).join('')}</div>`:'<div class="empty">Nenhum motorista cadastrado.</div>'}`;
   $('#vadd').onclick=()=>{const d=$('#vdrv').value.trim(),v=$('#vcar').value.trim();if(!d&&!v)return;const lg=($('#vlog').value||'').trim().toLowerCase();if(lg&&S.vehicles.some(x=>x.login===lg)){toast('Esse usuário já existe.');return}if(lg&&($('#vpas').value||'').trim().length<8){toast('A senha do motorista precisa ter pelo menos 8 caracteres.');return}S.vehicles.push({id:uid(),driver:d,car:v,login:lg,pass:lg?($('#vpas').value||'').trim():''});save();toast('Motorista adicionado');admVeiculos()};
   c.querySelectorAll('[data-vdel]').forEach(b=>b.onclick=()=>{ui.confirmDel='veh'+b.dataset.vdel;admVeiculos()});
   c.querySelectorAll('[data-vdok]').forEach(b=>b.onclick=()=>{S.vehicles=S.vehicles.filter(x=>x.id!==b.dataset.vdok);ui.confirmDel=null;save();admVeiculos()});
@@ -3604,7 +3621,7 @@ function admVendedores(){
       <div class="small muted">Vale para os produtos sem comissão própria. Produto com comissão cadastrada paga a dele.</div>
       <div class="vaccbox"><span class="lbl">Acesso do vendedor ao app</span>
         <div class="grid2"><div class="field"><label for="sll">Usuário</label><input type="text" id="sll" autocapitalize="none" value="${esc(E.login||'')}" placeholder="Ex.: joao"></div>
-          <div class="field"><label for="slpw">Senha</label><input type="password" id="slpw" value="" autocomplete="new-password" placeholder="${E.id&&E.hasPass?'Em branco = manter a senha atual':'Senha provisória (mínimo 8)'}"></div></div>
+          <div class="field"><label for="slpw">Senha</label><input type="password" id="slpw" value="" autocomplete="new-password" placeholder="${E.id&&E.hasPass?'Em branco = manter a senha atual':'Senha base (mín. 8): a pessoa troca no 1º acesso'}"></div></div>
         <div class="grid2"><div class="field"><label for="slmg">Margem mínima padrão (%)</label><input type="text" inputmode="decimal" id="slmg" value="${hasVal(E.minMg)?String(E.minMg).replace('.',','):''}" placeholder="Para produtos sem mínimo na categoria"><span class="small muted">Vale só para produtos cuja categoria não tem margem mínima.</span>
           <label for="sladj" style="margin-top:6px">Ajuste deste vendedor (pontos)</label><input type="text" inputmode="decimal" id="sladj" value="${hasVal(E.minAdj)?String(E.minAdj).replace('.',','):''}" placeholder="0"><span class="small muted">Ex.: 1 = exige 1 ponto a mais que o mínimo das categorias; -1 = deixa ir 1 ponto abaixo.</span></div>
           <div class="small muted" style="align-self:end">O vendedor <b>não vê</b> a margem. Ele pode mexer nos preços produto a produto; o pedido só sai se a margem do pedido inteiro ficar acima desse mínimo. Se não ficar, o pedido trava e ele pode enviar para a sua análise (aba Análise).</div></div>
@@ -3614,7 +3631,7 @@ function admVendedores(){
       <div class="err" id="slerr"></div>
       <div class="row"><button class="btn" type="submit">Salvar</button><button class="btn ghost" type="button" id="slcancel">Cancelar</button></div></form>`:''}
     ${(S.sellers||[]).length?`<div class="list" style="max-width:760px">${S.sellers.map(x=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(x.name)}</b><span class="small muted">Comissão padrão ${String(Number(x.commission)||0).replace('.',',')}% · ${nCli(x.id)} cliente${nCli(x.id)===1?'':'s'}${x.phone?' · '+esc(x.phone):''}</span><span class="small muted">${x.login?`Acesso: <b>${esc(x.login)}</b> · ${srvPassLabel(x)}${x.active===false?' · <b>desativado</b>':''}`:'Sem acesso ao app'}${hasVal(x.minMg)&&x.minMg!==''?' · mínimo padrão '+String(x.minMg).replace('.',',')+'%':''}${Number(x.minAdj)?' · ajuste '+(x.minAdj>0?'+':'')+String(x.minAdj).replace('.',',')+' pts':''}${x.allCli?' · todos os clientes':''}</span></div>
-      <div class="row" style="gap:6px"><button class="btn ghost dlb" data-sle="${x.id}">Editar</button>${ui.confirmDel==='sl'+x.id?`<button class="btn danger dlb" data-sldok="${x.id}">Confirmar</button>`:`<button class="btn ghost dlb" data-sld="${x.id}">Excluir</button>`}</div></div>`).join('')}</div>`:'<div class="empty">Nenhum vendedor cadastrado. Sem vendedor na venda, a comissão é zero.</div>'}
+      <div class="row" style="gap:6px"><button class="btn ghost dlb" data-sle="${x.id}">Editar</button>${srvResetBtn('sellers',x)}${ui.confirmDel==='sl'+x.id?`<button class="btn danger dlb" data-sldok="${x.id}">Confirmar</button>`:`<button class="btn ghost dlb" data-sld="${x.id}">Excluir</button>`}</div></div>`).join('')}</div>`:'<div class="empty">Nenhum vendedor cadastrado. Sem vendedor na venda, a comissão é zero.</div>'}
     <p class="small muted">O vendedor de cada cliente fica no cadastro do cliente e vai para os pedidos dele. Você pode trocar o vendedor em cada pedido.</p>`;
   $('#cmm').onchange=e=>{S.store.commMode=e.target.value;save();toast(e.target.value==='venda'?'Comissão liberada na conclusão do pedido':'Comissão liberada quando o cliente paga');admVendedores()};
   $('#slnew').onclick=()=>{ui.selEdit={id:null,name:'',phone:'',commission:''};admVendedores()};
@@ -4282,7 +4299,7 @@ function admFaturamento(){
       <div class="small muted">Quem fatura entra pela visão "Faturamento": vê os pedidos prontos e em separação, imprime o pedido e a separação, gera o arquivo para o sistema e marca o pedido como faturado (com o número da nota). Não vê custo, margem, comissão nem relatórios, e não muda preços.</div>
     </div>
     ${S.billers.length?`<div class="list" style="max-width:720px">${S.billers.map(k=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(k.name||k.login)}</b><span class="small muted">Usuário: ${esc(k.login)} · ${srvPassLabel(k)}</span></div>
-      ${ui.confirmDel==='fk'+k.id?`<button class="btn danger dlb" data-fkok="${k.id}">Confirmar</button>`:`<button class="btn ghost dlb" data-fkdel="${k.id}">Excluir</button>`}</div>`).join('')}</div>`:'<div class="empty">Nenhum acesso de faturamento cadastrado.</div>'}`;
+      <div class="row" style="gap:6px">${srvResetBtn('billers',k)}${ui.confirmDel==='fk'+k.id?`<button class="btn danger dlb" data-fkok="${k.id}">Confirmar</button>`:`<button class="btn ghost dlb" data-fkdel="${k.id}">Excluir</button>`}</div></div>`).join('')}</div>`:'<div class="empty">Nenhum acesso de faturamento cadastrado.</div>'}`;
   $('#fkadd').onclick=()=>{const n=$('#fkn').value.trim(),l=$('#fkl').value.trim().toLowerCase(),p=$('#fkp').value.trim();
     if(!n||!l||!p){$('#fkerr').textContent='Preencha nome, usuário e senha.';return}if(p.length<8){$('#fkerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}
     if(S.billers.some(x=>x.login.toLowerCase()===l)){$('#fkerr').textContent='Esse usuário já existe.';return}
@@ -5797,7 +5814,7 @@ function admClients(){
       <label class="switch"><input type="checkbox" id="cneg" ${e.canNeg?'checked':''}> <span><b>Pode negociar preço no app</b><br><span class="small muted">Libera o botão "Negociar preço" no carrinho deste cliente (vale quando a negociação está em "Só os clientes marcados").</span></span></label>
       <div class="grid2">
         <div class="field"><label for="cl">Usuário de acesso</label><input type="text" id="cl" value="${esc(e.login)}" autocapitalize="none" placeholder="Ex.: mercearia.sj" required></div>
-        <div class="field"><label for="cp">Senha</label><input type="password" id="cp" value="" autocomplete="new-password" placeholder="${e.id&&e.hasPass?'Em branco = manter a senha atual':'Senha provisória (mínimo 8)'}"></div>
+        <div class="field"><label for="cp">Senha</label><input type="password" id="cp" value="" autocomplete="new-password" placeholder="${e.id&&e.hasPass?'Em branco = manter a senha atual':'Senha base (mín. 8): a pessoa troca no 1º acesso'}"></div>
       </div>
       <div class="grid2">
         <div class="field"><label for="ct">Telefone / WhatsApp</label><input type="text" id="ct" value="${esc(e.phone)}" inputmode="tel"></div>
@@ -5891,7 +5908,7 @@ function admClients(){
     <div class="small muted pfcount">${cliList.length} de ${S.customers.length} cliente${S.customers.length===1?'':'s'}${cact?` · <button type="button" class="linkbtn" id="coclr">Limpar filtros</button>`:''}</div>
     <div class="list">${cliList.map(x=>`<div class="prow" style="grid-template-columns:1fr auto">
       <div class="t"><b>${esc(x.name)}</b>${showSt?(()=>{const t=stt.get(x.id);return `<span class="small">${t.n?`Comprou <b>${brl(t.v)}</b> em ${t.n} pedido${t.n>1?'s':''}`:'Sem pedidos'} ${CO.per==='tudo'?'desde o início':'nos últimos '+CO.per+' dias'}</span>`})():''}${x.doc?`<span class="small muted">${x.doc.length===11?'CPF':'CNPJ'} ${esc(fmtDoc(x.doc))}</span>`:''}<span class="small muted">Usuário: ${esc(x.login)} · ${srvPassLabel(x)}${x.phone?' · '+esc(x.phone):''}</span><span class="small muted">Pagamento: ${allowedPays(x).length===S.payments.length?'todas as formas':esc(allowedPays(x).join(', ')||'nenhuma')}</span>${clientExtra(x)}</div>
-      <button class="btn ghost" data-ce="${x.id}" style="min-height:40px;padding:8px 12px">Editar</button></div>`).join('')||(S.customers.length?'<div class="empty">Nenhum cliente nesse filtro.</div>':'<div class="empty">Nenhum cliente cadastrado.</div>')}</div>`;
+      <div class="row" style="gap:6px;justify-content:flex-end">${srvResetBtn('customers',x)}<button class="btn ghost" data-ce="${x.id}" style="min-height:40px;padding:8px 12px">Editar</button></div></div>`).join('')||(S.customers.length?'<div class="empty">Nenhum cliente nesse filtro.</div>':'<div class="empty">Nenhum cliente cadastrado.</div>')}</div>`;
   c.querySelectorAll('[data-cf]').forEach(b=>b.onclick=()=>{ui.cliF=b.dataset.cf;admClients()});
   {const ci=$('#cq');ci.oninput=()=>{CO.q=ci.value;const pos=ci.selectionStart;admClients();const n=$('#cq');n.focus();n.setSelectionRange(pos,pos)}}
   [['cosort','sort'],['coper','per'],['cocity','city'],['cosel','sel'],['coie','ie'],['covenc','venc']].forEach(([id,k])=>{const el=$('#'+id);if(el)el.onchange=()=>{CO[k]=el.value;const y=window.scrollY;admClients();window.scrollTo(0,y)}});
