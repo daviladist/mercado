@@ -33,7 +33,7 @@ button{cursor:pointer}
 .num{font-variant-numeric:tabular-nums}
 
 /* barra de demonstração */
-.demo{background:var(--surface-2);border-bottom:1px solid var(--line);font-size:13px}
+.demo{display:none!important}.teamlinks{margin-top:12px;color:var(--muted);line-height:1.8}.teamlinks a{color:var(--accent);font-weight:600}.srvbadge{position:fixed;right:12px;bottom:12px;background:var(--fg);color:var(--bg);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;z-index:99;opacity:.85}.srvbadge[hidden]{display:none}
 .demo .wrap{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding-block:8px}
 .demo b{font-weight:600}
 .seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px}
@@ -1038,6 +1038,161 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const brl=v=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const uid=()=>Math.random().toString(36).slice(2,9);
+/* ================= SERVIDOR: os dados e o login ficam no servidor =================
+ * O navegador só recebe o que a pessoa logada pode ver (o servidor filtra).
+ * Toda gravação vai para o servidor, que confere e recalcula antes de aceitar.
+ * Nada de senha, custo ou comissão fica guardado neste aparelho.            */
+const SRV={me:null,V:{meta:{}},base:{meta:{}},ord:{},t:null,busy:false,again:false,ver:'',poll:null,lastPass:''};
+const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins'];
+const SRV_ORDERED=['products','customers','sellers','checkers','billers','vehicles','cities','categories','combos','admins','payables','receivables'];
+const SRV_WRITE={cliente:['orders','customers'],vendedor:['orders'],conferente:['orders','counts'],faturamento:['orders'],entregador:['orders','romaneios','receivables']};
+const ROLE_VIEW={admin:'admin',cliente:'cliente',vendedor:'vend',conferente:'conf',faturamento:'fat',entregador:'ent'};
+const VIEW_ROLE={admin:'admin',cliente:'cliente',vend:'vendedor',conf:'conferente',fat:'faturamento',ent:'entregador'};
+async function api(path,body){
+  const opt=body===undefined?{credentials:'same-origin'}:{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-App':'1'},body:JSON.stringify(body)};
+  let r;try{r=await fetch(path,opt)}catch(e){const er=new Error('Sem conexão com o servidor. Confira a internet.');er.status=0;throw er}
+  let j={};try{j=await r.json()}catch(e){}
+  if(!r.ok){const e=new Error(j.error||('Erro '+r.status));e.status=r.status;e.data=j;throw e}
+  return j}
+function emptyState(){return {store:{name:'ATACADO DAVILA',pickupDisc:0,pickV:1,onerV:2,pickupOner:false},payments:[],cashPays:[],payDays:{},products:[],customers:[],orders:[],receivables:[],payables:[],sellers:[],checkers:[],billers:[],vehicles:[],cities:[],categories:[],combos:[],counts:[],commPayouts:[],trips:[],romaneios:[],admins:[],seq:1001,catTreeV1:true}}
+function srvFix(){const E=emptyState();Object.keys(E).forEach(k=>{if(S[k]==null)S[k]=E[k]});S.store=Object.assign({},E.store,S.store||{});
+  (S.products||[]).forEach(p=>{if(p.perPack===undefined)p.perPack=parsePack(p.unit);if(p.code==null)p.code='';if(p.ean==null)p.ean='';p.rules=Object.assign(emptyRules(),p.rules||{})})}
+function srvSnap(){SRV.base={meta:{}};SRV.ord={};
+  SRV_COLLS.forEach(c=>{SRV.base[c]={};(S[c]||[]).forEach(d=>{if(d&&d.id)SRV.base[c][d.id]=JSON.stringify(d)});SRV.ord[c]=(S[c]||[]).map(d=>d&&d.id)});
+  Object.keys(S).forEach(k=>{if(!SRV_COLLS.includes(k)&&k!=='seq')SRV.base.meta[k]=JSON.stringify(S[k])})}
+async function loadState(){const r=await api('/api/state');SRV.me=r.me;S=r.S;SRV.V=r.V||{meta:{}};srvFix();srvSnap();
+  if(ui.client)ui.client=S.customers.find(c=>c.id===ui.client.id)||null;
+  if(SRV.me&&SRV.me.role==='cliente')ui.client=S.customers.find(c=>c.id===SRV.me.refId)||ui.client}
+function srvInPlace(t,s){Object.keys(t).forEach(k=>{if(!(k in s))delete t[k]});return Object.assign(t,s)}
+function srvDiff(){const ch=[],order={},role=SRV.me&&SRV.me.role,can=c=>role==='admin'||(SRV_WRITE[role]||[]).includes(c);
+  SRV_COLLS.forEach(c=>{const arr=S[c]||[],B=SRV.base[c]=SRV.base[c]||{},V=SRV.V[c]||{},ids=new Set();
+    arr.forEach(d=>{if(!d||typeof d!=='object')return;if(!d.id)d.id=uid();ids.add(d.id);const s=JSON.stringify(d);if(B[d.id]!==s){if(can(c))ch.push({c,id:d.id,op:'put',doc:d,ver:V[d.id],base:V[d.id]?B[d.id]:undefined});else B[d.id]=s}});
+    Object.keys(B).forEach(id=>{if(!ids.has(id)){if(role==='admin')ch.push({c,id,op:'del',ver:V[id]});else delete B[id]}});
+    if(role==='admin'&&SRV_ORDERED.includes(c)){const now=arr.map(d=>d&&d.id);if(JSON.stringify(now)!==JSON.stringify(SRV.ord[c]||[]))order[c]=now}});
+  Object.keys(S).forEach(k=>{if(SRV_COLLS.includes(k)||k==='seq')return;const s=JSON.stringify(S[k]);if(SRV.base.meta[k]!==s){if(role==='admin')ch.push({c:'meta',id:k,op:'put',doc:S[k],ver:(SRV.V.meta||{})[k]});else SRV.base.meta[k]=s}});
+  return {ch,order}}
+function srvApply(r,order,sent){const touched=new Set();
+  (r.docs||[]).forEach(d=>{touched.add(d.c);
+    if(d.c==='meta'){SRV.base.meta[d.id]=JSON.stringify(S[d.id]);(SRV.V.meta=SRV.V.meta||{})[d.id]=d.ver;return}
+    const arr=S[d.c]=S[d.c]||[],k=arr.findIndex(x=>x&&x.id===d.id);SRV.V[d.c]=SRV.V[d.c]||{};SRV.base[d.c]=SRV.base[d.c]||{};
+    if(d.op==='del'){if(k>=0)arr.splice(k,1);delete SRV.base[d.c][d.id];delete SRV.V[d.c][d.id];return}
+    // se a pessoa mexeu de novo enquanto salvava, guarda essas mudanças por cima da versão do servidor
+    let delta=null;const sentS=sent&&sent[d.c+':'+d.id];
+    if(k>=0&&sentS){const sentO=JSON.parse(sentS),cur=arr[k];if(JSON.stringify(cur)!==sentS){delta={};new Set([...Object.keys(cur),...Object.keys(sentO)]).forEach(x=>{if(JSON.stringify(cur[x])!==JSON.stringify(sentO[x]))delta[x]=cur[x]===undefined?undefined:JSON.parse(JSON.stringify(cur[x]))})}}
+    const tgt=k>=0?srvInPlace(arr[k],d.doc):(arr.unshift(d.doc),d.doc);SRV.base[d.c][d.id]=JSON.stringify(tgt);SRV.V[d.c][d.id]=d.ver;
+    if(delta)Object.entries(delta).forEach(([x,v])=>{if(v===undefined)delete tgt[x];else tgt[x]=v})});
+  (r.drops||[]).forEach(d=>{const arr=S[d.c]||[],k=arr.findIndex(x=>x&&x.id===d.id);if(k>=0)arr.splice(k,1);if(SRV.base[d.c])delete SRV.base[d.c][d.id]});
+  Object.entries(order||{}).forEach(([c,ids])=>SRV.ord[c]=ids);
+  if(r.seq)S.seq=r.seq;return touched}
+function save(){clearTimeout(SRV.t);SRV.t=setTimeout(srvSync,120)}
+async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
+  const {ch,order}=srvDiff();if(!ch.length&&!Object.keys(order).length)return;
+  SRV.busy=true;srvBadge(true);
+  try{const sent={};ch.forEach(x=>{if(x.op==='put')sent[x.c+':'+x.id]=JSON.stringify(x.doc)});const r=await api('/api/sync',{changes:ch,order});const t=srvApply(r,order,sent);if(t.has('orders')||t.has('receivables')||(ui.admin&&['customers','sellers','checkers','billers','vehicles','admins'].some(c=>t.has(c))))srvSoftRender()}
+  catch(e){if(e.status===401){toast('Sua sessão terminou. Entre de novo.');setTimeout(()=>location.reload(),1200);return}
+    if(e.data&&e.data.mustReset){srvResetScreen();return}
+    if(e.status===409){/* alguém gravou o mesmo registro antes: junta as mudanças quando foram em campos diferentes */
+      const P=srvPatches(ch);try{await loadState()}catch(_){}
+      const m=srvMerge(P);srvSoftRender(true);
+      if(m.applied)SRV.again=true;
+      if(m.lost)toast('Outra pessoa alterou a mesma informação antes de você. A tela foi atualizada: confira e faça de novo.');
+      return}
+    toast(e.message||'Não foi possível salvar.');try{await loadState()}catch(_){}srvSoftRender(true)}
+  finally{SRV.busy=false;srvBadge(false);if(SRV.again){SRV.again=false;srvSync()}}}
+function srvBadge(on){let b=document.getElementById('srvbadge');if(!b){b=document.createElement('div');b.id='srvbadge';b.className='srvbadge';b.textContent='Salvando…';document.body.appendChild(b)}b.hidden=!on}
+/* atualiza a tela atual sem perder o que a pessoa está digitando */
+function srvSoftRender(force){const typing=document.activeElement&&document.activeElement.matches('input,textarea,select');if(typing&&!force)return;const y=window.scrollY;
+  try{renderTop();if(ui.view==='conf'){if(!ui.confSug)renderConf()}else if(ui.view==='vend'){if(!ui.lanc||force)renderVend()}else if(ui.view==='fat')renderFat();else if(ui.view==='ent')renderEnt();else if(ui.view==='cliente'){if(ui.cliPage!=='catalogo'||force)renderClient()}else if(ui.admin&&(force||((ui.tab==='pedidos'&&!ui.lanc&&!ui.adj&&!ui.romView)||ui.tab==='hoje'||(ui.tab==='cadastros'&&!ui.edit&&!ui.selEdit))))renderAdmin()}catch(e){}
+  window.scrollTo(0,y)}
+function reloadState(){srvRefresh(true)}
+async function srvRefresh(force){if(!SRV.me||SRV.busy)return;const {ch}=srvDiff();if(ch.length)return;
+  try{const v=await api('/api/version');if(!force&&v.v===SRV.ver)return;SRV.ver=v.v;await loadState();srvSoftRender(force)}
+  catch(e){if(e.status===401){location.reload()}}}
+function srvStartPoll(){clearInterval(SRV.poll);SRV.poll=setInterval(()=>{if(document.visibilityState==='visible')srvRefresh(false)},20000);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')srvRefresh(false)})}
+/* entrar: o servidor confere a senha; o navegador nunca vê senha de ninguém */
+async function srvLogin(role,u,p,errEl,btn){errEl.textContent='';if(btn)btn.disabled=true;
+  try{const me=await api('/api/login',{role,login:u,password:p});SRV.me=me;SRV.lastPass=p;
+    if(me.mustReset){srvResetScreen();return}await loadState();srvAfterLogin()}
+  catch(e){errEl.textContent=e.message||'Não foi possível entrar.'}finally{if(btn)btn.disabled=false}}
+function srvAfterLogin(){const me=SRV.me;SRV.lastPass='';ui.view=ROLE_VIEW[me.role]||'cliente';
+  if(me.role==='admin'){ui.admin=true;ui.adminName=me.name||me.login}
+  if(me.role==='cliente'){const c=S.customers.find(x=>x.id===me.refId);if(!c){toast('Cadastro não encontrado. Fale com a loja.');return}ui.client=c;ui.cart={};ui.nf=ieClient(c);ui.nfData=defaultNf(c);ui.addr=c.address||'';ui.bairro=c.bairro||'';ui.pay=allowedPays(c)[0]||'';ui.cliPage='catalogo'}
+  if(me.role==='conferente'){ui.checker=me.name||me.login;ui.confOrder=null}
+  if(me.role==='faturamento')ui.biller=me.name||me.login;
+  if(me.role==='vendedor'){ui.seller=me.refId;ui.vtab='pedidos';ui.lanc=null}
+  if(me.role==='entregador')ui.driver=me.refId;
+  try{history.replaceState(null,'',location.pathname+(me.role==='cliente'?'':'#'+me.role))}catch(e){}
+  render();srvStartPoll()}
+async function srvLogout(){try{await api('/api/logout',{})}catch(e){}try{location.hash=SRV.me&&SRV.me.role!=='cliente'?SRV.me.role:''}catch(e){}location.reload()}
+/* primeira entrada com senha provisória: a pessoa cria a senha dela */
+function srvResetScreen(){ui.view=ROLE_VIEW[SRV.me.role]||'cliente';const app=$('#app');try{renderTop()}catch(e){}$('#topbar').innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name||'ATACADO DAVILA')}</span><small>Crie sua senha</small></span></div>`;
+  app.innerHTML=`<div class="loginhero"><img src="${LOGO}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="rsf"><h2>Crie a sua senha</h2>
+    <div class="small muted">Olá, ${esc(SRV.me.name||SRV.me.login)}. A senha que você usou é provisória. Crie uma senha só sua${SRV.me.role==='admin'?' (mínimo 10 caracteres)':' (mínimo 8 caracteres)'}, misturando letras e números.</div>
+    ${SRV.lastPass?'':'<div class="field"><label for="rso">Senha atual</label><input type="password" id="rso" autocomplete="current-password" required></div>'}
+    <div class="field"><label for="rsn">Nova senha</label><input type="password" id="rsn" autocomplete="new-password" required></div>
+    <div class="field"><label for="rsn2">Repita a nova senha</label><input type="password" id="rsn2" autocomplete="new-password" required></div>
+    <div class="err" id="rse"></div><button class="btn block" type="submit">Salvar e entrar</button><button type="button" class="link" id="rsx" style="margin-top:8px">Sair</button></form>`;
+  $('#rsx').onclick=srvLogout;
+  $('#rsf').onsubmit=async e=>{e.preventDefault();const cur=SRV.lastPass||$('#rso').value,n=$('#rsn').value;if(n!==$('#rsn2').value){$('#rse').textContent='As senhas não conferem.';return}
+    try{await api('/api/password',{current:cur,next:n});SRV.me.mustReset=false;await loadState();srvAfterLogin();toast('Senha criada. Bem-vindo!')}catch(er){$('#rse').textContent=er.message}}}
+/* trocar a própria senha quando quiser */
+function srvPassScreen(){const app=$('#app');app.innerHTML=`<form class="login panel" id="psf" style="margin-top:18px"><h2>Trocar minha senha</h2>
+  <div class="field"><label for="pso">Senha atual</label><input type="password" id="pso" autocomplete="current-password" required></div>
+  <div class="field"><label for="psn">Nova senha</label><input type="password" id="psn" autocomplete="new-password" required></div>
+  <div class="field"><label for="psn2">Repita a nova senha</label><input type="password" id="psn2" autocomplete="new-password" required></div>
+  <div class="err" id="pse"></div><button class="btn block" type="submit">Trocar senha</button><button type="button" class="link" id="psx" style="margin-top:8px">Voltar</button></form>`;
+  $('#psx').onclick=()=>render();
+  $('#psf').onsubmit=async e=>{e.preventDefault();if($('#psn').value!==$('#psn2').value){$('#pse').textContent='As senhas não conferem.';return}
+    try{await api('/api/password',{current:$('#pso').value,next:$('#psn').value});toast('Senha trocada.');render()}catch(er){$('#pse').textContent=er.message}}}
+/* links de acesso da equipe na tela de login do cliente (cada pessoa entra pelo seu) */
+function srvTeamLinks(cur){return `<div class="teamlinks small">${cur==='cliente'?'Acesso da equipe:':'Outros acessos:'} ${[['cliente','Cliente'],['admin','Administrador'],['vend','Vendedor'],['conf','Conferente'],['fat','Faturamento'],['ent','Entregador']].filter(([k])=>k!==cur).map(([k,v])=>`<a href="#${VIEW_ROLE[k]}" data-goview="${k}">${v}</a>`).join(' · ')}</div>`}
+function srvBindTeamLinks(){document.querySelectorAll('[data-goview]').forEach(a=>a.onclick=e=>{e.preventDefault();ui.view=a.dataset.goview;try{history.replaceState(null,'','#'+VIEW_ROLE[ui.view])}catch(_){}render()})}
+function srvHashView(){const h=String(location.hash||'').replace('#','');const k=Object.keys(VIEW_ROLE).find(v=>VIEW_ROLE[v]===h);return k||'cliente'}
+/* trava de margem do vendedor: o cálculo é feito no servidor (o vendedor não recebe custo) */
+const SRV_LK={};
+function srvLockKey(cli,L){return JSON.stringify([cli&&cli.id,L.cart,L.over||{},L.mode,L.pay,!!L.nf,L.editId||'',!!L._tblOk])}
+function srvLock(R2,cli,L){if(!R2.items.length||!cli)return null;const k=srvLockKey(cli,L),c=SRV_LK[k];if(c)return c.K?Object.assign({min:0,mg:0},c.K):null;
+  if(!SRV_LK['p'+k]){SRV_LK['p'+k]=1;const eo=L.editId&&S.orders.find(o=>o.id===L.editId),keep=eo?Object.fromEntries(eo.items.filter(i=>!i.occLine).map(i=>[i.combo?i.comboId:i.pid,{price:i.price,label:i.label,ie:i.ie,rp:i.rp,base:i.base}])):null;
+    api('/api/lock',{cid:cli.id,cart:L.cart,over:L.over||null,mode:L.mode,pay:L.pay,nf:!!L.nf,keep,tblOk:!!L._tblOk}).then(r=>{SRV_LK[k]=r;if(ui.lanc===L){const y=window.scrollY;admLancar();window.scrollTo(0,y)}}).catch(()=>{delete SRV_LK['p'+k]})}
+  return null}
+function srvItemLevel(p,L,cli){const c=SRV_LK[srvLockKey(cli,L)];return c&&c.levels?c.levels[p.id]||null:null}
+/* backup completo vem do servidor (com fotos e sem senhas); restaurar também passa pelo servidor */
+async function srvBackup(){try{const j=await api('/api/backup');const ok=await offerFile('backup-atacado-davila-'+stamp()+'.json',JSON.stringify(j));if(ok){S.store.lastBackup=today();save();render()}}catch(e){toast(e.message)}}
+async function srvRestore(d){try{const r=await api('/api/restore',{data:d});toast('Backup restaurado: '+r.stats.docs+' registros.');await loadState();render()}catch(e){toast(e.message)}}
+/* senhas provisórias para quem ainda não tem senha (mostradas uma única vez) */
+async function srvTempPasswords(box){try{const r=await api('/api/temp-passwords',{});if(!r.list.length){box.innerHTML='<div class="small muted">Todo mundo com acesso já tem senha.</div>';return}
+  const R={cliente:'Cliente',vendedor:'Vendedor',conferente:'Conferente',faturamento:'Faturamento',entregador:'Entregador'};
+  box.innerHTML=`<div class="notice"><b>Anote ou imprima agora:</b> estas senhas aparecem só esta vez. Cada pessoa cria a própria senha no primeiro acesso.</div>
+    <div class="tablewrap"><table class="btable"><thead><tr><th>Função</th><th>Nome</th><th>Usuário</th><th>Senha provisória</th></tr></thead><tbody>${r.list.map(x=>`<tr><td>${R[x.role]||x.role}</td><td>${esc(x.name||'')}</td><td>${esc(x.login)}</td><td><b class="num">${esc(x.pass)}</b></td></tr>`).join('')}</tbody></table></div>
+    <div class="row"><button type="button" class="btn ghost" onclick="window.print()">Imprimir</button></div>`;await loadState()}catch(e){box.innerHTML='<div class="err">'+esc(e.message)+'</div>'}}
+function srvPassLabel(x){if(x.pass)return 'senha nova (salvando…)';return x.hasPass?(x.mustReset?'senha provisória (troca no 1º acesso)':'com senha'):'sem senha'}
+/* primeiro acesso ao sistema novo: criar o administrador (exige o código de instalação) */
+async function srvMaybeSetup(){try{const r=await api('/api/setup-status');if(!r.needsSetup||SRV.me)return}catch(e){return}
+  const app=$('#app');app.innerHTML=`<div class="loginhero"><img src="${LOGO}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="stf"><h2>Criar o administrador</h2>
+    <div class="small muted">Use o <b>código de instalação</b> que você cadastrou na Vercel (SETUP_CODE). Depois de criado, este formulário não aparece mais.</div>
+    <div class="field"><label for="stc">Código de instalação</label><input type="password" id="stc" autocomplete="off" required></div>
+    <div class="field"><label for="stn">Seu nome</label><input type="text" id="stn" required></div>
+    <div class="field"><label for="stu">Usuário</label><input type="text" id="stu" autocapitalize="none" autocomplete="username" required></div>
+    <div class="field"><label for="stp">Senha (mínimo 10 caracteres)</label><input type="password" id="stp" autocomplete="new-password" required></div>
+    <div class="field"><label for="stp2">Repita a senha</label><input type="password" id="stp2" autocomplete="new-password" required></div>
+    <div class="err" id="ste"></div><button class="btn block" type="submit">Criar e entrar</button></form>`;
+  $('#stf').onsubmit=async e=>{e.preventDefault();if($('#stp').value!==$('#stp2').value){$('#ste').textContent='As senhas não conferem.';return}
+    try{SRV.me=await api('/api/setup',{code:$('#stc').value,name:$('#stn').value.trim(),login:$('#stu').value.trim(),password:$('#stp').value});await loadState();srvAfterLogin();toast('Administrador criado. Agora restaure o backup em Cadastros › Configurações.')}catch(er){$('#ste').textContent=er.message}}}
+/* junção de mudanças (por campo): o que eu mudei x o que estava antes; reaplica se a outra pessoa não mexeu no mesmo campo */
+function srvPatches(ch){return ch.filter(x=>x.op==='put').map(x=>{const b=(SRV.base[x.c]||{})[x.id];if(!b)return {c:x.c,id:x.id,isNew:true,doc:x.doc};const o=JSON.parse(b),keys={},was={};
+  new Set([...Object.keys(o),...Object.keys(x.doc)]).forEach(k=>{if(JSON.stringify(o[k])!==JSON.stringify(x.doc[k])){keys[k]=x.doc[k];was[k]=o[k]}});return {c:x.c,id:x.id,keys,was}})}
+function srvMerge(P){let applied=0,lost=0;
+  P.forEach(p=>{const arr=p.c==='meta'?null:(S[p.c]=S[p.c]||[]);
+    if(p.c==='meta'){const k=p.id;if(JSON.stringify(S[k])===JSON.stringify(p.was&&p.was[k]))applied++;else lost++;return}
+    const d=arr.find(x=>x&&x.id===p.id);
+    if(p.isNew){if(!d){arr.unshift(p.doc);applied++}return}
+    if(!d){lost++;return}
+    const clash=Object.keys(p.keys).some(k=>JSON.stringify(d[k])!==JSON.stringify(p.was[k]));
+    if(clash){lost++;return}
+    Object.entries(p.keys).forEach(([k,v])=>{if(v===undefined)delete d[k];else d[k]=v});applied++});
+  return {applied,lost}}
+
 
 /* foto provisória: etiqueta colorida com as iniciais do produto */
 function ph(name,hue){
@@ -1097,21 +1252,19 @@ function seed(){
       P('Detergente Neutro 500ml','Limpeza','Caixa c/ 24 unidades',47.76,140),
       P('Papel Higiênico Folha Dupla','Limpeza','Fardo c/ 16 rolos',28.90,280),
     ],
-    customers:[{id:uid(),name:'Mercearia São José (exemplo)',login:'',pass:'',address:'Rua das Palmeiras, 120, Centro',phone:'(27) 99999-0000'}],
+    customers:[{id:uid(),name:'Mercearia São José (exemplo)',login:'',address:'Rua das Palmeiras, 120, Centro',phone:'(27) 99999-0000'}],
     orders:[],
     receivables:[],
     seq:1001,
     admins:[]
   };
 }
-let S; try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+let S=emptyState();try{localStorage.removeItem(KEY);localStorage.removeItem('pa-driver')}catch(e){}
 /* arquivo de teste com dados embutidos: cada versão nova do arquivo traz os dados dela (troca o que estava salvo de uma versão anterior) */
-if(window.__SEED&&window.__SEED.products&&(!S||!S.products||S._seed!==window.__SEED_ID)){S=JSON.parse(JSON.stringify(window.__SEED));S._seed=window.__SEED_ID;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
-if(!S||!S.products) S=seed();
-if(S.store&&S.store.name==='Atacado Bom Preço'){S.store.name='ATACADO DAVILA';try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+if(S.store&&S.store.name==='Atacado Bom Preço'){S.store.name='ATACADO DAVILA';}
 if(S.store.pickupDisc==null){S.store.pickupDisc=2;delete S.store.fee}
-if(S.store.pickV!==1){S.store.pickupDisc=0;S.store.pickV=1;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
-if(S.store.onerV!==2){S.store.pickupOner=false;S.store.onerV=2;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+if(S.store.pickV!==1){S.store.pickupDisc=0;S.store.pickV=1;}
+if(S.store.onerV!==2){S.store.pickupOner=false;S.store.onerV=2;}
 if(!S.receivables)S.receivables=[];
 (S.products||[]).forEach(p=>{if(p.rules){if(p.rules.promo)p.rules.promo.on=false;if(p.rules.limite)p.rules.limite.on=false}});
 if(!Array.isArray(S.checkers))S.checkers=[];
@@ -1124,7 +1277,6 @@ S.admins=S.admins.filter(a=>a.login!=='admin');delete S.admin;
 if(!S.cashPays)S.cashPays=S.payments.filter(p=>/pix|dinheiro|vista/i.test(p));
 S.products.forEach(p=>{if(p.perPack===undefined)p.perPack=parsePack(p.unit);if(p.code==null)p.code='';if(p.ean==null)p.ean='';p.rules=Object.assign(emptyRules(),p.rules||{})});
 let quotaWarned=false;
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){if(!quotaWarned){quotaWarned=true;setTimeout(()=>{try{toast('Atenção: o navegador não conseguiu guardar as últimas mudanças (espaço cheio ou bloqueado). Baixe um backup em CADASTROS > Loja e entrega.')}catch(_){}},0)}}}
 
 const ui={view:'cliente',client:null,admin:false,cat:'Todos',q:'',cart:{},cartOpen:false,mode:'retirada',pay:'',addr:'',note:'',cliPage:'catalogo',tab:'hoje',edit:null,ofilter:'ativos',lastOrder:null,confirmDel:null};
 
@@ -1164,7 +1316,7 @@ const negAllowed=c=>{const C=negCfg();return C.who==='todos'||(C.who==='marcados
 function negState(items){const C=negCfg(),its=items.filter(i=>!i.p.isCombo),n=its.length,sub=items.reduce((s,i)=>s+(i.neg?i.neg.from:i.price)*i.q,0);
   return {C,n,sub,ok:C.on&&negAllowed(ui.client)&&n>=C.minItems&&sub>=C.minTotal-0.004,needN:Math.max(0,C.minItems-n),needV:Math.max(0,C.minTotal-sub)}}
 /* resposta na hora: aceita se ficar até X% abaixo do preço e ainda respeitar a margem mínima da política (sem mostrar nada ao cliente) */
-function negEval(p,asked,from){const C=negCfg();if(!(asked>0)||!(from>0))return 'an';const off=(from-asked)/from*100;if(off>C.autoPct+1e-9)return 'an';
+function negEval(p,asked,from){if(SRV.me&&SRV.me.role==='cliente')return ((ui.negSt||{})[p.id+'|'+asked])||'an';const C=negCfg();if(!(asked>0)||!(from>0))return 'an';const off=(from-asked)/from*100;if(off>C.autoPct+1e-9)return 'an';
   const pm=polMin(p),sl=ui.client&&sellerById(ui.client.sellerId),slMin=sl&&setV(sl.minMg)?Number(sl.minMg):null,min=pm?pm.v:slMin!=null?slMin:C.defMin;if(min==null||!(Number(p.cost)>0))return 'an';
   const k=ui.mode==='retirada'&&!onerOn()?1-(Number(S.store.pickupDisc)||0)/100:1,net=asked*k,ie=!!(ui.client&&ieClient(ui.client)&&ui.nf);
   const cost=effCost(p,Number(p.cost),net,ie),rate=sl?lnCommRate(p,sl.id):0,mg=(net-cost-net*rate/100)/net*100;return mg>=min-1e-9?'ok':'an'}
@@ -1188,8 +1340,8 @@ function bindNeg(L,rer){
     const it=withOner(ui.mode,()=>{const sv=ui.neg&&ui.neg[id];if(ui.neg)delete ui.neg[id];const r=cartItems().find(x=>x.p.id===id);if(sv)ui.neg[id]=sv;return r});if(!it)return;
     const pack=Math.round(v*n*100)/100;if(pack>=it.price-0.004){toast('Esse preço já é o da tabela. Proponha um valor menor.');return}
     if(pack<it.price*0.5){toast('Proposta muito abaixo do preço. Tente um valor mais próximo.');return}
-    ui.neg=ui.neg||{};ui.neg[id]=pack;ui.negEdit=null;rer();
-    const r=cartItems().find(x=>x.p.id===id);toast(r&&r.neg&&r.neg.st==='ok'?'Proposta aceita! O preço já está no seu pedido.':'Proposta enviada: a loja analisa quando você finalizar o pedido.')};
+    ui.neg=ui.neg||{};ui.neg[id]=pack;ui.negEdit=null;ui.negSt=ui.negSt||{};
+    api('/api/neg',{pid:id,asked:pack,from:it.price,mode:ui.mode,pay:ui.pay,nf:!!ui.nf}).then(x=>x.st,()=>'an').then(st=>{ui.negSt[id+'|'+pack]=st;rer();toast(st==='ok'?'Proposta aceita! O preço já está no seu pedido.':'Proposta enviada: a loja analisa quando você finalizar o pedido.')})};
   L.querySelectorAll('[data-negok]').forEach(b=>b.onclick=()=>go(b.dataset.negok));
   {const i=$('#negv');if(i)i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go(ui.negEdit)}}}
 }
@@ -1233,20 +1385,21 @@ function renderTop(bump){
     const cn=$('#cnav');cn.innerHTML=clientNav();cn.querySelectorAll('[data-cp]').forEach(b=>b.onclick=()=>{ui.cliPage=b.dataset.cp;ui.cartOpen=false;render()});
   }else if(ui.view==='vend'){
     const me=SVme();t.innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name)}</span><small>Vendas${me?' · '+esc(me.name):''}</small></span></div>${me?'<button class="iconbtn" id="vdOut">Sair</button>':''}`;
-    if(me)$('#vdOut').onclick=()=>{ui.seller=null;ui.lanc=null;render()};
+    if(me)$('#vdOut').onclick=srvLogout;
   }else if(ui.view==='fat'){
     t.innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name)}</span><small>Faturamento${ui.biller?' · '+esc(ui.biller):''}</small></span></div>${ui.biller?'<button class="iconbtn" id="fbOut">Sair</button>':''}`;
-    if(ui.biller)$('#fbOut').onclick=()=>{ui.biller=null;ui.fat=null;render()};
+    if(ui.biller)$('#fbOut').onclick=srvLogout;
   }else if(ui.view==='ent'){
     t.innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name)}</span><small>Entregas${ui.driver?' · '+esc(drvName(ui.driver)):''}</small></span></div>${ui.driver?'<button class="iconbtn" id="dvOut">Sair</button>':''}`;
-    if(ui.driver)$('#dvOut').onclick=()=>{ui.driver=null;try{localStorage.removeItem('pa-driver')}catch(e){}render()};
+    if(ui.driver)$('#dvOut').onclick=srvLogout;
   }else if(ui.view==='conf'){
     t.innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name)}</span><small>Conferência${ui.checker?' · '+esc(ui.checker):''}</small></span></div>${ui.checker?'<button class="iconbtn" id="cfOut">Sair</button>':''}`;
-    if(ui.checker)$('#cfOut').onclick=()=>{ui.checker=null;ui.confOrder=null;render()};
+    if(ui.checker)$('#cfOut').onclick=srvLogout;
   }else{
     t.innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name)}</span><small>Painel do administrador${ui.admin&&ui.adminName?' · '+esc(ui.adminName):''}</small></span></div>${ui.admin?'<button class="iconbtn" id="admOut">Sair</button>':''}`;
-    if(ui.admin)$('#admOut').onclick=()=>{ui.admin=false;render()};
+    if(ui.admin)$('#admOut').onclick=srvLogout;
   }
+  if(SRV.me&&ui.view!=='cliente'){const o=t.querySelector('.iconbtn');if(o){const b=document.createElement('button');b.className='iconbtn';b.textContent='Senha';b.onclick=srvPassScreen;o.before(b)}}
 }
 
 /* ---------- cliente ---------- */
@@ -1257,18 +1410,11 @@ function loginForm(isAdmin){
     <div class="field"><label for="lp">Senha</label><input type="password" id="lp" autocomplete="current-password" required></div>
     <div class="err" id="le"></div>
     <button class="btn block" type="submit">Entrar</button>
-    ${isAdmin?'':'<div class="hint">Os acessos são criados pela loja. Esqueceu a senha? Fale com a loja.</div>'}
+    <div class="hint">${isAdmin?'':'Esqueceu a senha? Fale com a loja.'}</div>${srvTeamLinks(isAdmin?'admin':'cliente')}
   </form>`;
 }
-function bindLogin(isAdmin){
-  $('#lf').onsubmit=e=>{e.preventDefault();
-    const u=$('#lu').value.trim().toLowerCase(),p=$('#lp').value;
-    if(isAdmin){ const a=S.admins.find(a=>a.login&&a.pass&&a.login.toLowerCase()===u&&a.pass===p); if(a){ui.admin=true;ui.adminName=a.name||a.login;render()} else $('#le').textContent='Usuário ou senha incorretos.'; return}
-    const ud=u.replace(/\D/g,'');
-    const c=S.customers.find(c=>c.pass&&((c.login&&c.login.toLowerCase()===u)||(c.doc&&ud.length>=11&&c.doc===ud))&&c.pass===p);
-    if(!c){$('#le').textContent='Usuário ou senha incorretos. Confira com a loja.';return}
-    ui.client=c;ui.cart={};ui.nf=ieClient(c);ui.nfData=defaultNf(c);ui.addr=c.address||'';ui.bairro=c.bairro||'';ui.pay=allowedPays(c)[0]||'';ui.cliPage='catalogo';render();
-  };
+function bindLogin(isAdmin){srvBindTeamLinks();if(isAdmin)srvMaybeSetup();
+  $('#lf').onsubmit=e=>{e.preventDefault();srvLogin(isAdmin?'admin':'cliente',$('#lu').value.trim(),$('#lp').value,$('#le'),$('#lf button[type=submit]'))};
 }
 
 function renderCatalog(){
@@ -1618,7 +1764,7 @@ function renderDados(){
     ${P.top.length?`<div><span class="lbl">Seus produtos mais comprados no período</span><div class="tops">${P.top.slice(0,5).map((t,i)=>`<div class="topi"><span class="num">${i+1}º</span><b>${esc(t.name)}</b><span class="num muted">${t.q.toLocaleString('pt-BR')} ${esc(t.unit||'un.')}</span></div>`).join('')}</div></div>`:''}`
     :`<div class="empty" style="padding:20px">Nenhum pedido nesse período.</div>`}
   </section>`;
-  $('#logout').onclick=()=>{ui.client=null;ui.cart={};render()};
+  $('#logout').onclick=srvLogout;{const b=document.createElement('button');b.className='btn ghost';b.style.minHeight='40px';b.textContent='Trocar senha';b.onclick=srvPassScreen;$('#logout').before(b)}
   const upd=()=>{F.from=$('#cfrom').value||F.from;F.to=$('#cto').value||F.to;renderDados()};
   $('#cfrom').onchange=upd;$('#cto').onchange=upd;
   app.querySelectorAll('[data-cper]').forEach(b=>b.onclick=()=>{const k=b.dataset.cper,t=today();if(k==='mes')Object.assign(F,monthRange());else if(k==='90'){F.from=addDays(t,-89);F.to=t}else{F.from=t.slice(0,4)+'-01-01';F.to=t}renderDados()});
@@ -1700,7 +1846,7 @@ function renderClient(){
     if(evs.length)markSeen(ui.client);
     app.innerHTML=`<div class="sectionhead"><h2>Meus pedidos</h2><button class="btn ghost" id="logout" style="min-height:40px">Sair da conta</button></div>
       ${evBox}${mine.length?`<div class="orders">${mine.map(clientOrderCard).join('')}</div>`:'<div class="empty">Você ainda não fez pedidos.</div>'}`;
-    $('#logout').onclick=()=>{ui.client=null;ui.cart={};render()};
+    $('#logout').onclick=srvLogout;
     app.querySelectorAll('[data-tog]').forEach(b=>b.onclick=()=>{const id=b.dataset.tog;ui.cliOpen=ui.cliOpen||{};ui.cliOpen[id]=!ui.cliOpen[id];const card=b.closest('.corder');card.outerHTML=clientOrderCard(S.orders.find(x=>x.id===id));renderClient()});
     app.querySelectorAll('[data-cdl]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.cdl);if(o)exportOrders([o],'pdf','pedido-'+o.no)});
     bindRm(app,()=>{const y=window.scrollY;renderClient();window.scrollTo(0,y)});
@@ -1873,11 +2019,10 @@ function confLoginForm(){
     <div class="field"><label for="cflu">Usuário</label><input type="text" id="cflu" autocomplete="username" autocapitalize="none" required></div>
     <div class="field"><label for="cflp">Senha</label><input type="password" id="cflp" autocomplete="current-password" required></div>
     <div class="err" id="cfle"></div><button class="btn block" type="submit">Entrar</button>
-    <div class="hint">Os acessos de conferente são criados pelo administrador em CADASTROS &gt; Conferentes.</div></form>`}
+    <div class="hint">Os acessos de conferente são criados pelo administrador em CADASTROS &gt; Conferentes.</div>${srvTeamLinks('conf')}</form>`}
 function renderConf(){
   const app=$('#app');
-  if(!ui.checker){app.innerHTML=confLoginForm();$('#cfl').onsubmit=e=>{e.preventDefault();const u=$('#cflu').value.trim().toLowerCase(),p=$('#cflp').value;
-    const k=(S.checkers||[]).find(x=>x.login.toLowerCase()===u&&x.pass===p);if(!k){$('#cfle').textContent='Usuário ou senha incorretos.';return}ui.checker=k.name||k.login;ui.confOrder=null;render()};return}
+  if(!ui.checker){app.innerHTML=confLoginForm();srvBindTeamLinks();$('#cfl').onsubmit=e=>{e.preventDefault();srvLogin('conferente',$('#cflu').value.trim(),$('#cflp').value,$('#cfle'),$('#cfl button[type=submit]'))};return}
   const o=ui.confOrder&&S.orders.find(x=>x.id===ui.confOrder);
   if(o)return confOrderView(o);
   ui.confOrder=null;
@@ -1959,7 +2104,6 @@ function confOrderView(o){
   {const b=$('#cfReady');if(b)b.onclick=()=>{if(!canReady)return;stopScanCam();setOrderStatus(o,needsBill(o)&&!o.billed?'separado':'pronto');o.checkedAt=new Date().toISOString();save();toast('Pedido nº '+o.no+': '+stLabel(o)+(o.status==='separado'?' · foi para o faturamento':' · o cliente foi avisado'));ui.confOrder=null;renderConf();window.scrollTo(0,0)}}
 }
 /* recarrega os dados salvos (outra aba ou outro acesso no mesmo navegador) */
-function reloadState(){try{const n=JSON.parse(localStorage.getItem(KEY));if(n&&n.orders){S=n;if(S.store&&S.store.onerV!==2){S.store.pickupOner=false;S.store.onerV=2}if(S.store&&S.store.pickV!==1){S.store.pickupDisc=0;S.store.pickV=1}if(ui.client)ui.client=S.customers.find(c=>c.id===ui.client.id)||null}}catch(e){}}
 
 /* ---------- administrador: aprovar ou recusar as sugestões do conferente ---------- */
 function sugStdPrice(o,p,q){const cli=S.customers.find(x=>x.id===o.customerId)||null;return withIe(!!(o.nf&&ieClient(cli)),()=>withClient(cli,()=>priceFor(p,q,o.mode,o.pay)))}
@@ -2194,11 +2338,10 @@ function retApply(o,R,reason,who){const its=o.items.filter(i=>i.q>0),out=[];
   return 'Devolução registrada · '+brl(amount)+' a menos'+(left>0.004?' · cliente fica com crédito de '+brl(left)+' (já tinha pago)':o.recLaunched?' · abatido do contas a receber':'')}
 function admEntregas(){const c=$('#tabc');c.innerHTML=`<div class="sectionhead"><h2>Entregas</h2></div>${entregasHtml(null)}`;bindEntregas(c,null,()=>{const y=window.scrollY;admEntregas();window.scrollTo(0,y)})}
 function renderEnt(){const app=$('#app');
-  if(!ui.driver){try{const k=localStorage.getItem('pa-driver');if(k&&drvById(k))ui.driver=k}catch(e){}}
   if(!ui.driver){app.innerHTML=`<div class="loginhero"><img src="${LOGO}" alt="${esc(S.store.name)}"><div>Entregas</div></div><form class="login panel" id="dvl"><h2>Acesso do entregador</h2>
     <div class="field"><label for="dvlu">Usuário</label><input type="text" id="dvlu" autocapitalize="none" required></div><div class="field"><label for="dvlp">Senha</label><input type="password" id="dvlp" required></div>
-    <div class="err" id="dvle"></div><button class="btn block" type="submit">Entrar</button><div class="hint">O acesso é criado pelo administrador em CADASTROS &gt; Motoristas e veículos.</div></form>`;
-    $('#dvl').onsubmit=e=>{e.preventDefault();const u=$('#dvlu').value.trim().toLowerCase(),p=$('#dvlp').value,k=drvList().find(v=>v.login&&v.login.toLowerCase()===u&&v.pass===p);if(!k){$('#dvle').textContent='Usuário ou senha incorretos.';return}ui.driver=k.id;try{localStorage.setItem('pa-driver',k.id)}catch(e){}render()};return}
+    <div class="err" id="dvle"></div><button class="btn block" type="submit">Entrar</button><div class="hint">O acesso é criado pelo administrador em CADASTROS &gt; Motoristas e veículos.</div>${srvTeamLinks('ent')}</form>`;srvBindTeamLinks();
+    $('#dvl').onsubmit=e=>{e.preventDefault();srvLogin('entregador',$('#dvlu').value.trim(),$('#dvlp').value,$('#dvle'),$('#dvl button[type=submit]'))};return}
   app.innerHTML=`<div class="entview"><div class="sectionhead"><h2>Minhas entregas</h2><button class="btn ghost dlb" id="dvRef">Atualizar</button></div>${entregasHtml(ui.driver)}</div>`;
   $('#dvRef').onclick=()=>{reloadState();renderEnt();toast('Lista atualizada')};
   bindEntregas(app,ui.driver,()=>{const y=window.scrollY;renderEnt();window.scrollTo(0,y)})}
@@ -2278,10 +2421,10 @@ function admConferentes(){
       <div class="err" id="ckerr" style="min-height:0"></div>
       <div class="small muted">O conferente entra pela visão "Conferente": vê os pedidos novos e em separação, marca cada item conferido, sugere trocas ou inclusões (você aprova em Pedidos) e marca o pedido como pronto/separado. Ele não vê preços.</div>
     </div>
-    ${S.checkers.length?`<div class="list" style="max-width:720px">${S.checkers.map(k=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(k.name||k.login)}</b><span class="small muted">Usuário: ${esc(k.login)} · Senha: ${esc(k.pass)}</span></div>
+    ${S.checkers.length?`<div class="list" style="max-width:720px">${S.checkers.map(k=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(k.name||k.login)}</b><span class="small muted">Usuário: ${esc(k.login)} · ${srvPassLabel(k)}</span></div>
       ${ui.confirmDel==='ck'+k.id?`<button class="btn danger dlb" data-ckok="${k.id}">Confirmar</button>`:`<button class="btn ghost dlb" data-ckdel="${k.id}">Excluir</button>`}</div>`).join('')}</div>`:'<div class="empty">Nenhum conferente cadastrado.</div>'}`;
   $('#ckadd').onclick=()=>{const n=$('#ckn').value.trim(),l=$('#ckl').value.trim().toLowerCase(),p=$('#ckp').value.trim();
-    if(!n||!l||!p){$('#ckerr').textContent='Preencha nome, usuário e senha.';return}
+    if(!n||!l||!p){$('#ckerr').textContent='Preencha nome, usuário e senha.';return}if(p.length<8){$('#ckerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}
     if(S.checkers.some(x=>x.login.toLowerCase()===l)){$('#ckerr').textContent='Esse usuário já existe.';return}
     S.checkers.push({id:uid(),name:n,login:l,pass:p});save();toast('Conferente adicionado');admConferentes()};
   c.querySelectorAll('[data-ckdel]').forEach(b=>b.onclick=()=>{ui.confirmDel='ck'+b.dataset.ckdel;admConferentes()});
@@ -2290,16 +2433,6 @@ function admConferentes(){
 
 function renderAdmin(){
   const app=$('#app');
-  if(!ui.admin&&!(S.admins||[]).length){app.innerHTML=`<div class="loginhero"><img src="${LOGO}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="fa"><h2>Criar o administrador</h2>
-    <div class="field"><label for="fan">Seu nome</label><input type="text" id="fan" required></div>
-    <div class="field"><label for="fau">Usuário</label><input type="text" id="fau" autocapitalize="none" autocomplete="username" required></div>
-    <div class="field"><label for="fap">Senha (mínimo 8 caracteres)</label><input type="password" id="fap" autocomplete="new-password" required></div>
-    <div class="field"><label for="fap2">Repita a senha</label><input type="password" id="fap2" autocomplete="new-password" required></div>
-    <div class="err" id="fae"></div><button class="btn block" type="submit">Criar e entrar</button>
-    <div class="hint">Depois, em CADASTROS &gt; Loja e entrega, use <b>Restaurar de um arquivo</b> para trazer os seus dados (o backup).</div></form>`;
-    $('#fa').onsubmit=e=>{e.preventDefault();const n=$('#fan').value.trim(),u=$('#fau').value.trim().toLowerCase(),p=$('#fap').value;
-      if(p.length<8){$('#fae').textContent='A senha precisa ter pelo menos 8 caracteres.';return}if(p!==$('#fap2').value){$('#fae').textContent='As senhas não conferem.';return}
-      S.admins=[{login:u,pass:p,name:n||u}];save();ui.admin=true;ui.adminName=n||u;render()};return}
   if(!ui.admin){app.innerHTML=loginForm(true);bindLogin(true);return}
   pendSweep();if(ui.tab==='analise'||ui.tab==='separacao')ui.tab='decisoes';
   const nprog=S.orders.filter(o=>drvCan(o)&&!(o.deliv&&o.deliv.drv)).length+S.orders.filter(o=>o.occ&&o.occ.reboleto).length;
@@ -2915,7 +3048,7 @@ function autoReceivables(o,prev){
 function statusMsg(o){const n='Seu pedido nº '+o.no;return {separando:n+' está sendo separado.',separado:n+' foi separado e está sendo faturado.',pronto:o.mode==='entrega'?n+' foi separado e logo sai para entrega.':n+' está pronto para retirada no depósito.',saiu:n+' saiu para entrega.',concluido:n+' foi concluído. Obrigado pela compra!',cancelado:n+' foi cancelado. Fale com a loja se tiver dúvida.',novo:n+' voltou para a fila de pedidos.'}[o.status]||''}
 function addEvent(o,text){if(text)(o.events=o.events||[]).push({at:new Date().toISOString(),text})}
 function unseen(c){return S.orders.filter(o=>o.customerId===c.id).flatMap(o=>(o.events||[]).filter(e=>!o.seenAt||e.at>o.seenAt).map(e=>({...e,no:o.no}))).sort((a,b)=>b.at.localeCompare(a.at))}
-function markSeen(c){const t=new Date().toISOString();S.orders.forEach(o=>{if(o.customerId===c.id&&(o.events||[]).length)o.seenAt=t});save()}
+function markSeen(c){const t=new Date().toISOString();let ch=false;S.orders.forEach(o=>{if(o.customerId===c.id&&(o.events||[]).some(e=>!o.seenAt||e.at>o.seenAt)){o.seenAt=t;ch=true}});if(ch)save()}
 /* uma única porta para mudar a situação: estoque, contas a receber e aviso ao cliente */
 /* trocar retirada <-> entrega num pedido em aberto */
 function modeSwBox(o){const cli=S.customers.find(x=>x.id===o.customerId)||{};
@@ -3056,7 +3189,7 @@ function admHoje(){
   const crit=S.products.filter(isCritical).length,parados=S.customers.filter(x=>{const d=idleDays(x);return d!=null&&d>=15}).length;
   const tile=(go,lbl,big,small,cls)=>`<button class="tile ${cls||''}" data-go="${go}"><span class="lbl">${lbl}</span><b class="num">${big}</b><span class="small muted">${small}</span></button>`;
   c.innerHTML=`<div class="sectionhead"><h2>Dashboard</h2><div class="row" style="gap:6px"><button class="btn ghost" id="hRom" aria-label="Romaneio de entrega em PDF">${PDFI}Romaneio</button><button class="btn" id="hLan">+ Lançar pedido</button></div></div>
-    ${(()=>{const a=backupAge();return a==null||a>=3?`<div class="notice bkwarn"><span>${a==null?'Você ainda não fez backup dos dados.':'Último backup há '+a+' dias.'} No protótipo os dados ficam só neste navegador.</span><button class="btn dlb" id="hBk">Baixar backup agora</button></div>`:''})()}
+    ${(()=>{const a=backupAge();return a==null||a>=3?`<div class="notice bkwarn"><span>${a==null?'Você ainda não fez backup dos dados.':'Último backup há '+a+' dias.'} Os dados ficam no servidor; o backup é uma cópia extra.</span><button class="btn dlb" id="hBk">Baixar backup agora</button></div>`:''})()}
     ${dashHtml()}
     <h3 class="dech dbsec">Hoje · ${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})}</h3>
     <div class="htiles">
@@ -3312,9 +3445,9 @@ function admVeiculos(){
       <div class="row" style="gap:8px"><input type="text" id="vdrv" placeholder="Nome do motorista" style="flex:1;min-width:160px" aria-label="Motorista"><input type="text" id="vcar" placeholder="Veículo e placa, ex.: Caminhão 3/4 · ABC1D23" style="flex:1;min-width:200px" aria-label="Veículo"><input type="text" id="vlog" placeholder="Usuário (opcional)" autocapitalize="none" style="width:150px" aria-label="Usuário do entregador"><input type="text" id="vpas" placeholder="Senha" style="width:110px" aria-label="Senha do entregador" value="${Math.floor(1000+Math.random()*9000)}"><button class="btn" id="vadd">Adicionar</button></div>
       <div class="small muted">Aparecem para escolher no romaneio e na aba Entregas. Com usuário e senha, o motorista entra pela visão "Entregador" e confirma as entregas pelo celular, com o nome de quem recebeu e a foto do canhoto.</div>
     </div>
-    ${(S.vehicles||[]).length?`<div class="list" style="max-width:720px">${S.vehicles.map(v=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(v.driver||'Sem motorista')}</b><span class="small muted">${esc(v.car||'Sem veículo')}${v.login?' · acesso de entregador: '+esc(v.login)+' / '+esc(v.pass):' · sem acesso ao app'}</span></div>
+    ${(S.vehicles||[]).length?`<div class="list" style="max-width:720px">${S.vehicles.map(v=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(v.driver||'Sem motorista')}</b><span class="small muted">${esc(v.car||'Sem veículo')}${v.login?' · acesso de entregador: '+esc(v.login)+' · '+srvPassLabel(v):' · sem acesso ao app'}</span></div>
       ${ui.confirmDel==='veh'+v.id?`<button class="btn danger dlb" data-vdok="${v.id}">Confirmar</button>`:`<button class="btn ghost dlb" data-vdel="${v.id}">Excluir</button>`}</div>`).join('')}</div>`:'<div class="empty">Nenhum motorista cadastrado.</div>'}`;
-  $('#vadd').onclick=()=>{const d=$('#vdrv').value.trim(),v=$('#vcar').value.trim();if(!d&&!v)return;const lg=($('#vlog').value||'').trim().toLowerCase();if(lg&&S.vehicles.some(x=>x.login===lg)){toast('Esse usuário já existe.');return}S.vehicles.push({id:uid(),driver:d,car:v,login:lg,pass:lg?($('#vpas').value||'').trim():''});save();toast('Motorista adicionado');admVeiculos()};
+  $('#vadd').onclick=()=>{const d=$('#vdrv').value.trim(),v=$('#vcar').value.trim();if(!d&&!v)return;const lg=($('#vlog').value||'').trim().toLowerCase();if(lg&&S.vehicles.some(x=>x.login===lg)){toast('Esse usuário já existe.');return}if(lg&&($('#vpas').value||'').trim().length<8){toast('A senha do motorista precisa ter pelo menos 8 caracteres.');return}S.vehicles.push({id:uid(),driver:d,car:v,login:lg,pass:lg?($('#vpas').value||'').trim():''});save();toast('Motorista adicionado');admVeiculos()};
   c.querySelectorAll('[data-vdel]').forEach(b=>b.onclick=()=>{ui.confirmDel='veh'+b.dataset.vdel;admVeiculos()});
   c.querySelectorAll('[data-vdok]').forEach(b=>b.onclick=()=>{S.vehicles=S.vehicles.filter(x=>x.id!==b.dataset.vdok);ui.confirmDel=null;save();admVeiculos()});
 }
@@ -3471,7 +3604,7 @@ function admVendedores(){
       <div class="small muted">Vale para os produtos sem comissão própria. Produto com comissão cadastrada paga a dele.</div>
       <div class="vaccbox"><span class="lbl">Acesso do vendedor ao app</span>
         <div class="grid2"><div class="field"><label for="sll">Usuário</label><input type="text" id="sll" autocapitalize="none" value="${esc(E.login||'')}" placeholder="Ex.: joao"></div>
-          <div class="field"><label for="slpw">Senha</label><input type="text" id="slpw" value="${esc(E.pass||(E.id?'':String(Math.floor(1000+Math.random()*9000))))}"></div></div>
+          <div class="field"><label for="slpw">Senha</label><input type="password" id="slpw" value="" autocomplete="new-password" placeholder="${E.id&&E.hasPass?'Em branco = manter a senha atual':'Senha provisória (mínimo 8)'}"></div></div>
         <div class="grid2"><div class="field"><label for="slmg">Margem mínima padrão (%)</label><input type="text" inputmode="decimal" id="slmg" value="${hasVal(E.minMg)?String(E.minMg).replace('.',','):''}" placeholder="Para produtos sem mínimo na categoria"><span class="small muted">Vale só para produtos cuja categoria não tem margem mínima.</span>
           <label for="sladj" style="margin-top:6px">Ajuste deste vendedor (pontos)</label><input type="text" inputmode="decimal" id="sladj" value="${hasVal(E.minAdj)?String(E.minAdj).replace('.',','):''}" placeholder="0"><span class="small muted">Ex.: 1 = exige 1 ponto a mais que o mínimo das categorias; -1 = deixa ir 1 ponto abaixo.</span></div>
           <div class="small muted" style="align-self:end">O vendedor <b>não vê</b> a margem. Ele pode mexer nos preços produto a produto; o pedido só sai se a margem do pedido inteiro ficar acima desse mínimo. Se não ficar, o pedido trava e ele pode enviar para a sua análise (aba Análise).</div></div>
@@ -3480,7 +3613,7 @@ function admVendedores(){
       </div>
       <div class="err" id="slerr"></div>
       <div class="row"><button class="btn" type="submit">Salvar</button><button class="btn ghost" type="button" id="slcancel">Cancelar</button></div></form>`:''}
-    ${(S.sellers||[]).length?`<div class="list" style="max-width:760px">${S.sellers.map(x=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(x.name)}</b><span class="small muted">Comissão padrão ${String(Number(x.commission)||0).replace('.',',')}% · ${nCli(x.id)} cliente${nCli(x.id)===1?'':'s'}${x.phone?' · '+esc(x.phone):''}</span><span class="small muted">${x.login?`Acesso: <b>${esc(x.login)}</b> · senha ${esc(x.pass||'')}${x.active===false?' · <b>desativado</b>':''}`:'Sem acesso ao app'}${hasVal(x.minMg)&&x.minMg!==''?' · mínimo padrão '+String(x.minMg).replace('.',',')+'%':''}${Number(x.minAdj)?' · ajuste '+(x.minAdj>0?'+':'')+String(x.minAdj).replace('.',',')+' pts':''}${x.allCli?' · todos os clientes':''}</span></div>
+    ${(S.sellers||[]).length?`<div class="list" style="max-width:760px">${S.sellers.map(x=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(x.name)}</b><span class="small muted">Comissão padrão ${String(Number(x.commission)||0).replace('.',',')}% · ${nCli(x.id)} cliente${nCli(x.id)===1?'':'s'}${x.phone?' · '+esc(x.phone):''}</span><span class="small muted">${x.login?`Acesso: <b>${esc(x.login)}</b> · ${srvPassLabel(x)}${x.active===false?' · <b>desativado</b>':''}`:'Sem acesso ao app'}${hasVal(x.minMg)&&x.minMg!==''?' · mínimo padrão '+String(x.minMg).replace('.',',')+'%':''}${Number(x.minAdj)?' · ajuste '+(x.minAdj>0?'+':'')+String(x.minAdj).replace('.',',')+' pts':''}${x.allCli?' · todos os clientes':''}</span></div>
       <div class="row" style="gap:6px"><button class="btn ghost dlb" data-sle="${x.id}">Editar</button>${ui.confirmDel==='sl'+x.id?`<button class="btn danger dlb" data-sldok="${x.id}">Confirmar</button>`:`<button class="btn ghost dlb" data-sld="${x.id}">Excluir</button>`}</div></div>`).join('')}</div>`:'<div class="empty">Nenhum vendedor cadastrado. Sem vendedor na venda, a comissão é zero.</div>'}
     <p class="small muted">O vendedor de cada cliente fica no cadastro do cliente e vai para os pedidos dele. Você pode trocar o vendedor em cada pedido.</p>`;
   $('#cmm').onchange=e=>{S.store.commMode=e.target.value;save();toast(e.target.value==='venda'?'Comissão liberada na conclusão do pedido':'Comissão liberada quando o cliente paga');admVendedores()};
@@ -3495,7 +3628,7 @@ function admVendedores(){
     if(cm!==''&&(isNaN(cm)||cm<0||cm>100)){$('#slerr').textContent='Comissão entre 0 e 100%.';return}
     const lg=$('#sll').value.trim().toLowerCase(),pw=$('#slpw').value.trim(),mg=pnum($('#slmg').value),adj=(()=>{const t=$('#sladj').value.trim().replace(',','.');return t===''?'':Number(t)})();
     if(adj!==''&&(isNaN(adj)||adj<-20||adj>20)){$('#slerr').textContent='Ajuste entre -20 e 20 pontos.';return}
-    if(lg&&!pw){$('#slerr').textContent='Informe a senha do vendedor.';return}
+    if(lg&&!pw&&!E.hasPass){$('#slerr').textContent='Informe a senha do vendedor.';return}if(pw&&pw.length<8){$('#slerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}
     if(lg&&S.sellers.some(x=>x.id!==E.id&&String(x.login||'').toLowerCase()===lg)){$('#slerr').textContent='Esse usuário já existe.';return}
     if(mg!==''&&(isNaN(mg)||mg<0||mg>90)){$('#slerr').textContent='Margem mínima entre 0 e 90%.';return}
     const v={...E,id:E.id||uid(),name,phone:$('#slp').value.trim(),commission:cm===''?0:cm,login:lg,pass:pw,minMg:mg===''?'':mg,minAdj:adj,allCli:$('#slall').checked,active:$('#slact').checked};
@@ -4079,12 +4212,11 @@ function fatLoginForm(){
     <div class="field"><label for="fblu">Usuário</label><input type="text" id="fblu" autocomplete="username" autocapitalize="none" required></div>
     <div class="field"><label for="fblp">Senha</label><input type="password" id="fblp" autocomplete="current-password" required></div>
     <div class="err" id="fble"></div><button class="btn block" type="submit">Entrar</button>
-    <div class="hint">Os acessos de faturamento são criados pelo administrador em CADASTROS &gt; Faturamento.</div></form>`}
+    <div class="hint">Os acessos de faturamento são criados pelo administrador em CADASTROS &gt; Faturamento.</div>${srvTeamLinks('fat')}</form>`}
 function fatDay(o){return o.billed&&o.billed.at?locDay(o.billed.at):''}
 function renderFat(){
   const app=$('#app');
-  if(!ui.biller){app.innerHTML=fatLoginForm();$('#fbl').onsubmit=e=>{e.preventDefault();const u=$('#fblu').value.trim().toLowerCase(),p=$('#fblp').value;
-    const k=(S.billers||[]).find(x=>x.login.toLowerCase()===u&&x.pass===p);if(!k){$('#fble').textContent='Usuário ou senha incorretos.';return}ui.biller=k.name||k.login;render()};return}
+  if(!ui.biller){app.innerHTML=fatLoginForm();srvBindTeamLinks();$('#fbl').onsubmit=e=>{e.preventDefault();srvLogin('faturamento',$('#fblu').value.trim(),$('#fblp').value,$('#fble'),$('#fbl button[type=submit]'))};return}
   const F=ui.fat=ui.fat||{tab:'fat',per:'7',q:'',sel:{},nf:{}};
   const base=S.orders.filter(o=>o.status!=='cancelado'),t=today();
   const aFat=base.filter(o=>!o.billed&&['separado','pronto','saiu','concluido'].includes(o.status)),emSep=base.filter(o=>!o.billed&&!apprHold(o)&&['novo','separando'].includes(o.status));
@@ -4149,10 +4281,10 @@ function admFaturamento(){
       <div class="err" id="fkerr" style="min-height:0"></div>
       <div class="small muted">Quem fatura entra pela visão "Faturamento": vê os pedidos prontos e em separação, imprime o pedido e a separação, gera o arquivo para o sistema e marca o pedido como faturado (com o número da nota). Não vê custo, margem, comissão nem relatórios, e não muda preços.</div>
     </div>
-    ${S.billers.length?`<div class="list" style="max-width:720px">${S.billers.map(k=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(k.name||k.login)}</b><span class="small muted">Usuário: ${esc(k.login)} · Senha: ${esc(k.pass)}</span></div>
+    ${S.billers.length?`<div class="list" style="max-width:720px">${S.billers.map(k=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(k.name||k.login)}</b><span class="small muted">Usuário: ${esc(k.login)} · ${srvPassLabel(k)}</span></div>
       ${ui.confirmDel==='fk'+k.id?`<button class="btn danger dlb" data-fkok="${k.id}">Confirmar</button>`:`<button class="btn ghost dlb" data-fkdel="${k.id}">Excluir</button>`}</div>`).join('')}</div>`:'<div class="empty">Nenhum acesso de faturamento cadastrado.</div>'}`;
   $('#fkadd').onclick=()=>{const n=$('#fkn').value.trim(),l=$('#fkl').value.trim().toLowerCase(),p=$('#fkp').value.trim();
-    if(!n||!l||!p){$('#fkerr').textContent='Preencha nome, usuário e senha.';return}
+    if(!n||!l||!p){$('#fkerr').textContent='Preencha nome, usuário e senha.';return}if(p.length<8){$('#fkerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}
     if(S.billers.some(x=>x.login.toLowerCase()===l)){$('#fkerr').textContent='Esse usuário já existe.';return}
     S.billers.push({id:uid(),name:n,login:l,pass:p});save();toast('Acesso de faturamento adicionado');admFaturamento()};
   c.querySelectorAll('[data-fkdel]').forEach(b=>b.onclick=()=>{ui.confirmDel='fk'+b.dataset.fkdel;admFaturamento()});
@@ -4222,7 +4354,7 @@ function lnTarget(R2){const me=SVme();if(!me)return null;const adj=Number(me.min
   return any&&w>0?Math.max(0,t/w+adj):null}
 function lnItemMin(p){const me=SVme();if(!me)return null;const pm=polMin(p),m=pm?pm.v:(setV(me.minMg)?Number(me.minMg):null);return m==null?null:Math.max(0,m+(Number(me.minAdj)||0))}
 const mgTol=()=>{const v=S.store&&S.store.mgTol;return v==null||v===''?2:Math.max(0,Number(v)||0)};
-function lnLock(R2,cli,L){const me=SVme();if(!me||!R2.items.length)return null;const min=lnTarget(R2);if(min==null)return null;
+function lnLock(R2,cli,L){const me=SVme();if(!me||!R2.items.length)return null;if(SRV.me&&SRV.me.role==='vendedor')return srvLock(R2,cli,L);const min=lnTarget(R2);if(min==null)return null;
   const mg=lnMargin(R2,cli,L);if(mg>=min-1e-9)return {ok:true,min,mg,level:mg<min+1?'yellow':'green'};
   if(L._tblOk)return {ok:true,min,mg,level:'yellow',table:true};
   if(mgTol()>0&&mg>=min-mgTol()-1e-9)return {ok:true,min,mg,level:'yellow',tol:true};
@@ -4231,7 +4363,7 @@ function lnLock(R2,cli,L){const me=SVme();if(!me||!R2.items.length)return null;c
   return {ok:false,min,mg,level:'red',need:Math.ceil(R2.total*(hi-1)*100)/100}}
 function lnPill(K){if(!K)return '';const t={red:'Abaixo do permitido',yellow:'No limite',green:'Margem ok'}[K.level];return `<div class="mgpillwrap"><div class="mgpill mg-${K.level}" role="status" aria-live="polite"><span class="mgdot"></span>${t}</div></div>`}
 /* luz por produto (vendedor): margem do item depois da comissão, contra o mínimo dele */
-function lnItemLevel(p,packPrice,k,L,cli,tp){const min=lnItemMin(p);if(min==null||!(packPrice>0))return null;const atTable=tp>0&&packPrice>=tp-0.004;const pc=Number(p.cost);if(!(pc>0))return atTable?'yellow':'red';
+function lnItemLevel(p,packPrice,k,L,cli,tp){if(SRV.me&&SRV.me.role==='vendedor')return srvItemLevel(p,L,cli);const min=lnItemMin(p);if(min==null||!(packPrice>0))return null;const atTable=tp>0&&packPrice>=tp-0.004;const pc=Number(p.cost);if(!(pc>0))return atTable?'yellow':'red';
   const ie=!!(L.nf&&ieClient(cli)),net=packPrice*k,cost=effCost(p,pc,net,ie),mg=(net-cost-net*lnCommRate(p,L.sel)/100)/net*100;return mg<min-1e-9?(atTable?'yellow':'red'):mg<min+1?'yellow':'green'}
 const lnDot=(lv,title)=>lv?`<span class="mgdot mg-${lv}" title="${title||({red:'Abaixo do permitido',yellow:'No limite',green:'Margem ok'})[lv]}"></span> `:'';
 function lnReview(c,L,cli,R2,R0,pays,lnDoSave,tpOf){
@@ -4268,7 +4400,7 @@ function vendLoginForm(){
     <div class="field"><label for="vdlu">Usuário</label><input type="text" id="vdlu" autocomplete="username" autocapitalize="none" required></div>
     <div class="field"><label for="vdlp">Senha</label><input type="password" id="vdlp" autocomplete="current-password" required></div>
     <div class="err" id="vdle"></div><button class="btn block" type="submit">Entrar</button>
-    <div class="hint">O acesso do vendedor é criado pelo administrador em CADASTROS &gt; Vendedores.</div></form>`}
+    <div class="hint">O acesso do vendedor é criado pelo administrador em CADASTROS &gt; Vendedores.</div>${srvTeamLinks('vend')}</form>`}
 
 /* ---------- resposta da loja: tirar produtos do pedido antes de aceitar ---------- */
 function rmSel(o){ui.rmSel=ui.rmSel||{};return ui.rmSel[o.id]||(ui.rmSel[o.id]={})}
@@ -4296,9 +4428,8 @@ const pctx=v=>String(Math.round(Number(v)*100)/100).replace('.',',')+'%';
 function apprChip(o){return o.appr==='contra'?'<span class="apchip pend">Contraproposta da loja</span>':o.appr==='aceito'?'<span class="apchip ok">Contraproposta aceita</span>':o.appr==='ajustar'?'<span class="apchip no">Devolvido para ajuste</span>':o.appr==='liberado'?'<span class="apchip ok">Ajustado e liberado</span>':o.appr==='pendente'?'<span class="apchip pend">Aguardando aprovação</span>':o.appr==='aprovado'?'<span class="apchip ok">Aprovado pela loja</span>':o.appr==='recusado'?(o.cliRej?'<span class="apchip no">Recusado pelo cliente</span>':'<span class="apchip no">Recusado pela loja</span>'):''}
 function renderVend(){
   const app=$('#app');
-  if(!ui.seller){app.innerHTML=vendLoginForm();$('#vdl').onsubmit=e=>{e.preventDefault();const u=$('#vdlu').value.trim().toLowerCase(),p=$('#vdlp').value;
-    const k=(S.sellers||[]).find(x=>x.login&&x.login.toLowerCase()===u&&x.pass===p&&x.active!==false);if(!k){$('#vdle').textContent='Usuário ou senha incorretos, ou acesso desativado.';return}ui.seller=k.id;ui.vtab='pedidos';ui.lanc=null;render()};return}
-  const me=SVme();if(!me||me.active===false){ui.seller=null;renderVend();return}
+  if(!ui.seller){app.innerHTML=vendLoginForm();srvBindTeamLinks();$('#vdl').onsubmit=e=>{e.preventDefault();srvLogin('vendedor',$('#vdlu').value.trim(),$('#vdlp').value,$('#vdle'),$('#vdl button[type=submit]'))};return}
+  const me=SVme();if(!me||me.active===false){if(SRV.me){$('#app').innerHTML='<div class="empty">Seu acesso de vendedor está desativado. Fale com a loja.</div>';return}ui.seller=null;renderVend();return}
   if(ui.lanc){app.innerHTML='<div id="tabc" class="svmode"></div>';admLancar();return}
   const T=ui.vtab||'pedidos',mine=S.orders.filter(o=>o.sellerId===me.id),cls=lnPool();
   const tabs=[['pedidos','Meus pedidos'],['clientes','Clientes ('+cls.length+')'],['produtos','Produtos'],['comissao','Comissão']];
@@ -5666,7 +5797,7 @@ function admClients(){
       <label class="switch"><input type="checkbox" id="cneg" ${e.canNeg?'checked':''}> <span><b>Pode negociar preço no app</b><br><span class="small muted">Libera o botão "Negociar preço" no carrinho deste cliente (vale quando a negociação está em "Só os clientes marcados").</span></span></label>
       <div class="grid2">
         <div class="field"><label for="cl">Usuário de acesso</label><input type="text" id="cl" value="${esc(e.login)}" autocapitalize="none" placeholder="Ex.: mercearia.sj" required></div>
-        <div class="field"><label for="cp">Senha</label><input type="text" id="cp" value="${esc(e.pass)}" required></div>
+        <div class="field"><label for="cp">Senha</label><input type="password" id="cp" value="" autocomplete="new-password" placeholder="${e.id&&e.hasPass?'Em branco = manter a senha atual':'Senha provisória (mínimo 8)'}"></div>
       </div>
       <div class="grid2">
         <div class="field"><label for="ct">Telefone / WhatsApp</label><input type="text" id="ct" value="${esc(e.phone)}" inputmode="tel"></div>
@@ -5723,6 +5854,7 @@ function admClients(){
         if(!ct){ct={id:uid(),name:fd.cidade.toLowerCase().replace(/(^|\s)(\S)/g,(m,a,b)=>a+b.toUpperCase()).replace(/\b(Da|De|Do|Das|Dos|E)\b/g,w=>w.toLowerCase()),fuel:'',driver:'',helper:'',other:''};(S.cities=S.cities||[]).push(ct);toast('Cidade "'+ct.name+'" criada em Cidades de entrega')}
         city=ct.id;fd.cidade=ct.name}
       const address=[fd.rua,fd.num].filter(Boolean).join(', ')+(fd.comp?' - '+fd.comp:'');
+      if($('#cp').value&&$('#cp').value.length<8){$('#cerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}
       const cu={...e,id:e.id||uid(),name,login,pass:$('#cp').value,phone:val('ct'),address,pays,doc,bairro:fd.bairro,city,sellerId:$('#csel').value,table:'',creditLimit:pnum($('#clim').value),fiscal:nfClean(fd),stCode:e.stCode||''};
       cu.ieOk=$('#cie').checked;cu.canNeg=!!($('#cneg')&&$('#cneg').checked);
       if(cu.ieOk){const ie=String(fd.ie||'').toUpperCase();if(!ie||ie==='ISENTO'){$('#cerr').textContent='Para marcar como contribuinte, preencha a inscrição estadual.';return}}
@@ -5758,32 +5890,32 @@ function admClients(){
     <div class="filters">${[['todos','Todos'],['15','Sem comprar há 15+ dias'],['30','Há 30+ dias'],['nunca','Nunca compraram']].map(([k,v])=>`<button class="chip" data-cf="${k}" aria-pressed="${CF===k}">${v}${k!=='todos'?' ('+withIdle.filter(({d})=>inF(k,d)).length+')':''}</button>`).join('')}</div>
     <div class="small muted pfcount">${cliList.length} de ${S.customers.length} cliente${S.customers.length===1?'':'s'}${cact?` · <button type="button" class="linkbtn" id="coclr">Limpar filtros</button>`:''}</div>
     <div class="list">${cliList.map(x=>`<div class="prow" style="grid-template-columns:1fr auto">
-      <div class="t"><b>${esc(x.name)}</b>${showSt?(()=>{const t=stt.get(x.id);return `<span class="small">${t.n?`Comprou <b>${brl(t.v)}</b> em ${t.n} pedido${t.n>1?'s':''}`:'Sem pedidos'} ${CO.per==='tudo'?'desde o início':'nos últimos '+CO.per+' dias'}</span>`})():''}${x.doc?`<span class="small muted">${x.doc.length===11?'CPF':'CNPJ'} ${esc(fmtDoc(x.doc))}</span>`:''}<span class="small muted">Usuário: ${esc(x.login)} · Senha: ${esc(x.pass)}${x.phone?' · '+esc(x.phone):''}</span><span class="small muted">Pagamento: ${allowedPays(x).length===S.payments.length?'todas as formas':esc(allowedPays(x).join(', ')||'nenhuma')}</span>${clientExtra(x)}</div>
+      <div class="t"><b>${esc(x.name)}</b>${showSt?(()=>{const t=stt.get(x.id);return `<span class="small">${t.n?`Comprou <b>${brl(t.v)}</b> em ${t.n} pedido${t.n>1?'s':''}`:'Sem pedidos'} ${CO.per==='tudo'?'desde o início':'nos últimos '+CO.per+' dias'}</span>`})():''}${x.doc?`<span class="small muted">${x.doc.length===11?'CPF':'CNPJ'} ${esc(fmtDoc(x.doc))}</span>`:''}<span class="small muted">Usuário: ${esc(x.login)} · ${srvPassLabel(x)}${x.phone?' · '+esc(x.phone):''}</span><span class="small muted">Pagamento: ${allowedPays(x).length===S.payments.length?'todas as formas':esc(allowedPays(x).join(', ')||'nenhuma')}</span>${clientExtra(x)}</div>
       <button class="btn ghost" data-ce="${x.id}" style="min-height:40px;padding:8px 12px">Editar</button></div>`).join('')||(S.customers.length?'<div class="empty">Nenhum cliente nesse filtro.</div>':'<div class="empty">Nenhum cliente cadastrado.</div>')}</div>`;
   c.querySelectorAll('[data-cf]').forEach(b=>b.onclick=()=>{ui.cliF=b.dataset.cf;admClients()});
   {const ci=$('#cq');ci.oninput=()=>{CO.q=ci.value;const pos=ci.selectionStart;admClients();const n=$('#cq');n.focus();n.setSelectionRange(pos,pos)}}
   [['cosort','sort'],['coper','per'],['cocity','city'],['cosel','sel'],['coie','ie'],['covenc','venc']].forEach(([id,k])=>{const el=$('#'+id);if(el)el.onchange=()=>{CO[k]=el.value;const y=window.scrollY;admClients();window.scrollTo(0,y)}});
   {const b=$('#coclr');if(b)b.onclick=()=>{ui.co=null;ui.cliF='todos';admClients()}}
-  $('#newC').onclick=()=>{ui.edit={id:null,name:'',login:'',pass:Math.floor(1000+Math.random()*9000).toString(),phone:'',address:'',pays:S.payments.slice(),bairro:'',table:'',creditLimit:''};renderAdmin()};
+  $('#newC').onclick=()=>{ui.edit={id:null,name:'',login:'',pass:'',phone:'',address:'',pays:S.payments.slice(),bairro:'',table:'',creditLimit:''};renderAdmin()};
   c.querySelectorAll('[data-ce]').forEach(b=>b.onclick=()=>{ui.edit={...S.customers.find(x=>x.id===b.dataset.ce)};renderAdmin()});
 }
 /* ---------- BACKUP: baixar e restaurar todos os dados ---------- */
-function backupNow(){const data=JSON.stringify({app:'pedidos-atacado',version:1,savedAt:new Date().toISOString(),data:S});
-  offerFile('backup-atacado-davila-'+stamp()+'.json',data).then(ok=>{if(ok){S.store.lastBackup=today();save();render()}})}
+function backupNow(){srvBackup()}
 function backupAge(){return S.store.lastBackup?daysBetween(S.store.lastBackup,today()):null}
 function backupPanel(){const a=backupAge();return `<section class="panel bkpanel" style="display:grid;gap:10px;max-width:620px;margin-top:14px">
-  <div><b>Backup dos dados</b><div class="small muted">Baixa um arquivo com tudo: produtos, fotos, clientes, pedidos, contas a receber, combos e cadastros. Guarde no computador, no pendrive ou no Google Drive. Se o navegador perder os dados, é só restaurar.</div></div>
+  <div><b>Backup dos dados</b><div class="small muted">Os dados ficam guardados no servidor. O backup é uma cópia extra com tudo (produtos, fotos, clientes, pedidos, contas e cadastros), <b>sem nenhuma senha</b>. Guarde num lugar seguro: ele tem dados dos seus clientes.</div></div>
   <div class="small ${a==null||a>=3?'neg':''}">${a==null?'Nenhum backup feito ainda.':'Último backup: '+dBR(S.store.lastBackup)+(a===0?' (hoje)':' (há '+a+' dia'+(a===1?'':'s')+')')}</div>
   <div class="row" style="gap:8px"><button type="button" class="btn" id="bkSave">Baixar backup agora</button><label class="btn ghost" for="bkFile" style="display:inline-flex;align-items:center;cursor:pointer">Restaurar de um arquivo</label><input type="file" id="bkFile" accept=".json,application/json" hidden></div>
-  <div id="bkMsg"></div></section>`}
+  <div id="bkMsg"></div></section>
+  <section class="panel" style="display:grid;gap:10px;max-width:620px;margin-top:14px"><div><b>Acessos sem senha</b><div class="small muted">Gera uma senha provisória para cada pessoa cadastrada com usuário que ainda não tem senha. Ela aparece uma única vez; a pessoa cria a própria senha no primeiro acesso.</div></div><div class="row"><button type="button" class="btn ghost" id="tmpPw">Gerar senhas provisórias</button></div><div id="tmpPwBox"></div></section>`}
 function bindBackup(){
-  const sv=$('#bkSave');if(sv)sv.onclick=backupNow;
+  const sv=$('#bkSave');if(sv)sv.onclick=backupNow;{const tb=$('#tmpPw');if(tb)tb.onclick=()=>srvTempPasswords($('#tmpPwBox'))}
   const f=$('#bkFile');if(!f)return;
   f.onchange=()=>{const file=f.files[0];if(!file)return;const rd=new FileReader();rd.onload=()=>{let j;try{j=JSON.parse(rd.result)}catch(e){$('#bkMsg').innerHTML='<div class="err">Esse arquivo não é um backup do app.</div>';return}
     const d=j&&j.app==='pedidos-atacado'?j.data:j;if(!d||!Array.isArray(d.products)||!Array.isArray(d.customers)||!Array.isArray(d.orders)){$('#bkMsg').innerHTML='<div class="err">Esse arquivo não é um backup do app.</div>';return}
     $('#bkMsg').innerHTML=`<div class="notice">Backup de ${j.savedAt?new Date(j.savedAt).toLocaleString('pt-BR'):'data desconhecida'}: ${d.products.length} produtos, ${d.customers.length} clientes, ${d.orders.length} pedidos. Restaurar <b>substitui todos os dados atuais</b>.</div><div class="row" style="gap:6px;margin-top:6px"><button type="button" class="btn danger" id="bkOk">Restaurar este backup</button><button type="button" class="btn ghost" id="bkNo">Cancelar</button></div>`;
     $('#bkNo').onclick=()=>{$('#bkMsg').innerHTML='';f.value=''};
-    $('#bkOk').onclick=()=>{S=d;save();toast('Backup restaurado');try{location.reload()}catch(e){render()}}};rd.readAsText(file)};
+    $('#bkOk').onclick=()=>{$('#bkMsg').innerHTML='<div class="small muted">Restaurando…</div>';srvRestore(d)}};rd.readAsText(file)};
 }
 function admConfig(){
   const c=$('#cadc')||$('#tabc'),st=S.store;
@@ -5840,7 +5972,7 @@ function admConfig(){
 }
 
 /* ---------- geral ---------- */
-function render(){
+function render(){if(SRV.me&&!SRV.me.mustReset)ui.view=ROLE_VIEW[SRV.me.role]||ui.view;
   $('#vCli').setAttribute('aria-pressed',ui.view==='cliente');$('#vAdm').setAttribute('aria-pressed',ui.view==='admin');$('#vConf').setAttribute('aria-pressed',ui.view==='conf');$('#vFat').setAttribute('aria-pressed',ui.view==='fat');$('#vVend').setAttribute('aria-pressed',ui.view==='vend');$('#vEnt').setAttribute('aria-pressed',ui.view==='ent');
   if(ui.view!=='conf'||!ui.confOrder)stopScanCam();
   renderTop();
@@ -5855,13 +5987,10 @@ $('#vFat').onclick=()=>{ui.view='fat';ui.edit=null;reloadState();render()};
 $('#vEnt').onclick=()=>{ui.view='ent';ui.edit=null;reloadState();render()};
 $('#vVend').onclick=()=>{if(ui.view!=='vend')ui.lanc=null;ui.view='vend';ui.edit=null;reloadState();render()};
 $('#vAdm').addEventListener('click',()=>{if(ui.view==='vend')ui.lanc=null},true);
-/* outra aba do mesmo navegador salvou: atualiza a tela do conferente e a lista de pedidos */
-window.addEventListener('storage',e=>{if(e.key!==KEY||!e.newValue)return;reloadState();
-  if(ui.view==='conf'&&!ui.confSug){const y=window.scrollY;renderTop();renderConf();window.scrollTo(0,y)}
-  else if(ui.view==='vend'&&ui.seller&&!ui.lanc&&!(document.activeElement&&document.activeElement.matches('input'))){const y=window.scrollY;renderVend();window.scrollTo(0,y)}
-  else if(ui.view==='fat'&&ui.biller&&!(document.activeElement&&document.activeElement.matches('#fq,[data-fnf]'))){const y=window.scrollY;renderFat();window.scrollTo(0,y)}
-  else if(ui.view==='admin'&&ui.admin&&((ui.tab==='pedidos'&&!ui.lanc&&!ui.adj&&!ui.romView)||(ui.tab==='semana'&&!ui.week))){const y=window.scrollY;renderAdmin();window.scrollTo(0,y)}});
-render();
+window.addEventListener('hashchange',()=>{if(!SRV.me){ui.view=srvHashView();render()}});
+ui.view=srvHashView();render();
+(async()=>{try{const me=await api('/api/me');SRV.me=me;if(me.mustReset){srvResetScreen();return}await loadState();srvAfterLogin()}catch(e){if(e.status&&e.status!==401)toast(e.message)}})();
+window.addEventListener('pagehide',()=>{try{const d=srvDiff();if(SRV.me&&d.ch.length&&!SRV.busy)fetch('/api/sync',{method:'POST',keepalive:true,credentials:'same-origin',headers:{'Content-Type':'application/json','X-App':'1'},body:JSON.stringify({changes:d.ch,order:d.order})})}catch(e){}});
 })();
 </script>
 
