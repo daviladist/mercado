@@ -15,6 +15,14 @@
   },
   "rewrites": [
     {
+      "source": "/cliente",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/cliente/",
+      "destination": "/index.html"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index"
     }

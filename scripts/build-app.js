@@ -68,7 +68,7 @@ R("\n  $('#logout').onclick=()=>{ui.client=null;ui.cart={};render()};", "\n  $('
 R("function render(){\n", "function render(){if(SRV.me&&!SRV.me.mustReset)ui.view=ROLE_VIEW[SRV.me.role]||ui.view;\n");
 s = s.replace(/\/\* outra aba do mesmo navegador salvou[\s\S]*?\nrender\(\);\n\}\)\(\);/, () => { n++; return `window.addEventListener('hashchange',()=>{if(!SRV.me){ui.view=srvHashView();render()}});
 ui.view=srvHashView();render();
-(async()=>{try{const me=await api('/api/me');SRV.me=me;if(me.mustReset){srvResetScreen();return}await loadState();srvAfterLogin()}catch(e){if(e.status&&e.status!==401)toast(e.message)}})();
+(async()=>{try{const me=await api('/api/me');if(CLIENT_ONLY&&me.role!=='cliente')return;SRV.me=me;if(me.mustReset){srvResetScreen();return}await loadState();srvAfterLogin()}catch(e){if(e.status&&e.status!==401)toast(e.message)}})();
 window.addEventListener('pagehide',()=>{try{const d=srvDiff();if(SRV.me&&d.ch.length&&!SRV.busy)fetch('/api/sync',{method:'POST',keepalive:true,credentials:'same-origin',headers:{'Content-Type':'application/json','X-App':'1'},body:JSON.stringify({changes:d.ch,order:d.order})})}catch(e){}});
 })();`; });
 

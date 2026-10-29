@@ -2,6 +2,8 @@
  * O navegador só recebe o que a pessoa logada pode ver (o servidor filtra).
  * Toda gravação vai para o servidor, que confere e recalcula antes de aceitar.
  * Nada de senha, custo ou comissão fica guardado neste aparelho.            */
+/* /cliente: link só para clientes (sem textos da equipe; só aceita login de cliente) */
+const CLIENT_ONLY=/^\/cliente\/?$/.test(location.pathname);
 const SRV={me:null,V:{meta:{}},base:{meta:{}},ord:{},t:null,busy:false,again:false,ver:'',poll:null,lastPass:''};
 const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins'];
 const SRV_ORDERED=['products','customers','sellers','checkers','billers','vehicles','cities','categories','combos','admins','payables','receivables'];
@@ -72,7 +74,7 @@ function srvStartPoll(){clearInterval(SRV.poll);SRV.poll=setInterval(()=>{if(doc
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')srvRefresh(false)})}
 /* entrar: o servidor confere a senha; o navegador nunca vê senha de ninguém */
 async function srvLogin(role,u,p,errEl,btn){errEl.textContent='';if(btn)btn.disabled=true;
-  try{const me=await api('/api/login',{role,login:u,password:p});SRV.me=me;SRV.lastPass=p;
+  try{const me=await api('/api/login',{role:CLIENT_ONLY?'cliente-only':role,login:u,password:p});SRV.me=me;SRV.lastPass=p;
     if(me.mustReset){srvResetScreen();return}await loadState();srvAfterLogin()}
   catch(e){errEl.textContent=e.message||'Não foi possível entrar.'}finally{if(btn)btn.disabled=false}}
 function srvAfterLogin(){const me=SRV.me;SRV.lastPass='';ui.view=ROLE_VIEW[me.role]||'cliente';
@@ -106,9 +108,9 @@ function srvPassScreen(){const app=$('#app');app.innerHTML=`<form class="login p
   $('#psf').onsubmit=async e=>{e.preventDefault();if($('#psn').value!==$('#psn2').value){$('#pse').textContent='As senhas não conferem.';return}
     try{await api('/api/password',{current:$('#pso').value,next:$('#psn').value});toast('Senha trocada.');render()}catch(er){$('#pse').textContent=er.message}}}
 /* links de acesso da equipe na tela de login do cliente (cada pessoa entra pelo seu) */
-function srvTeamLinks(cur){return cur==='cliente'?'<div class="teamlinks small">Equipe da loja (vendedor, conferente, faturamento, motorista e administrador) também entra por aqui, com o usuário e a senha que a loja passou.</div>':''}
+function srvTeamLinks(cur){return cur==='cliente'&&!CLIENT_ONLY?'<div class="teamlinks small">Equipe da loja (vendedor, conferente, faturamento, motorista e administrador) também entra por aqui, com o usuário e a senha que a loja passou.</div>':''}
 function srvBindTeamLinks(){document.querySelectorAll('[data-goview]').forEach(a=>a.onclick=e=>{e.preventDefault();ui.view=a.dataset.goview;try{history.replaceState(null,'','#'+VIEW_ROLE[ui.view])}catch(_){}render()})}
-function srvHashView(){const h=String(location.hash||'').replace('#','');const k=Object.keys(VIEW_ROLE).find(v=>VIEW_ROLE[v]===h);return k||'cliente'}
+function srvHashView(){if(CLIENT_ONLY)return 'cliente';const h=String(location.hash||'').replace('#','');const k=Object.keys(VIEW_ROLE).find(v=>VIEW_ROLE[v]===h);return k||'cliente'}
 /* trava de margem do vendedor: o cálculo é feito no servidor (o vendedor não recebe custo) */
 const SRV_LK={};
 function srvLockKey(cli,L){return JSON.stringify([cli&&cli.id,L.cart,L.over||{},L.mode,L.pay,!!L.nf,L.editId||'',!!L._tblOk])}
