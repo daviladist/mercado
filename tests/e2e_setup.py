@@ -1,5 +1,11 @@
 """Prepara os acessos como o administrador faria pela tela, gera senhas provisórias e cada pessoa cria a própria senha."""
-import json, os
+import json, os, secrets, sys
+# senhas de teste sorteadas a cada execução (nada de senha escrita no repositório)
+def gen():
+    while True:
+        p = 'Tt' + secrets.token_urlsafe(9).replace('-', 'x').replace('_', 'y') + 'a7'
+        if not any(l in p.lower() for l in ('1', 'm', 'ze', 'vend', 'kesfi', 'pirilampo')): return p
+P_VEND, P_ZE = gen(), gen()
 from playwright.sync_api import sync_playwright
 BASE = os.environ.get('BASE', 'http://localhost:3077')
 OUT = os.environ.get('OUT', '/tmp/e2e'); os.makedirs(OUT, exist_ok=True)
@@ -23,12 +29,12 @@ with sync_playwright() as pw:
     pg.click('[data-cadg=usuarios]'); pg.wait_for_timeout(200)
     pg.locator('[data-cad]', has_text='Vendedores').first.click(); pg.wait_for_timeout(200)
     pg.locator('[data-sle]').first.click(); pg.wait_for_timeout(200)
-    pg.fill('#sll', 'vend'); pg.fill('#slpw', 'Provisoria-123'); pg.fill('#slmg', '15'); pg.check('#slall')
+    pg.fill('#sll', 'vend'); pg.fill('#slpw', P_VEND); pg.fill('#slmg', '15'); pg.check('#slall')
     pg.click('#slf button[type=submit]'); pg.wait_for_timeout(900)
     print('vendedor:', pg.locator('#cadc .prow').first.inner_text().replace('\n', ' | ')[:160])
     # motorista com acesso
     pg.locator('[data-cad]', has_text='Motoristas').first.click(); pg.wait_for_timeout(200)
-    pg.fill('#vdrv', 'Zé Motorista'); pg.fill('#vcar', 'Caminhão'); pg.fill('#vlog', 'ze'); pg.fill('#vpas', 'Provisoria-456'); pg.click('#vadd'); pg.wait_for_timeout(900)
+    pg.fill('#vdrv', 'Zé Motorista'); pg.fill('#vcar', 'Caminhão'); pg.fill('#vlog', 'ze'); pg.fill('#vpas', P_ZE); pg.click('#vadd'); pg.wait_for_timeout(900)
     print('motoristas:', [x.replace('\n', ' | ')[:120] for x in pg.locator('#cadc .prow').all_inner_texts()])
     # cliente KESFI pode negociar
     pg.click('[data-cadg=clientes]'); pg.wait_for_timeout(300)
@@ -41,13 +47,13 @@ with sync_playwright() as pw:
     pg.click('#tmpPw'); pg.wait_for_selector('#tmpPwBox tbody tr, #tmpPwBox .err, #tmpPwBox .muted', timeout=60000); pg.wait_for_timeout(300)
     rows = [r.split('\t') for r in pg.locator('#tmpPwBox tbody tr').all_inner_texts()]
     temp = {r[2]: r[3] for r in rows}
-    temp['vend'] = 'Provisoria-123'; temp['ze'] = 'Provisoria-456'
+    temp['vend'] = P_VEND; temp['ze'] = P_ZE
     print('senhas provisórias geradas:', len(rows), [r[:3] for r in rows])
     pg.screenshot(path=f'{OUT}/s02_senhas.png', full_page=True)
     # cada pessoa entra com a provisória e cria a sua
     final = {}
-    for role, view, login, newp in [('cliente', '', 'kesfi', 'Padaria-forte-77'), ('cliente', '', 'pirilampo', 'Piri-nova-2026'), ('conferente', 'conferente', '1', 'Conf-nova-2026'),
-                                    ('faturamento', 'faturamento', 'm', 'Fatu-nova-2026'), ('vendedor', 'vendedor', 'vend', 'Comercial-forte-88'), ('entregador', 'entregador', 'ze', 'Entr-nova-2026')]:
+    for role, view, login, newp in [('cliente', '', 'kesfi', gen()), ('cliente', '', 'pirilampo', gen()), ('conferente', 'conferente', '1', gen()),
+                                    ('faturamento', 'faturamento', 'm', gen()), ('vendedor', 'vendedor', 'vend', gen()), ('entregador', 'entregador', 'ze', gen())]:
         c2 = new_ctx(b, True); p2 = c2.new_page(); p2.on('pageerror', lambda e, r=role: errs.append(r + ': ' + str(e)))
         p2.goto(BASE + '/' + ('#' + view if view else '')); p2.wait_for_timeout(500)
         ids = {'cliente': ('#lu', '#lp', '#lf'), 'conferente': ('#cflu', '#cflp', '#cfl'), 'faturamento': ('#fblu', '#fblp', '#fbl'), 'vendedor': ('#vdlu', '#vdlp', '#vdl'), 'entregador': ('#dvlu', '#dvlp', '#dvl')}[role]
@@ -57,7 +63,7 @@ with sync_playwright() as pw:
         weak = p2.locator('#rse').inner_text()
         p2.fill('#rsn', newp); p2.fill('#rsn2', newp); p2.click('#rsf button[type=submit]')
         try: p2.wait_for_selector('#rsf', state='detached', timeout=15000)
-        except Exception: print('   ficou na tela de senha:', p2.locator('#rse').inner_text())
+        except Exception: print('   ficou na tela de senha:', p2.locator('#rse').inner_text()); errs.append(login + ': não conseguiu criar a senha')
         p2.wait_for_timeout(800)
         print(f'{role:11} {login:10} tela de nova senha: {has_reset} | senha fraca -> "{weak}" | depois:', p2.locator('#app').inner_text()[:60].replace('\n', ' / '))
         p2.screenshot(path=f'{OUT}/s03_{role}_{login}.png')
@@ -65,3 +71,4 @@ with sync_playwright() as pw:
     json.dump({'final': final}, open(f'{OUT}/creds.json', 'w'))
     b.close()
 print('ERROS', errs)
+if errs or len(final) != 6: sys.exit(1)

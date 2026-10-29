@@ -8,7 +8,7 @@ App de pedidos de atacado do ATACADO D'ÁVILA. Seis acessos: cliente, administra
 
 | Pasta | O que tem |
 |---|---|
-| `public/index.html` | O app (a tela). **Não tem nenhum dado nem senha.** É gerado por `scripts/build-app.js`. |
+| `public/index.html`, `public/cliente.html`, `public/app.js` | O app (a tela), equipe e só-clientes. **Não tem nenhum dado nem senha.** Gerados por `scripts/build-app.js`; o código fica em `app.js` porque a CSP proíbe script dentro da página. |
 | `api/index.js` | Única função da Vercel; todas as rotas `/api/*` chegam aqui. |
 | `lib/pg.js` | Cliente do Postgres (TLS + SCRAM), sem dependências. |
 | `lib/auth.js` | Senhas com hash **scrypt** (N=2^17, r=8, p=1), sessões e bloqueio por tentativas. |
@@ -17,7 +17,8 @@ App de pedidos de atacado do ATACADO D'ÁVILA. Seis acessos: cliente, administra
 | `lib/core.generated.js` | As mesmas regras de preço/margem/comissão do app, copiadas por `scripts/build-core.js` para o servidor recalcular tudo. |
 | `src/app.source.html` | Código original do app (onde se mexe nas telas). |
 | `src/server-client.js` | Parte do app que conversa com o servidor (login, sincronização). |
-| `tests/` | Testes: segurança (130 verificações) e fluxo completo pedido → entrega. |
+| `tests/unit/` | Testes de unidade das regras do servidor, com dados fictícios (`npm test`, também no GitHub Actions). |
+| `tests/*.py` | Testes pela API e pela tela, num banco de teste: segurança, os itens da banca de revisão (`banca_api.py`) e o fluxo completo pedido → entrega. Saem com código 1 quando algo falha. |
 
 Não há pacotes npm para instalar: tudo usa só o Node 20+.
 
@@ -25,7 +26,8 @@ Não há pacotes npm para instalar: tudo usa só o Node 20+.
 
 - **Login no servidor.** O navegador manda usuário e senha; o servidor confere contra o hash e devolve um cookie `HttpOnly`, `Secure` e `SameSite=Strict`. O navegador nunca recebe senha de ninguém.
 - **Senhas com hash scrypt** (resistente a força bruta, recomendado pela OWASP). No banco fica só o hash; da sessão fica só o SHA-256 do token.
-- **5 senhas erradas seguidas** bloqueiam o usuário por 15 minutos. 30 erros vindos do mesmo IP bloqueiam esse IP.
+- **Bloqueio de senha errada:** 5 erros seguidos bloqueiam aquela pessoa **naquele aparelho/IP** por 15 minutos (ninguém de fora tranca o dono). 60 erros somando todos os IPs, ou 30 de um mesmo IP, também bloqueiam. "Redefinir senha" pela loja destrava.
+- **Trocar a senha derruba as outras sessões** (quem roubou uma sessão perde o acesso).
 - **Senha provisória** é obrigatoriamente trocada no primeiro acesso: mínimo de 8 caracteres, e 10 para o administrador.
 - **Cada papel recebe só a sua parte:**
   - Custo, margem, regras de negociação, impostos e senhas só chegam ao administrador.
@@ -38,7 +40,10 @@ Não há pacotes npm para instalar: tudo usa só o Node 20+.
   - A trava de margem do vendedor e o aceite da negociação são calculados no servidor.
   - Situação e faturamento seguem a ordem certa: sem nota, o pedido não sai.
   - Ninguém mexe em pedido de outra pessoa.
-- **Nada fica guardado no aparelho:** o app apaga a cópia antiga do protótipo que estava no `localStorage`.
+- **Nada de dado da loja guardado no aparelho:** o app apaga a cópia antiga do protótipo. Ficam no aparelho só o rascunho da própria pessoa (carrinho, pedido em andamento, formulário de entrega) e o que ainda não foi enviado por falta de internet, até o servidor confirmar.
+- **Sem internet:** nada é dado como gravado sem resposta do servidor. Uma faixa vermelha mostra quantas alterações faltam enviar; o app reenvia sozinho quando a conexão volta.
+- **Alteração recusada pelo servidor** aparece num aviso que fica na tela até a pessoa fechar, e só aquela alteração volta atrás (as outras seguem).
+- **Etapas e dinheiro no servidor:** itens só mudam com o pedido em "novo" (fora a loja); falta e troca da separação, ocorrência na entrega, contas "não pagou"/"produto a mais", estoque e parcelas automáticas são calculados pelo servidor. Pedido em análise, contraproposta ou recusado não anda.
 - **Outras proteções:** proteção contra envio de outro site (CSRF), cabeçalhos de segurança (CSP, HSTS, X-Frame-Options) e site fora do Google.
 
 ## Colocar no ar (Vercel + Neon)
@@ -71,7 +76,9 @@ node scripts/build-core.js   # só se mudar regra de preço no src/app.source.ht
 node scripts/build-app.js    # gera public/index.html a partir de src/
 node scripts/dev-server.js   # http://localhost:3000
 ```
-- Testes (precisam de Python + Playwright): `tests/e2e_setup.py`, `tests/security.py` e `tests/e2e_flow.py`.
+- Testes de unidade (sem banco): `npm test`.
+- Testes pela API e pela tela (Python + Playwright, banco de TESTE): `tests/e2e_setup.py` (cria os acessos e sorteia senhas de teste em `$OUT/creds.json`), depois `tests/security.py`, `tests/banca_api.py` e `tests/e2e_flow.py`. Nenhuma senha de teste fica escrita no repositório.
+- `scripts/build-app.js` para se alguma troca não casar com o código-fonte (o número de trocas é conferido).
 - `PG_INSECURE_TLS=1` e `DEV_INSECURE_COOKIE=1` são só para teste local. **Nunca configure essas duas na Vercel.**
 
 ## Regras deste repositório
@@ -85,3 +92,7 @@ node scripts/dev-server.js   # http://localhost:3000
 - **StarIA dentro do app:** "Puxar do StarIA", importação em massa, atualizar custos e comparar estoque funcionavam só dentro do Claude. No site publicado, precisam de uma integração direta com a API do StarIA, com credencial do fornecedor. Até lá esses botões avisam que não conseguiram consultar.
 - **Fotos e backup grandes:** a Vercel aceita no máximo 4,5 MB por envio. Restaurar um backup acima disso precisa ser pelo terminal (`scripts/migrate.js`).
 - **Atualização entre aparelhos:** a tela de outra pessoa atualiza em até 20 segundos, ou no botão Atualizar.
+- **Driver do banco próprio (`lib/pg.js`):** feito sem dependências porque o ambiente de criação não tinha npm. Já tem TLS verificado, tempo limite e reaproveitamento de conexão; trocar pelo pacote `pg` ou `@neondatabase/serverless` é simples (só `lib/pg.js` fala com o banco).
+- **Carga do banco inteiro por requisição** nas gravações (`/api/sync` e `/api/state`): ok para o volume atual (centenas de pedidos); com milhares, vale carregar só o necessário. Trava do vendedor e negociação já carregam só o que usam.
+- **Regras de preço extraídas do app por nome** (`scripts/build-core.js`): mudar o nome de uma função de preço no app exige rodar o build de novo; o GitHub Actions avisa se os arquivos gerados não baterem com o fonte.
+- **Arquivos grandes** (`src/app.source.html`, `checkOrderUpdate`) continuam grandes: a quebra em módulos fica para depois, agora com testes que pegam regressão.

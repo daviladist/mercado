@@ -1,0 +1,23 @@
+name: testes
+on:
+  push:
+  pull_request:
+jobs:
+  regras-e-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Testes de unidade das regras (dados fictícios)
+        run: node --test tests/unit/*.test.js
+      - name: Os arquivos gerados batem com o código-fonte
+        run: |
+          npm i -g typescript@5.6.3
+          TS_PATH="$(npm root -g)/typescript" node scripts/build-core.js
+          node scripts/build-app.js
+          git diff --stat --exit-code lib/core.generated.js public/
+      - name: Nada de senha ou dado de cliente no que vai para o site
+        run: |
+          ! grep -RInE "pass_hash|scrypt\\$|\"cost\":" public/ || (echo "dado sensível em public/"; exit 1)

@@ -125,6 +125,8 @@ with sync_playwright() as pw:
     say('motorista escolhido:', [t[:40] for t in adm2.locator('[data-drvpick]').all_inner_texts()])
     # ---------- entregador
     ent = device('entregador'); login(ent, '#entregador', ('#dvlu', '#dvlp', '#dvl'), 'ze', CR['ze'])
+    try: ent.wait_for_selector('[data-dsel]:not([disabled])', timeout=15000)
+    except Exception: pass
     sel = ent.locator('[data-dsel]:not([disabled])'); say('entregador pode sair com:', sel.count())
     for k in range(sel.count()): sel.nth(k).check(); ent.wait_for_timeout(150)
     ent.click('[data-dgo]'); wait_sync(ent, 1000); say('romaneio:', toast(ent))
@@ -161,4 +163,22 @@ with sync_playwright() as pw:
         say(f'{nm:11} localStorage: {ls} | "cost" na página: {html.count("data-cost=\"1") + html.count("custo R$") if nm != "admin" else "-"}')
     b.close()
 json.dump(log, open(f'{OUT}/flow_log.json', 'w'), ensure_ascii=False)
+# ---------- conferência no servidor (o teste reprova se algo não ficou gravado como devia)
+import urllib.request, http.cookiejar, sys
+jar = http.cookiejar.CookieJar(); op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+def post(path, body): return json.loads(op.open(urllib.request.Request(BASE + path, data=json.dumps(body).encode(), headers={'Content-Type': 'application/json', 'X-App': '1'})).read())
+post('/api/login', {'login': 'eduardo', 'password': ADMIN}); S = json.loads(op.open(BASE + '/api/state').read())['S']
+by = lambda txt: [o for o in S['orders'] if txt in o['customer'].upper()]
+fails = []
+def chk(c, m): print(('  OK   ' if c else '  FALHA ') + m); (None if c else fails.append(m))
+k = by('KESFI')[0]; v = by('PIRILAMPO')[0]
+chk(k['status'] == 'concluido' and k.get('delivered', {}).get('name') == 'Kesia', f"pedido KESFI concluído com canhoto ({k['status']})")
+chk(v['status'] == 'concluido' and v.get('occ') and v['total'] > 0, f"pedido PIRILAMPO concluído com ocorrência e total positivo ({v['status']}, {v['total']})")
+chk(any(i.get('qOrig') == 3 or (i.get('qOrig') and i['q'] == 3) for i in v['items']) or any(s.get('type') == 'qtd' for s in v.get('sugs', [])), 'falta do conferente registrada')
+chk(all(o.get('billed') and o['billed'].get('nf') for o in (k, v)), 'os dois pedidos faturados com número de NF')
+chk(all(abs(o['total'] * 100 - round(o['total'] * 100)) < 1e-6 for o in S['orders']), 'totais sem resíduo de arredondamento')
+recs = [r for r in S['receivables'] if r.get('orderId') in (k['id'], v['id'])]
+chk(len({r['id'] for r in recs}) == len(recs), f'contas a receber sem duplicata ({len(recs)})')
+chk(not errs, 'nenhum erro de tela nem resposta de erro da API: ' + '; '.join(errs[:5]))
 print('ERROS', errs)
+sys.exit(1 if fails else 0)

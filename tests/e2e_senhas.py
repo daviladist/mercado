@@ -42,3 +42,4 @@ with sync_playwright() as pw:
     c2 = page(True); login_root(c2, 'kesfi', 'x-errada-x'); print('cliente senha errada:', c2.locator('#le').inner_text())
     b.close()
 print('ERROS', errs)
+import sys; sys.exit(1 if errs else 0)

@@ -10,9 +10,10 @@ with sync_playwright() as pw:
         p = c.new_page(); p.on('pageerror', lambda e: errs.append(str(e))); return p
     p = page(); p.goto(BASE + '/cliente'); p.wait_for_timeout(700)
     t = p.locator('#app').inner_text(); print('texto da tela /cliente:', t.replace('\n', ' / ')[:200])
-    print('fala de equipe/administrador?', any(w in t.lower() for w in ['equipe', 'administrador', 'vendedor', 'conferente']))
+    if any(w in t.lower() for w in ['equipe', 'administrador', 'vendedor', 'conferente']): errs.append('/cliente fala da equipe')
     for u, pw_ in [('eduardo', ADMIN), ('1', CR['1']), ('vend', CR['vend'])]:
-        p.fill('#lu', u); p.fill('#lp', pw_); p.click('#lf button[type=submit]'); p.wait_for_timeout(1200); print(f'equipe "{u}" em /cliente ->', p.locator('#le').inner_text())
+        p.fill('#lu', u); p.fill('#lp', pw_); p.click('#lf button[type=submit]'); p.wait_for_timeout(1500); m = p.locator('#le').inner_text(); print(f'equipe "{u}" em /cliente ->', m)
+        if 'só para clientes' not in m: errs.append(f'equipe {u} em /cliente: mensagem errada: {m}')
     p.goto(BASE + '/cliente#admin'); p.wait_for_timeout(600); print('/cliente#admin continua no cliente:', p.locator('#app h2').first.inner_text())
     p.fill('#lu', 'kesfi'); p.fill('#lp', CR['kesfi']); p.click('#lf button[type=submit]'); p.wait_for_timeout(1800)
     print('cliente entrou:', p.locator('#topbar').inner_text().replace('\n', ' ')[:60], '| endereço:', p.url)
@@ -21,3 +22,4 @@ with sync_playwright() as pw:
     q = page(); q.goto(BASE + '/'); q.wait_for_timeout(700); print('página principal ainda mostra texto da equipe:', 'Equipe da loja' in q.locator('#app').inner_text())
     b.close()
 print('ERROS', errs)
+import sys; sys.exit(1 if errs else 0)

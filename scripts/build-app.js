@@ -13,10 +13,18 @@ const ROOT = path.join(__dirname, '..');
 let s = fs.readFileSync(path.join(ROOT, 'src/app.source.html'), 'utf8');
 const client = fs.readFileSync(path.join(ROOT, 'src/server-client.js'), 'utf8');
 let n = 0;
+const EXPECTED = 65;      // número de trocas deste arquivo: mude junto quando incluir/tirar uma
+const COUNT_LS = 3;      // gravações antigas no aparelho espalhadas pelo código (depois de tirar o save antigo)
+// cada troca TEM que casar o número exato de vezes: se o código-fonte mudou, o build para (nada falha em silêncio)
 function R(a, b, count = 1) {
   const c = s.split(a).length - 1;
   if (c !== count) { console.error(`Trecho encontrado ${c}x (esperado ${count}):\n${a.slice(0, 160)}`); process.exit(1); }
   s = s.split(a).join(b); n++;
+}
+function RX(re, fn, count = 1) {
+  const c = (s.match(new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g')) || []).length;
+  if (c !== count) { console.error(`Expressão encontrada ${c}x (esperado ${count}): ${re}`); process.exit(1); }
+  s = s.replace(re, fn); n++;
 }
 
 // ---------- 1. o código-fonte já não tem senha nem dado de exemplo (a conferência no fim garante)
@@ -26,15 +34,15 @@ R('const uid=()=>Math.random().toString(36).slice(2,9);', 'const uid=()=>Math.ra
 R("let S; try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}", "let S=emptyState();try{localStorage.removeItem(KEY);localStorage.removeItem('pa-driver')}catch(e){}");
 R("if(window.__SEED&&window.__SEED.products&&(!S||!S.products||S._seed!==window.__SEED_ID)){S=JSON.parse(JSON.stringify(window.__SEED));S._seed=window.__SEED_ID;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}\n", '');
 R('if(!S||!S.products) S=seed();\n', '');
-s = s.replace(/^function save\(\)\{try\{localStorage\.setItem\(KEY,JSON\.stringify\(S\)\)\}.*\n/m, () => { n++; return ''; });
-s = s.replace(/^function reloadState\(\)\{try\{const n=JSON\.parse\(localStorage\.getItem\(KEY\)\).*\n/m, () => { n++; return ''; });
+RX(/^function save\(\)\{try\{localStorage\.setItem\(KEY,JSON\.stringify\(S\)\)\}.*\n/m, () => '');
+RX(/^function reloadState\(\)\{try\{const n=JSON\.parse\(localStorage\.getItem\(KEY\)\).*\n/m, () => '');
 // mudanças de versão antigas gravavam direto no aparelho: agora não gravam nada
-s = s.split("try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}").join('');
+R("try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}", '', COUNT_LS);
 
 // ---------- 3. login no servidor (cada papel)
 R(`    \${isAdmin?'':'<div class="hint">Para testar: usuário <b>cliente</b>, senha <b>1234</b>. Os acessos dos clientes são criados por você no painel do administrador.</div>'}`,
   `    <div class="hint">\${isAdmin?'':'Esqueceu a senha? Fale com a loja.'}</div>\${srvTeamLinks(isAdmin?'admin':'cliente')}`);
-s = s.replace(/function bindLogin\(isAdmin\)\{\n  \$\('#lf'\)\.onsubmit=e=>\{e\.preventDefault\(\);\n[\s\S]*?\n  \};\n\}/, () => { n++; return "function bindLogin(isAdmin){srvBindTeamLinks();if(isAdmin)srvMaybeSetup();\n  $('#lf').onsubmit=e=>{e.preventDefault();srvLogin(isAdmin?'admin':'cliente',$('#lu').value.trim(),$('#lp').value,$('#le'),$('#lf button[type=submit]'))};\n}"; });
+RX(/function bindLogin\(isAdmin\)\{\n  \$\('#lf'\)\.onsubmit=e=>\{e\.preventDefault\(\);\n[\s\S]*?\n  \};\n\}/, () => "function bindLogin(isAdmin){srvBindTeamLinks();if(isAdmin)srvMaybeSetup();\n  $('#lf').onsubmit=e=>{e.preventDefault();srvLogin(isAdmin?'admin':'cliente',$('#lu').value.trim(),$('#lp').value,$('#le'),$('#lf button[type=submit]'))};\n}");
 R(`    <div class="hint">Os acessos de conferente são criados pelo administrador em CADASTROS &gt; Conferentes.</div></form>\``, `    <div class="hint">Os acessos de conferente são criados pelo administrador em CADASTROS &gt; Conferentes.</div>\${srvTeamLinks('conf')}</form>\``);
 R(`if(!ui.checker){app.innerHTML=confLoginForm();$('#cfl').onsubmit=e=>{e.preventDefault();const u=$('#cflu').value.trim().toLowerCase(),p=$('#cflp').value;
     const k=(S.checkers||[]).find(x=>x.login.toLowerCase()===u&&x.pass===p);if(!k){$('#cfle').textContent='Usuário ou senha incorretos.';return}ui.checker=k.name||k.login;ui.confOrder=null;render()};return}`,
@@ -66,11 +74,11 @@ R("\n  $('#logout').onclick=()=>{ui.client=null;ui.cart={};render()};", "\n  $('
 
 // ---------- 5. cada pessoa fica na tela do seu papel; troca de tela só antes de entrar
 R("function render(){\n", "function render(){if(SRV.me&&!SRV.me.mustReset)ui.view=ROLE_VIEW[SRV.me.role]||ui.view;\n");
-s = s.replace(/\/\* outra aba do mesmo navegador salvou[\s\S]*?\nrender\(\);\n\}\)\(\);/, () => { n++; return `window.addEventListener('hashchange',()=>{if(!SRV.me){ui.view=srvHashView();render()}});
+RX(/\/\* outra aba do mesmo navegador salvou[\s\S]*?\nrender\(\);\n\}\)\(\);/, () => `window.addEventListener('hashchange',()=>{if(!SRV.me){ui.view=srvHashView();render()}});
 ui.view=srvHashView();render();
 (async()=>{try{const me=await api('/api/me');if(CLIENT_ONLY&&me.role!=='cliente')return;SRV.me=me;if(me.mustReset){srvResetScreen();return}await loadState();srvAfterLogin()}catch(e){if(e.status&&e.status!==401)toast(e.message)}})();
 window.addEventListener('pagehide',()=>{try{const d=srvDiff();if(SRV.me&&d.ch.length&&!SRV.busy)fetch('/api/sync',{method:'POST',keepalive:true,credentials:'same-origin',headers:{'Content-Type':'application/json','X-App':'1'},body:JSON.stringify({changes:d.ch,order:d.order})})}catch(e){}});
-})();`; });
+})();`);
 
 // ---------- 6. senhas: só para DEFINIR (nunca aparecem)
 R("<span class=\"small muted\">Usuário: ${esc(k.login)} · Senha: ${esc(k.pass)}</span></div>\n      ${ui.confirmDel==='ck'+k.id", "<span class=\"small muted\">Usuário: ${esc(k.login)} · ${srvPassLabel(k)}</span></div>\n      ${ui.confirmDel==='ck'+k.id");
@@ -85,7 +93,7 @@ R(`<input type="text" id="slpw" value="\${esc(E.pass||(E.id?'':String(Math.floor
 R("if(lg&&!pw){$('#slerr').textContent='Informe a senha do vendedor.';return}", "if(lg&&!pw&&!E.hasPass){$('#slerr').textContent='Informe a senha do vendedor.';return}if(pw&&pw.length<8){$('#slerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}");
 R("if(!n||!l||!p){$('#ckerr').textContent='Preencha nome, usuário e senha.';return}", "if(!n||!l||!p){$('#ckerr').textContent='Preencha nome, usuário e senha.';return}if(p.length<8){$('#ckerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}");
 R("if(!n||!l||!p){$('#fkerr').textContent='Preencha nome, usuário e senha.';return}", "if(!n||!l||!p){$('#fkerr').textContent='Preencha nome, usuário e senha.';return}if(p.length<8){$('#fkerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}");
-R("if(lg&&S.vehicles.some(x=>x.login===lg)){toast('Esse usuário já existe.');return}", "if(lg&&S.vehicles.some(x=>x.login===lg)){toast('Esse usuário já existe.');return}if(lg&&($('#vpas').value||'').trim().length<8){toast('A senha do motorista precisa ter pelo menos 8 caracteres.');return}");
+R("if(lg&&loginTaken(lg)){toast('O usuário \"'+lg+'\" já é usado por outra pessoa. Escolha outro.');return}", "if(lg&&loginTaken(lg)){toast('O usuário \"'+lg+'\" já é usado por outra pessoa. Escolha outro.');return}if(lg&&($('#vpas').value||'').trim().length<8){toast('A senha do motorista precisa ter pelo menos 8 caracteres.');return}");
 
 
 // ---------- 6b. botão "Redefinir senha" em cada pessoa e senha base nos formulários
@@ -107,7 +115,11 @@ R("function negEval(p,asked,from){const C=negCfg();", "function negEval(p,asked,
 R(`    ui.neg=ui.neg||{};ui.neg[id]=pack;ui.negEdit=null;rer();
     const r=cartItems().find(x=>x.p.id===id);toast(r&&r.neg&&r.neg.st==='ok'?'Proposta aceita! O preço já está no seu pedido.':'Proposta enviada: a loja analisa quando você finalizar o pedido.')};`,
   `    ui.neg=ui.neg||{};ui.neg[id]=pack;ui.negEdit=null;ui.negSt=ui.negSt||{};
-    api('/api/neg',{pid:id,asked:pack,from:it.price,mode:ui.mode,pay:ui.pay,nf:!!ui.nf}).then(x=>x.st,()=>'an').then(st=>{ui.negSt[id+'|'+pack]=st;rer();toast(st==='ok'?'Proposta aceita! O preço já está no seu pedido.':'Proposta enviada: a loja analisa quando você finalizar o pedido.')})};`);
+    api('/api/neg',{pid:id,asked:pack,q:ui.cart[id]||1,mode:ui.mode,pay:ui.pay,nf:!!ui.nf}).then(x=>x.st,()=>'an').then(st=>{if(st==='tabela'){delete ui.neg[id];rer();toast('Esse valor não é menor que o preço da tabela. Proponha um valor menor.');return}ui.negSt[id+'|'+pack]=st;rer();toast(st==='ok'?'Proposta aceita! O preço já está no seu pedido.':'Proposta enviada: a loja analisa quando você finalizar o pedido.')})};`);
+
+// ---------- 7b. estoque e contas automáticas dos pedidos: só o servidor faz (o navegador não mexe)
+R("function syncStock(o){\n", "function syncStock(o){if(typeof SRV!=='undefined')return;\n");
+R("function autoReceivables(o,prev){\n", "function autoReceivables(o,prev){if(typeof SRV!=='undefined')return '';\n");
 
 // ---------- 8. backup e restauração pelo servidor; senhas provisórias
 R("function backupNow(){const data=JSON.stringify({app:'pedidos-atacado',version:1,savedAt:new Date().toISOString(),data:S});\n  offerFile('backup-atacado-davila-'+stamp()+'.json',data).then(ok=>{if(ok){S.store.lastBackup=today();save();render()}})}", 'function backupNow(){srvBackup()}');
@@ -123,16 +135,25 @@ R("function markSeen(c){const t=new Date().toISOString();S.orders.forEach(o=>{if
   "function markSeen(c){const t=new Date().toISOString();let ch=false;S.orders.forEach(o=>{if(o.customerId===c.id&&(o.events||[]).some(e=>!o.seenAt||e.at>o.seenAt)){o.seenAt=t;ch=true}});if(ch)save()}");
 
 // ---------- 9. visual: barra de demonstração some; aviso de "salvando"
-R('.demo{background:var(--surface-2);border-bottom:1px solid var(--line);font-size:13px}', '.demo{display:none!important}.teamlinks{margin-top:12px;color:var(--muted);line-height:1.8}.teamlinks a{color:var(--accent);font-weight:600}.srvbadge{position:fixed;right:12px;bottom:12px;background:var(--fg);color:var(--bg);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;z-index:99;opacity:.85}.srvbadge[hidden]{display:none}.instbox{margin:12px auto 0;max-width:420px;padding:0 4px;text-align:center}.pwbox{display:grid;gap:8px;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;margin:2px 0 10px;background:var(--surface)}');
+R('.demo{background:var(--surface-2);border-bottom:1px solid var(--line);font-size:13px}', '.demo{display:none!important}.teamlinks{margin-top:12px;color:var(--muted);line-height:1.8}.teamlinks a{color:var(--accent);font-weight:600}.srvbadge{position:fixed;right:12px;bottom:12px;background:var(--fg);color:var(--bg);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;z-index:99;opacity:.85}.srvbadge[hidden]{display:none}.instbox{margin:12px auto 0;max-width:420px;padding:0 4px;text-align:center}.pwbox{display:grid;gap:8px;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;margin:2px 0 10px;background:var(--surface)}.srvnet{position:fixed;left:0;right:0;top:0;z-index:120;background:#B3261E;color:#fff;font-weight:700;font-size:14px;padding:10px 14px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.25)}.srvnet[hidden],.srvalert[hidden]{display:none}.srvalert{position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:121;background:#fff4f2;color:#7a1610;border:2px solid #B3261E;border-radius:12px;padding:12px 14px;font-size:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;box-shadow:0 6px 18px rgba(0,0,0,.2)}.srvalert .btn{margin-left:auto}');
 R('<title>Pedidos Atacado</title>', "<title>D'Ávila Pedidos</title>");
 
 // ---------- documento final
+// conferência: todas as trocas aplicadas (se o fonte mudou e alguma deixou de casar, o build já parou acima)
+if (n !== EXPECTED) { console.error(`Foram aplicadas ${n} trocas; o esperado é ${EXPECTED}. Confira scripts/build-app.js.`); process.exit(1); }
+// o código do app sai do HTML e vai para /app.js (sem script inline, a CSP bloqueia código injetado)
+const sOpen = '<script>\n(function(){', sClose = '})();\n</script>';
+const a0 = s.indexOf(sOpen), a1 = s.indexOf(sClose, a0);
+if (a0 < 0 || a1 < 0 || s.indexOf(sOpen, a0 + 1) >= 0) { console.error('Não achei o bloco de script principal do app.'); process.exit(1); }
+const appJs = '(function(){' + s.slice(a0 + sOpen.length, a1) + '})();\n';
+s = s.slice(0, a0) + '<script src="/app.js?v=' + require('crypto').createHash('sha256').update(appJs).digest('hex').slice(0, 10) + '"></script>' + s.slice(a1 + sClose.length);
+if (/<script>(?!<\/script>)/.test(s.replace(/<script src=[^>]*><\/script>/g, ''))) { console.error('Ainda há script inline no HTML.'); process.exit(1); }
 const head = s.split('<style>')[0], body = s.slice(head.length);
 const i = body.indexOf('</style>') + '</style>'.length;
 const html = '<!doctype html>\n<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#E11F2C"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">\n'
   + head + body.slice(0, i) + '\n</head><body>\n' + body.slice(i) + '\n</body></html>\n';
 // conferência: nada de senha nem dado embutido
-const bad = ['1208' + '10', "pass:'1234'", '__SEED=', 'x.pass===p', 'a.pass===p', 'c.pass===p', 'v.pass===p', "localStorage.setItem(KEY,"].filter(t => html.includes(t));
+const bad = ['1208' + '10', "pass:'1234'", '__SEED=', 'x.pass===p', 'a.pass===p', 'c.pass===p', 'v.pass===p', "localStorage.setItem(KEY,", 'onclick="'].filter(t => html.includes(t) || appJs.includes(t));
 if (bad.length) { console.error('Ainda há trechos proibidos no app:', bad); process.exit(1); }
 fs.mkdirSync(path.join(ROOT, 'public'), { recursive: true });
 // app instalável: cada endereço tem o seu nome, ícone e cor (equipe azul, cliente vermelho)
@@ -143,4 +164,5 @@ if (!htmlEquipe.includes('equipe.webmanifest') || !htmlCliente.includes('cliente
 fs.writeFileSync(path.join(ROOT, 'public/index.html'), htmlEquipe);
 // /cliente: o mesmo app, aberto no modo "só clientes" (a página percebe pelo endereço)
 fs.writeFileSync(path.join(ROOT, 'public/cliente.html'), htmlCliente);
+fs.writeFileSync(path.join(ROOT, 'public/app.js'), appJs);
 console.log('public/index.html:', Math.round(html.length / 1024), 'KB ·', n, 'trocas aplicadas');

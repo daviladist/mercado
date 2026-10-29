@@ -7,6 +7,10 @@ CREDS = json.load(open(os.environ['CREDS']))['final']
 ADMIN_PASS = os.environ['ADMIN_PASSWORD']
 ok_count = 0; fails = []
 
+def rejected(s, r):
+    # gravação recusada: o servidor responde erro, ou 200 com a alteração na lista "rejected"
+    return s in (400, 403) or (s == 200 and bool((r or {}).get('rejected')))
+
 def check(cond, msg):
     global ok_count
     if cond: ok_count += 1; print('  OK  ', msg)
@@ -60,7 +64,9 @@ for role, (lg,) in ROLES.items():
 print('\n== 2. Tentativas de burlar')
 cli, me, J = C['cliente']; S = J['S']
 p = [x for x in AS['products'] if x.get('active') is not False and x.get('price')][0]
-fake = {'id': 'hack001', 'items': [{'pid': p['id'], 'q': 50, 'price': 0.01, 'name': p['name']}], 'mode': 'retirada', 'pay': S['customers'][0].get('pays', AS['payments'])[0] if S['customers'][0].get('pays') else AS['payments'][0], 'total': 0.01, 'sub': 0.01, 'status': 'concluido', 'customerId': 'outro', 'nf': None}
+import math
+QMIN = max(10, math.ceil((float(AS['store'].get('min') or 0) * 2.5) / float(p['price'])))   # quantidade que passa do pedido mínimo mesmo com 50% de desconto
+fake = {'id': 'hack001', 'items': [{'pid': p['id'], 'q': QMIN, 'price': 0.01, 'name': p['name']}], 'mode': 'retirada', 'pay': S['customers'][0].get('pays', AS['payments'])[0] if S['customers'][0].get('pays') else AS['payments'][0], 'total': 0.01, 'sub': 0.01, 'status': 'concluido', 'customerId': 'outro', 'nf': None}
 s, r = cli.req('/api/sync', {'changes': [{'c': 'orders', 'id': 'hack001', 'op': 'put', 'doc': fake}]})
 if s == 200:
     o = [d for d in r['docs'] if d['c'] == 'orders'][0]['doc']
@@ -72,32 +78,32 @@ else:
     check(False, f'pedido do cliente recusado: {s} {r}'); my_order = None
 other = [o for o in AS['orders'] if o['customerId'] != me['refId']][0]
 s, r = cli.req('/api/sync', {'changes': [{'c': 'orders', 'id': other['id'], 'op': 'put', 'doc': other, 'ver': A['V']['orders'][other['id']]}]})
-check(s == 403, f'cliente altera pedido de outro cliente: recusado ({s})')
+check(rejected(s, r), f'cliente altera pedido de outro cliente: recusado ({s})')
 if my_order:
     o2 = copy.deepcopy(my_order); o2['items'][0]['price'] = 1.0
     s, r = cli.req('/api/sync', {'changes': [{'c': 'orders', 'id': o2['id'], 'op': 'put', 'doc': o2, 'ver': my_ver}]})
-    check(s == 403, f"cliente baixa o preço do próprio pedido: recusado ({s}: {r.get('error')})")
+    check(rejected(s, r), f"cliente baixa o preço do próprio pedido: recusado ({s}: {r.get('error')})")
     o3 = copy.deepcopy(my_order); o3['status'] = 'concluido'
     s, r = cli.req('/api/sync', {'changes': [{'c': 'orders', 'id': o3['id'], 'op': 'put', 'doc': o3, 'ver': my_ver}]})
-    check(s == 403, f"cliente marca o pedido como concluído: recusado ({s})")
-    o4 = copy.deepcopy(my_order); o4['items'][0]['q'] = 500
+    check(rejected(s, r), f"cliente marca o pedido como concluído: recusado ({s})")
+    o4 = copy.deepcopy(my_order); o4['items'][0]['q'] = QMIN * 3
     s, r = cli.req('/api/sync', {'changes': [{'c': 'orders', 'id': o4['id'], 'op': 'put', 'doc': o4, 'ver': my_ver}]})
-    check(s == 403, f"cliente aumenta quantidade depois de enviado: recusado ({s})")
+    check(rejected(s, r), f"cliente aumenta quantidade depois de enviado: recusado ({s})")
 pp = copy.deepcopy(p); pp['price'] = 0.01
 s, r = cli.req('/api/sync', {'changes': [{'c': 'products', 'id': p['id'], 'op': 'put', 'doc': pp, 'ver': A['V']['products'][p['id']]}]})
-check(s == 403, f'cliente muda preço de produto: recusado ({s})')
+check(rejected(s, r), f'cliente muda preço de produto: recusado ({s})')
 s, r = cli.req('/api/sync', {'changes': [{'c': 'customers', 'id': me['refId'], 'op': 'put', 'doc': dict(J['S']['customers'][0], creditLimit=999999, canNeg=True), 'ver': J['V']['customers'][me['refId']]}]})
-check(s == 403, f'cliente aumenta o próprio limite de crédito: recusado ({s})')
+check(rejected(s, r), f'cliente aumenta o próprio limite de crédito: recusado ({s})')
 s, r = cli.req('/api/sync', {'changes': [{'c': 'meta', 'id': 'store', 'op': 'put', 'doc': {'name': 'HACK', 'min': 0}}]})
 check(s in (200, 403), 'cliente tenta mudar configurações da loja: ignorado/recusado')
 _, _, A2 = state(adm); check(A2['S']['store']['name'] != 'HACK', 'configuração da loja continua intacta')
 s, r = cli.req('/api/sync', {'changes': [{'c': 'sellers', 'id': 'x1', 'op': 'put', 'doc': {'id': 'x1', 'name': 'eu', 'login': 'eu', 'pass': 'Senha-qualquer-1'}}]})
-check(s == 403, f'cliente tenta criar um login de vendedor: recusado ({s})')
+check(rejected(s, r), f'cliente tenta criar um login de vendedor: recusado ({s})')
 s, r = cli.req('/api/sync', {'changes': [{'c': 'admins', 'id': 'x2', 'op': 'put', 'doc': {'id': 'x2', 'login': 'eu2', 'pass': 'Senha-qualquer-1'}}]})
-check(s == 403, f'cliente tenta se cadastrar como administrador: recusado ({s})')
-s, r = cli.req('/api/backup'); check(s == 403, 'cliente baixa o backup: recusado')
-s, r = cli.req('/api/temp-passwords', {}); check(s == 403, 'cliente gera senhas provisórias: recusado')
-s, r = cli.req('/api/lock', {'cid': me['refId'], 'cart': {}}); check(s == 403, 'cliente consulta trava de margem: recusado')
+check(rejected(s, r), f'cliente tenta se cadastrar como administrador: recusado ({s})')
+s, r = cli.req('/api/backup'); check(rejected(s, r), 'cliente baixa o backup: recusado')
+s, r = cli.req('/api/temp-passwords', {}); check(rejected(s, r), 'cliente gera senhas provisórias: recusado')
+s, r = cli.req('/api/lock', {'cid': me['refId'], 'cart': {}}); check(rejected(s, r), 'cliente consulta trava de margem: recusado')
 
 conf, cme, CJ = C['conferente']
 o = [x for x in CJ['S']['orders'] if x['status'] in ('novo', 'separando')]
@@ -105,13 +111,13 @@ if o:
     o = o[0]; full = [x for x in A2['S']['orders'] if x['id'] == o['id']][0]
     x = copy.deepcopy(o); x['items'][0]['price'] = 0.5
     s, r = conf.req('/api/sync', {'changes': [{'c': 'orders', 'id': x['id'], 'op': 'put', 'doc': x, 'ver': CJ['V']['orders'][x['id']]}]})
-    check(s == 403, f'conferente coloca preço: recusado ({s}: {r.get("error")})')
+    check(rejected(s, r), f'conferente coloca preço: recusado ({s}: {r.get("error")})')
     x = copy.deepcopy(o); x['status'] = 'pronto'
     s, r = conf.req('/api/sync', {'changes': [{'c': 'orders', 'id': x['id'], 'op': 'put', 'doc': x, 'ver': CJ['V']['orders'][x['id']]}]})
-    check(s == 403, f'conferente pula para pronto sem faturar: recusado ({s}: {r.get("error")})')
+    check(rejected(s, r), f'conferente pula para pronto sem faturar: recusado ({s}: {r.get("error")})')
     x = copy.deepcopy(o); x['customerId'] = 'outro'
     s, r = conf.req('/api/sync', {'changes': [{'c': 'orders', 'id': x['id'], 'op': 'put', 'doc': x, 'ver': CJ['V']['orders'][x['id']]}]})
-    check(s == 403, f'conferente troca o cliente do pedido: recusado ({s})')
+    check(rejected(s, r), f'conferente troca o cliente do pedido: recusado ({s})')
     # o pedido do conferente vem sem preços: ao salvar, o servidor mantém os preços originais
     x = copy.deepcopy(o); x['volumes'] = 3
     s, r = conf.req('/api/sync', {'changes': [{'c': 'orders', 'id': x['id'], 'op': 'put', 'doc': x, 'ver': CJ['V']['orders'][x['id']]}]})
@@ -124,7 +130,7 @@ o = [x for x in FJ['S']['orders']]
 if o:
     o = o[0]; x = copy.deepcopy(o); x['items'].append(dict(x['items'][0], q=99))
     s, r = fat.req('/api/sync', {'changes': [{'c': 'orders', 'id': x['id'], 'op': 'put', 'doc': x, 'ver': FJ['V']['orders'][x['id']]}]})
-    check(s == 403, f'faturamento inclui item: recusado ({s})')
+    check(rejected(s, r), f'faturamento inclui item: recusado ({s})')
     x = copy.deepcopy(o); x['total'] = 1
     s, r = fat.req('/api/sync', {'changes': [{'c': 'orders', 'id': x['id'], 'op': 'put', 'doc': x, 'ver': FJ['V']['orders'][x['id']]}]})
     _, _, A4 = state(adm); after = [y for y in A4['S']['orders'] if y['id'] == o['id']][0]
@@ -132,23 +138,23 @@ if o:
 
 ven, vme, VJ = C['vendedor']
 cust = VJ['S']['customers'][0]
-cheap = {'id': 'vend001', 'customerId': cust['id'], 'items': [{'pid': p['id'], 'q': 10, 'price': round(p['price'] * 0.5, 2)}], 'mode': 'retirada', 'pay': (cust.get('pays') or AS['payments'])[0], 'nf': None}
+cheap = {'id': 'vend001', 'customerId': cust['id'], 'items': [{'pid': p['id'], 'q': QMIN, 'price': round(p['price'] * 0.5, 2)}], 'mode': 'retirada', 'pay': (cust.get('pays') or AS['payments'])[0], 'nf': None}
 s, r = ven.req('/api/sync', {'changes': [{'c': 'orders', 'id': 'vend001', 'op': 'put', 'doc': cheap}]})
 od = [d for d in r.get('docs', []) if d['c'] == 'orders']
 check(s == 200 and od and od[0]['doc'].get('appr') == 'pendente', f"vendedor manda preço 50% abaixo sem pedir análise: servidor coloca em análise ({s}, {od and od[0]['doc'].get('appr')})")
 check(s == 200 and od and 'apprMg' not in od[0]['doc'] and 'cost' not in json.dumps(od), 'resposta ao vendedor sem margem/custo')
-s, r = ven.req('/api/lock', {'cid': cust['id'], 'cart': {p['id']: 10}, 'over': {p['id']: round(p['price'] * 0.5, 2)}, 'mode': 'retirada', 'pay': cheap['pay']})
+s, r = ven.req('/api/lock', {'cid': cust['id'], 'cart': {p['id']: QMIN}, 'over': {p['id']: round(p['price'] * 0.5, 2)}, 'mode': 'retirada', 'pay': cheap['pay']})
 check(s == 200 and r['K'] and r['K']['ok'] is False and 'mg' not in r['K'] and 'min' not in r['K'], f"trava do vendedor: diz só se pode, sem revelar margem ({r.get('K')})")
 
 ent, eme, EJ = C['entregador']
 o = [x for x in A4['S']['orders'] if not ((x.get('deliv') or {}).get('drv') == eme['refId'])][0]
 s, r = ent.req('/api/sync', {'changes': [{'c': 'orders', 'id': o['id'], 'op': 'put', 'doc': dict(o, status='concluido'), 'ver': A4['V']['orders'][o['id']]}]})
-check(s == 403, f'entregador mexe em pedido de outro motorista: recusado ({s})')
+check(rejected(s, r), f'entregador mexe em pedido de outro motorista: recusado ({s})')
 
 print('\n== 3. Sessão, CSRF e força bruta')
 s, r = Client().req('/api/state'); check(s == 401, 'sem login não recebe nada')
-s, r = cli.req('/api/sync', {'changes': []}, headers={'Content-Type': 'application/json'}); check(s == 403, 'envio sem o cabeçalho do app (CSRF): recusado')
-s, r = cli.req('/api/sync', {'changes': []}, headers={'Content-Type': 'application/json', 'X-App': '1', 'Origin': 'https://site-malicioso.com'}); check(s == 403, 'envio vindo de outro site: recusado')
+s, r = cli.req('/api/sync', {'changes': []}, headers={'Content-Type': 'application/json'}); check(rejected(s, r), 'envio sem o cabeçalho do app (CSRF): recusado')
+s, r = cli.req('/api/sync', {'changes': []}, headers={'Content-Type': 'application/json', 'X-App': '1', 'Origin': 'https://site-malicioso.com'}); check(rejected(s, r), 'envio vindo de outro site: recusado')
 s, r = Client().login('admin', 'kesfi', CREDS['kesfi']); check(s == 200 and r.get('role') == 'cliente', f"cliente na tela do administrador: entra só como cliente ({r.get('role')})")
 s, r = Client().login('cliente', "' or 1=1 --", 'x'); check(s == 401, 'tentativa de SQL injection no login: recusada')
 bf = Client(); codes = [bf.login('faturamento', 'm', 'errada%d' % i)[0] for i in range(6)]
@@ -160,3 +166,4 @@ ck = [c for c in adm.jar][0]; check(ck.has_nonstandard_attr('HttpOnly') or 'http
 
 print(f'\nRESULTADO: {ok_count} ok, {len(fails)} falhas')
 for f in fails: print('  -', f)
+import sys; sys.exit(1 if fails else 0)

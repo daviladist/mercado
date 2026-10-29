@@ -1,5 +1,6 @@
 'use strict';
 /* Servidor local para testar: serve public/ e a API no mesmo endereço (como na Vercel). */
+process.env.TZ = 'America/Sao_Paulo';
 const http = require('http');
 const fs = require('fs');
 const path = require('path');

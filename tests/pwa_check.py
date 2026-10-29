@@ -1,5 +1,6 @@
 """Confere se os dois apps são instaláveis (teste do próprio Chrome) e se o service worker não guarda dados."""
-import os
+import os, sys
+bad = []
 from playwright.sync_api import sync_playwright
 BASE = os.environ.get('BASE', 'http://localhost:3077')
 with sync_playwright() as pw:
@@ -14,6 +15,8 @@ with sync_playwright() as pw:
         sw = p.evaluate('navigator.serviceWorker.getRegistrations().then(r=>r.length)')
         import json; m = json.loads(man.get('data') or '{}')
         print(f"{path:9} manifesto: {m.get('name')} | início {m.get('start_url')} | erros de instalação: {inst.get('installabilityErrors')} | service worker: {sw} | caixa instalar: {p.locator('.instbox').count()} | {errs}")
+        if inst.get('installabilityErrors') or not m.get('name') or sw < 1 or errs: bad.append(path)
         p.screenshot(path=os.environ.get('OUT', '/tmp') + f"/pwa{path.replace('/', '_') or '_'}.png")
         c.close()
     b.close()
+print('FALHAS', bad); sys.exit(1 if bad else 0)

@@ -4,10 +4,10 @@
  * Nada de senha, custo ou comissão fica guardado neste aparelho.            */
 /* /cliente: link só para clientes (sem textos da equipe; só aceita login de cliente) */
 const CLIENT_ONLY=/^\/cliente\/?$/.test(location.pathname);
-const SRV={me:null,V:{meta:{}},base:{meta:{}},ord:{},t:null,busy:false,again:false,ver:'',poll:null,lastPass:''};
+const SRV={me:null,V:{meta:{}},base:{meta:{}},ord:{},t:null,busy:false,again:false,ver:'',poll:null,lastPass:'',offline:false,retry:null,rej:{},nPend:0};
 const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins'];
 const SRV_ORDERED=['products','customers','sellers','checkers','billers','vehicles','cities','categories','combos','admins','payables','receivables'];
-const SRV_WRITE={cliente:['orders','customers'],vendedor:['orders'],conferente:['orders','counts'],faturamento:['orders'],entregador:['orders','romaneios','receivables']};
+const SRV_WRITE={cliente:['orders','customers'],vendedor:['orders'],conferente:['orders','counts'],faturamento:['orders'],entregador:['orders','romaneios']};
 const ROLE_VIEW={admin:'admin',cliente:'cliente',vendedor:'vend',conferente:'conf',faturamento:'fat',entregador:'ent'};
 const VIEW_ROLE={admin:'admin',cliente:'cliente',vend:'vendedor',conf:'conferente',fat:'faturamento',ent:'entregador'};
 async function api(path,body){
@@ -40,34 +40,69 @@ function srvApply(r,order,sent){const touched=new Set();
     if(d.op==='del'){if(k>=0)arr.splice(k,1);delete SRV.base[d.c][d.id];delete SRV.V[d.c][d.id];return}
     // se a pessoa mexeu de novo enquanto salvava, guarda essas mudanças por cima da versão do servidor
     let delta=null;const sentS=sent&&sent[d.c+':'+d.id];
-    if(k>=0&&sentS){const sentO=JSON.parse(sentS),cur=arr[k];if(JSON.stringify(cur)!==sentS){delta={};new Set([...Object.keys(cur),...Object.keys(sentO)]).forEach(x=>{if(JSON.stringify(cur[x])!==JSON.stringify(sentO[x]))delta[x]=cur[x]===undefined?undefined:JSON.parse(JSON.stringify(cur[x]))})}}
+    if(k>=0&&sentS){const sentO=JSON.parse(sentS),cur=arr[k];if(JSON.stringify(cur)!==sentS){delta={};new Set([...Object.keys(cur),...Object.keys(sentO)]).forEach(x=>{if(srvCanon(cur[x])!==srvCanon(sentO[x]))delta[x]=cur[x]===undefined?undefined:JSON.parse(JSON.stringify(cur[x]))})}}
     const tgt=k>=0?srvInPlace(arr[k],d.doc):(arr.unshift(d.doc),d.doc);SRV.base[d.c][d.id]=JSON.stringify(tgt);SRV.V[d.c][d.id]=d.ver;
     if(delta)Object.entries(delta).forEach(([x,v])=>{if(v===undefined)delete tgt[x];else tgt[x]=v})});
   (r.drops||[]).forEach(d=>{const arr=S[d.c]||[],k=arr.findIndex(x=>x&&x.id===d.id);if(k>=0)arr.splice(k,1);if(SRV.base[d.c])delete SRV.base[d.c][d.id]});
   Object.entries(order||{}).forEach(([c,ids])=>SRV.ord[c]=ids);
   if(r.seq)S.seq=r.seq;return touched}
 function save(){clearTimeout(SRV.t);SRV.t=setTimeout(srvSync,120)}
+/* situação de um registro: ainda não foi para o servidor? */
+function srvIsPending(c,id){const d=(S[c]||[]).find(x=>x&&x.id===id);return !!d&&(SRV.base[c]||{})[id]!==JSON.stringify(d)}
+function srvOrderState(id){if(SRV.rej[id]&&!S.orders.some(o=>o.id===id))return 'rej';if(srvIsPending('orders',id))return SRV.offline?'off':'wait';return 'ok'}
+/* o que não foi enviado fica guardado no aparelho até o servidor confirmar (inclusive se a página recarregar) */
+function srvPendKey(){return SRV.me?'srv-pend:'+SRV.me.role+':'+(SRV.me.refId||SRV.me.login):''}
+function srvPersist(ch){const k=srvPendKey();if(!k)return;try{if(!ch||!ch.length){localStorage.removeItem(k);return}
+  const L=ch.filter(x=>x.op==='put').map(x=>({c:x.c,id:x.id,doc:x.doc,ver:x.ver,base:x.base}));
+  try{localStorage.setItem(k,JSON.stringify(L))}catch(e){localStorage.setItem(k,JSON.stringify(L.map(x=>x.doc&&x.doc.delivered&&String(x.doc.delivered.photo||'').startsWith('data:')?Object.assign({},x,{nophoto:true,doc:Object.assign({},x.doc,{delivered:Object.assign({},x.doc.delivered,{photo:''})})}):x)))}}catch(e){}}
+function srvRestorePending(){const k=srvPendKey();if(!k)return;let L=null;try{L=JSON.parse(localStorage.getItem(k)||'null')}catch(e){}if(!Array.isArray(L)||!L.length)return;let n=0,lost=0;
+  L.forEach(p=>{const arr=S[p.c];if(!Array.isArray(arr)||!p.doc)return;const k2=arr.findIndex(x=>x&&x.id===p.id),sv=(SRV.V[p.c]||{})[p.id];
+    if(p.nophoto){lost++;return}
+    if(k2<0&&!p.ver){arr.unshift(p.doc);n++}else if(k2>=0&&sv===p.ver){arr[k2]=p.doc;n++}else lost++});
+  if(lost)toast('Uma alteração feita sem internet não pôde ser enviada (outra pessoa mudou o mesmo registro, ou a foto não coube no aparelho). Confira e faça de novo.');
+  if(n){toast(n+(n>1?' alterações guardadas sem internet estão sendo enviadas.':' alteração guardada sem internet está sendo enviada.'));save()}else srvPersist([])}
+/* faixa vermelha fixa enquanto houver algo não enviado (sem internet) */
+function srvNetBar(){let b=document.getElementById('srvnet');const n=SRV.nPend;
+  if(!SRV.offline||!n){if(b)b.hidden=true;return}
+  if(!b){b=document.createElement('div');b.id='srvnet';b.className='srvnet';b.setAttribute('role','status');document.body.appendChild(b)}
+  b.hidden=false;b.textContent='Sem internet: '+n+(n>1?' alterações ainda não foram enviadas':' alteração ainda não foi enviada')+'. O app envia sozinho quando a conexão voltar. Não feche o app.'}
+window.addEventListener('online',()=>{if(SRV.me)srvSync()});
 async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
-  const {ch,order}=srvDiff();if(!ch.length&&!Object.keys(order).length)return;
-  SRV.busy=true;srvBadge(true);
-  try{const sent={};ch.forEach(x=>{if(x.op==='put')sent[x.c+':'+x.id]=JSON.stringify(x.doc)});const r=await api('/api/sync',{changes:ch,order});const t=srvApply(r,order,sent);if(ui.admin&&['customers','sellers','checkers','billers','vehicles','admins'].some(c=>t.has(c)))srvSoftRender();else if(t.has('orders')||t.has('receivables'))srvSoftRender()}
+  const {ch,order}=srvDiff();SRV.nPend=ch.length;if(!ch.length&&!Object.keys(order).length){srvPersist([]);SRV.offline=false;srvNetBar();return}
+  srvPersist(ch);
+  SRV.busy=true;srvBadge(true);clearTimeout(SRV.retry);
+  try{const sent={};ch.forEach(x=>{if(x.op==='put')sent[x.c+':'+x.id]=JSON.stringify(x.doc)});const r=await api('/api/sync',{changes:ch,order});
+    SRV.offline=false;const t=srvApply(r,order,sent);
+    // recusadas: mostra o motivo e volta aquele registro para como está no servidor (as outras gravações seguem)
+    if((r.rejected||[]).length){r.rejected.forEach(x=>{SRV.rej[x.id]=x.error;const arr=S[x.c]||[],k=arr.findIndex(d=>d&&d.id===x.id),b=(SRV.base[x.c]||{})[x.id];
+        if(k>=0){if(b)arr[k]=JSON.parse(b);else arr.splice(k,1)}t.add(x.c)});
+      srvAlert(r.rejected.map(x=>x.error).filter((v,i,a)=>a.indexOf(v)===i).join(' · '))}
+    const left=srvDiff().ch;SRV.nPend=left.length;srvPersist(left);
+    if(ui.admin&&['customers','sellers','checkers','billers','vehicles','admins'].some(c=>t.has(c)))srvSoftRender((r.rejected||[]).length>0);else if(t.has('orders')||t.has('receivables')||t.has('products'))srvSoftRender((r.rejected||[]).length>0)}
   catch(e){if(e.status===401){toast('Sua sessão terminou. Entre de novo.');setTimeout(()=>location.reload(),1200);return}
     if(e.data&&e.data.mustReset){srvResetScreen();return}
+    if(e.status===0||e.status>=500&&e.status!==501){/* sem internet ou servidor fora: guarda e tenta de novo sozinho */
+      SRV.offline=e.status===0;srvNetBar();if(ui.view==='cliente'&&ui.cliPage==='ok')try{renderClient()}catch(_){}if(!SRV.offline)toast('O servidor não respondeu. Vamos tentar de novo em instantes.');
+      SRV.retry=setTimeout(srvSync,SRV.offline?5000:8000);return}
     if(e.status===409){/* alguém gravou o mesmo registro antes: junta as mudanças quando foram em campos diferentes */
       const P=srvPatches(ch);try{await loadState()}catch(_){}
       const m=srvMerge(P);srvSoftRender(true);
       if(m.applied)SRV.again=true;
-      if(m.lost)toast('Outra pessoa alterou a mesma informação antes de você. A tela foi atualizada: confira e faça de novo.');
+      if(m.lost)srvAlert('Outra pessoa alterou a mesma informação antes de você. A tela foi atualizada: confira e faça de novo.');
       return}
-    toast(e.message||'Não foi possível salvar.');try{await loadState()}catch(_){}srvSoftRender(true)}
-  finally{SRV.busy=false;srvBadge(false);if(SRV.again){SRV.again=false;srvSync()}}}
+    srvAlert(e.message||'Não foi possível salvar.');try{await loadState()}catch(_){}srvPersist([]);srvSoftRender(true)}
+  finally{SRV.busy=false;srvBadge(false);srvNetBar();if(SRV.again){SRV.again=false;srvSync()}}}
+/* aviso que fica na tela até a pessoa fechar (erros de gravação não podem passar despercebidos) */
+function srvAlert(msg){let b=document.getElementById('srvalert');if(!b){b=document.createElement('div');b.id='srvalert';b.className='srvalert';b.setAttribute('role','alert');document.body.appendChild(b)}
+  b.innerHTML='<b>Não foi gravado:</b> '+esc(msg)+' <button type="button" class="btn ghost dlb">Entendi</button>';b.hidden=false;b.querySelector('button').onclick=()=>{b.hidden=true}}
 function srvBadge(on){let b=document.getElementById('srvbadge');if(!b){b=document.createElement('div');b.id='srvbadge';b.className='srvbadge';b.textContent='Salvando…';document.body.appendChild(b)}b.hidden=!on}
 /* atualiza a tela atual sem perder o que a pessoa está digitando */
-function srvSoftRender(force){const typing=(document.activeElement&&document.activeElement.matches('input,textarea,select'))||(ui.tab==='cadastros'&&[...document.querySelectorAll('#cadc input[type=text],#cadc input[type=password]')].some(i=>i.value&&!i.closest('.pwbox')));if(typing&&!force)return;const y=window.scrollY;
-  try{renderTop();if(ui.view==='conf'){if(!ui.confSug)renderConf()}else if(ui.view==='vend'){if(!ui.lanc||force)renderVend()}else if(ui.view==='fat')renderFat();else if(ui.view==='ent')renderEnt();else if(ui.view==='cliente'){if(ui.cliPage!=='catalogo'||force)renderClient()}else if(ui.admin&&(force||((ui.tab==='pedidos'&&!ui.lanc&&!ui.adj&&!ui.romView)||ui.tab==='hoje'||(ui.tab==='cadastros'&&!ui.edit&&!ui.selEdit))))renderAdmin()}catch(e){}
+function srvDirty(){return [...document.querySelectorAll('#app input,#app textarea,#app select')].some(i=>!i.closest('.pwbox')&&(i.type==='file'?i.files&&i.files.length:i.type==='checkbox'||i.type==='radio'?i.checked!==i.defaultChecked&&!i.closest('.orst,.romck,[data-fsel],.switch'):i.tagName==='SELECT'?false:i.value!==i.defaultValue))}
+function srvSoftRender(force){const typing=(document.activeElement&&document.activeElement.matches('input,textarea,select'))||srvDirty();if(typing&&!force)return;const y=window.scrollY;
+  try{renderTop();if(ui.view==='conf'){if(!ui.confSug)renderConf()}else if(ui.view==='vend'){if(!ui.lanc||force)renderVend()}else if(ui.view==='fat')renderFat();else if(ui.view==='ent')renderEnt();else if(ui.view==='cliente'){if(ui.cliPage!=='catalogo'||force)renderClient()}else if(ui.admin&&(force||((ui.tab==='pedidos'&&!ui.lanc&&!ui.adj&&!ui.romView)||ui.tab==='hoje'||(ui.tab==='cadastros'&&!ui.edit&&!ui.selEdit))))renderAdmin()}catch(e){console.error('Falha ao atualizar a tela:',e)}
   window.scrollTo(0,y)}
 function reloadState(){srvRefresh(true)}
-async function srvRefresh(force){if(!SRV.me||SRV.busy)return;const {ch}=srvDiff();if(ch.length)return;
+async function srvRefresh(force){if(!SRV.me||SRV.busy)return;const {ch}=srvDiff();if(ch.length){srvSync();return}
   try{const v=await api('/api/version');if(!force&&v.v===SRV.ver)return;SRV.ver=v.v;await loadState();srvSoftRender(force)}
   catch(e){if(e.status===401){location.reload()}}}
 function srvStartPoll(){clearInterval(SRV.poll);SRV.poll=setInterval(()=>{if(document.visibilityState==='visible')srvRefresh(false)},20000);
@@ -85,19 +120,20 @@ function srvAfterLogin(){const me=SRV.me;SRV.lastPass='';ui.view=ROLE_VIEW[me.ro
   if(me.role==='vendedor'){ui.seller=me.refId;ui.vtab='pedidos';ui.lanc=null}
   if(me.role==='entregador')ui.driver=me.refId;
   try{history.replaceState(null,'',location.pathname+(me.role==='cliente'?'':'#'+me.role))}catch(e){}
-  render();srvStartPoll()}
-async function srvLogout(){try{await api('/api/logout',{})}catch(e){}try{history.replaceState(null,'',location.pathname)}catch(e){}location.reload()}
+  srvDraftLoad();render();srvStartPoll();srvRestorePending();srvBackInit()}
+async function srvLogout(){if(srvDiff().ch.length&&!confirm('Há alterações que ainda não foram enviadas ao servidor. Sair mesmo assim? Elas serão perdidas.'))return;
+  try{localStorage.removeItem(srvPendKey());localStorage.removeItem(srvDraftKey())}catch(e){}try{await api('/api/logout',{})}catch(e){}try{history.replaceState(null,'',location.pathname)}catch(e){}location.reload()}
 /* primeira entrada com senha provisória: a pessoa cria a senha dela */
 function srvResetScreen(){ui.view=ROLE_VIEW[SRV.me.role]||'cliente';const app=$('#app');try{renderTop()}catch(e){}$('#topbar').innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name||'ATACADO DAVILA')}</span><small>Crie sua senha</small></span></div>`;
   app.innerHTML=`<div class="loginhero"><img src="${LOGO}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="rsf"><h2>Crie a sua senha</h2>
-    <div class="small muted">Olá, ${esc(SRV.me.name||SRV.me.login)}. A senha que você usou é provisória. Crie uma senha só sua${SRV.me.role==='admin'?' (mínimo 10 caracteres)':' (mínimo 8 caracteres)'}, misturando letras e números.</div>
+    <div class="small muted">Olá, ${esc(SRV.me.name||SRV.me.login)}. A senha que você usou é provisória. Crie uma senha só sua${SRV.me.role==='admin'?' (mínimo 10 caracteres)':' (mínimo 8 caracteres)'}, com letras e números.</div>
     ${SRV.lastPass?'':'<div class="field"><label for="rso">Senha atual</label><input type="password" id="rso" autocomplete="current-password" required></div>'}
     <div class="field"><label for="rsn">Nova senha</label><input type="password" id="rsn" autocomplete="new-password" required></div>
     <div class="field"><label for="rsn2">Repita a nova senha</label><input type="password" id="rsn2" autocomplete="new-password" required></div>
     <div class="err" id="rse"></div><button class="btn block" type="submit">Salvar e entrar</button><button type="button" class="link" id="rsx" style="margin-top:8px">Sair</button></form>`;
   $('#rsx').onclick=srvLogout;
   $('#rsf').onsubmit=async e=>{e.preventDefault();const cur=SRV.lastPass||$('#rso').value,n=$('#rsn').value;if(n!==$('#rsn2').value){$('#rse').textContent='As senhas não conferem.';return}
-    try{await api('/api/password',{current:cur,next:n});SRV.me.mustReset=false;await loadState();srvAfterLogin();toast('Senha criada. Bem-vindo!')}catch(er){$('#rse').textContent=er.message}}}
+    try{await api('/api/password',{current:cur,next:n});SRV.me.mustReset=false;SRV.lastPass='';await loadState();srvAfterLogin();toast('Senha criada. Bem-vindo!')}catch(er){$('#rse').textContent=er.message}}}
 /* trocar a própria senha quando quiser */
 function srvPassScreen(){const app=$('#app');app.innerHTML=`<form class="login panel" id="psf" style="margin-top:18px"><h2>Trocar minha senha</h2>
   <div class="field"><label for="pso">Senha atual</label><input type="password" id="pso" autocomplete="current-password" required></div>
@@ -127,7 +163,7 @@ async function srvTempPasswords(box){try{const r=await api('/api/temp-passwords'
   const R={cliente:'Cliente',vendedor:'Vendedor',conferente:'Conferente',faturamento:'Faturamento',entregador:'Entregador'};
   box.innerHTML=`<div class="notice"><b>Anote ou imprima agora:</b> estas senhas aparecem só esta vez. Cada pessoa cria a própria senha no primeiro acesso.</div>
     <div class="tablewrap"><table class="btable"><thead><tr><th>Função</th><th>Nome</th><th>Usuário</th><th>Senha provisória</th></tr></thead><tbody>${r.list.map(x=>`<tr><td>${R[x.role]||x.role}</td><td>${esc(x.name||'')}</td><td>${esc(x.login)}</td><td><b class="num">${esc(x.pass)}</b></td></tr>`).join('')}</tbody></table></div>
-    <div class="row"><button type="button" class="btn ghost" onclick="window.print()">Imprimir</button></div>`;await loadState()}catch(e){box.innerHTML='<div class="err">'+esc(e.message)+'</div>'}}
+    <div class="row"><button type="button" class="btn ghost" id="tmpPrint">Imprimir</button></div>`;{const pb=document.getElementById('tmpPrint');if(pb)pb.onclick=()=>window.print()}await loadState()}catch(e){box.innerHTML='<div class="err">'+esc(e.message)+'</div>'}}
 function srvPassLabel(x){return x.pass?'senha base (salvando…)':x.hasPass?(x.mustReset?'senha base · aguardando 1º acesso':'senha própria definida'):'sem senha'}
 /* primeiro acesso ao sistema novo: criar o administrador (exige o código de instalação) */
 async function srvMaybeSetup(){try{const r=await api('/api/setup-status');if(!r.needsSetup||SRV.me)return}catch(e){return}
@@ -142,15 +178,17 @@ async function srvMaybeSetup(){try{const r=await api('/api/setup-status');if(!r.
   $('#stf').onsubmit=async e=>{e.preventDefault();if($('#stp').value!==$('#stp2').value){$('#ste').textContent='As senhas não conferem.';return}
     try{SRV.me=await api('/api/setup',{code:$('#stc').value,name:$('#stn').value.trim(),login:$('#stu').value.trim(),password:$('#stp').value});await loadState();srvAfterLogin();toast('Administrador criado. Agora restaure o backup em Cadastros › Configurações.')}catch(er){$('#ste').textContent=er.message}}}
 /* junção de mudanças (por campo): o que eu mudei x o que estava antes; reaplica se a outra pessoa não mexeu no mesmo campo */
+/* comparação sem depender da ordem das chaves (o servidor pode devolver o mesmo objeto com as chaves em outra ordem) */
+function srvCanon(v){return JSON.stringify(v===undefined?null:v,(k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.keys(x).sort().reduce((o,kk)=>{o[kk]=x[kk];return o},{}):x)}
 function srvPatches(ch){return ch.filter(x=>x.op==='put').map(x=>{const b=(SRV.base[x.c]||{})[x.id];if(!b)return {c:x.c,id:x.id,isNew:true,doc:x.doc};const o=JSON.parse(b),keys={},was={};
-  new Set([...Object.keys(o),...Object.keys(x.doc)]).forEach(k=>{if(JSON.stringify(o[k])!==JSON.stringify(x.doc[k])){keys[k]=x.doc[k];was[k]=o[k]}});return {c:x.c,id:x.id,keys,was}})}
+  new Set([...Object.keys(o),...Object.keys(x.doc)]).forEach(k=>{if(srvCanon(o[k])!==srvCanon(x.doc[k])){keys[k]=x.doc[k];was[k]=o[k]}});return {c:x.c,id:x.id,keys,was}})}
 function srvMerge(P){let applied=0,lost=0;
   P.forEach(p=>{const arr=p.c==='meta'?null:(S[p.c]=S[p.c]||[]);
-    if(p.c==='meta'){const k=p.id;if(JSON.stringify(S[k])===JSON.stringify(p.was&&p.was[k]))applied++;else lost++;return}
+    if(p.c==='meta'){lost++;return}
     const d=arr.find(x=>x&&x.id===p.id);
     if(p.isNew){if(!d){arr.unshift(p.doc);applied++}return}
     if(!d){lost++;return}
-    const clash=Object.keys(p.keys).some(k=>JSON.stringify(d[k])!==JSON.stringify(p.was[k]));
+    const clash=Object.keys(p.keys).some(k=>srvCanon(d[k])!==srvCanon(p.was[k])&&srvCanon(d[k])!==srvCanon(p.keys[k]));
     if(clash){lost++;return}
     Object.entries(p.keys).forEach(([k,v])=>{if(v===undefined)delete d[k];else d[k]=v});applied++});
   return {applied,lost}}
@@ -166,7 +204,7 @@ document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest
   row.after(box);const inp=box.querySelector('.pwin');inp.focus();inp.select();
   box.querySelector('.pwx').onclick=()=>box.remove();
   box.querySelector('.pwok').onclick=async()=>{const pass=inp.value.trim(),er=box.querySelector('.pwerr');er.textContent='';
-    if(pass.length<8){er.textContent='Mínimo de 8 caracteres.';return}
+    if(pass.length<8){er.textContent='Mínimo de 8 caracteres.';return}if(pass.toLowerCase().includes(String(d.login||'').toLowerCase()||'\u0000')){er.textContent='A senha base não pode conter o usuário.';return}
     try{await api('/api/users/reset',{coll,id,pass});d.hasPass=true;d.mustReset=true;if(SRV.base[coll])SRV.base[coll][id]=JSON.stringify(d);
       box.innerHTML=`<div class="notice"><b>Pronto.</b> Passe para ${esc(nm)}: usuário <b>${esc(d.login||String(d.doc||''))}</b> e senha base <b class="num">${esc(pass)}</b>. No primeiro acesso o app pede uma senha nova. Se a pessoa estava logada em algum aparelho, foi desconectada.</div>`;
       const lbl=row.querySelector('.pwlbl');if(lbl)lbl.textContent=srvPassLabel(d)}
@@ -187,3 +225,41 @@ function srvInstallBox(){document.querySelectorAll('.instbox').forEach(x=>x.remo
   if(!html)return;const d=document.createElement('div');d.className='instbox';d.innerHTML=html;f.after(d);
   const b=document.getElementById('instBtn');if(b)b.onclick=async()=>{if(!SRV_INSTALL)return;SRV_INSTALL.prompt();try{await SRV_INSTALL.userChoice}catch(e){}SRV_INSTALL=null;srvInstallBox()}}
 new MutationObserver(()=>{if(document.querySelector('form.login')&&!document.querySelector('.instbox')&&!SRV.me)srvInstallBox()}).observe(document.documentElement,{childList:true,subtree:true});
+/* rascunho: carrinho, pedido do vendedor em andamento e formulário de entrega sobrevivem a recarregar a página */
+function srvDraftKey(){return SRV.me?'srv-draft:'+SRV.me.role+':'+(SRV.me.refId||SRV.me.login):''}
+function srvDraftSnap(){const r=SRV.me&&SRV.me.role;if(!r)return null;
+  if(r==='cliente')return {cart:ui.cart||{},note:ui.note||'',neg:ui.neg||{},negSt:ui.negSt||{}};
+  if(r==='vendedor'||r==='admin')return {lanc:ui.lanc||null};
+  if(r==='entregador')return {dForm:ui.dForm||{},dName:ui.dName||{},dPhoto:ui.dPhoto||{},occ:ui.occ||{}};
+  if(r==='conferente')return {confOrder:ui.confOrder||null};
+  return null}
+let SRV_DRAFT='';
+function srvDraftSave(){const k=srvDraftKey();if(!k)return;const d=srvDraftSnap();if(!d)return;let j;try{j=JSON.stringify(d)}catch(e){return}if(j===SRV_DRAFT)return;SRV_DRAFT=j;
+  try{localStorage.setItem(k,j)}catch(e){try{if(d.dPhoto){d.dPhoto={};localStorage.setItem(k,JSON.stringify(d))}}catch(_){}}}
+function srvDraftLoad(){const k=srvDraftKey();if(!k)return;let d=null;try{d=JSON.parse(localStorage.getItem(k)||'null')}catch(e){}if(!d)return;
+  const live=id=>S.orders.some(o=>o.id===id);
+  if(d.cart){const c={};Object.entries(d.cart).forEach(([id,q])=>{if((S.products||[]).some(p=>p.id===id&&p.active!==false)||(S.combos||[]).some(x=>x.id===id))c[id]=q});ui.cart=c;ui.note=d.note||'';ui.neg=d.neg||{};ui.negSt=d.negSt||{};if(Object.keys(c).length)toast('Seu carrinho foi recuperado.')}
+  if(d.lanc&&(!d.lanc.editId||live(d.lanc.editId))){ui.lanc=d.lanc;toast('O pedido que você estava lançando foi recuperado.')}
+  if(d.dForm){ui.dForm=d.dForm;ui.dName=d.dName||{};ui.dPhoto=d.dPhoto||{};ui.occ=d.occ||{}}
+  if(d.confOrder&&live(d.confOrder))ui.confOrder=d.confOrder;
+  SRV_DRAFT=JSON.stringify(d)}
+setInterval(()=>{if(SRV.me&&!SRV.me.mustReset)srvDraftSave()},1500);
+window.addEventListener('pagehide',()=>{if(SRV.me)srvDraftSave()});
+/* botão "voltar" do celular: fecha o que está aberto dentro do app em vez de sair dele */
+let SRV_BACK=0;
+function srvBackInit(){if(SRV_BACK)return;SRV_BACK=1;try{history.pushState({srv:1},'')}catch(e){return}
+  window.addEventListener('popstate',()=>{if(!SRV.me)return;
+    if(srvBackStep()){try{history.pushState({srv:1},'')}catch(e){}window.scrollTo(0,0);return}
+    if(SRV_BACK===2){SRV_BACK=1;try{history.back()}catch(e){}return}
+    SRV_BACK=2;try{history.pushState({srv:1},'')}catch(e){}toast('Toque em voltar de novo para sair do app.');setTimeout(()=>{if(SRV_BACK===2)SRV_BACK=1},2500)})}
+function srvBackStep(){const v=ui.view;
+  if(v==='cliente'){if(ui.cartOpen){ui.cartOpen=false;render();return true}if(ui.cliPage&&ui.cliPage!=='catalogo'){ui.cliPage='catalogo';render();return true}return false}
+  if(v==='conf'){if(ui.confSug){ui.confSug=null;render();return true}if(ui.confOrder){ui.confOrder=null;render();return true}return false}
+  if(v==='ent'){const F=ui.dForm||{};if(Object.keys(F).length){ui.dForm={};render();return true}return false}
+  if(v==='vend'){if(ui.lanc){toast('Para sair do pedido, use o botão Cancelar ou Voltar da tela (o pedido fica guardado).');return true}return false}
+  if(ui.admin){if(ui.edit||ui.selEdit||ui.adj||ui.lanc){toast('Use o botão Cancelar ou Voltar da tela.');return true}return false}
+  return false}
+/* campos de valor (preço, comissão...): avisa quando o número é inválido e confirma salto grande de preço */
+document.addEventListener('change',e=>{const i=e.target;if(!i||!i.matches||!i.matches('input[inputmode=decimal]'))return;const v=String(i.value||'').trim();if(!v)return;
+  const n=pnum(v);if(n===''){toast('Valor inválido: "'+v+'". Use números, por exemplo 4,50.');return}
+  const old=pnum(i.defaultValue);if(old!==''&&old>0&&n>old*3&&i.matches('.lnpr,[data-lp],[data-sgp],[data-anp],[data-apr]')&&!confirm('Confere o valor? Antes: '+brl(old)+' · agora: '+brl(n)+' (mais de 3 vezes maior).')){i.value=i.defaultValue;i.dispatchEvent(new Event('input',{bubbles:true}))}},true);
