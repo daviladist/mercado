@@ -263,3 +263,7 @@ function srvBackStep(){const v=ui.view;
 document.addEventListener('change',e=>{const i=e.target;if(!i||!i.matches||!i.matches('input[inputmode=decimal]'))return;const v=String(i.value||'').trim();if(!v)return;
   const n=pnum(v);if(n===''){toast('Valor inválido: "'+v+'". Use números, por exemplo 4,50.');return}
   const old=pnum(i.defaultValue);if(old!==''&&old>0&&n>old*3&&i.matches('.lnpr,[data-lp],[data-sgp],[data-anp],[data-apr]')&&!confirm('Confere o valor? Antes: '+brl(old)+' · agora: '+brl(n)+' (mais de 3 vezes maior).')){i.value=i.defaultValue;i.dispatchEvent(new Event('input',{bubbles:true}))}},true);
+/* barras que grudam no topo (abas do painel, menu do cliente) ficam logo abaixo do cabeçalho, seja qual for a altura dele no celular */
+(function(){const set=()=>{const h=document.querySelector('header.top');if(h)document.documentElement.style.setProperty('--toph',Math.ceil(h.getBoundingClientRect().height)+'px')};
+  set();window.addEventListener('resize',set);window.addEventListener('orientationchange',()=>setTimeout(set,300));
+  try{const h=document.querySelector('header.top');if(h&&window.ResizeObserver)new ResizeObserver(set).observe(h)}catch(e){}})();
