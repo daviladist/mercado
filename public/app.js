@@ -431,7 +431,7 @@ function recEdit(el,r){const R=ui.rcv;R.q=R.q||'';
     if(semValor.length&&!confirm(semValor.length+' produto(s) sem valor da nota ('+semValor.map(i=>i.name).slice(0,3).join(', ')+'). Conferir mesmo assim? A loja completa na precificação.'))return;
     if(!confirm('Confirmar a conferência da NF '+r.nf+'?\n'+r.items.length+' produto(s), '+rcQty(n)+' embalagem(ns), total '+brl(tot())+'.\nO estoque soma agora.'))return;
     r.items.forEach(i=>{if(!(Number(i.valor)>=0)||i.valor==='')i.valor=0});
-    r.status='conferida';save();R.id=null;toast('NF '+r.nf+' conferida: estoque atualizado. Foi para a precificação.');recScreen(el);window.scrollTo(0,0)};
+    r.status='conferida';save();R.id=null;toast('NF '+r.nf+' conferida: estoque atualizado. Foi para a precificação.');if(ui.admin&&ui.tab==='recmerc')renderAdmin();else recScreen(el);window.scrollTo(0,0)};
 }
 
 /* ---------- PRECIFICAÇÃO DE NOTAS (administrador e faturamento) ---------- */
