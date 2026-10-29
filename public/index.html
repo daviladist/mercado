@@ -827,6 +827,38 @@ a.mi{display:block;text-decoration:none;color:var(--fg)}
 .pcflags{display:flex;flex-wrap:wrap;gap:8px 18px}
 .pcmg{align-self:center}.mgok{color:var(--ok);font-weight:700}
 @media (max-width:420px){.rcgh,.rcline{grid-template-columns:minmax(0,1fr) 62px 84px 40px;gap:6px}}
+/* importação em massa: precificação em lista e alteração em massa */
+.bsbox{display:grid;gap:10px;margin-bottom:12px;border-left:5px solid var(--accent)}
+.bsh{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;cursor:pointer;min-height:32px}.bsbox:not([open]){gap:0}
+.bsgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.bsgrid label,.imf{display:grid;gap:4px;font-size:12px;font-weight:700;color:var(--muted);min-width:0}
+.bsgrid input,.bsgrid select{min-height:44px;width:100%}
+.imhead,.imline{display:grid;grid-template-columns:32px minmax(0,1fr) 96px 104px 100px 76px 100px 76px;gap:8px;align-items:center}
+.imhead{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;padding:0 11px 4px 15px}
+.imline{background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--warn);border-radius:10px;padding:8px 10px}
+.imline.ok{border-left-color:var(--ok)}.imline.sel{background:var(--surface-2);outline:2px solid var(--accent);outline-offset:-2px}
+.imline input[type=text]{min-height:44px;padding:6px 8px;width:100%;min-width:0}
+.imn{display:grid;gap:2px;min-width:0}.imn input{font-weight:700}
+.imnum{text-align:right}.imnum.neg{color:var(--danger);font-weight:700}
+.imk{font-weight:400;min-height:14px}
+.imlbl{display:none}
+.imtr{white-space:nowrap}
+.imnoie{grid-column:span 2;text-align:center}
+.imck{display:flex;align-items:center;justify-content:center;min-height:44px;min-width:32px}.imck input{width:22px;height:22px;margin:0}
+.prow.pbsel{grid-template-columns:32px 52px minmax(0,1fr) auto}
+@media (max-width:900px){
+  .imhead{display:none}
+  .imline{grid-template-columns:32px repeat(4,minmax(0,1fr));gap:6px 8px;align-items:start}
+  .imline .imck{grid-row:1;grid-column:1;align-self:start}
+  .imline .imn{grid-column:2/-1}
+  .imline .imc{grid-column:2/4}
+  .imline .imp1{grid-column:2}.imline .imm1{grid-column:3}.imline .imp2{grid-column:4}.imline .imm2{grid-column:5}
+  .imline .imtr{grid-column:4/-1;align-self:center}
+  .imnoie{grid-column:4/-1;text-align:left;align-self:center}
+  .imlbl{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .imline .imtr{margin-top:22px}
+}
+@media (max-width:640px){.prow.pbsel{grid-template-columns:32px 52px minmax(0,1fr)}}
 /* 2ª linha de navegação (subabas do painel, categorias do catálogo): fica presa logo abaixo das abas, sem ficar escondida */
 .subnavwrap,.navband{position:sticky;top:calc(var(--sat) + var(--toph,66px) + var(--tabsh,0px));z-index:17;background:var(--bg);margin:0 -16px 18px;padding:24px 16px 14px;box-shadow:0 6px 10px -8px rgba(0,0,0,.35)}
 .subnavwrap .subnav,.navband>.seg{margin:0!important}
@@ -1066,6 +1098,6 @@ h2{color:var(--fg)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="/app.js?v=4922d46a49"></script>
+<script src="/app.js?v=e25584c8f2"></script>
 
 </body></html>

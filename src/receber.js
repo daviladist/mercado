@@ -6,6 +6,12 @@
 const RC_ST={aberta:'Em conferência',conferida:'Conferida · aguardando preço',aprovada:'Aprovada',cancelada:'Cancelada'};
 const rcPend=()=>(S.receipts||[]).filter(r=>r.status==='conferida');
 const rcNorm=t=>String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+/* o app recarrega os dados do servidor de tempos em tempos (e a cada gravação troca as listas internas):
+ * as telas de edição usam sempre a versão atual do registro, senão o que se digita vai para uma cópia velha e some */
+const LIVE=Symbol('live');
+function liveDoc(c,doc){if(!doc||doc[LIVE])return doc;const id=doc.id,cur=()=>(S[c]||[]).find(x=>x&&x.id===id)||doc;
+  return new Proxy({},{get:(_,k)=>k===LIVE?true:cur()[k],set:(_,k,v)=>{cur()[k]=v;return true},deleteProperty:(_,k)=>{delete cur()[k];return true},has:(_,k)=>k in cur(),
+    ownKeys:()=>Reflect.ownKeys(cur()),getOwnPropertyDescriptor:(_,k)=>{const d=Object.getOwnPropertyDescriptor(cur(),k);if(d)d.configurable=true;return d}})}
 const rcMoney=v=>v===''||v==null||isNaN(v)?'':Number(v).toFixed(2).replace('.',',');
 const rcQty=v=>v===''||v==null||isNaN(v)?'':String(Math.round(Number(v)*1000)/1000).replace('.',',');
 function rcFindProducts(t){const q=rcNorm(t).trim(),d=String(t||'').replace(/\D/g,'');if(!q)return [];
@@ -94,7 +100,7 @@ function recScreen(el){if(!el)return;S.receipts=S.receipts||[];const R=ui.rcv=ui
       const r={id:uid(),status:'aberta',nf,supplierId:N.supplierId,supplierName:s?s.name:'',emissao:N.emissao||'',items:[],totalNota:0,by:ui.checker||ui.adminName||'',at:new Date().toISOString()};
       S.receipts.push(r);R.nova=null;R.id=r.id;save();rer();window.scrollTo(0,0);const n=$('#rcin');if(n)n.focus()}}
 }
-function recEdit(el,r){const R=ui.rcv;R.q=R.q||'';
+function recEdit(el,r){r=liveDoc('receipts',r);const R=ui.rcv;R.q=R.q||'';
   const hits=R.q&&!R.pick?rcFindProducts(R.q):[];
   const tot=()=>Math.round(r.items.reduce((a,i)=>a+(Number(i.q)||0)*(Number(i.valor)||0),0)*100)/100;
   el.innerHTML=`<div class="sectionhead"><h2>Conferindo NF ${esc(r.nf)}</h2><button class="btn ghost dlb" id="rcBack">Voltar</button></div>
@@ -126,9 +132,10 @@ function recEdit(el,r){const R=ui.rcv;R.q=R.q||'';
     if(!document.activeElement||document.activeElement===document.body)inp.focus()}
   el.querySelectorAll('[data-rcp]').forEach(b=>b.onclick=()=>add((S.products||[]).find(p=>p.id===b.dataset.rcp)));
   {const f=$('#rcfree');if(f)f.onclick=()=>{const v=R.q.trim(),d=v.replace(/\D/g,'');add(null,/^\d{8,14}$/.test(v)?'Produto EAN '+d:v,/^\d{8,14}$/.test(v)?d:'')}}
-  el.querySelectorAll('[data-rq]').forEach(i=>{i.onchange=()=>{const it=r.items.find(x=>x.k===i.dataset.rq),v=pnum(i.value);if(!it)return;if(!(v>0)){toast('Quantidade inválida.');i.value=rcQty(it.q);return}it.q=v;i.value=rcQty(v);save();$('#rctot').textContent=brl(tot())};
+  let rcT=null;const rcLater=()=>{clearTimeout(rcT);rcT=setTimeout(save,900)};
+  el.querySelectorAll('[data-rq]').forEach(i=>{i.oninput=()=>{const it=r.items.find(x=>x.k===i.dataset.rq),v=pnum(i.value);if(it&&v!==''&&v>0){it.q=v;rcLater();$('#rctot').textContent=brl(tot())}};i.onchange=()=>{const it=r.items.find(x=>x.k===i.dataset.rq),v=pnum(i.value);if(!it)return;if(!(v>0)){toast('Quantidade inválida.');i.value=rcQty(it.q);return}it.q=v;i.value=rcQty(v);save();$('#rctot').textContent=brl(tot())};
     i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const v=el.querySelector('[data-rv="'+i.dataset.rq+'"]');if(v){v.focus();v.select()}}}});
-  el.querySelectorAll('[data-rv]').forEach(i=>{i.onchange=()=>{const it=r.items.find(x=>x.k===i.dataset.rv),v=pnum(i.value);if(!it)return;if(i.value.trim()&&v===''){toast('Valor inválido. Use números, ex.: 45,90');i.value=rcMoney(it.valor);return}it.valor=v===''?'':v;i.value=rcMoney(it.valor);save();$('#rctot').textContent=brl(tot())};
+  el.querySelectorAll('[data-rv]').forEach(i=>{i.oninput=()=>{const it=r.items.find(x=>x.k===i.dataset.rv),v=pnum(i.value);if(it&&v!==''){it.valor=v;rcLater();$('#rctot').textContent=brl(tot())}};i.onchange=()=>{const it=r.items.find(x=>x.k===i.dataset.rv),v=pnum(i.value);if(!it)return;if(i.value.trim()&&v===''){toast('Valor inválido. Use números, ex.: 45,90');i.value=rcMoney(it.valor);return}it.valor=v===''?'':v;i.value=rcMoney(it.valor);save();$('#rctot').textContent=brl(tot())};
     i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();i.blur();const n=$('#rcin');if(n)n.focus()}}});
   el.querySelectorAll('[data-rx]').forEach(b=>b.onclick=()=>{r.items=r.items.filter(x=>x.k!==b.dataset.rx);save();rer()});
   $('#rcDel').onclick=()=>{if(!confirm('Cancelar a nota '+r.nf+'? Ela some da lista de conferência.'))return;r.status='cancelada';save();R.id=null;toast('Nota cancelada');recScreen(el)};
@@ -145,18 +152,23 @@ function rcMargins(c,pv,trib,ie){if(!(c>0)||!(pv>0))return null;const ce=trib?ef
 const rcPct=v=>isFinite(v)?(Math.round(v*10)/10).toFixed(1).replace('.',',')+'%':'—';
 function rcMgTxt(c,pv,trib,ie){const m=rcMargins(c,pv,trib,ie);return m?`<span class="${m.mg<0?'neg':m.mg<8?'wkwarn':'mgok'}">margem ${rcPct(m.mg)}</span> / markup ${rcPct(m.mk)}`:'<span class="muted">margem — / markup —</span>'}
 function precScreen(el){if(!el)return;S.receipts=S.receipts||[];const P=ui.prc=ui.prc||{};
+  if(P.imp){const im=(S.imports||[]).find(x=>x.id===P.imp&&(x.status==='pendente'||x.status==='consultando'));if(im)return impEdit(el,im);P.imp=null}
   const cur=P.id&&S.receipts.find(r=>r.id===P.id&&r.status==='conferida');
   if(cur)return precEdit(el,cur);
   P.id=null;const L=rcPend().sort((a,b)=>String(a.conferidaAt).localeCompare(String(b.conferidaAt)));
   const ok=S.receipts.filter(r=>r.status==='aprovada').sort((a,b)=>String(b.aprovadaAt).localeCompare(String(a.aprovadaAt))).slice(0,8);
+  const IC=typeof impCards==='function'&&ui.admin?impCards():'';
   el.innerHTML=`<div class="sectionhead"><h2>Precificação de notas</h2></div>
+    ${IC}${IC?'<h3 class="dech">Notas de entrada <span class="cnt2">'+L.length+'</span></h3>':''}
     ${L.length?`<div class="notice" style="margin-bottom:12px"><b>${L.length} nota${L.length>1?'s':''} esperando preço.</b> O estoque já entrou; os preços e o custo só mudam quando você aprovar.</div>
       <div class="rclist">${L.map(r=>`<button class="rccard pend" data-pco="${r.id}"><span><b>NF ${esc(r.nf)}</b> · ${esc(r.supplierName)}</span><span class="small muted">${r.items.length} ite${r.items.length===1?'m':'ns'} · ${brl(r.totalNota||0)} · conferida por ${esc(r.conferidaBy||r.by||'')} em ${r.conferidaAt?dBR(String(r.conferidaAt).slice(0,10)):''}</span></button>`).join('')}</div>`
       :'<div class="empty">Nenhuma nota esperando preço.</div>'}
     ${ok.length?`<h3 class="dech" style="margin-top:16px">Aprovadas recentemente</h3><div class="rclist">${ok.map(r=>`<div class="rccard"><span><b>NF ${esc(r.nf)}</b> · ${esc(r.supplierName)}</span><span class="small muted">${r.items.length} itens · ${brl(r.totalNota||0)} · aprovada por ${esc(r.aprovadaBy||'')}</span></div>`).join('')}</div>`:''}`;
   el.querySelectorAll('[data-pco]').forEach(b=>b.onclick=()=>{P.id=b.dataset.pco;precScreen(el);window.scrollTo(0,0)});
+  el.querySelectorAll('[data-imo]').forEach(b=>b.onclick=()=>{P.imp=b.dataset.imo;P.id=null;precScreen(el);window.scrollTo(0,0)});
+  if(ui.admin&&typeof impWatch==='function')impWatch();
 }
-function precEdit(el,r){const P=ui.prc;P.lk=P.lk||{};
+function precEdit(el,r){r=liveDoc('receipts',r);const P=ui.prc;P.lk=P.lk||{};
   // começa com o que o produto já tem (tributação, preços), para só ajustar
   let pre=false;r.items.forEach(i=>{const p=i.pid&&(S.products||[]).find(x=>x.id===i.pid);if(i.trib===undefined){i.trib=!!(p&&p.trib);pre=true}
     if(i.ieOn===undefined){i.ieOn=!!(p&&Number(p.iePrice)>0);pre=true}
@@ -220,6 +232,9 @@ function rcAlert(){const c0=$('#tabc'),sj=(S.stariaJobs||[]).filter(j=>j.status=
   {const pa=S.orders.filter(pendSettle);if(c0&&pa.length&&ui.tab!=='entregas'){const d=document.createElement('div');d.className='rcalert';const t=pa.reduce((a,o)=>a+(Number(o.delivered.collect)||o.total),0);
     d.innerHTML=`<span><b>${pa.length} entrega${pa.length>1?'s':''} aguardando acerto</b> (dinheiro/PIX, ${brl(t)}). Só concluem quando você ou o faturamento confirmar que recebeu.</span><button type="button" class="btn dlb">Ver acertos</button>`;
     c0.prepend(d);d.querySelector('button').onclick=()=>{ui.tab='entregas';renderAdmin();window.scrollTo(0,0)}}}
+  if(c0&&ui.tab!=='precnotas'&&typeof impOpen==='function'){impFillAll();const IL=impOpen();if(IL.length){const d=document.createElement('div');d.className='rcalert imalert';
+    d.innerHTML=`<span><b>${IL.length} importaç${IL.length>1?'ões':'ão'} em massa esperando preço.</b> Os produtos só entram no catálogo quando você aprovar.</span><div class="row" style="gap:6px;flex-wrap:wrap">${IL.map((im,k)=>`<button type="button" class="btn dlb" data-ima="${im.id}">${im.status==='consultando'?'Importação '+(k+1)+' · aguardando StarIA':'Precificar importação'+(IL.length>1?' '+(k+1):'')+' ('+impLeft(im).length+')'}</button>`).join('')}</div>`;
+    c0.prepend(d);d.querySelectorAll('[data-ima]').forEach(b=>b.onclick=()=>{ui.tab='precnotas';ui.prc={imp:b.dataset.ima};renderAdmin();window.scrollTo(0,0)});impWatch()}}
   const n=rcPend().length,c=$('#tabc');if(!n||!c||ui.tab==='precnotas')return;
   const d=document.createElement('div');d.className='rcalert';d.innerHTML=`<span><b>${n} nota${n>1?'s':''} de entrada esperando preço.</b> O estoque já entrou; aprove os preços em Produtos › Precificação de notas.</span><button type="button" class="btn dlb">Precificar agora</button>`;
   c.prepend(d);d.querySelector('button').onclick=()=>{ui.tab='precnotas';renderAdmin();window.scrollTo(0,0)}}

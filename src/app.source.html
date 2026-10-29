@@ -825,6 +825,38 @@ a.mi{display:block;text-decoration:none;color:var(--fg)}
 .pcflags{display:flex;flex-wrap:wrap;gap:8px 18px}
 .pcmg{align-self:center}.mgok{color:var(--ok);font-weight:700}
 @media (max-width:420px){.rcgh,.rcline{grid-template-columns:minmax(0,1fr) 62px 84px 40px;gap:6px}}
+/* importação em massa: precificação em lista e alteração em massa */
+.bsbox{display:grid;gap:10px;margin-bottom:12px;border-left:5px solid var(--accent)}
+.bsh{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;cursor:pointer;min-height:32px}.bsbox:not([open]){gap:0}
+.bsgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.bsgrid label,.imf{display:grid;gap:4px;font-size:12px;font-weight:700;color:var(--muted);min-width:0}
+.bsgrid input,.bsgrid select{min-height:44px;width:100%}
+.imhead,.imline{display:grid;grid-template-columns:32px minmax(0,1fr) 96px 104px 100px 76px 100px 76px;gap:8px;align-items:center}
+.imhead{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;padding:0 11px 4px 15px}
+.imline{background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--warn);border-radius:10px;padding:8px 10px}
+.imline.ok{border-left-color:var(--ok)}.imline.sel{background:var(--surface-2);outline:2px solid var(--accent);outline-offset:-2px}
+.imline input[type=text]{min-height:44px;padding:6px 8px;width:100%;min-width:0}
+.imn{display:grid;gap:2px;min-width:0}.imn input{font-weight:700}
+.imnum{text-align:right}.imnum.neg{color:var(--danger);font-weight:700}
+.imk{font-weight:400;min-height:14px}
+.imlbl{display:none}
+.imtr{white-space:nowrap}
+.imnoie{grid-column:span 2;text-align:center}
+.imck{display:flex;align-items:center;justify-content:center;min-height:44px;min-width:32px}.imck input{width:22px;height:22px;margin:0}
+.prow.pbsel{grid-template-columns:32px 52px minmax(0,1fr) auto}
+@media (max-width:900px){
+  .imhead{display:none}
+  .imline{grid-template-columns:32px repeat(4,minmax(0,1fr));gap:6px 8px;align-items:start}
+  .imline .imck{grid-row:1;grid-column:1;align-self:start}
+  .imline .imn{grid-column:2/-1}
+  .imline .imc{grid-column:2/4}
+  .imline .imp1{grid-column:2}.imline .imm1{grid-column:3}.imline .imp2{grid-column:4}.imline .imm2{grid-column:5}
+  .imline .imtr{grid-column:4/-1;align-self:center}
+  .imnoie{grid-column:4/-1;text-align:left;align-self:center}
+  .imlbl{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .imline .imtr{margin-top:22px}
+}
+@media (max-width:640px){.prow.pbsel{grid-template-columns:32px 52px minmax(0,1fr)}}
 /* 2ª linha de navegação (subabas do painel, categorias do catálogo): fica presa logo abaixo das abas, sem ficar escondida */
 .subnavwrap,.navband{position:sticky;top:calc(var(--sat) + var(--toph,66px) + var(--tabsh,0px));z-index:17;background:var(--bg);margin:0 -16px 18px;padding:24px 16px 14px;box-shadow:0 6px 10px -8px rgba(0,0,0,.35)}
 .subnavwrap .subnav,.navband>.seg{margin:0!important}
@@ -2358,7 +2390,7 @@ function renderAdmin(){
   const nan=S.orders.filter(o=>o.appr==='pendente'&&o.status!=='cancelado').length,ncnt=(S.counts||[]).filter(x=>x.status==='finalizada').length,venc=(S.receivables||[]).filter(r=>recStatus(r)==='vencido').length,crit=S.products.filter(isCritical).length;
   /* menu em grupos: poucas abas em cima, micro abas dentro */
   const G=[['Dashboard',[['hoje','Visão geral'],['relatorios','Relatórios']]],['Pedidos',[['pedidos','Pedidos'],['decisoes','Decisões'],['entregas','Entregas']]],['Ofertas',[['semana','Ofertas da semana']]],['Produtos',[['produtos','Produtos'],['recmerc','Receber mercadoria'],['precnotas','Precificação de notas']]],['Financeiro',[['receber','Financeiro']]],['Cadastros',[['cadastros','Cadastros'],['clientes',''],['config','']]]];
-  const BD={pedidos:novos?{n:novos,c:''}:null,decisoes:(nan+nsug)?{n:nan+nsug,c:''}:null,entregas:nprog?{n:nprog,c:'var(--accent)'}:null,semana:ncnt?{n:ncnt,c:'var(--accent)'}:null,receber:venc?{n:venc,c:''}:null,produtos:crit?{n:crit,c:'var(--warn)'}:null,precnotas:(S.receipts||[]).some(r=>r.status==='conferida')?{n:(S.receipts||[]).filter(r=>r.status==='conferida').length,c:''}:null};
+  const BD={pedidos:novos?{n:novos,c:''}:null,decisoes:(nan+nsug)?{n:nan+nsug,c:''}:null,entregas:nprog?{n:nprog,c:'var(--accent)'}:null,semana:ncnt?{n:ncnt,c:'var(--accent)'}:null,receber:venc?{n:venc,c:''}:null,produtos:crit?{n:crit,c:'var(--warn)'}:null,precnotas:(()=>{const n=(S.receipts||[]).filter(r=>r.status==='conferida').length+(S.imports||[]).filter(x=>x.status==='pendente'||x.status==='consultando').length;return n?{n,c:''}:null})()};
   const cnt=b=>b?`<span class="cnt" ${b.c?`style="background:${b.c}"`:''}>${b.n}</span>`:'';
   const grp=G.find(g=>g[1].some(x=>x[0]===ui.tab))||G[0];ui.lastSub=ui.lastSub||{};ui.lastSub[grp[0]]=ui.tab;
   const tabs=G.map(g=>{const k=g===grp?g[1][0][0]:(ui.lastSub[g[0]]||g[1][0][0]),tot=g[1].reduce((a,x)=>a+(BD[x[0]]?BD[x[0]].n:0),0),red=g[1].some(x=>BD[x[0]]&&!BD[x[0]].c);return {k,label:g[0],sel:g===grp,b:tot?{n:tot,c:red?'':(g[1].map(x=>BD[x[0]]).find(Boolean)||{}).c}:null}});
@@ -4676,13 +4708,14 @@ function admProducts(){
   if(ui.bulk){bulkView();return}
   if(ui.combosView){admCombos();return}
   const cats=catNames(),PFR=prodFiltered();
-  c.innerHTML=`<div class="sectionhead"><h2>Produtos</h2><div class="row"><details class="more"><summary class="btn ghost">Mais opções ▾</summary><div class="menu"><button class="mi" id="cbP">Combos (${(S.combos||[]).length})</button><button class="mi" id="bulkP">CADASTRO EM MASSA (planilha e StarIA)</button><button class="mi" id="ucP">Atualizar custos pelo StarIA</button>${S.products.some(p=>p.active&&ieF(p)<1)?'<button class="mi" id="plIE">'+PDFI+'Tabela para clientes com IE (com nota)</button>':''}</div></details><button class="btn ghost" id="newS">+ Novo pelo StarIA</button><button class="btn" id="newP">+ Novo produto</button><button class="iconpdf" id="plP" title="Baixar tabela / folha de pedido em PDF" aria-label="Baixar tabela / folha de pedido em PDF"><svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><path d="M8 3h11l7 7v17a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="var(--surface)" stroke="currentColor" stroke-width="1.8"/><path d="M19 3v7h7" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="15" width="20" height="9" rx="2" fill="#C62828"/><text x="13" y="22" text-anchor="middle" font-family="Arial" font-weight="700" font-size="7" fill="#fff">PDF</text></svg></button></div></div>
+  c.innerHTML=`<div class="sectionhead"><h2>Produtos</h2><div class="row"><details class="more"><summary class="btn ghost">Mais opções ▾</summary><div class="menu"><button class="mi" id="cbP">Combos (${(S.combos||[]).length})</button><button class="mi" id="bulkP">CADASTRO EM MASSA (planilha e StarIA)</button><button class="mi" id="ucP">Atualizar custos pelo StarIA</button><button class="mi" id="pbP">${ui.pbulk?'Sair da alteração em massa':'Alterar vários de uma vez (categoria, família…)'}</button>${S.products.some(p=>p.active&&ieF(p)<1)?'<button class="mi" id="plIE">'+PDFI+'Tabela para clientes com IE (com nota)</button>':''}</div></details><button class="btn ghost" id="newS">+ Novo pelo StarIA</button><button class="btn" id="newP">+ Novo produto</button><button class="iconpdf" id="plP" title="Baixar tabela / folha de pedido em PDF" aria-label="Baixar tabela / folha de pedido em PDF"><svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><path d="M8 3h11l7 7v17a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="var(--surface)" stroke="currentColor" stroke-width="1.8"/><path d="M19 3v7h7" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="15" width="20" height="9" rx="2" fill="#C62828"/><text x="13" y="22" text-anchor="middle" font-family="Arial" font-weight="700" font-size="7" fill="#fff">PDF</text></svg></button></div></div>
     <p class="small muted" style="margin:0 0 12px">Produtos desativados ficam guardados e não aparecem para o cliente. Use isso para reaproveitar de uma semana para outra.</p>
     <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="text" id="aq" placeholder="Buscar por nome, código ou código de barras" value="${esc(ui.aq||'')}" aria-label="Buscar produto"></div>
     ${pfBar(PFR.F,PFR.L.length)}
+    ${ui.pbulk?prodBulkHtml(PFR.L):''}
     ${(()=>{const n=S.products.filter(isCritical).length;return n?`<div class="critbar"><span><b>${n} produto${n===1?'':'s'} em estoque crítico</b> · hora de comprar</span><button class="btn ${ui.critOnly?'':'ghost'} dlb" id="critF">${ui.critOnly?'Mostrar todos':'Ver só esses'}</button></div>`:''})()}
-    <div class="list">${PFR.L.map(p=>{const n=['qty','vista','retira','promo','limite'].filter(k=>p.rules[k].on).length;return `<div class="prow ${p.active?'':'off'}">
-      <img src="${p.photo}" alt="">
+    <div class="list">${PFR.L.map(p=>{const n=['qty','vista','retira','promo','limite'].filter(k=>p.rules[k].on).length;return `<div class="prow ${p.active?'':'off'} ${ui.pbulk?'pbsel':''}">
+      ${ui.pbulk?`<label class="imck"><input type="checkbox" data-psel="${p.id}" ${ui.pbulk.sel[p.id]?'checked':''} aria-label="Marcar ${esc(p.name)}"></label>`:''}<img src="${p.photo}" alt="">
       <div class="t"><b>${esc(p.name)}${p.fam?` <span class="varchip" title="Sabor de ${esc(p.fam)}">${esc(p.var||'sabor')}</span>`:''}${(()=>{const b=belowMin(p);return b?` <span class="apchip no" title="No preço de tabela, depois da comissão">abaixo do mínimo: ${String(Math.round(b.mg*10)/10).replace('.',',')}% de ${String(b.min).replace('.',',')}%</span>`:''})()}</b><span class="small muted">${esc(catLabel(p))} · ${codesLine(p.code,p.ean)||'Sem código'}${packOf(p)?' · '+nfmt(packOf(p))+(isKg(p)?' kg · ':' un. · ')+brl(p.price/packOf(p))+'/'+uw(p):''}${p.trib?' · <b>Tributado</b>':''}${['mgmaior','mgmenor'].includes(PFR.F.sort)||PFR.F.x==='lowmg'?(prodMg(p)==null?' · sem custo':` · margem <b class="${prodMg(p)<0?'neg':prodMg(p)<8?'wkwarn':''}">${(Math.round(prodMg(p)*10)/10).toLocaleString('pt-BR')}%</b>`):''}${PFR.sold?` · vendeu <b>${qBR(PFR.sold(p))}</b> em 90 dias`:''}${p.stock!==''&&p.stock!=null?` · <span class="${p.stock<=0?'stk0':''}">Estoque: ${Number(p.stock).toLocaleString('pt-BR')}${hasMin(p)?' (mín. '+Number(p.minStock).toLocaleString('pt-BR')+(p.idealStock!==''&&p.idealStock!=null?' · ideal '+Number(p.idealStock).toLocaleString('pt-BR'):'')+')':''}</span>${isCritical(p)?' <span class="crit">Comprar</span>':''}`:''}</span><div class="num" style="font-weight:700">${brl(p.price)}${ieF(p)<1?` <span class="mgchip iechip">com IE ${brl(Number(p.iePrice))}</span>`:''}${hasVal(p.commission)?` <span class="mgchip">comissão ${String(p.commission).replace('.',',')}%</span>`:''}${p.cost>0?` <span class="mgchip ${p.price<p.cost?'neg':''}">custo ${brl(p.cost)} · margem ${(Math.round(mgOf(effCost(p,p.cost,p.price),p.price)*10)/10).toLocaleString('pt-BR')}%${p.trib?' (tributado)':''} · markup ${(Math.round(mkOf(p.cost,p.price)*10)/10).toLocaleString('pt-BR')}%</span>`:''}${n?` <span class="rulechip">${n} condiç${n>1?'ões':'ão'} de preço</span>`:''}${p.active?'':' <span class="small muted">· desativado</span>'}</div></div>
       <div class="row" style="gap:6px"><button class="btn ghost" data-tog="${p.id}" style="min-height:40px;padding:8px 10px">${p.active?'Desativar':'Ativar'}</button><button class="btn ghost" data-ed="${p.id}" style="min-height:40px;padding:8px 10px">Editar</button><button class="btn ghost" data-edp="${p.id}" style="min-height:40px;padding:8px 10px">Precificar</button></div>
     </div>`}).join('')||'<div class="empty">Nenhum produto encontrado.</div>'}</div>`;
@@ -4693,6 +4726,8 @@ function admProducts(){
   $('#plP').onclick=()=>{if(!S.products.length){toast('Nenhum produto cadastrado ainda.');return}priceListDialog()};
 
   $('#ucP').onclick=()=>{ui.stCost={phase:'input'};admProducts();window.scrollTo(0,0)};
+  $('#pbP').onclick=()=>{ui.pbulk=ui.pbulk?null:{sel:{}};ui.bs={};admProducts()};
+  if(ui.pbulk&&typeof prodBulkBind==='function')prodBulkBind(PFR.L,()=>{const y=window.scrollY;admProducts();window.scrollTo(0,y)});
   $('#cbP').onclick=()=>{ui.combosView=true;ui.comboEdit=null;admProducts()};
   $('#bulkP').onclick=()=>{ui.bulk={rows:null,deact:false,file:''};renderAdmin()};
   $('#newS').onclick=()=>{ui.stFocus=true;$('#newP').click()};
@@ -5138,7 +5173,7 @@ function stBulkView(){
   if(B.phase==='input'){
     c.innerHTML=`<div class="sectionhead"><h2>Importar do StarIA em massa</h2><button class="btn ghost" id="sbBack">Voltar</button></div>
       <div class="panel" style="display:grid;gap:12px;max-width:760px">
-        <div class="small muted">Cole ou digite os <b>códigos internos</b> (ou EANs), um por linha ou separados por vírgula. O app busca todos no StarIA e depois mostra um por um para você completar e aprovar.</div>
+        <div class="small muted">Cole ou digite os <b>códigos internos</b> (ou EANs), um por linha ou separados por vírgula. O app busca todos no StarIA e cria uma <b>importação pendente</b> em Produtos › Precificação de notas, com todos em lista para você precificar e aprovar. Se sair da tela, ela continua lá.</div>
         <textarea id="sbText" style="min-height:160px;font-variant-numeric:tabular-nums" placeholder="14489&#10;10827&#10;7894900027013">${esc(B.text||'')}</textarea>
         <div class="row" style="gap:10px;align-items:end"><div class="field"><label for="sbMul">Unidades na embalagem (padrão)</label><input type="number" id="sbMul" min="1" value="${B.mul||1}" style="width:120px"></div><span class="small muted" style="flex:1">Multiplica o custo unitário do StarIA. Dá para mudar produto por produto na aprovação.</span></div>
         <div class="err" id="sbErr"></div>
@@ -5150,8 +5185,9 @@ function stBulkView(){
       const terms=[...new Set(B.text.split(/[\s,;]+/).map(t=>t.trim()).filter(Boolean))];
       if(!terms.length){$('#sbErr').textContent='Informe pelo menos um código.';return}
       if(terms.length>200){$('#sbErr').textContent='Até 200 códigos por vez.';return}
-      if(stariaWeb()){const miss=stariaMissing(terms);if(miss.length){stariaQueue(miss);B.phase='waiting';B.waitN=miss.length;stBulkView();
-        stariaWait(miss,()=>{if(ui.stBulk!==B||B.phase!=='waiting')return;B.phase='input';stBulkView();const g=$('#sbGo');if(g)g.click()});return}}
+      /* a importação vira um item pendente em Produtos › Precificação de notas: sair da tela não perde nada */
+      const goImp=im=>{ui.stBulk=null;ui.backWeek=false;ui.tab='precnotas';ui.prc={imp:im.id};renderAdmin();window.scrollTo(0,0)};
+      if(typeof impCreate==='function'&&stariaWeb()){goImp(impCreate(terms,null,B.mul));return}
       B.items=terms.map(t=>({term:t,status:'pend'}));B.phase='loading';B.idx=0;stBulkView();
       for(let k=0;k<B.items.length;k++){
         const it=B.items[k];
@@ -5159,6 +5195,7 @@ function stBulkView(){
         catch(e){if(STOP_CODES.includes(e&&e.code)){B.phase='input';stBulkView();$('#sbErr').textContent=stariaErr(e);return}it.status='err';it.msg=e&&e.code==='bad_term'?'código com letras ou símbolos':stariaErr(e)}
         const pg=$('#sbProg');if(pg){pg.style.width=Math.round((k+1)/B.items.length*100)+'%';$('#sbProgT').textContent=(k+1)+' de '+B.items.length+' consultados'}
       }
+      if(typeof impCreate==='function'){const res={};B.items.forEach(it=>{res[stNorm(it.term)]=it.status==='ok'?it.r:null});goImp(impCreate(terms,res,B.mul));return}
       B.items.forEach(it=>{if(it.status!=='ok')return;const r=it.r,ex=S.products.find(p=>(r.code&&String(p.code)===r.code)||(r.ean&&p.ean===r.ean));it.ex=ex||null;
         const pk=ex&&packOf(ex)?packOf(ex):B.mul;
         const dv=pk>1?pk:1;it.f={name:ex?ex.name:r.name,cat:ex?ex.cat:'',unit:ex?ex.unit:(pk>1?'Embalagem c/ '+pk+' unidades':''),pk:pk>1?pk:'',ucost:r.cost!==''?money(r.cost):(ex&&ex.cost>0?money(Math.round(ex.cost/dv*100)/100):''),uprice:ex?money(Math.round(ex.price/dv*100)/100):'',active:ex?ex.active:true,trib:!!(ex&&ex.trib),sub:ex?ex.sub||'':'',cond:condFrom(ex,dv)}});

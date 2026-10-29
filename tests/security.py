@@ -46,6 +46,9 @@ for role, (lg,) in ROLES.items():
         check(bad not in raw, f'{role}: não recebe {bad}')
     if role != 'vendedor': check('"commission"' not in raw and '"commP"' not in raw and '"sellerRate"' not in raw, f'{role}: não recebe comissão')
     check(not S['admins'] and not S['payables'], f'{role}: não recebe administradores nem contas a pagar')
+    check(not S.get('imports') and not S.get('stariaJobs'), f'{role}: não recebe importações nem consultas ao StarIA')
+    s2, r2 = c.req('/api/sync', {'changes': [{'c': 'imports', 'id': 'imx' + role[:3], 'op': 'put', 'doc': {'id': 'imx' + role[:3], 'status': 'pendente', 'items': []}}]})
+    check(rejected(s2, r2), f'{role}: não grava importação ({s2})')
     if role == 'cliente':
         check(len(S['customers']) == 1 and S['customers'][0]['id'] == me['refId'], 'cliente: recebe só o próprio cadastro')
         check(all(o['customerId'] == me['refId'] for o in S['orders']), f"cliente: só os próprios pedidos ({len(S['orders'])})")
