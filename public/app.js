@@ -4619,7 +4619,7 @@ function admReceber(){
     </div>
     ${list.length?`<div class="small muted" style="margin-bottom:8px">${list.length} título${list.length===1?'':'s'} · total <b class="num" style="color:var(--fg)">${brl(tot)}</b></div>
     <div class="list">${list.map(r=>{const st=recStatus(r),late=st==='vencido'?daysBetween(r.due,today()):0,left=st==='aberto'?daysBetween(today(),r.due):0;return `<div class="rec r-${st}">
-      <div class="t"><b>${esc(r.customer)}</b><span class="small muted">${r.orderNo?'Pedido nº '+esc(r.orderNo)+' · ':''}Parcela ${r.parcel}${r.desc?' · '+esc(r.desc):''}</span>
+      <div class="t"><b>${esc(r.customer)}</b><span class="small muted">${r.orderNo?'Pedido nº '+esc(r.orderNo)+' · ':''}Parcela ${esc(r.parcel)}${r.desc?' · '+esc(r.desc):''}</span>
         <span class="small">Vence <b>${dBR(r.due)}</b> · <span class="rst">${st==='pago'?'Pago em '+dBR(r.paidAt):st==='vencido'?'Vencido há '+late+' dia'+(late===1?'':'s'):left===0?'Vence hoje':'Faltam '+left+' dia'+(left===1?'':'s')}</span></span></div>
       <div class="ra"><b class="num">${brl(r.amount)}</b>
         <div class="row" style="gap:6px;justify-content:flex-end">${st==='pago'?`<button class="btn ghost dlb" data-runpay="${r.id}">Desfazer pagamento</button>`:`<button class="btn dlb" data-rpay="${r.id}">Marcar como pago</button>`}

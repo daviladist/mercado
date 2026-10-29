@@ -584,6 +584,8 @@ a.mi{display:block;text-decoration:none;color:var(--fg)}
 .prow{display:grid;grid-template-columns:52px 1fr auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
 .prow img{width:52px;height:52px;border-radius:8px;object-fit:cover;background:var(--surface-2)}
 .prow.off{opacity:.55}
+/* celular: nome e dados do produto/pessoa usam a largura toda; os botões vão para a linha de baixo */
+@media (max-width:640px){.prow{grid-template-columns:52px minmax(0,1fr)}.prow>:last-child:not(.t):not(img){grid-column:1/-1;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}}
 .prow .t{min-width:0}
 .prow .t b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .list{display:grid;gap:8px}
@@ -759,6 +761,7 @@ a.mi{display:block;text-decoration:none;color:var(--fg)}
 @media (max-width:480px){.part{grid-template-columns:40px 1fr}.part>span:last-child{grid-column:1/-1}}
 .rec{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--warn);border-radius:10px;padding:10px 12px}
 .rec .t{min-width:0;flex:1;display:grid;gap:2px}
+@media (max-width:640px){.rec .t{flex-basis:100%}.rec .ra{flex-basis:100%;grid-template-columns:1fr auto;align-items:center;justify-items:stretch}.rec .ra>b{justify-self:start}}
 .rec .ra{display:grid;gap:6px;justify-items:end}
 .rec .ra>b{font-family:var(--display);font-size:24px;line-height:1}
 .rec.r-vencido{border-left-color:var(--danger)} .rec.r-vencido .rst{color:var(--danger);font-weight:700}
@@ -786,9 +789,9 @@ a.mi{display:block;text-decoration:none;color:var(--fg)}
 .buyq{color:var(--accent);font-size:16px}
 .catbar{display:flex;gap:10px;align-items:flex-start;margin-bottom:12px}
 /* 2ª linha de navegação (subabas do painel, categorias do catálogo): fica presa logo abaixo das abas, sem ficar escondida */
-.subnavwrap,.navband{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--toph,66px) + var(--tabsh,0px));z-index:17;background:var(--bg);margin:-4px -16px 14px;padding:14px 16px 10px;box-shadow:0 6px 10px -8px rgba(0,0,0,.35)}
+.subnavwrap,.navband{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--toph,66px) + var(--tabsh,0px));z-index:17;background:var(--bg);margin:-4px -16px 18px;padding:24px 16px 14px;box-shadow:0 6px 10px -8px rgba(0,0,0,.35)}
 .subnavwrap .subnav,.navband>.seg{margin:0!important}
-.catbar{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--toph,66px) + var(--cnavh,48px));z-index:16;background:var(--bg);margin-inline:-16px;padding:14px 16px 10px;box-shadow:0 6px 10px -8px rgba(0,0,0,.35)}
+.catbar{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--toph,66px) + var(--cnavh,48px));z-index:16;background:var(--bg);margin-inline:-16px;padding:24px 16px 14px;box-shadow:0 6px 10px -8px rgba(0,0,0,.35)}
 .catbar .chips{flex:1;min-width:0;margin-bottom:0}
 .viewseg{flex:none}
 .validity .viewseg{margin-left:auto}
@@ -5382,7 +5385,7 @@ function admReceber(){
     </div>
     ${list.length?`<div class="small muted" style="margin-bottom:8px">${list.length} título${list.length===1?'':'s'} · total <b class="num" style="color:var(--fg)">${brl(tot)}</b></div>
     <div class="list">${list.map(r=>{const st=recStatus(r),late=st==='vencido'?daysBetween(r.due,today()):0,left=st==='aberto'?daysBetween(today(),r.due):0;return `<div class="rec r-${st}">
-      <div class="t"><b>${esc(r.customer)}</b><span class="small muted">${r.orderNo?'Pedido nº '+esc(r.orderNo)+' · ':''}Parcela ${r.parcel}${r.desc?' · '+esc(r.desc):''}</span>
+      <div class="t"><b>${esc(r.customer)}</b><span class="small muted">${r.orderNo?'Pedido nº '+esc(r.orderNo)+' · ':''}Parcela ${esc(r.parcel)}${r.desc?' · '+esc(r.desc):''}</span>
         <span class="small">Vence <b>${dBR(r.due)}</b> · <span class="rst">${st==='pago'?'Pago em '+dBR(r.paidAt):st==='vencido'?'Vencido há '+late+' dia'+(late===1?'':'s'):left===0?'Vence hoje':'Faltam '+left+' dia'+(left===1?'':'s')}</span></span></div>
       <div class="ra"><b class="num">${brl(r.amount)}</b>
         <div class="row" style="gap:6px;justify-content:flex-end">${st==='pago'?`<button class="btn ghost dlb" data-runpay="${r.id}">Desfazer pagamento</button>`:`<button class="btn dlb" data-rpay="${r.id}">Marcar como pago</button>`}
