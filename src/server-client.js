@@ -171,3 +171,19 @@ document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest
       box.innerHTML=`<div class="notice"><b>Pronto.</b> Passe para ${esc(nm)}: usuário <b>${esc(d.login||String(d.doc||''))}</b> e senha base <b class="num">${esc(pass)}</b>. No primeiro acesso o app pede uma senha nova. Se a pessoa estava logada em algum aparelho, foi desconectada.</div>`;
       const lbl=row.querySelector('.pwlbl');if(lbl)lbl.textContent=srvPassLabel(d)}
     catch(er2){er.textContent=er2.message}}});
+/* app instalável no celular (sem loja de aplicativos) */
+let SRV_INSTALL=null;
+try{if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(()=>{})}catch(e){}
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();SRV_INSTALL=e;srvInstallBox()});
+window.addEventListener('appinstalled',()=>{SRV_INSTALL=null;srvInstallBox();toast('App instalado na tela do celular.')});
+function srvStandalone(){return (window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true}
+function srvIsIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)}
+/* aparece só nas telas de entrada, para não atrapalhar o uso */
+function srvInstallBox(){document.querySelectorAll('.instbox').forEach(x=>x.remove());if(srvStandalone()||SRV.me)return;
+  const f=document.querySelector('form.login');if(!f)return;const name=CLIENT_ONLY?"D'Ávila Pedidos":"D'Ávila Equipe";let html='';
+  if(SRV_INSTALL)html=`<button type="button" class="btn ghost block" id="instBtn">📲 Instalar o app ${esc(name)} no celular</button>`;
+  else if(srvIsIOS())html=`<div class="small muted">📲 Para ter o app na tela do iPhone: no Safari, toque em <b>Compartilhar</b> (o quadrado com a seta) e depois em <b>Adicionar à Tela de Início</b>.</div>`;
+  else if(/android/i.test(navigator.userAgent))html=`<div class="small muted">📲 Para ter o app na tela do celular: no Chrome, toque nos <b>três pontinhos</b> e em <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</div>`;
+  if(!html)return;const d=document.createElement('div');d.className='instbox';d.innerHTML=html;f.after(d);
+  const b=document.getElementById('instBtn');if(b)b.onclick=async()=>{if(!SRV_INSTALL)return;SRV_INSTALL.prompt();try{await SRV_INSTALL.userChoice}catch(e){}SRV_INSTALL=null;srvInstallBox()}}
+new MutationObserver(()=>{if(document.querySelector('form.login')&&!document.querySelector('.instbox')&&!SRV.me)srvInstallBox()}).observe(document.documentElement,{childList:true,subtree:true});

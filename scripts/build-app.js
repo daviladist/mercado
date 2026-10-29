@@ -123,7 +123,7 @@ R("function markSeen(c){const t=new Date().toISOString();S.orders.forEach(o=>{if
   "function markSeen(c){const t=new Date().toISOString();let ch=false;S.orders.forEach(o=>{if(o.customerId===c.id&&(o.events||[]).some(e=>!o.seenAt||e.at>o.seenAt)){o.seenAt=t;ch=true}});if(ch)save()}");
 
 // ---------- 9. visual: barra de demonstração some; aviso de "salvando"
-R('.demo{background:var(--surface-2);border-bottom:1px solid var(--line);font-size:13px}', '.demo{display:none!important}.teamlinks{margin-top:12px;color:var(--muted);line-height:1.8}.teamlinks a{color:var(--accent);font-weight:600}.srvbadge{position:fixed;right:12px;bottom:12px;background:var(--fg);color:var(--bg);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;z-index:99;opacity:.85}.srvbadge[hidden]{display:none}.pwbox{display:grid;gap:8px;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;margin:2px 0 10px;background:var(--surface)}');
+R('.demo{background:var(--surface-2);border-bottom:1px solid var(--line);font-size:13px}', '.demo{display:none!important}.teamlinks{margin-top:12px;color:var(--muted);line-height:1.8}.teamlinks a{color:var(--accent);font-weight:600}.srvbadge{position:fixed;right:12px;bottom:12px;background:var(--fg);color:var(--bg);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;z-index:99;opacity:.85}.srvbadge[hidden]{display:none}.instbox{margin:12px auto 0;max-width:420px;padding:0 4px;text-align:center}.pwbox{display:grid;gap:8px;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;margin:2px 0 10px;background:var(--surface)}');
 R('<title>Pedidos Atacado</title>', "<title>D'Ávila Pedidos</title>");
 
 // ---------- documento final
@@ -135,7 +135,12 @@ const html = '<!doctype html>\n<html lang="pt-BR"><head><meta charset="utf-8"><m
 const bad = ['1208' + '10', "pass:'1234'", '__SEED=', 'x.pass===p', 'a.pass===p', 'c.pass===p', 'v.pass===p', "localStorage.setItem(KEY,"].filter(t => html.includes(t));
 if (bad.length) { console.error('Ainda há trechos proibidos no app:', bad); process.exit(1); }
 fs.mkdirSync(path.join(ROOT, 'public'), { recursive: true });
-fs.writeFileSync(path.join(ROOT, 'public/index.html'), html);
+// app instalável: cada endereço tem o seu nome, ícone e cor (equipe azul, cliente vermelho)
+const pwa = (key, title, color) => `<link rel="manifest" href="/${key}.webmanifest"><link rel="apple-touch-icon" href="/icons/${key}-apple-180.png"><link rel="icon" type="image/png" sizes="192x192" href="/icons/${key}-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="${title}">`;
+const withPwa = (h, key, title, color) => h.replace('<meta name="theme-color" content="#E11F2C">', `<meta name="theme-color" content="${color}">` + pwa(key, title, color)).replace("<title>D'Ávila Pedidos</title>", `<title>${title}</title>`);
+const htmlEquipe = withPwa(html, 'equipe', "D'Ávila Equipe", '#0A66B2'), htmlCliente = withPwa(html, 'cliente', "D'Ávila Pedidos", '#E11F2C');
+if (!htmlEquipe.includes('equipe.webmanifest') || !htmlCliente.includes('cliente.webmanifest')) { console.error('Não consegui colocar o manifesto do app.'); process.exit(1); }
+fs.writeFileSync(path.join(ROOT, 'public/index.html'), htmlEquipe);
 // /cliente: o mesmo app, aberto no modo "só clientes" (a página percebe pelo endereço)
-fs.writeFileSync(path.join(ROOT, 'public/cliente.html'), html);
+fs.writeFileSync(path.join(ROOT, 'public/cliente.html'), htmlCliente);
 console.log('public/index.html:', Math.round(html.length / 1024), 'KB ·', n, 'trocas aplicadas');

@@ -1,0 +1,33 @@
+{
+ "name": "D'Ávila Pedidos",
+ "short_name": "D'Ávila",
+ "description": "Pedidos de atacado do Atacado D'Ávila",
+ "id": "/cliente",
+ "start_url": "/cliente",
+ "scope": "/cliente",
+ "display": "standalone",
+ "orientation": "portrait",
+ "background_color": "#E11F2C",
+ "theme_color": "#E11F2C",
+ "lang": "pt-BR",
+ "icons": [
+  {
+   "src": "/icons/cliente-192.png",
+   "sizes": "192x192",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "/icons/cliente-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "/icons/cliente-maskable-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ]
+}
