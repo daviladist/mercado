@@ -794,7 +794,7 @@ function prodBulkBind(list,rer){const M=ui.pbulk;if(!M)return;bsBind();const c=$
 const PDV={st:null,items:[],cust:null,desc:null,auth:null,saleId:null,quote:null,qsig:'',modal:null,last:null,busy:false,qty:null,pays:[],online:navigator.onLine,qrLib:null};
 const PDV_KEYS=['F2','F3','F4','F6','F7','F8','F9','F10','F11','F12'];
 const PDV_HELP={F2:'Buscar nome',F3:'Quantidade',F4:'Cliente',F6:'Desconto',F7:'Cancelar item',F8:'Reimprimir',F9:'Consultar preço',F10:'Pagamento',F11:'Espera',F12:'Caixa'};
-function pdvKey(s){return 'pdv:'+(TSLUG||'@')+':'+(SRV.me?(SRV.me.refId||SRV.me.login):'')+':'+s}
+function pdvKey(s){return 'pdv:'+(TSLUG||'@')+':'+(s==='fila'||s==='falhas'?'':(SRV.me?(SRV.me.refId||SRV.me.login):''))+':'+s}
 function pdvLoad(s,d){try{return JSON.parse(localStorage.getItem(pdvKey(s))||'null')||d}catch(e){return d}}
 function pdvSave(s,v){try{localStorage.setItem(pdvKey(s),JSON.stringify(v))}catch(e){}}
 function pdvNewId(){const a=new Uint8Array(12);crypto.getRandomValues(a);return 'v'+Date.now().toString(36)+Array.from(a,b=>b.toString(16).padStart(2,'0')).join('').slice(0,16)}
@@ -892,7 +892,7 @@ function pdvNet(){const n=$('#pdvnet');if(n){n.className='net'+(PDV.online?'':' 
 
 /* ---------------------------------------------------------------- itens */
 function pdvFind(code){const c=String(code||'').trim();if(!c)return null;const d=c.replace(/\D/g,'');
-  return S.products.find(p=>p.active!==false&&d&&String(p.ean||'')===d)||S.products.find(p=>p.active!==false&&String(p.code||'').toLowerCase()===c.toLowerCase())||null}
+  return S.products.find(p=>p.active!==false&&d&&(String(p.ean||'')===d||String(p.ean2||'')===d))||S.products.find(p=>p.active!==false&&String(p.code||'').toLowerCase()===c.toLowerCase())||null}
 function pdvUnit(p,q){const ie=!!(PDV.cust&&PDV.cust.ie);try{return Math.round(withIe(ie,()=>withOner('retirada',()=>priceFor(p,q,'retirada','').price))*100)/100}catch(e){return Number(p.price)||0}}
 function pdvScan(raw){let v=String(raw||'').trim();if(!v)return;let q=PDV.qty||1;
   const m=/^(\d+(?:[.,]\d+)?)\s*\*\s*(.+)$/.exec(v);if(m){q=pdvNum(m[1]);v=m[2].trim()}
@@ -969,7 +969,7 @@ function pdvDiscount(){if(!PDV.items.some(i=>!i.cancel)){pdvBeep(false);return}
     const prev=PDV.desc;PDV.desc={tipo:pct?'pct':'valor',valor:v};PDV.auth=null;
     try{const Q=await pdvQuote();if(!Q)return;
       if(Q.needAuth){if(!$('#pdvgl')){$('#pdvdauth').innerHTML='<p class="pdvmut">Este desconto passa do limite do caixa ou deixa a margem abaixo da mínima.</p>'+pdvMgrFields();$('#pdvgl').focus();pdvSave('venda',{items:PDV.items,cust:PDV.cust,desc:PDV.desc,saleId:PDV.saleId});pdvPaint();return}
-        const a=await api('/api/pdv/autorizar',Object.assign(pdvBody(),{gerente:pdvMgr()}));PDV.auth=a.token;toast('Desconto autorizado por '+a.gerente)}
+        const a=await api('/api/pdv/autorizar',Object.assign(pdvBody(),{gerente:pdvMgr()}));PDV.auth=a.token;toast('Desconto autorizado por '+a.gerente+(a.alerta?'. '+a.alerta:''))}
       pdvBeep(true);pdvClose();pdvChanged()}
     catch(e){pdvBeep(false);if(e.status===0){err.textContent='Sem internet: desconto só com conexão.';PDV.desc=prev}else err.textContent=e.message}};
   $('#pdvdok').onclick=apply;$('#pdvdv').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();apply()}}}
@@ -1021,7 +1021,7 @@ function pdvAddPay(forma,raw){const err=$('#pdverr');const v=Math.round(pdvNum(r
   if(!(v>0)){err.textContent='Valor inválido.';return}
   if(forma!=='dinheiro'&&v>falta+0.004){err.textContent='Só o dinheiro pode passar do total (troco).';return}
   if(forma==='fiado'){if(!PDV.cust){err.textContent='Fiado só com cliente identificado (F4).';return}if(!(PDV.cust.limit>0)){err.textContent='Este cliente não tem limite de fiado.';return}
-    const F=PDV.quote&&PDV.quote.fiado;if(F&&v>F.disponivel+0.004){err.textContent='Passa do limite. Disponível: '+pdvMoney(F.disponivel);return}}
+    const F=PDV.quote&&PDV.quote.fiado;if(F&&F.motivo){err.textContent=F.motivo;return}if(F&&v>F.disponivel+0.004){err.textContent='Passa do limite. Disponível: '+pdvMoney(F.disponivel);return}}
   if(forma==='pix'&&!(PDV.st.cfg&&PDV.st.cfg.pixKey)){err.textContent='Chave PIX não configurada (Painel › Caixa (PDV) › Configurar).';return}
   PDV.pays.push({forma,valor:v,...(forma==='dinheiro'?{recebido:v}:{}),...(forma==='pix'?{conferido:false}:{})});pdvBeep(true);pdvPayPaint()}
 /* PIX: "copia e cola" (BR Code) no valor exato, com QR */
@@ -1037,8 +1037,8 @@ function pdvPixQr(v){const draw=()=>{const box=$('#pdvqrimg');if(!box)return;try
 function pdvQrLib(){if(window.qrcode)return Promise.resolve();if(PDV.qrLib)return PDV.qrLib;PDV.qrLib=new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';s.onload=ok;s.onerror=()=>{PDV.qrLib=null;no()};document.head.appendChild(s)});return PDV.qrLib}
 async function pdvFinish(){if(PDV.busy)return;PDV.busy=true;const ok=$('#pdvpok');if(ok)ok.disabled=true;
   const body=Object.assign(pdvBody(),{id:PDV.saleId,caixaId:PDV.st.caixa.id,autorizacao:PDV.auth||'',pagamentos:PDV.pays.map(p=>({forma:p.forma,valor:p.valor,recebido:p.recebido,conferido:!!p.conferido})),totalEsperado:PDV.payTotal,clientAt:new Date().toISOString()});
-  const snap={items:PDV.items.slice(),cust:PDV.cust,T:pdvTotals(),pays:PDV.pays.slice(),troco:Math.max(0,pdvPaid()-PDV.payTotal)};
-  try{const r=await api('/api/pdv/venda',body);pdvBeep(true);pdvDone(snap,r.numero,r.status==='revisar')}
+  const snap={items:PDV.items.slice(),cust:PDV.cust,T:pdvTotals(),pays:PDV.pays.slice(),troco:Math.max(0,Math.round((pdvPaid()-PDV.payTotal)*100)/100)};
+  try{const r=await api('/api/pdv/venda',body);pdvBeep(true);pdvDone(snap,r.numero,r.status==='revisar'||r.status==='falha')}
   catch(e){if(e.status===0){const F=pdvLoad('fila',[]);F.push(Object.assign(body,{offline:true}));pdvSave('fila',F);pdvBeep(true);pdvDone(snap,null,false);toast('Sem internet: venda guardada no aparelho. Será enviada sozinha.');pdvFila()}
     else{pdvBeep(false);const er=$('#pdverr');if(er)er.textContent=e.message;if(e.data&&e.data.needAuth){PDV.auth=null;pdvClose();pdvDiscount()}if(e.status===409)PDV.quote=null}}
   finally{PDV.busy=false;const b=$('#pdvpok');if(b)b.disabled=false}}
@@ -1059,8 +1059,14 @@ function pdvPrint(){const L=PDV.last;if(!L){toast('Nenhuma venda para imprimir.'
 function pdvFila(){const n=pdvLoad('fila',[]).length,f=$('#pdvfila');if(f)f.textContent=n?n+' venda'+(n>1?'s':'')+' aguardando envio':''}
 let pdvQTimer=null;
 function pdvStartQueue(){clearInterval(pdvQTimer);pdvQTimer=setInterval(pdvSendQueue,15000);pdvSendQueue()}
-async function pdvSendQueue(){if(PDV.sending)return;let F=pdvLoad('fila',[]);if(!F.length)return;PDV.sending=true;
-  try{while(F.length){try{await api('/api/pdv/venda',F[0])}catch(e){if(e.status===0||e.status>=500)break;const X=pdvLoad('falhas',[]);X.push(Object.assign(F[0],{erro:e.message}));pdvSave('falhas',X);srvAlert('Uma venda guardada sem internet foi recusada: '+e.message+' (o gerente vê no painel)')}
+/* envia a fila. Venda só sai da fila quando o servidor GUARDOU (como venda, "a revisar" ou "com problema" para o gerente).
+   Sessão vencida, caixa desligado ou erro: a venda continua guardada aqui e tenta de novo depois. */
+async function pdvSendQueue(){if(PDV.sending||!SRV.me)return;let F=pdvLoad('fila',[]);if(!F.length)return;PDV.sending=true;
+  try{while(F.length){let r;try{r=await api('/api/pdv/venda',F[0])}catch(e){
+      if(e.status===401){srvAlert('Entre de novo para enviar as vendas guardadas sem internet.')}
+      else if(e.status&&e.status!==0&&e.status<500&&!PDV.warned){PDV.warned=true;srvAlert('Não foi possível enviar uma venda guardada sem internet: '+e.message+'. Ela continua guardada neste aparelho.')}
+      break}
+    if(r&&r.status==='falha')srvAlert('Venda feita sem internet guardada com problema ('+r.erro+'). O gerente resolve no painel.');
     F.shift();pdvSave('fila',F)}}finally{PDV.sending=false;pdvFila()}}
 
 /* ---------------------------------------------------------------- caixa: abrir, sangria, suprimento, fechar */
@@ -1073,7 +1079,7 @@ function pdvOpenCaixa(){const app=$('#app');app.innerHTML=`<div class="pdv" id="
 function pdvCaixaMenu(){pdvModal('caixa',`<h2>Caixa nº ${PDV.st.caixa.numero}</h2><div class="pdvlist" id="pdvxm">
   <button type="button" data-id="sangria"><span>Sangria (tirar dinheiro)</span><b>S</b></button><button type="button" data-id="suprimento"><span>Suprimento (pôr troco)</span><b>U</b></button>
   <button type="button" data-id="fechar"><span>Fechar o caixa</span><b>F</b></button><button type="button" data-id="sair"><span>Sair (trocar de operador)</span><b>X</b></button></div>`,()=>{const b=document.querySelector('#pdvxm button');b&&b.focus()});
-  const go=id=>id==='fechar'?pdvClose2():id==='sair'?srvLogout():pdvMov(id);
+  const go=id=>id==='fechar'?pdvClose2():id==='sair'?(pdvLoad('fila',[]).length?toast('Há vendas guardadas sem internet. Conecte e espere enviar antes de sair.'):srvLogout()):pdvMov(id);
   document.querySelectorAll('#pdvxm button').forEach(b=>b.onclick=()=>go(b.dataset.id));
   document.querySelector('.pdvmd').addEventListener('keydown',e=>{const m={s:'sangria',u:'suprimento',f:'fechar',x:'sair'}[e.key.toLowerCase()];if(m){e.preventDefault();go(m)}})}
 function pdvMov(tipo){pdvModal('mov',`<h2>${tipo==='sangria'?'Sangria':'Suprimento'}</h2><label for="pdvmv">Valor</label><input id="pdvmv" inputmode="decimal"><label for="pdvmm">Motivo</label><input id="pdvmm" maxlength="120">${pdvMgrFields()}<div class="pdverr" id="pdverr" role="alert"></div>
@@ -1100,9 +1106,10 @@ async function pdvAdmin(c){c.innerHTML='<div class="sectionhead"><h2>Caixa (PDV)
   try{R=await api('/api/pdv/resumo')}catch(e){c.innerHTML='<div class="empty">'+esc(e.message)+'</div>';return}
   const cfg=S.pdv||{},F=R.porForma||{},nm={dinheiro:'Dinheiro',pix:'PIX',debito:'Débito',credito:'Crédito',fiado:'Fiado'};
   c.innerHTML=`<div class="sectionhead row" style="justify-content:space-between"><h2>Caixa (PDV)</h2><a class="btn" href="${TBASE}/pdv">Abrir o caixa (tela cheia)</a></div>
-   ${R.diferencas.length||R.revisar.length?`<div class="panel" style="border:2px solid #E8A33D;display:grid;gap:8px;margin-bottom:12px"><h3 style="margin:0">Avisos do balcão</h3>
+   ${R.diferencas.length||R.revisar.length||(R.falhas||[]).length?`<div class="panel" style="border:2px solid #E8A33D;display:grid;gap:8px;margin-bottom:12px"><h3 style="margin:0">Avisos do balcão</h3>
      ${R.diferencas.map(d=>`<div class="row" style="justify-content:space-between"><span>Caixa nº ${d.numero} (${esc(d.operador)}) fechou com diferença de <b>${brl(d.diferenca)}</b></span><span class="row" style="gap:6px"><input id="pj${d.id}" placeholder="Justificativa" style="min-width:200px"><button class="btn ghost" data-pj="${d.id}">Justificar</button></span></div>`).join('')}
-     ${R.revisar.map(v=>`<div class="row" style="justify-content:space-between"><span>Venda nº ${v.numero} (${brl(v.total)}) a revisar: ${esc(v.motivo||'')}</span><button class="btn ghost" data-rv="${v.id}">Conferido</button></div>`).join('')}</div>`:''}
+     ${R.revisar.map(v=>`<div class="row" style="justify-content:space-between"><span>Venda nº ${v.numero} (${brl(v.total)}) a revisar: ${esc(v.motivo||'')}</span><button class="btn ghost" data-rv="${v.id}">Conferido</button></div>`).join('')}
+     ${(R.falhas||[]).map(f=>`<div class="row" style="justify-content:space-between"><span>Venda sem internet de ${esc(f.operador||'')} (${brl(f.total)}) não entrou: ${esc(f.erro)}</span><span class="row" style="gap:6px"><input id="pf${esc(f.id)}" placeholder="O que foi feito" style="min-width:200px"><button class="btn ghost" data-pf="${esc(f.id)}">Resolvido</button></span></div>`).join('')}</div>`:''}
    <div class="pnh small muted" style="margin-bottom:6px">Últimos 7 dias (${esc(R.de)} a ${esc(R.ate)})</div>
    <div class="dbkpis"><div class="dbk hero"><span class="lbl">Vendas no balcão</span><b>${brl(R.total)}</b><span class="muted small">${R.vendas} vendas</span></div>
      <div class="dbk"><span class="lbl">Margem do balcão</span><b>${R.margem==null?'—':String(R.margem).replace('.',',')+'%'}</b><span class="muted small">só o administrador vê</span></div>
@@ -1121,6 +1128,7 @@ async function pdvAdmin(c){c.innerHTML='<div class="sectionhead"><h2>Caixa (PDV)
      <div class="small muted">NFC-e (nota do consumidor) fica para a fase 2: módulo "NFC-e no caixa" na Central.</div><button class="btn" type="submit" style="justify-self:start">Salvar configuração</button></form>`;
   const re=()=>pdvAdmin(c);
   c.querySelectorAll('[data-pj]').forEach(b=>b.onclick=async()=>{try{await api('/api/pdv/justificar',{id:b.dataset.pj,texto:$('#pj'+b.dataset.pj).value});toast('Justificado');re()}catch(e){toast(e.message)}});
+  c.querySelectorAll('[data-pf]').forEach(b=>b.onclick=async()=>{try{await api('/api/pdv/falha',{id:b.dataset.pf,texto:$('#pf'+b.dataset.pf).value});toast('Resolvido');re()}catch(e){toast(e.message)}});
   c.querySelectorAll('[data-rv]').forEach(b=>b.onclick=async()=>{try{await api('/api/pdv/revisar',{id:b.dataset.rv});toast('Venda conferida');re()}catch(e){toast(e.message)}});
   c.querySelectorAll('[data-ft]').forEach(b=>b.onclick=async()=>{if(!confirm('Transformar esta venda em pedido para emitir a NF-e?'))return;b.disabled=true;try{const r=await api('/api/pdv/faturar',{id:b.dataset.ft});toast('Pedido nº '+r.no+' criado em "A faturar"');srvRefresh(true);re()}catch(e){toast(e.message);b.disabled=false}});
   c.querySelectorAll('[data-tr]').forEach(b=>b.onclick=async()=>{try{const t=await api('/api/pdv/turno?id='+encodeURIComponent(b.dataset.tr));alert(`Caixa nº ${t.numero} · ${t.operador}\nAberto: ${new Date(t.abertoEm).toLocaleString('pt-BR')}${t.fechadoEm?'\nFechado: '+new Date(t.fechadoEm).toLocaleString('pt-BR'):''}\nFundo: ${brl(t.fundo)} · Vendas: ${t.vendas} (${brl(t.totalVendas)}) · Fiado: ${brl(t.fiado)}\nSangria: ${brl(t.sangria)} · Suprimento: ${brl(t.suprimento)}${t.contado?'\nContado: '+Object.entries(t.contado).map(([k,v])=>k+' '+brl(v)).join(', '):''}\nEsperado: ${Object.entries(t.esperado||{}).map(([k,v])=>k+' '+brl(v)).join(', ')}${t.diferenca!=null?'\nDiferença: '+brl(t.diferenca):''}${t.justificativa?'\nJustificativa: '+t.justificativa+' ('+t.justificadoPor+')':''}${t.cancelados.length?'\nItens cancelados: '+t.cancelados.map(x=>'venda '+x.venda+' '+x.nome+' ('+x.motivo+')').join('; '):''}`)}catch(e){toast(e.message)}});
@@ -1138,9 +1146,9 @@ function pdvAdmOperadores(c){const L=S.cashiers||(S.cashiers=[]);
   c.querySelectorAll('[data-opdel]').forEach(b=>b.onclick=()=>{if(!confirm('Excluir este operador? Ele deixa de entrar no caixa.'))return;S.cashiers=L.filter(x=>x.id!==b.dataset.opdel);save();pdvAdmOperadores(c)})}
 /* painel (Visão geral): cartão do balcão, separado das vendas de pedidos */
 async function pdvDashCard(){if(!modOn('pdv')||!SRV.me||SRV.me.role!=='admin'||ui.tab!=='hoje')return;const host=$('#tabc');if(!host)return;
-  try{const hj=new Date().toLocaleDateString('sv-SE');const R=await api('/api/pdv/resumo?de='+hj+'&ate='+hj);if(ui.tab!=='hoje'||!$('#tabc'))return;
+  try{const hj=new Date().toLocaleDateString('sv-SE',{timeZone:'America/Sao_Paulo'});const R=await api('/api/pdv/resumo?de='+hj+'&ate='+hj);if(ui.tab!=='hoje'||!$('#tabc'))return;
     const d=document.createElement('div');d.className='panel';d.id='pdvdash';d.style.cssText='display:grid;gap:6px;margin-bottom:12px;border-left:5px solid #E8A33D';
-    d.innerHTML=`<b>Balcão (PDV) hoje</b><div class="row" style="gap:16px;flex-wrap:wrap"><span>Vendas: <b>${R.vendas}</b></span><span>Total: <b>${brl(R.total)}</b></span><span>Margem: <b>${R.margem==null?'—':String(R.margem).replace('.',',')+'%'}</b></span></div>${R.diferencas.length?`<div class="warnc">${R.diferencas.length} caixa(s) com diferença aguardando justificativa</div>`:''}${R.revisar.length?`<div class="warnc">${R.revisar.length} venda(s) do balcão a revisar</div>`:''}`;
+    d.innerHTML=`<b>Balcão (PDV) hoje</b><div class="row" style="gap:16px;flex-wrap:wrap"><span>Vendas: <b>${R.vendas}</b></span><span>Total: <b>${brl(R.total)}</b></span><span>Margem: <b>${R.margem==null?'—':String(R.margem).replace('.',',')+'%'}</b></span></div>${R.diferencas.length?`<div class="warnc">${R.diferencas.length} caixa(s) com diferença aguardando justificativa</div>`:''}${R.revisar.length?`<div class="warnc">${R.revisar.length} venda(s) do balcão a revisar</div>`:''}${(R.falhas||[]).length?`<div class="warnc">${R.falhas.length} venda(s) sem internet com problema</div>`:''}`;
     const old=$('#pdvdash');if(old)old.remove();host.prepend(d)}catch(e){}}
 /* Financeiro › Caixa da semana: o balcão (PDV) aparece separado, por dia e por forma */
 async function pdvCaixaSemana(){if(!modOn('pdv'))return;const t=today(),W=ui.cxW||0,de=addDays(t,W*7),ate=addDays(de,6);

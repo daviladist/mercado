@@ -245,3 +245,21 @@ create table if not exists pdv_seq (
   last_no bigint not null,
   primary key (tenant_id, tipo)
 );
+-- vendas feitas sem internet que não puderam virar venda (produto apagado, cliente bloqueado...): o gerente resolve no painel
+create table if not exists pdv_falhas (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  caixa_id text,
+  operador_id bigint,
+  operador_nome text,
+  dados jsonb not null,
+  erro text not null,
+  created_at timestamptz not null default now(),
+  resolvida_em timestamptz,
+  resolvida_por text,
+  resolucao text,
+  primary key (tenant_id, id)
+);
+create index if not exists pdv_vendas_revisar on pdv_vendas(tenant_id) where status='revisar';
+create index if not exists caixa_mov_caixa on caixa_movimentos(tenant_id, caixa_id);
+create index if not exists pdv_aut_expira on pdv_autorizacoes(expira_em);
