@@ -192,6 +192,29 @@ s, st = A.req('/api/state'); check(next(p for p in st['S']['products'] if p['id'
 s, r = A.req('/api/pdv/cancelar', {'id': V1, 'motivo': 'de novo, por engano'}); check(s == 409, 'não cancela duas vezes')
 s, r = A.req('/api/pdv/cancelar', {'id': FV, 'motivo': 'já virou pedido'}); check(s == 400, 'venda que já virou pedido da NF-e não é cancelada por aqui')
 
+print('== rodada final: fiado no lançamento e caixa de outro operador')
+s, r = op.req('/api/pdv/caixa/abrir', {'fundo': 0}); CX3 = r['caixa']['id']
+FF = sid(); s, r = op.req('/api/pdv/venda', {'id': FF, 'caixaId': CX3, 'customerId': 'cn', 'items': [{'pid': 'pb', 'q': 1}], 'pagamentos': [{'forma': 'fiado', 'valor': 7}], 'totalEsperado': 7, 'offline': True})
+check(r.get('status') == 'falha', 'fiado sem internet com valor errado para cliente SEM limite fica com problema')
+s, r = A.req('/api/pdv/falha/lancar', {'id': FF}); check(s == 409 and r.get('confirmarFiado') and 'limite' in r.get('error', ''), 'lançar não pula a regra do fiado sem avisar o gerente: %s' % r.get('error'))
+s, st = A.req('/api/state'); check(not [x for x in st['S']['receivables'] if x.get('pdvVenda') == FF], 'sem a confirmação, nenhuma conta a receber foi criada')
+s, r = A.req('/api/pdv/falha/lancar', {'id': FF, 'confirmarFiado': True}); check(s == 200 and r.get('numero'), 'com a confirmação explícita do gerente, lança')
+B2PW = pw(); s, st = A.req('/api/state')
+s, r = A.req('/api/sync', {'changes': [{'c': 'cashiers', 'id': 'op2', 'op': 'put', 'doc': {'id': 'op2', 'name': 'Operadora Bia', 'login': 'bia.caixa', 'pass': B2PW}}]})
+op2 = C(); s, _ = op2.req('/api/login', {'role': 'operador_caixa', 'login': 'bia.caixa', 'password': B2PW}); check(s == 200, 'segunda operadora entra')
+s, _ = op2.req('/api/password', {'current': B2PW, 'next': pw()})
+s, r = op2.req('/api/pdv/venda', {'id': sid(), 'caixaId': CX3, 'items': [{'pid': 'pb', 'q': 1}], 'pagamentos': [{'forma': 'dinheiro', 'valor': 8}], 'totalEsperado': 8, 'offline': True})
+check(s == 200 and r.get('status') == 'falha', 'venda sem internet de uma operadora no caixa da OUTRA não entra no turno da colega: vai para o gerente')
+s, R = A.req('/api/pdv/resumo'); check(any('caixa de' in (f.get('erro') or '') for f in R['falhas']), 'o gerente vê o motivo (enviada para o caixa de outra pessoa)')
+
+# cancelar e faturar a MESMA venda ao mesmo tempo: nunca fica venda cancelada com pedido de NF-e
+CF = sid(); s, r = op.req('/api/pdv/venda', {'id': CF, 'caixaId': CX3, 'customerId': 'cf', 'items': [{'pid': 'pb', 'q': 1}], 'pagamentos': [{'forma': 'dinheiro', 'valor': 8}], 'totalEsperado': 8}); check(s == 200, 'venda para a corrida: %s' % r)
+def corre(k):
+    return A.req('/api/pdv/cancelar', {'id': CF, 'motivo': 'corrida de teste'})[0] if k == 0 else A.req('/api/pdv/faturar', {'id': CF})[0]
+with cf.ThreadPoolExecutor(2) as ex: res = list(ex.map(corre, range(2)))
+s, st = A.req('/api/state'); ped = [o for o in st['S']['orders'] if o.get('pdvVenda') == CF]
+check(res.count(200) == 1 and not (res[0] == 200 and ped), 'cancelar e faturar juntos: só um vale (cancelar/faturar = %s, pedidos = %s)' % (res, len(ped)))
+
 print('== outra empresa não vê o caixa desta')
 s, r = cen.req('/api/central/tenant', {'name': 'Loja PDV ' + secrets.token_hex(2), 'segment': 'basico', 'status': 'ativa', 'modules': {'pdv': True}}); TB = r['tenant']['id']
 s, r = cen.req('/api/central/tenant-admin', {'id': TB, 'login': 'dono'}); B = C(TB); B.req('/api/login', {'role': 'admin', 'login': 'dono', 'password': r['password']}); NB = pw(); B.req('/api/password', {'current': r['password'], 'next': NB})

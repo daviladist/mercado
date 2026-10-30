@@ -127,7 +127,7 @@ Venda no balcão ("pague e leve") no mesmo sistema e no mesmo banco, separada po
 - **Integrações:** painel com o balcão separado (vendas, margem, avisos); Financeiro › Caixa da semana mostra o balcão por dia e por forma; botão **Enviar para faturamento** transforma a venda (com cliente) em pedido "A faturar" para a NF-e, sem baixar estoque de novo nem gerar outra conta. Comprovante 80 mm pelo navegador (não fiscal).
 - **NFC-e:** fase 2 (módulo "NFC-e no caixa", já registrado; a venda tem os campos `nfce_status`/`nfce_chave` reservados).
 - **Tabelas:** `caixas`, `pdv_vendas`, `pdv_itens` (custo e preço do momento), `pdv_pagamentos`, `caixa_movimentos`, `pdv_autorizacoes`, `pdv_seq` — todas com `tenant_id` (a empresa).
-- **Testes:** `tests/pdv.py` (91 verificações; roda no `tests/ci_banco.sh` e no GitHub).
+- **Testes:** `tests/pdv.py` (108 verificações; roda no `tests/ci_banco.sh` e no GitHub).
 
 ## Desenvolver e testar no computador
 

@@ -799,7 +799,9 @@ function pdvLoad(s,d){try{return JSON.parse(localStorage.getItem(pdvKey(s))||'nu
 function pdvSave(s,v){try{localStorage.setItem(pdvKey(s),JSON.stringify(v))}catch(e){}}
 function pdvNewId(){const a=new Uint8Array(12);crypto.getRandomValues(a);return 'v'+Date.now().toString(36)+Array.from(a,b=>b.toString(16).padStart(2,'0')).join('').slice(0,16)}
 const pdvMoney=v=>brl(v);
-function pdvNum(v){const s=String(v==null?'':v).trim().replace(/\s/g,'').replace(/^R\$/i,'');if(!s)return NaN;if(/^\d{1,3}(\.\d{3})+$/.test(s))return Number(s.replace(/\./g,''));return Number(s.includes(',')?s.replace(/\./g,'').replace(',','.'):s)}
+function pdvNum(v){const s=String(v==null?'':v).trim().replace(/\s/g,'').replace(/^R\$/i,'');if(!s)return NaN;if(/^[1-9]\d{0,2}(\.\d{3})+$/.test(s))return Number(s.replace(/\./g,''));return Number(s.includes(',')?s.replace(/\./g,'').replace(',','.'):s)}
+/* quantidade: ponto e vírgula são sempre decimais ("0.500" e "0,500" = meio quilo), nunca milhar */
+function pdvQtyNum(v){const s=String(v==null?'':v).trim().replace(/\s/g,'');return s?Number(s.replace(',','.')):NaN}
 /* o leitor USB "digita" muito rápido: guarda o tempo das teclas para saber se um Enter veio do leitor */
 const PDV_KT=[];document.addEventListener('keydown',e=>{if(e.key.length===1){PDV_KT.push(Date.now());if(PDV_KT.length>30)PDV_KT.shift()}},true);
 function pdvFromScanner(){const n=PDV_KT.length;if(n<3)return false;const t=PDV_KT.slice(-3);return Date.now()-t[2]<80&&t[2]-t[0]<60}
@@ -868,7 +870,7 @@ async function renderPdv(){pdvCss();document.body.classList.add('pdvmode');const
     try{PDV.st=await api('/api/pdv/state')}catch(e){app.innerHTML='<div class="pdv"><div class="empty" style="padding:40px">'+esc(e.message)+'</div></div>';return}
     const draft=pdvLoad('venda',null);if(draft&&Array.isArray(draft.items)){Object.assign(PDV,{items:draft.items,cust:draft.cust||null,desc:draft.desc||null,saleId:draft.saleId||null})}
     pdvStartQueue();pdvQrLib().catch(()=>{})}
-  pdvSnapSave();
+  if(PDV.st&&PDV.st.caixa)pdvSnapSave();else pdvSnapDrop();   // caixa fechado (aqui ou em outro lugar): nada de vender sem internet com catálogo velho
   if(!PDV.st.caixa){pdvOpenCaixa();return}
   if(!PDV.saleId)PDV.saleId=pdvNewId();
   app.innerHTML=`<div class="pdv" id="pdvroot">
@@ -903,7 +905,7 @@ function pdvFind(code){const c=String(code||'').trim();if(!c)return null;const d
   return S.products.find(p=>p.active!==false&&d&&(String(p.ean||'')===d||String(p.ean2||'')===d||(Array.isArray(p.eans)&&p.eans.includes(d))))||S.products.find(p=>p.active!==false&&String(p.code||'').toLowerCase()===c.toLowerCase())||null}
 function pdvUnit(p,q){const ie=!!(PDV.cust&&PDV.cust.ie);try{return Math.round(withIe(ie,()=>withOner('retirada',()=>priceFor(p,q,'retirada','').price))*100)/100}catch(e){return Number(p.price)||0}}
 function pdvScan(raw){let v=String(raw||'').trim();if(!v)return;let q=PDV.qty||1;
-  if(v.includes('*')){const m=/^(\d+(?:[.,]\d+)?)\s*\*\s*(\S+)$/.exec(v);if(!m){pdvBeep(false);toast('Quantidade inválida. Use: quantidade*código (ex.: 4*789...).');return}q=pdvNum(m[1]);v=m[2].trim()}
+  if(v.includes('*')){const m=/^(\d+(?:[.,]\d+)?)\s*\*\s*(\S+)$/.exec(v);if(!m){pdvBeep(false);toast('Quantidade inválida. Use: quantidade*código (ex.: 4*789...).');return}q=pdvQtyNum(m[1]);v=m[2].trim()}
   if(!(q>0)){pdvBeep(false);toast('Quantidade inválida.');return}
   if(q>999){pdvBeep(false);toast('Quantidade muito alta numa leitura só (máximo 999). Confira.');return}
   const p=pdvFind(v);
@@ -963,7 +965,7 @@ function pdvSearch(onPick){pdvModal('busca',`<h2>Buscar produto</h2><input id="p
   inp.oninput=run}
 /* F3: quantidade para o próximo item */
 function pdvQty(){pdvModal('qtd',`<h2>Quantidade do próximo item</h2><input id="pdvqq" inputmode="decimal" autocomplete="off"><div class="pdvmut">Dica: no campo do código, "4*código" também funciona.</div>`,()=>$('#pdvqq').focus());
-  $('#pdvqq').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const q=pdvNum(e.target.value);if(!(q>0)||q>99999){pdvBeep(false);return}PDV.qty=q;pdvClose();renderPdv()}}}
+  $('#pdvqq').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const q=pdvQtyNum(e.target.value);if(!(q>0)||q>99999){pdvBeep(false);return}PDV.qty=q;pdvClose();renderPdv()}}}
 /* F4: cliente (usa a tabela e a IE dele) */
 function pdvCustomer(){pdvModal('cli',`<h2>Cliente</h2><input id="pdvcq" placeholder="Nome, CNPJ ou CPF" autocomplete="off"><div class="pdvlist" id="pdvcl" role="listbox"></div><div class="bt"><button type="button" id="pdvc0">Sem cliente (consumidor)</button></div>`,()=>$('#pdvcq').focus());
   const inp=$('#pdvcq');$('#pdvc0').onclick=()=>{PDV.cust=null;PDV.auth=null;pdvClose();pdvReprice();pdvChanged()};
@@ -1002,6 +1004,7 @@ function pdvPriceCheck(){pdvModal('preco',`<h2>Consultar preço</h2><input id="p
     $('#pdvpr').innerHTML=p?`<div class="pdvlast">${esc(p.name)}</div><div class="pdvbig">${pdvMoney(pdvUnit(p,1))}</div><div class="pdvmut">${esc(p.unit||'')}${PDV.cust?' · preço para '+esc(PDV.cust.name):''}</div>`:'<div class="pdverr">Código não cadastrado.</div>';pdvBeep(!!p)}}
 /* F11: venda em espera */
 function pdvHold(){const L=pdvLoad('espera',[]);
+  if(PDV.items.length&&!PDV.items.some(i=>!i.cancel)){pdvReset();toast('Todos os itens foram cancelados: venda descartada.');return}
   if(PDV.items.length){L.push({items:PDV.items,cust:PDV.cust,desc:PDV.desc,em:new Date().toISOString()});pdvSave('espera',L.slice(-10));pdvReset();toast('Venda em espera. F11 de novo para retomar.');return}
   if(!L.length){toast('Nenhuma venda em espera.');return}
   pdvModal('espera',`<h2>Vendas em espera</h2><div class="pdvlist" id="pdvwl">${L.map((v,k)=>`<button type="button" data-id="${k}"><span>${new Date(v.em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${v.items.length} itens${v.cust?' · '+esc(v.cust.name):''}</span><b>Retomar</b></button>`).join('')}</div>`,()=>{const b=document.querySelector('#pdvwl button');if(b)b.focus()});
@@ -1010,7 +1013,7 @@ function pdvReset(){Object.assign(PDV,{items:[],cust:null,desc:null,auth:null,qu
 
 /* ---------------------------------------------------------------- pagamento (F10) */
 const PDV_FORMAS=[['dinheiro','Dinheiro','1'],['pix','PIX','2'],['debito','Débito','3'],['credito','Crédito','4'],['fiado','Fiado','5']];
-async function pdvPay(){if(!PDV.items.some(i=>!i.cancel)){pdvBeep(false);toast('Venda sem itens.');return}
+async function pdvPay(){if(!PDV.items.some(i=>!i.cancel)){if(PDV.items.length){pdvReset();toast('Todos os itens foram cancelados: venda descartada. Pode ler o próximo produto.');return}pdvBeep(false);toast('Venda sem itens.');return}
   let T=pdvTotals(),srv=false;
   if(PDV.online){try{const Q=await pdvQuote();if(Q){T=pdvTotals();srv=true;if(Q.needAuth&&!PDV.auth){toast('O desconto precisa da senha do gerente (F6).');pdvDiscount();return}}}catch(e){if(e.status!==0){pdvBeep(false);toast(e.message);return}}}
   PDV.pays=[];PDV.payTotal=T.total;PDV.paySrv=srv;pdvPayPaint()}
@@ -1101,12 +1104,12 @@ function pdvMov(tipo){pdvModal('mov',`<h2>${tipo==='sangria'?'Sangria':'Suprimen
   <div class="bt"><button type="button" id="pdvmx">Cancelar</button><button type="button" class="ok" id="pdvmok">Confirmar</button></div>`,()=>$('#pdvmv').focus());
   $('#pdvmx').onclick=pdvClose;$('#pdvmok').onclick=async()=>{const b=$('#pdvmok');b.disabled=true;try{const r=await api('/api/pdv/caixa/mov',{tipo,valor:pdvNum($('#pdvmv').value),motivo:$('#pdvmm').value,gerente:pdvMgr()});pdvBeep(true);pdvClose();toast((tipo==='sangria'?'Sangria':'Suprimento')+' registrado. Autorizado por '+r.autorizadoPor)}catch(e){pdvBeep(false);$('#pdverr').textContent=e.message}finally{b.disabled=false}}}
 /* fechamento às cegas: o operador informa o que contou SEM ver o esperado */
-function pdvClose2(){if(pdvLoad('espera',[]).length){toast('Há vendas em espera (F11). Retome ou cancele antes de fechar o caixa.');return}if(pdvLoad('fila',[]).length){toast('Há vendas aguardando envio. Conecte à internet antes de fechar o caixa.');return}if(PDV.items.length){toast('Termine ou ponha em espera a venda aberta antes de fechar.');return}
+function pdvClose2(){if(pdvLoad('espera',[]).length){toast('Há vendas em espera (F11). Retome ou cancele antes de fechar o caixa.');return}if(pdvLoad('fila',[]).length){toast('Há vendas aguardando envio. Conecte à internet antes de fechar o caixa.');return}if(PDV.items.length&&!PDV.items.some(i=>!i.cancel))pdvReset();if(PDV.items.length){toast('Termine ou ponha em espera a venda aberta antes de fechar.');return}
   pdvModal('fechar',`<h2>Fechar o caixa</h2><p class="pdvmut">Conte e informe. O sistema compara depois.</p>${['dinheiro','pix','debito','credito'].map(f=>`<div><label for="pdvz${f}">${{dinheiro:'Dinheiro na gaveta',pix:'PIX recebido',debito:'Débito (maquininha)',credito:'Crédito (maquininha)'}[f]}</label><input id="pdvz${f}" inputmode="decimal" placeholder="0,00"></div>`).join('')}
   <div class="pdverr" id="pdverr" role="alert"></div><div class="bt"><button type="button" id="pdvzx">Voltar</button><button type="button" class="ok" id="pdvzok">Fechar caixa</button></div>`,()=>$('#pdvzdinheiro').focus());
   $('#pdvzx').onclick=pdvClose;$('#pdvzok').onclick=async()=>{const c={};for(const f of ['dinheiro','pix','debito','credito']){const v=pdvNum($('#pdvz'+f).value||'0');if(!(v>=0)){$('#pdverr').textContent='Valor inválido.';return}c[f]=v}
     if(!confirm('Fechar o caixa agora? Depois de fechado não dá para vender nele.'))return;
-    try{const r=await api('/api/pdv/caixa/fechar',{contado:c});PDV.st.caixa=null;pdvTurno(r)}catch(e){$('#pdverr').textContent=e.message}}}
+    try{const r=await api('/api/pdv/caixa/fechar',{contado:c});PDV.st.caixa=null;pdvSnapDrop();pdvTurno(r)}catch(e){$('#pdverr').textContent=e.message}}}
 function pdvTurno(r){const L=['dinheiro','pix','debito','credito'],nm={dinheiro:'Dinheiro',pix:'PIX',debito:'Débito',credito:'Crédito'};
   pdvModal('turno',`<h2>Caixa nº ${r.numero} fechado</h2><table style="width:100%;border-collapse:collapse"><tr><th style="text-align:left">Forma</th><th style="text-align:right">Contado</th><th style="text-align:right">Esperado</th></tr>${L.map(f=>`<tr><td>${nm[f]}</td><td style="text-align:right">${pdvMoney(r.contado[f])}</td><td style="text-align:right">${pdvMoney(r.esperado[f])}</td></tr>`).join('')}</table>
    <div class="pdvrow"><span>Vendas</span><b>${r.vendas} · ${pdvMoney(r.totalVendas)}</b></div><div class="pdvrow"><span>Fiado</span><b>${pdvMoney(r.fiado)}</b></div><div class="pdvrow"><span>Sangrias / suprimentos</span><b>${pdvMoney(r.sangria)} / ${pdvMoney(r.suprimento)}</b></div>
@@ -1144,7 +1147,7 @@ async function pdvAdmin(c){c.innerHTML='<div class="sectionhead"><h2>Caixa (PDV)
   const re=()=>pdvAdmin(c);
   c.querySelectorAll('[data-pj]').forEach(b=>b.onclick=async()=>{try{await api('/api/pdv/justificar',{id:b.dataset.pj,texto:$('#pj'+b.dataset.pj).value});toast('Justificado');re()}catch(e){toast(e.message)}});
   c.querySelectorAll('[data-cv]').forEach(b=>b.onclick=async()=>{const m=prompt('Motivo do cancelamento (o estoque volta e o fiado em aberto é apagado):');if(m==null)return;try{await api('/api/pdv/cancelar',{id:b.dataset.cv,motivo:m});toast('Venda cancelada');re()}catch(e){toast(e.message)}});
-  c.querySelectorAll('[data-pl]').forEach(b=>b.onclick=async()=>{if(!confirm('Lançar como venda pelo valor cobrado no balcão? O estoque baixa e o dinheiro entra no caixa da venda.'))return;b.disabled=true;try{const r=await api('/api/pdv/falha/lancar',{id:b.dataset.pl});toast('Lançada como venda nº '+r.numero);re()}catch(e){toast(e.message);b.disabled=false}});
+  c.querySelectorAll('[data-pl]').forEach(b=>b.onclick=async()=>{if(!confirm('Lançar como venda pelo valor cobrado no balcão? O estoque baixa e o dinheiro entra no caixa da venda.'))return;b.disabled=true;try{let r;try{r=await api('/api/pdv/falha/lancar',{id:b.dataset.pl})}catch(e){if(!(e.data&&e.data.confirmarFiado)||!confirm(e.message))throw e;r=await api('/api/pdv/falha/lancar',{id:b.dataset.pl,confirmarFiado:true})}toast('Lançada como venda nº '+r.numero);re()}catch(e){toast(e.message);b.disabled=false}});
   c.querySelectorAll('[data-pf]').forEach(b=>b.onclick=async()=>{try{await api('/api/pdv/falha',{id:b.dataset.pf,texto:$('#pf'+b.dataset.pf).value});toast('Resolvido');re()}catch(e){toast(e.message)}});
   c.querySelectorAll('[data-rv]').forEach(b=>b.onclick=async()=>{try{await api('/api/pdv/revisar',{id:b.dataset.rv});toast('Venda conferida');re()}catch(e){toast(e.message)}});
   c.querySelectorAll('[data-ft]').forEach(b=>b.onclick=async()=>{if(!confirm('Transformar esta venda em pedido para emitir a NF-e?'))return;b.disabled=true;try{const r=await api('/api/pdv/faturar',{id:b.dataset.ft});toast('Pedido nº '+r.no+' criado em "A faturar"');srvRefresh(true);re()}catch(e){toast(e.message);b.disabled=false}});
@@ -1180,8 +1183,20 @@ async function pdvCaixaSemana(){if(!modOn('pdv'))return;const t=today(),W=ui.cxW
    sem estoque) e o estado do caixa. Se a página for aberta/recarregada SEM internet, o caixa continua vendendo
    com esse catálogo: as vendas vão para a fila e o servidor confere tudo quando a conexão voltar. */
 const PDV_SNAP=()=>'pdv:'+(TSLUG||'@')+':snap';
-function pdvSnapSave(){if(!SRV.me||!PDV.st||!PDV.st.caixa)return;const pick=k=>S[k];
-  const snap={at:Date.now(),me:SRV.me,T:TENANT,st:PDV.st,S:{store:pick('store'),products:pick('products'),categories:pick('categories'),combos:pick('combos'),customers:pick('customers'),payments:pick('payments'),cashPays:pick('cashPays'),payDays:pick('payDays'),cities:pick('cities'),catTreeV1:pick('catTreeV1')}};
+/* O que vai para o aparelho é SEMPRE o recorte do operador de caixa, mesmo quando quem abriu o caixa é o
+   administrador: produto sem custo/estoque/tabelas/margem, cliente só com 5 campos, loja só com o público.
+   Estas listas são as mesmas de lib/policy.js (P_SECRET, STORE_PUBLIC e a projeção de clientes do
+   operador_caixa); tests/unit confere que continuam iguais. */
+const PDV_P_SECRET=['lastIn','cost','refCost','tablePrices','stock','minStock','idealStock','minMg','trib','commission'];
+const PDV_STORE_PUBLIC=['name','from','to','min','pickup','conds','billGate','pickupDisc','pickupOner','pickV','onerV','autoRec'];
+const PDV_CLI_KEYS=['id','name','doc','ieOk','creditLimit'];
+function pdvSnapCut(){const pk=(o,ks)=>{const x={};ks.forEach(k=>{if(o&&o[k]!==undefined)x[k]=o[k]});return x};
+  const products=(S.products||[]).filter(p=>p.active!==false).map(p=>{const x=Object.assign({},p);PDV_P_SECRET.forEach(k=>delete x[k]);return x});
+  const st=S.store||{},store=pk(st,PDV_STORE_PUBLIC);if(st.neg)store.neg={who:st.neg.who,on:st.neg.on,minItems:st.neg.minItems,minTotal:st.neg.minTotal,maxItems:st.neg.maxItems};
+  const customers=(S.customers||[]).filter(c=>c.active!==false&&c.blocked!==true).map(c=>pk(c,PDV_CLI_KEYS));
+  return {store,products,categories:S.categories,combos:S.combos,customers,payments:S.payments,cashPays:S.cashPays,payDays:S.payDays,cities:S.cities,catTreeV1:S.catTreeV1}}
+function pdvSnapSave(){if(!SRV.me||!PDV.st||!PDV.st.caixa)return;
+  const snap={at:Date.now(),me:SRV.me,T:TENANT,st:PDV.st,S:pdvSnapCut()};
   try{localStorage.setItem(PDV_SNAP(),JSON.stringify(snap))}catch(e){}
   try{if('serviceWorker' in navigator)navigator.serviceWorker.ready.then(r=>r.active&&r.active.postMessage({guardar:[location.pathname,'/app.js']}))}catch(e){}}
 function pdvSnapDrop(){try{localStorage.removeItem(PDV_SNAP())}catch(e){}}
@@ -1369,7 +1384,7 @@ function validDoc(d){
 function docHint(v){v=String(v).replace(/\D/g,'');if(!v)return 'Opcional. O cliente também pode entrar no app com o CNPJ/CPF no lugar do usuário.';if(v.length===11)return validDoc(v)?'CPF válido':'CPF inválido';if(v.length===14)return validDoc(v)?'CNPJ válido':'CNPJ inválido';return v.length<11?'Digite os 11 números do CPF ou os 14 do CNPJ.':'Faltam números para o CNPJ.'}
 function allowedPays(c){const all=S.payments;return c&&Array.isArray(c.pays)?all.filter(p=>c.pays.includes(p)):all}
 function cartSavings(){return withOner(ui.mode,()=>cartItems().reduce((s,i)=>s+((i.p.isCombo?i.p.listPrice:baseOf(i.p))-i.price)*i.q,0))}
-function matches(p,q){if(!q)return true;const d=q.replace(/\s/g,'');return p.name.toLowerCase().includes(q)||String(p.code||'').toLowerCase().includes(d)||String(p.ean||'').includes(d)||String(p.ean2||'').includes(d)||String(p.sub||'').toLowerCase().includes(q)}
+function matches(p,q){if(!q)return true;const d=q.replace(/\s/g,'');return p.name.toLowerCase().includes(q)||String(p.code||'').toLowerCase().includes(d)||String(p.ean||'').includes(d)||String(p.ean2||'').includes(d)||(p.eans||[]).some(c=>String(c).includes(d))||String(p.sub||'').toLowerCase().includes(q)}
 function codesLine(code,ean){const a=[];if(code)a.push('Cód. '+esc(code));if(ean)a.push('EAN '+esc(ean));return a.join(' · ')}
 function cartCount(){return cartItems().reduce((s,i)=>s+i.q,0)}
 function fmtDate(d){if(!d)return'';const[y,m,dd]=d.split('-');return dd+'/'+m}
@@ -1873,8 +1888,8 @@ let scanLibP=null,scanCam=null,scanLast={code:'',at:0};
 function loadScanLib(){if(window.Html5Qrcode)return Promise.resolve(true);if(scanLibP)return scanLibP;
   scanLibP=new Promise(res=>{const s=document.createElement('script');s.src=SCAN_LIB;s.onload=()=>res(!!window.Html5Qrcode);s.onerror=()=>{scanLibP=null;res(false)};document.head.appendChild(s)});return scanLibP}
 const normCode=c=>String(c||'').replace(/\D/g,'').replace(/^0+(?=\d{8,})/,'');
-function itemCodes(i){const p=itemProduct(i)||{},set=new Set();[i.ean,p.ean,p.ean2,p.code,i.code].forEach(c=>{const n=normCode(c);if(n)set.add(n)});return set}
-function hasBarcode(i){const p=itemProduct(i)||{};return !!(normCode(i.ean)||normCode(p.ean)||normCode(p.ean2))}
+function itemCodes(i){const p=itemProduct(i)||{},set=new Set();[i.ean,p.ean,p.ean2,p.code,i.code,...(p.eans||[])].forEach(c=>{const n=normCode(c);if(n)set.add(n)});return set}
+function hasBarcode(i){const p=itemProduct(i)||{};return !!(normCode(i.ean)||normCode(p.ean)||normCode(p.ean2)||(p.eans||[]).some(normCode))}
 function beep(ok){try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;const ctx=beep.ctx||(beep.ctx=new A()),o=ctx.createOscillator(),g=ctx.createGain();o.type='square';o.frequency.value=ok?1250:220;g.gain.value=.06;o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+(ok?.09:.35))}catch(e){}
   try{navigator.vibrate&&navigator.vibrate(ok?60:[120,60,120])}catch(e){}}
 function scanFlash(ok,text){let f=document.getElementById('scanflash');if(!f){f=document.createElement('div');f.id='scanflash';document.body.appendChild(f)}
@@ -1884,7 +1899,7 @@ function scanCode(o,raw,mult){
   const code=normCode(raw);if(!code){scanFlash(false,'Código vazio');beep(false);return}
   const now=Date.now();if(scanCam&&code===scanLast.code&&now-scanLast.at<1500)return;scanLast={code,at:now};
   const its=o.items.filter(i=>i.q>0),hit=its.find(i=>itemCodes(i).has(code));
-  if(!hit){const p=S.products.find(x=>[x.ean,x.ean2,x.code].some(c=>normCode(c)===code));beep(false);scanFlash(false,'Não está no pedido'+(p?': '+p.name:'')+' ('+code+')');
+  if(!hit){const p=S.products.find(x=>[x.ean,x.ean2,x.code,...(x.eans||[])].some(c=>normCode(c)===code));beep(false);scanFlash(false,'Não está no pedido'+(p?': '+p.name:'')+' ('+code+')');
     (o.scanLog=o.scanLog||[]).push({at:new Date().toISOString(),code,ok:false,by:ui.checker});save();return}
   const k=ikey(hit),n=Math.max(1,parseInt(mult)||1);o.scan=o.scan||{};o.chk=o.chk||{};
   const cur=o.scan[k]||0;if(cur>=hit.q){beep(false);scanFlash(false,hit.name+': já completou '+hit.q+' de '+hit.q);return}
@@ -4022,7 +4037,7 @@ function admOrders(){
 }
 /* ================= CONTAGEM DA SEMANA: o conferente bipa e conta o que tem no depósito ================= */
 function countOpen(){return (S.counts||[]).find(c=>c.status==='aberta')||null}
-function prodByCode(raw){const n=normCode(raw);if(!n)return null;return S.products.find(x=>[x.ean,x.ean2,x.code].some(c=>normCode(c)===n))||null}
+function prodByCode(raw){const n=normCode(raw);if(!n)return null;return S.products.find(x=>[x.ean,x.ean2,x.code,...(x.eans||[])].some(c=>normCode(c)===n))||null}
 function countTotals(C){const it=(C&&C.items)||[];return {n:it.length,sem:it.filter(i=>!i.pid&&!i.ign).length}}
 const qBR=v=>Number(v||0).toLocaleString('pt-BR',{maximumFractionDigits:2});
 /* câmera genérica: chama onCode a cada código lido */
@@ -4233,7 +4248,7 @@ function varAfterSave(p,e){
   if(p.fam&&p.famSync)famSibs(p).forEach(x=>{famCopy(p,x);x.famSync=true;nsync++});
   const nv=(e._nv||[]).filter(r=>r.var);
   if(p.fam&&nv.length){let at=S.products.findIndex(x=>x.id===p.id)+1;
-    nv.forEach(r=>{const q=JSON.parse(JSON.stringify(p));q.id=uid();q.var=r.var;q.name=p.fam+' '+r.var;q.code=r.code;q.ean=r.ean;q.ean2='';q.stock='';
+    nv.forEach(r=>{const q=JSON.parse(JSON.stringify(p));q.id=uid();q.var=r.var;q.name=p.fam+' '+r.var;q.code=r.code;q.ean=r.ean;q.ean2='';delete q.eans;q.stock='';
       if(!p.photo||p.photo===ph(p.name,150))q.photo=ph(q.name,150);S.products.splice(at++,0,q);ncr++})}
   return (ncr?' · '+ncr+' sabor'+(ncr>1?'es criados':' criado'):'')+(nsync?' · preço e condições copiados para '+nsync+' sabor'+(nsync>1?'es':''):'')}
 
@@ -4999,6 +5014,7 @@ function productForm(){
     </div>
     <div class="grid2">
       <div class="field"><label for="pean2">Código de barras da embalagem <span class="small muted">(DUN-14, opcional)</span></label><input type="text" id="pean2" inputmode="numeric" value="${esc(e.ean2||'')}" placeholder="Código impresso no fardo/caixa"></div>
+      ${(e.eans||[]).length?`<div class="field" id="peansbox"><span class="lbl">Códigos ligados no caixa</span><span class="small">${esc(e.eans.join(', '))}</span> <button type="button" class="btn ghost sm" id="peansdel">Apagar estes códigos</button></div>`:''}
       <div class="small muted" style="align-self:end">Usado pelo conferente ao bipar. Se o fardo tem código próprio, cadastre aqui; os dois códigos são aceitos.</div>
     </div>
     <div class="grid2">
@@ -5065,6 +5081,7 @@ function productForm(){
   {const sc=$('#pc'),nc=$('#pcnew');sc.onchange=()=>{nc.hidden=sc.value!=='__new';if(!nc.hidden){nc.focus();return}collect();e.sub='';const y=window.scrollY;productForm();window.scrollTo(0,y);const n=$('#psub');if(n)n.focus()}}
   {const ss=$('#psub'),ns=$('#psubnew');ss.onchange=()=>{ns.hidden=ss.value!=='__new';if(!ns.hidden)ns.focus()}}
   $('#pfile').onchange=ev=>{const f=ev.target.files[0];if(f)setPhoto(f)};
+  {const bd=$('#peansdel');if(bd)bd.onclick=()=>{ui.edit.eans=[];const bx=$('#peansbox');if(bx)bx.remove()}}
   bindStaria();if(ui.stFocus){ui.stFocus=false;const sq=$('#stq');if(sq){sq.focus();if(ui.stPrefill){sq.value=ui.stPrefill;ui.stPrefill='';const g=$('#stgo');if(g)g.click()}}}
   /* custo, venda, margem e markup ligados: venda muda margem/markup; margem ou markup mudam a venda */
   const iC=$('#pcost'),iP=$('#pp'),iM=$('#pmg'),iK=$('#pmk');
@@ -5153,7 +5170,7 @@ function productForm(){
     if(e.cost!==''&&!(e.cost>0))return err('Preço de custo inválido. Deixe em branco ou digite um valor, ex.: 32,50.');
     {const rv=$('#prefc');if(rv&&rv.value.trim()&&!(e.refCost>0))return err('Custo de referência inválido. Deixe em branco ou digite um valor, ex.: 19,00.')}
     {const ve=varCheck(e,code,ean);if(ve)return err(ve)}
-    const p={id:e.id||uid(),kg:!!e.kg&&e.perPack>1,fam:e.fam||'',var:e.fam?e.var||'':'',famSync:e.famSync!==false,code,ean,ean2:e.ean2||'',trib:!!e.trib,name,cat:(e.cat||'').trim()||'Outros',sub:(e.sub||'').trim(),unit:(e.unit||'').trim()||'Unidade',perPack:e.perPack>1?Math.round(e.perPack*1000)/1000:'',showUnit:e.showUnit!==false,price,cost:e.cost||'',refCost:e.refCost>0&&!(Number(e.cost)>=e.refCost)?e.refCost:'',tablePrices:e.tablePrices||{},commission:hasVal(e.commission)?e.commission:'',minMg:setV(e.minMg)?e.minMg:'',iePrice:e.iePrice>0?e.iePrice:'',stock:e.stock===''||isNaN(e.stock)?'':e.stock,minStock:e.minStock===''||isNaN(e.minStock)?'':e.minStock,idealStock:e.idealStock===''||isNaN(e.idealStock)?'':e.idealStock,photo:e.photo||ph(name,150),active:e.active,rules:R};
+    const p={id:e.id||uid(),kg:!!e.kg&&e.perPack>1,fam:e.fam||'',var:e.fam?e.var||'':'',famSync:e.famSync!==false,code,ean,ean2:e.ean2||'',...(Array.isArray(e.eans)&&e.eans.length?{eans:e.eans.slice()}:{}),trib:!!e.trib,name,cat:(e.cat||'').trim()||'Outros',sub:(e.sub||'').trim(),unit:(e.unit||'').trim()||'Unidade',perPack:e.perPack>1?Math.round(e.perPack*1000)/1000:'',showUnit:e.showUnit!==false,price,cost:e.cost||'',refCost:e.refCost>0&&!(Number(e.cost)>=e.refCost)?e.refCost:'',tablePrices:e.tablePrices||{},commission:hasVal(e.commission)?e.commission:'',minMg:setV(e.minMg)?e.minMg:'',iePrice:e.iePrice>0?e.iePrice:'',stock:e.stock===''||isNaN(e.stock)?'':e.stock,minStock:e.minStock===''||isNaN(e.minStock)?'':e.minStock,idealStock:e.idealStock===''||isNaN(e.idealStock)?'':e.idealStock,photo:e.photo||ph(name,150),active:e.active,rules:R};
     const i=S.products.findIndex(x=>x.id===p.id);if(i>=0)S.products[i]=p;else S.products.unshift(p);
     const vmsg=varAfterSave(p,e);
     catList();save();ui.edit=null;toast('Produto salvo'+vmsg+(e.refCost>0&&!(p.refCost>0)?' · custo de referência apagado: o custo já é igual ou maior':''));if(weekBack())return;renderAdmin();

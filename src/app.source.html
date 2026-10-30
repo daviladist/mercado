@@ -1308,7 +1308,7 @@ function validDoc(d){
 function docHint(v){v=String(v).replace(/\D/g,'');if(!v)return 'Opcional. O cliente também pode entrar no app com o CNPJ/CPF no lugar do usuário.';if(v.length===11)return validDoc(v)?'CPF válido':'CPF inválido';if(v.length===14)return validDoc(v)?'CNPJ válido':'CNPJ inválido';return v.length<11?'Digite os 11 números do CPF ou os 14 do CNPJ.':'Faltam números para o CNPJ.'}
 function allowedPays(c){const all=S.payments;return c&&Array.isArray(c.pays)?all.filter(p=>c.pays.includes(p)):all}
 function cartSavings(){return withOner(ui.mode,()=>cartItems().reduce((s,i)=>s+((i.p.isCombo?i.p.listPrice:baseOf(i.p))-i.price)*i.q,0))}
-function matches(p,q){if(!q)return true;const d=q.replace(/\s/g,'');return p.name.toLowerCase().includes(q)||String(p.code||'').toLowerCase().includes(d)||String(p.ean||'').includes(d)||String(p.ean2||'').includes(d)||String(p.sub||'').toLowerCase().includes(q)}
+function matches(p,q){if(!q)return true;const d=q.replace(/\s/g,'');return p.name.toLowerCase().includes(q)||String(p.code||'').toLowerCase().includes(d)||String(p.ean||'').includes(d)||String(p.ean2||'').includes(d)||(p.eans||[]).some(c=>String(c).includes(d))||String(p.sub||'').toLowerCase().includes(q)}
 function codesLine(code,ean){const a=[];if(code)a.push('Cód. '+esc(code));if(ean)a.push('EAN '+esc(ean));return a.join(' · ')}
 function cartCount(){return cartItems().reduce((s,i)=>s+i.q,0)}
 function fmtDate(d){if(!d)return'';const[y,m,dd]=d.split('-');return dd+'/'+m}
@@ -1818,8 +1818,8 @@ let scanLibP=null,scanCam=null,scanLast={code:'',at:0};
 function loadScanLib(){if(window.Html5Qrcode)return Promise.resolve(true);if(scanLibP)return scanLibP;
   scanLibP=new Promise(res=>{const s=document.createElement('script');s.src=SCAN_LIB;s.onload=()=>res(!!window.Html5Qrcode);s.onerror=()=>{scanLibP=null;res(false)};document.head.appendChild(s)});return scanLibP}
 const normCode=c=>String(c||'').replace(/\D/g,'').replace(/^0+(?=\d{8,})/,'');
-function itemCodes(i){const p=itemProduct(i)||{},set=new Set();[i.ean,p.ean,p.ean2,p.code,i.code].forEach(c=>{const n=normCode(c);if(n)set.add(n)});return set}
-function hasBarcode(i){const p=itemProduct(i)||{};return !!(normCode(i.ean)||normCode(p.ean)||normCode(p.ean2))}
+function itemCodes(i){const p=itemProduct(i)||{},set=new Set();[i.ean,p.ean,p.ean2,p.code,i.code,...(p.eans||[])].forEach(c=>{const n=normCode(c);if(n)set.add(n)});return set}
+function hasBarcode(i){const p=itemProduct(i)||{};return !!(normCode(i.ean)||normCode(p.ean)||normCode(p.ean2)||(p.eans||[]).some(normCode))}
 function beep(ok){try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;const ctx=beep.ctx||(beep.ctx=new A()),o=ctx.createOscillator(),g=ctx.createGain();o.type='square';o.frequency.value=ok?1250:220;g.gain.value=.06;o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+(ok?.09:.35))}catch(e){}
   try{navigator.vibrate&&navigator.vibrate(ok?60:[120,60,120])}catch(e){}}
 function scanFlash(ok,text){let f=document.getElementById('scanflash');if(!f){f=document.createElement('div');f.id='scanflash';document.body.appendChild(f)}
@@ -1829,7 +1829,7 @@ function scanCode(o,raw,mult){
   const code=normCode(raw);if(!code){scanFlash(false,'Código vazio');beep(false);return}
   const now=Date.now();if(scanCam&&code===scanLast.code&&now-scanLast.at<1500)return;scanLast={code,at:now};
   const its=o.items.filter(i=>i.q>0),hit=its.find(i=>itemCodes(i).has(code));
-  if(!hit){const p=S.products.find(x=>[x.ean,x.ean2,x.code].some(c=>normCode(c)===code));beep(false);scanFlash(false,'Não está no pedido'+(p?': '+p.name:'')+' ('+code+')');
+  if(!hit){const p=S.products.find(x=>[x.ean,x.ean2,x.code,...(x.eans||[])].some(c=>normCode(c)===code));beep(false);scanFlash(false,'Não está no pedido'+(p?': '+p.name:'')+' ('+code+')');
     (o.scanLog=o.scanLog||[]).push({at:new Date().toISOString(),code,ok:false,by:ui.checker});save();return}
   const k=ikey(hit),n=Math.max(1,parseInt(mult)||1);o.scan=o.scan||{};o.chk=o.chk||{};
   const cur=o.scan[k]||0;if(cur>=hit.q){beep(false);scanFlash(false,hit.name+': já completou '+hit.q+' de '+hit.q);return}
@@ -3970,7 +3970,7 @@ function admOrders(){
 }
 /* ================= CONTAGEM DA SEMANA: o conferente bipa e conta o que tem no depósito ================= */
 function countOpen(){return (S.counts||[]).find(c=>c.status==='aberta')||null}
-function prodByCode(raw){const n=normCode(raw);if(!n)return null;return S.products.find(x=>[x.ean,x.ean2,x.code].some(c=>normCode(c)===n))||null}
+function prodByCode(raw){const n=normCode(raw);if(!n)return null;return S.products.find(x=>[x.ean,x.ean2,x.code,...(x.eans||[])].some(c=>normCode(c)===n))||null}
 function countTotals(C){const it=(C&&C.items)||[];return {n:it.length,sem:it.filter(i=>!i.pid&&!i.ign).length}}
 const qBR=v=>Number(v||0).toLocaleString('pt-BR',{maximumFractionDigits:2});
 /* câmera genérica: chama onCode a cada código lido */
@@ -4181,7 +4181,7 @@ function varAfterSave(p,e){
   if(p.fam&&p.famSync)famSibs(p).forEach(x=>{famCopy(p,x);x.famSync=true;nsync++});
   const nv=(e._nv||[]).filter(r=>r.var);
   if(p.fam&&nv.length){let at=S.products.findIndex(x=>x.id===p.id)+1;
-    nv.forEach(r=>{const q=JSON.parse(JSON.stringify(p));q.id=uid();q.var=r.var;q.name=p.fam+' '+r.var;q.code=r.code;q.ean=r.ean;q.ean2='';q.stock='';
+    nv.forEach(r=>{const q=JSON.parse(JSON.stringify(p));q.id=uid();q.var=r.var;q.name=p.fam+' '+r.var;q.code=r.code;q.ean=r.ean;q.ean2='';delete q.eans;q.stock='';
       if(!p.photo||p.photo===ph(p.name,150))q.photo=ph(q.name,150);S.products.splice(at++,0,q);ncr++})}
   return (ncr?' · '+ncr+' sabor'+(ncr>1?'es criados':' criado'):'')+(nsync?' · preço e condições copiados para '+nsync+' sabor'+(nsync>1?'es':''):'')}
 
@@ -4949,6 +4949,7 @@ function productForm(){
     </div>
     <div class="grid2">
       <div class="field"><label for="pean2">Código de barras da embalagem <span class="small muted">(DUN-14, opcional)</span></label><input type="text" id="pean2" inputmode="numeric" value="${esc(e.ean2||'')}" placeholder="Código impresso no fardo/caixa"></div>
+      ${(e.eans||[]).length?`<div class="field" id="peansbox"><span class="lbl">Códigos ligados no caixa</span><span class="small">${esc(e.eans.join(', '))}</span> <button type="button" class="btn ghost sm" id="peansdel">Apagar estes códigos</button></div>`:''}
       <div class="small muted" style="align-self:end">Usado pelo conferente ao bipar. Se o fardo tem código próprio, cadastre aqui; os dois códigos são aceitos.</div>
     </div>
     <div class="grid2">
@@ -5015,6 +5016,7 @@ function productForm(){
   {const sc=$('#pc'),nc=$('#pcnew');sc.onchange=()=>{nc.hidden=sc.value!=='__new';if(!nc.hidden){nc.focus();return}collect();e.sub='';const y=window.scrollY;productForm();window.scrollTo(0,y);const n=$('#psub');if(n)n.focus()}}
   {const ss=$('#psub'),ns=$('#psubnew');ss.onchange=()=>{ns.hidden=ss.value!=='__new';if(!ns.hidden)ns.focus()}}
   $('#pfile').onchange=ev=>{const f=ev.target.files[0];if(f)setPhoto(f)};
+  {const bd=$('#peansdel');if(bd)bd.onclick=()=>{ui.edit.eans=[];const bx=$('#peansbox');if(bx)bx.remove()}}
   bindStaria();if(ui.stFocus){ui.stFocus=false;const sq=$('#stq');if(sq){sq.focus();if(ui.stPrefill){sq.value=ui.stPrefill;ui.stPrefill='';const g=$('#stgo');if(g)g.click()}}}
   /* custo, venda, margem e markup ligados: venda muda margem/markup; margem ou markup mudam a venda */
   const iC=$('#pcost'),iP=$('#pp'),iM=$('#pmg'),iK=$('#pmk');
@@ -5103,7 +5105,7 @@ function productForm(){
     if(e.cost!==''&&!(e.cost>0))return err('Preço de custo inválido. Deixe em branco ou digite um valor, ex.: 32,50.');
     {const rv=$('#prefc');if(rv&&rv.value.trim()&&!(e.refCost>0))return err('Custo de referência inválido. Deixe em branco ou digite um valor, ex.: 19,00.')}
     {const ve=varCheck(e,code,ean);if(ve)return err(ve)}
-    const p={id:e.id||uid(),kg:!!e.kg&&e.perPack>1,fam:e.fam||'',var:e.fam?e.var||'':'',famSync:e.famSync!==false,code,ean,ean2:e.ean2||'',trib:!!e.trib,name,cat:(e.cat||'').trim()||'Outros',sub:(e.sub||'').trim(),unit:(e.unit||'').trim()||'Unidade',perPack:e.perPack>1?Math.round(e.perPack*1000)/1000:'',showUnit:e.showUnit!==false,price,cost:e.cost||'',refCost:e.refCost>0&&!(Number(e.cost)>=e.refCost)?e.refCost:'',tablePrices:e.tablePrices||{},commission:hasVal(e.commission)?e.commission:'',minMg:setV(e.minMg)?e.minMg:'',iePrice:e.iePrice>0?e.iePrice:'',stock:e.stock===''||isNaN(e.stock)?'':e.stock,minStock:e.minStock===''||isNaN(e.minStock)?'':e.minStock,idealStock:e.idealStock===''||isNaN(e.idealStock)?'':e.idealStock,photo:e.photo||ph(name,150),active:e.active,rules:R};
+    const p={id:e.id||uid(),kg:!!e.kg&&e.perPack>1,fam:e.fam||'',var:e.fam?e.var||'':'',famSync:e.famSync!==false,code,ean,ean2:e.ean2||'',...(Array.isArray(e.eans)&&e.eans.length?{eans:e.eans.slice()}:{}),trib:!!e.trib,name,cat:(e.cat||'').trim()||'Outros',sub:(e.sub||'').trim(),unit:(e.unit||'').trim()||'Unidade',perPack:e.perPack>1?Math.round(e.perPack*1000)/1000:'',showUnit:e.showUnit!==false,price,cost:e.cost||'',refCost:e.refCost>0&&!(Number(e.cost)>=e.refCost)?e.refCost:'',tablePrices:e.tablePrices||{},commission:hasVal(e.commission)?e.commission:'',minMg:setV(e.minMg)?e.minMg:'',iePrice:e.iePrice>0?e.iePrice:'',stock:e.stock===''||isNaN(e.stock)?'':e.stock,minStock:e.minStock===''||isNaN(e.minStock)?'':e.minStock,idealStock:e.idealStock===''||isNaN(e.idealStock)?'':e.idealStock,photo:e.photo||ph(name,150),active:e.active,rules:R};
     const i=S.products.findIndex(x=>x.id===p.id);if(i>=0)S.products[i]=p;else S.products.unshift(p);
     const vmsg=varAfterSave(p,e);
     catList();save();ui.edit=null;toast('Produto salvo'+vmsg+(e.refCost>0&&!(p.refCost>0)?' · custo de referência apagado: o custo já é igual ou maior':''));if(weekBack())return;renderAdmin();
