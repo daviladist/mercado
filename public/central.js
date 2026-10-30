@@ -5,7 +5,7 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const SWATCHES = [['#1F3D2B', 'Verde Tino'], ['#E11F2C', 'Vermelho'], ['#0A66B2', 'Azul'], ['#B4410F', 'Laranja'], ['#6D28D9', 'Roxo']];
   const STATUS = { ativa: 'Ativa', em_preparo: 'Em preparo', suspensa: 'Suspensa' };
-  let D = null, sel = null, draft = null, dirty = false;
+  let D = null, sel = null, draft = null, dirty = false, pendingDraft = null;
 
   async function api(path, body) {
     const opt = body === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-App': '1' }, body: JSON.stringify(body) };
@@ -16,7 +16,7 @@
   }
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 3200); }
 
-  function showLogin() { $('#loginView').hidden = false; $('#appView').hidden = true; $('#who').hidden = true; setTimeout(() => $('#lu').focus(), 50); }
+  function showLogin(msg) { $('#lerr').textContent = msg || ''; $('#loginView').hidden = false; $('#appView').hidden = true; $('#who').hidden = true; setTimeout(() => $('#lu').focus(), 50); }
   $('#loginForm').addEventListener('submit', async e => {
     e.preventDefault();
     const b = $('#loginForm button[type=submit]'); b.disabled = true; $('#lerr').textContent = '';
@@ -30,6 +30,7 @@
     try { D = await api('/api/central/state'); }
     catch (e) { if (e.status === 401) return showLogin(); toast(e.message); return; }
     $('#loginView').hidden = true; $('#appView').hidden = false; $('#who').hidden = false; $('#whoName').textContent = D.me.login;
+    if (pendingDraft) { const p = pendingDraft; pendingDraft = null; sel = p.sel; pick(sel); draft = p.draft; dirty = true; renderList(); renderEditor(); return; }
     if (!keep || !D.tenants.some(t => t.id === sel)) sel = (D.tenants[0] || {}).id || null;
     pick(sel);
   }
@@ -56,9 +57,9 @@
     $('#editor').innerHTML = `
     <section class="card top">
       <div><h1>${esc(t.name || 'Nova empresa')}</h1><p class="muted small" style="margin:4px 0 0">${on} de ${D.modules.length} módulos ligados · essenciais sempre ativos</p></div>
-      <div class="field" style="min-width:180px"><label for="fst">Situação</label><select id="fst">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${t.status === k ? 'selected' : ''} ${t.primary && k === 'suspensa' ? 'disabled' : ''}>${v}</option>`).join('')}</select></div>
+      <div class="field" style="min-width:180px"><label for="fst">Situação</label><select id="fst">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${t.status === k ? 'selected' : ''} ${t.primary && k !== 'ativa' ? 'disabled' : ''}>${v}</option>`).join('')}</select></div>
     </section>
-    ${t.primary ? '' : '<div class="note">Empresa nova fica registrada com a configuração pronta. Ela passa a funcionar com dados próprios na próxima etapa (separação dos dados por empresa).</div>'}
+    ${t.id ? accessCard(t) : '<div class="note">Salve a empresa para gerar o endereço e o acesso do administrador dela.</div>'}
     <section class="card" style="display:grid;gap:16px" aria-labelledby="hid">
       <h2 id="hid">Identidade da marca</h2>
       <div class="grid">
@@ -78,15 +79,49 @@
       <div class="presets">${D.segments.map(s => `<button type="button" data-seg="${esc(s.id)}" aria-pressed="${seg === s.id}">${esc(s.name)}</button>`).join('')}${seg ? '' : '<button type="button" aria-pressed="true" disabled>Personalizado</button>'}</div>
     </section>
     ${groups.map(g => `<section class="card grp"><h2>${esc(g)}${g === 'Essenciais' ? '<small>Não podem ser desligados</small>' : ''}</h2>
-      ${D.modules.filter(m => m.group === g).map(m => `<div class="mod"><div class="t"><div class="n">${esc(m.name)}${!m.essential && !m.enforced ? '<span class="tag">efeito na próxima etapa</span>' : ''}</div><div class="d">${esc(m.desc)}</div></div>
+      ${D.modules.filter(m => m.group === g).map(m => `<div class="mod"><div class="t"><div class="n">${esc(m.name)}${!m.essential && !m.enforced ? '<span class="tag">efeito na próxima etapa</span>' : m.enforced === 'tela' ? '<span class="tag">só esconde a tela</span>' : ''}</div><div class="d">${esc(m.desc)}</div></div>
         ${m.essential ? '<span class="lock">Sempre ativo</span>' : `<button type="button" class="sw-t" role="switch" data-m="${esc(m.code)}" aria-checked="${!!t.modules[m.code]}" aria-label="${esc(m.name)}"><span></span></button>`}</div>`).join('')}</section>`).join('')}
     <div class="bar${dirty ? ' dirty' : ''}"><span>${dirty ? 'Há mudanças sem salvar.' : 'Tudo salvo.'}</span><div style="display:flex;gap:8px"><button class="btn ghost-light" type="button" id="undo" ${dirty ? '' : 'disabled'}>Desfazer</button><button class="btn primary" type="button" id="save" ${dirty ? '' : 'disabled'}>Salvar configuração</button></div></div>`;
     bind();
   }
+  /* endereço e acesso do administrador da empresa */
+  function accessCard(t) {
+    const base = location.origin + (t.primary ? '' : '/t/' + t.id), st = t.stats || {};
+    return `<section class="card" style="display:grid;gap:12px" aria-labelledby="hac">
+      <h2 id="hac">Acesso da empresa</h2>
+      <div class="grid">
+        <div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Endereço da equipe</span><code class="link">${esc(base + '/#admin')}</code></div>
+        <div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Endereço dos clientes</span><code class="link">${esc(base + '/cliente')}</code></div>
+      </div>
+      <p class="small muted" style="margin:0">${st.products || 0} produtos · ${st.orders || 0} pedidos · ${st.users || 0} usuários${t.adminLogin ? ' · administrador: ' + esc(t.adminLogin) : ''}</p>
+      ${t.primary ? '<p class="small muted" style="margin:0">A empresa principal cuida dos próprios acessos pelo painel dela.</p>' : `
+      <div class="logo-row">
+        <div class="field" style="flex:1 1 200px"><label for="alog">Usuário do administrador</label><input type="text" id="alog" value="${esc(t.adminLogin || 'admin')}" maxlength="40" autocapitalize="off" spellcheck="false"></div>
+        <button class="btn dark" type="button" id="agen" style="align-self:end">${t.adminLogin ? 'Gerar nova senha' : 'Criar acesso do administrador'}</button>
+      </div>
+      <div id="aout" aria-live="polite"></div>`}
+    </section>`;
+  }
+  async function genAdmin() {
+    const login = $('#alog').value.trim().toLowerCase();
+    if (!/^[a-z0-9._-]{3,40}$/.test(login)) { toast('Usuário: de 3 a 40 letras minúsculas, números, ponto ou traço (sem espaço nem acento).'); $('#alog').focus(); return; }
+    if (draft.adminLogin && !confirm('Gerar uma nova senha derruba o acesso atual do administrador desta empresa. Continuar?')) return;
+    const b = $('#agen'); b.disabled = true;
+    try {
+      const r = await api('/api/central/tenant-admin', { id: draft.id, login });
+      const url = location.origin + '/t/' + r.tenant + '/#admin';
+      $('#aout').innerHTML = `<div class="note" style="display:grid;gap:6px"><b>Anote agora: esta senha aparece só uma vez.</b>
+        <span>Endereço: <code class="link">${esc(url)}</code></span><span>Usuário: <code>${esc(r.login)}</code></span><span>Senha provisória: <code style="font-size:17px">${esc(r.password)}</code></span>
+        <span class="small">No primeiro acesso, a pessoa cria a senha dela.</span></div>`;
+      const t = D.tenants.find(x => x.id === draft.id); if (t) { t.adminLogin = r.login; draft.adminLogin = r.login; }
+      b.textContent = 'Gerar nova senha';
+    } catch (e) { if (e.status === 401) return showLogin('Sua sessão terminou. Entre de novo.'); toast(e.message); }
+    finally { b.disabled = false; }
+  }
   function touch() { dirty = true; renderEditor(); }
   function bind() {
     const E = $('#editor');
-    $('#fname').addEventListener('input', e => { draft.name = e.target.value; dirty = true; E.querySelector('h1').textContent = draft.name || 'Nova empresa'; $('#save').disabled = false; $('#undo').disabled = false; });
+    $('#fname').addEventListener('input', e => { draft.name = e.target.value; dirty = true; E.querySelector('h1').textContent = draft.name || 'Nova empresa'; $('#save').disabled = false; $('#undo').disabled = false; const bar = E.querySelector('.bar'); bar.classList.add('dirty'); bar.querySelector('span').textContent = 'Há mudanças sem salvar.'; });
     $('#fst').addEventListener('change', e => { draft.status = e.target.value; touch(); });
     E.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => { draft.color = b.dataset.c; touch(); }));
     $('#fcolor').addEventListener('change', e => { draft.color = e.target.value.toUpperCase(); touch(); });
@@ -96,6 +131,7 @@
     $('#flogo').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) readLogo(f); });
     $('#undo').addEventListener('click', () => pick(sel));
     $('#save').addEventListener('click', save);
+    const ag = $('#agen'); if (ag) ag.addEventListener('click', genAdmin);
   }
   /* reduz a logo para no máximo 256 px antes de enviar (fica leve e sem código escondido) */
   function readLogo(f) {
@@ -117,7 +153,7 @@
     try {
       const r = await api('/api/central/tenant', { id: draft.id, name: draft.name, logo: draft.logo, color: draft.color, segment: matchSegment() || draft.segment, status: draft.status, modules: mods });
       sel = r.tenant.id; toast('Configuração salva'); await load(true);
-    } catch (e) { if (e.status === 401) return showLogin(); toast(e.message); b.disabled = false; }
+    } catch (e) { if (e.status === 401) { pendingDraft = { sel, draft }; return showLogin('Sua sessão terminou. Entre de novo: suas mudanças continuam aqui para salvar.'); } toast(e.message); b.disabled = false; }
   }
   window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
   load();

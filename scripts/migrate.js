@@ -21,10 +21,11 @@ const store = require('../lib/store');
   if (!file) { console.log('Sem arquivo de backup: só criei as tabelas.'); process.exit(0); }
   const j = JSON.parse(fs.readFileSync(file, 'utf8'));
   const S = j && j.app === 'pedidos-atacado' ? j.data : (j.data || j);
-  const stats = await store.importBackup(S, { importPasswords: process.argv.includes('--senhas-antigas') });
+  const TID = process.env.TENANT_ID || 'davila';
+  const stats = await store.importBackup(TID, S, { importPasswords: process.argv.includes('--senhas-antigas') });
   console.log('Importado:', stats);
   if (process.env.ADMIN_LOGIN && process.env.ADMIN_PASSWORD) {
-    const u = await store.setupAdmin(process.env.ADMIN_NAME || process.env.ADMIN_LOGIN, process.env.ADMIN_LOGIN, process.env.ADMIN_PASSWORD).catch(e => { console.log('Administrador:', e.message); return null; });
+    const u = await store.setupAdmin(TID, process.env.ADMIN_NAME || process.env.ADMIN_LOGIN, process.env.ADMIN_LOGIN, process.env.ADMIN_PASSWORD).catch(e => { console.log('Administrador:', e.message); return null; });
     if (u) console.log('Administrador criado:', u.login);
   } else console.log('Administrador: crie no primeiro acesso ao app (precisa do SETUP_CODE) ou rode com ADMIN_LOGIN e ADMIN_PASSWORD.');
   process.exit(0);

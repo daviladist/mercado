@@ -21,3 +21,25 @@ jobs:
       - name: Nada de senha ou dado de cliente no que vai para o site
         run: |
           ! grep -RInE "pass_hash|scrypt\\$|\"cost\":" public/ || (echo "dado sensível em public/"; exit 1)
+  banco:
+    # Central e separação por empresa, com Postgres de verdade (banco descartável do próprio CI)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: tester-ci-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U tester" --health-interval 2s --health-timeout 2s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Central e separação por empresa
+        env:
+          PGURL: postgres://tester:tester-ci-only@127.0.0.1:5432
+          PGPASSWORD: tester-ci-only
+        run: bash tests/ci_banco.sh

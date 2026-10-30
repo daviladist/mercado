@@ -74,29 +74,60 @@ Alternativa pelo terminal (no lugar dos passos 4 a 6):
 DATABASE_URL="postgres://...neon..." ADMIN_LOGIN=eduardo ADMIN_PASSWORD='...' node scripts/migrate.js backup.json
 ```
 
-## Tino — Central do sistema (dono do sistema)
+## Tino — Central do sistema e várias empresas
 
-Este app é a base do **Tino** (*Quem tem Tino, vende melhor.*). A **Central do sistema** fica em `https://SEU-SITE/central` e é só do dono do sistema (usuário `super_admin`), separada do painel da loja.
+Este app é a base do **Tino** (*Quem tem Tino, vende melhor.*). Vários negócios usam o mesmo sistema e o mesmo banco, cada um vendo só os próprios dados.
 
-- **O que faz:** cadastra empresas, troca nome, logo e cor, aplica um modelo por segmento (Atacado completo, Distribuidora de suplementos, Só o básico) e liga/desliga cada módulo.
-- **Efeito já hoje (empresa principal, D'Ávila):** módulo desligado some da tela **e** o servidor recusa gravar nele (comissão, ofertas, negociação, entrada de mercadoria, conferência, contagem, entregas, faturamento, a receber/a pagar/caixa, relatórios, decisões, StarIA). Desligar Conferência, Entregas ou Faturamento também tira o login desses papéis. Os marcados como "efeito na próxima etapa" ficam só registrados.
-- **Empresas novas** ficam "em preparo": a configuração fica pronta, mas os dados por empresa só existem depois da **separação dos dados por empresa** (próxima etapa).
-- **Nada muda para quem já usa:** a empresa atual começa com tudo ligado; as tabelas novas (`tenants`, `central_sessions`) são só acrescentadas.
+### Endereços
+- Empresa principal (D'Ávila): `https://SEU-SITE/` (equipe em `/#admin` etc.), como sempre.
+- Outras empresas: `https://SEU-SITE/t/<empresa>/#admin` (equipe) e `https://SEU-SITE/t/<empresa>/cliente` (clientes).
+- Central do sistema (só o dono do sistema): `https://SEU-SITE/central`, usuário `super_admin`.
+
+### Como os dados ficam separados
+- Toda linha de `users`, `docs` e `photos` tem `tenant_id` (sem valor padrão: quem grava é obrigado a dizer a empresa) ligado a `tenants`.
+- O navegador manda a empresa no cabeçalho `X-Tenant` (`@` = principal). A sessão pertence a UMA empresa: aberta no endereço de outra, vale como não logado. Sem cabeçalho (foto num `<img>`), vale a empresa da sessão.
+- Número do pedido por empresa (`order_seq`), nunca repetido. Rascunhos e alterações sem internet guardados no aparelho também levam a empresa.
+
+### Central
+- Cadastra empresas (nome, logo, cor, modelo por segmento), liga/desliga módulos e cria o **acesso principal do administrador** de cada empresa (senha provisória mostrada uma vez; gerar de novo, mesmo com outro usuário, substitui o anterior e derruba as sessões dele).
+- Situação: **ativa**; **em preparo** (só o administrador entra, para cadastrar tudo); **suspensa** (ninguém entra; quem estiver com o app aberto é avisado e sai). A principal não pode ser suspensa.
+- Módulos: os marcados como servidor não enviam os dados nem aceitam gravação quando desligados (e tiram o login de conferente, entregador ou faturamento); Caixa, Relatórios e Decisões só escondem a tela (são visões de outros dados); os marcados "efeito na próxima etapa" ficam só registrados.
 
 ### Segurança da Central
-- Login separado da loja: outro cookie (`__Host-csid`, HttpOnly, Secure, SameSite=Strict), outra tabela de sessões, sessão de 8 h. Sessão da loja não abre a Central e vice-versa.
-- Senha do `super_admin` com hash **scrypt** em `lib/central-cred.js` (só o hash, nunca a senha). Senha sorteada com ~115 bits.
-- 5 senhas erradas do mesmo IP bloqueiam por 15 min (60 no total, de todos os IPs).
-- Mesma proteção CSRF, CSP e cabeçalhos do resto do app; logo só PNG/JPG/WEBP até 300 KB; tudo registrado na tabela `audit`.
-- Testes: `python3 tests/central.py` (40 verificações, banco de TESTE) e `npm test`.
+- Login separado da loja: outro cookie (`__Host-csid`, HttpOnly, Secure, SameSite=Strict), outra tabela de sessões, 8 h.
+- Senha do `super_admin`: só o **hash** scrypt. Vem da variável **`CENTRAL_HASH`** da Vercel, se existir (recomendado); senão, de `lib/central-cred.js`.
+- 5 tentativas por IP a cada 15 min, contadas antes de conferir a senha (tentativas em paralelo não furam o limite). Sem bloqueio geral, para ninguém trancar o dono do lado de fora.
 
-### Esqueceu ou perdeu a senha do super_admin
-Não existe "recuperar": a senha não fica guardada em lugar nenhum. Gere outra:
-```
-node scripts/central-senha.js   # mostra a senha nova uma vez e grava o hash
-git add lib/central-cred.js && git commit -m "Central: nova senha do super_admin" && git push
-```
-Ao publicar, as sessões antigas da Central caem.
+### Perdeu a senha do super_admin
+Não existe "recuperar": a senha não fica guardada. Gere outra com `node scripts/central-senha.js` (mostra a senha uma vez e grava o hash em `lib/central-cred.js`; para usar a variável, copie o hash para `CENTRAL_HASH` na Vercel) e publique. As sessões antigas da Central caem.
+
+### Atualização do banco (importante)
+- `lib/schema.sql` é aplicado sozinho, **numa transação só e com trava**, e só quando o arquivo muda (a impressão digital fica em `schema_version`).
+- A conversão para várias empresas **não tem volta automática**: depois de publicada, **não use "Instant Rollback"/"Promote" de uma versão anterior na Vercel** (a versão antiga não entende `tenant_id`: gravaria com erro e misturaria empresas). Para desfazer algo, publique uma correção para frente. Publique fora do horário de uso.
+
+### Testes
+- `npm test` (regras, sem banco) e `PGURL=postgres://usuario:senha@host:porta bash tests/ci_banco.sh` (Central e separação por empresa com Postgres de teste; também roda no GitHub).
+
+## Caixa de balcão (PDV) — módulo "pdv"
+
+Venda no balcão ("pague e leve") no mesmo sistema e no mesmo banco, separada por empresa.
+
+- **Ligar:** Central do sistema › empresa › módulo "Caixa de balcão (PDV)" (começa desligado). Desligado, o operador de caixa não entra e a API do caixa responde 403.
+- **Quem usa:** perfil **operador de caixa** (Cadastros › Usuários › Operadores de caixa). Vende e recebe; **nunca** recebe custo, margem nem estoque. O administrador também pode operar.
+- **Endereço:** `https://SEU-SITE/pdv` (outras empresas: `/t/<empresa>/pdv`). No painel: aba **Caixa (PDV)**.
+- **Tela (teclado):** campo do código sempre com foco (leitor USB = teclado + Enter); `4*código` = 4 unidades; F2 busca por nome, F3 quantidade, F4 cliente (preço com IE, se o cliente tiver), F6 desconto, F7 cancela item com motivo, F8 reimprime, F9 consulta preço, F10 pagamento, F11 (ou Ctrl+E) venda em espera, F12 (ou Ctrl+K) caixa. Esc fecha janelas. Som de ok/erro. Código não cadastrado: aviso, e o gerente pode vincular o código a um produto.
+- **Pagamento:** misto (dinheiro, PIX, débito, crédito, fiado), troco automático (só sai do dinheiro), PIX com QR/"copia e cola" no valor exato e botão "Conferi o PIX", cartão só registra, fiado só para cliente com limite (gera conta a receber).
+- **Servidor confere tudo:** recalcula preço, desconto e margem; venda com valor diferente do servidor é recusada; desconto acima do limite (ou abaixo da margem mínima) só com senha de um administrador, gravando quem autorizou (autorização vale uma vez, para aquela venda, por 10 minutos); a mesma venda enviada duas vezes grava uma vez; venda, itens, pagamentos, estoque e fiado entram juntos ou nada entra; tudo auditado.
+- **Preço no balcão:** o mesmo cálculo do app para *retirada*, sem forma de pagamento escolhida (a regra "à vista" e o desconto de retirada do app não valem no balcão), com o preço de IE para cliente com IE ativa. Desconto do caixa: até o limite configurado sem gerente; acima disso, senha do gerente, que é avisado quando a margem fica abaixo da mínima (o caixa nunca recebe essa informação, para não deduzir o custo).
+- **Fiado:** mesma regra de crédito do app (conta vencida bloqueia; pedidos a prazo em aberto contam no limite), conferida dentro da transação com o cliente travado.
+- **Sem internet:** o caixa abre e vende com o catálogo guardado no aparelho (até 3 dias; sem custo, margem nem estoque). Venda que chegar diferente do servidor (preço, desconto sem gerente, fiado fora da regra, produto removido) **não vira venda**: fica em "vendas com problema" no painel: o gerente confere e **lança como venda** (pelo valor cobrado no balcão; a diferença vira desconto autorizado por ele; o estoque baixa e o dinheiro entra no caixa da venda) ou resolve com uma anotação. Marcar uma venda como "sem internet" não afrouxa nenhuma regra.
+- **Cancelar venda:** só o administrador, com motivo; devolve o estoque e apaga o fiado ainda não pago (venda que já virou pedido da NF-e é cancelada pelo pedido).
+- **Caixa:** abertura com fundo de troco; sangria/suprimento com senha do gerente; fechamento **às cegas** (o operador informa o que contou sem ver o esperado); diferença **por forma de pagamento** (falta no PIX não some com sobra no dinheiro) vira aviso no painel até ser justificada; relatório do turno.
+- **Sem internet:** a venda vai para uma fila no aparelho e é enviada sozinha. Se o valor não bater quando chegar, ela entra "a revisar" (já foi paga) para o gerente conferir.
+- **Integrações:** painel com o balcão separado (vendas, margem, avisos); Financeiro › Caixa da semana mostra o balcão por dia e por forma; botão **Enviar para faturamento** transforma a venda (com cliente) em pedido "A faturar" para a NF-e, sem baixar estoque de novo nem gerar outra conta. Comprovante 80 mm pelo navegador (não fiscal).
+- **NFC-e:** fase 2 (módulo "NFC-e no caixa", já registrado; a venda tem os campos `nfce_status`/`nfce_chave` reservados).
+- **Tabelas:** `caixas`, `pdv_vendas`, `pdv_itens` (custo e preço do momento), `pdv_pagamentos`, `caixa_movimentos`, `pdv_autorizacoes`, `pdv_seq` — todas com `tenant_id` (a empresa).
+- **Testes:** `tests/pdv.py` (108 verificações; roda no `tests/ci_banco.sh` e no GitHub).
 
 ## Desenvolver e testar no computador
 
@@ -116,7 +147,7 @@ node scripts/dev-server.js   # http://localhost:3000
 
 - Repositório **privado**.
 - **Nunca** colocar aqui backups (`.json`), planilhas ou PDFs com dados de clientes. O `.gitignore` já bloqueia esses arquivos.
-- Senhas nunca vão no código nem em variável de ambiente, com uma exceção: `SETUP_CODE`, que só cria o primeiro administrador. O `lib/central-cred.js` guarda só o **hash** da senha da Central (nunca a senha).
+- Senhas nunca vão no código nem em variável de ambiente, com uma exceção: `SETUP_CODE`, que só cria o primeiro administrador. A senha da Central existe só como **hash** (variável `CENTRAL_HASH` ou `lib/central-cred.js`), nunca a senha.
 
 ## Pendências conhecidas
 

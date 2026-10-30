@@ -3,20 +3,29 @@
  * Toda gravação vai para o servidor, que confere e recalcula antes de aceitar.
  * Nada de senha, custo ou comissão fica guardado neste aparelho.            */
 /* /cliente: link só para clientes (sem textos da equipe; só aceita login de cliente) */
-const CLIENT_ONLY=/^\/cliente\/?$/.test(location.pathname);
+/* Tino: cada empresa tem o seu endereço /t/<empresa> (a principal fica em /). Vai em toda chamada ao servidor. */
+if(/^\/t\/[^/]*[A-Z]/.test(location.pathname)){location.replace(location.pathname.replace(/^\/t\/[^/]+/,m=>m.toLowerCase())+location.search+location.hash);throw new Error('indo para o endereço em minúsculas')}
+/* endereço /t/... com nome de empresa inválido (sublinhado, acento...): nunca cai na empresa principal */
+const TBAD=/^\/t(\/|$)/.test(location.pathname)&&!/^\/t\/[a-z0-9-]{1,40}(?:\/(?:(?:cliente|pdv)\/?)?)?$/.test(location.pathname);
+if(TBAD){const nf=()=>{document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>'};if(document.body)nf();else document.addEventListener('DOMContentLoaded',nf);throw new Error('endereço de empresa inválido')}
+const TSLUG=(location.pathname.match(/^\/t\/([a-z0-9-]{1,40})(?:\/|$)/)||[])[1]||'';
+const CLIENT_ONLY=/^(?:\/t\/[a-z0-9-]{1,40})?\/cliente\/?$/.test(location.pathname);
+/* /pdv (ou /t/<empresa>/pdv): caixa de balcão em tela cheia */
+const PDV_PATH=/^(?:\/t\/[a-z0-9-]{1,40})?\/pdv\/?$/.test(location.pathname);
+const TBASE=TSLUG?'/t/'+TSLUG:'';
 const SRV={me:null,V:{meta:{}},base:{meta:{}},ord:{},t:null,busy:false,again:false,ver:'',poll:null,lastPass:'',offline:false,retry:null,rej:{},nPend:0};
-const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins','suppliers','receipts','stariaJobs','imports'];
-const SRV_ORDERED=['suppliers','products','customers','sellers','checkers','billers','vehicles','cities','categories','combos','admins','payables','receivables'];
+const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins','suppliers','receipts','stariaJobs','imports','cashiers'];
+const SRV_ORDERED=['suppliers','products','customers','sellers','checkers','billers','vehicles','cities','categories','combos','admins','payables','receivables','cashiers'];
 const SRV_WRITE={cliente:['orders','customers'],vendedor:['orders'],conferente:['orders','counts','receipts'],faturamento:['orders','receipts'],entregador:['orders','romaneios']};
-const ROLE_VIEW={admin:'admin',cliente:'cliente',vendedor:'vend',conferente:'conf',faturamento:'fat',entregador:'ent'};
-const VIEW_ROLE={admin:'admin',cliente:'cliente',vend:'vendedor',conf:'conferente',fat:'faturamento',ent:'entregador'};
+const ROLE_VIEW={admin:'admin',cliente:'cliente',vendedor:'vend',conferente:'conf',faturamento:'fat',entregador:'ent',operador_caixa:'pdv'};
+const VIEW_ROLE={admin:'admin',cliente:'cliente',vend:'vendedor',conf:'conferente',fat:'faturamento',ent:'entregador',pdv:'operador_caixa'};
 async function api(path,body){
-  const opt=body===undefined?{credentials:'same-origin'}:{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-App':'1'},body:JSON.stringify(body)};
+  const opt=body===undefined?{credentials:'same-origin',headers:{'X-Tenant':TSLUG||'@'}}:{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-App':'1','X-Tenant':TSLUG||'@'},body:JSON.stringify(body)};
   let r;try{r=await fetch(path,opt)}catch(e){const er=new Error('Sem conexão com o servidor. Confira a internet.');er.status=0;throw er}
   let j={};try{j=await r.json()}catch(e){}
   if(!r.ok){const e=new Error(j.error||('Erro '+r.status));e.status=r.status;e.data=j;throw e}
   return j}
-function emptyState(){return {store:{name:'ATACADO DAVILA',pickupDisc:0,pickV:1,onerV:2,pickupOner:false},payments:[],cashPays:[],payDays:{},products:[],customers:[],orders:[],receivables:[],payables:[],sellers:[],checkers:[],billers:[],vehicles:[],cities:[],categories:[],combos:[],counts:[],commPayouts:[],trips:[],romaneios:[],admins:[],suppliers:[],receipts:[],stariaJobs:[],imports:[],seq:1001,catTreeV1:true}}
+function emptyState(){return {store:{name:'ATACADO DAVILA',pickupDisc:0,pickV:1,onerV:2,pickupOner:false},payments:[],cashPays:[],payDays:{},products:[],customers:[],orders:[],receivables:[],payables:[],sellers:[],checkers:[],billers:[],vehicles:[],cities:[],categories:[],combos:[],counts:[],commPayouts:[],trips:[],romaneios:[],admins:[],suppliers:[],receipts:[],stariaJobs:[],imports:[],cashiers:[],seq:1001,catTreeV1:true}}
 function srvFix(){const E=emptyState();Object.keys(E).forEach(k=>{if(S[k]==null)S[k]=E[k]});S.store=Object.assign({},E.store,S.store||{});
   (S.products||[]).forEach(p=>{if(p.perPack===undefined)p.perPack=parsePack(p.unit);if(p.code==null)p.code='';if(p.ean==null)p.ean='';p.rules=Object.assign(emptyRules(),p.rules||{})})}
 function srvSnap(){SRV.base={meta:{}};SRV.ord={};
@@ -24,19 +33,23 @@ function srvSnap(){SRV.base={meta:{}};SRV.ord={};
   Object.keys(S).forEach(k=>{if(!SRV_COLLS.includes(k)&&k!=='seq')SRV.base.meta[k]=JSON.stringify(S[k])})}
 /* Tino: módulos e marca da empresa, definidos na Central do sistema */
 let TENANT=null;
+/* antes do login: nome, cor e logo da empresa do endereço (empresa que não é a principal não mostra a marca da principal) */
+async function srvLoadBrand(){try{const b=await api('/api/brand');if(b&&!b.primary){TENANT={id:b.id,primary:false,brand:{name:b.name,color:b.color,logo:b.logo},modules:null};{const m=document.querySelector('link[rel=manifest]');if(m)m.href='/api/manifest?t='+encodeURIComponent(TSLUG)+(CLIENT_ONLY?'&k=cliente':'');const ic=document.querySelector('link[rel=apple-touch-icon]');if(ic)ic.href='/icons/tino-180.png';const at=document.querySelector('meta[name=apple-mobile-web-app-title]');if(at)at.content=String(b.name||'Tino').slice(0,30)}S.store.name=String(b.name||'').toUpperCase();document.title=b.name||document.title;srvBrand()}}catch(e){if(e.status===404){document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>';throw e}}}
 function srvBrand(){const c=TENANT&&TENANT.brand&&TENANT.brand.color;if(!c||!/^#[0-9A-Fa-f]{6}$/.test(c))return;
   const n=parseInt(c.slice(1),16),dk=[16,8,0].map(k=>Math.round(((n>>k)&255)*.78).toString(16).padStart(2,'0')).join(''),R=document.documentElement.style;
-  R.setProperty('--brand',c);R.setProperty('--brand-dark','#'+dk);const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',c)}
+  R.setProperty('--brand',c);R.setProperty('--brand-dark','#'+dk);if(TENANT&&TENANT.primary===false){R.setProperty('--accent',c);R.setProperty('--stripe','#'+dk);R.setProperty('--accent-soft',c+'1F')}const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',c)}
 async function loadState(){const r=await api('/api/state');SRV.me=r.me;S=r.S;SRV.V=r.V||{meta:{}};TENANT=r.T||null;srvBrand();srvFix();srvSnap();
   if(ui.client)ui.client=S.customers.find(c=>c.id===ui.client.id)||null;
   if(SRV.me&&SRV.me.role==='cliente')ui.client=S.customers.find(c=>c.id===SRV.me.refId)||ui.client}
 function srvInPlace(t,s){Object.keys(t).forEach(k=>{if(!(k in s))delete t[k]});return Object.assign(t,s)}
 function srvDiff(){const ch=[],order={},role=SRV.me&&SRV.me.role,can=c=>role==='admin'||(SRV_WRITE[role]||[]).includes(c);
+  const off=(TENANT&&TENANT.off)||{keepColls:[],keepMetas:[]};
   SRV_COLLS.forEach(c=>{const arr=S[c]||[],B=SRV.base[c]=SRV.base[c]||{},V=SRV.V[c]||{},ids=new Set();
+    if(off.keepColls.includes(c)){const was=Object.values(B);if(arr.length!==was.length||arr.some(d=>d&&B[d.id]!==JSON.stringify(d))){S[c]=was.map(x=>JSON.parse(x));SRV.offHit=true}return}
     arr.forEach(d=>{if(!d||typeof d!=='object')return;if(!d.id)d.id=uid();ids.add(d.id);const s=JSON.stringify(d);if(B[d.id]!==s){if(can(c))ch.push({c,id:d.id,op:'put',doc:d,ver:V[d.id],base:V[d.id]?B[d.id]:undefined});else B[d.id]=s}});
     Object.keys(B).forEach(id=>{if(!ids.has(id)){if(role==='admin')ch.push({c,id,op:'del',ver:V[id]});else delete B[id]}});
     if(role==='admin'&&SRV_ORDERED.includes(c)){const now=arr.map(d=>d&&d.id);if(JSON.stringify(now)!==JSON.stringify(SRV.ord[c]||[]))order[c]=now}});
-  Object.keys(S).forEach(k=>{if(SRV_COLLS.includes(k)||k==='seq')return;const s=JSON.stringify(S[k]);if(SRV.base.meta[k]!==s){if(role==='admin')ch.push({c:'meta',id:k,op:'put',doc:S[k],ver:(SRV.V.meta||{})[k]});else SRV.base.meta[k]=s}});
+  Object.keys(S).forEach(k=>{if(SRV_COLLS.includes(k)||k==='seq')return;if(off.keepMetas.includes(k)){if(SRV.base.meta[k]!==JSON.stringify(S[k])){if(SRV.base.meta[k]===undefined)delete S[k];else S[k]=JSON.parse(SRV.base.meta[k]);SRV.offHit=true}return}const s=JSON.stringify(S[k]);if(SRV.base.meta[k]!==s){if(role==='admin')ch.push({c:'meta',id:k,op:'put',doc:S[k],ver:(SRV.V.meta||{})[k]});else SRV.base.meta[k]=s}});
   return {ch,order}}
 function srvApply(r,order,sent){const touched=new Set();
   (r.docs||[]).forEach(d=>{touched.add(d.c);
@@ -56,7 +69,9 @@ function save(){clearTimeout(SRV.t);SRV.t=setTimeout(srvSync,120)}
 function srvIsPending(c,id){const d=(S[c]||[]).find(x=>x&&x.id===id);return !!d&&(SRV.base[c]||{})[id]!==JSON.stringify(d)}
 function srvOrderState(id){if(SRV.rej[id]&&!S.orders.some(o=>o.id===id))return 'rej';if(srvIsPending('orders',id))return SRV.offline?'off':'wait';return 'ok'}
 /* o que não foi enviado fica guardado no aparelho até o servidor confirmar (inclusive se a página recarregar) */
-function srvPendKey(){return SRV.me?'srv-pend:'+SRV.me.role+':'+(SRV.me.refId||SRV.me.login):''}
+/* chaves guardadas no aparelho levam a empresa: o que ficou pendente numa empresa nunca é enviado para outra */
+const TKEY=TSLUG?TSLUG+':':'';
+function srvPendKey(){return SRV.me?'srv-pend:'+TKEY+SRV.me.role+':'+(SRV.me.refId||SRV.me.login):''}
 function srvPersist(ch){const k=srvPendKey();if(!k)return;try{if(!ch||!ch.length){localStorage.removeItem(k);return}
   const L=ch.filter(x=>x.op==='put').map(x=>({c:x.c,id:x.id,doc:x.doc,ver:x.ver,base:x.base}));
   try{localStorage.setItem(k,JSON.stringify(L))}catch(e){localStorage.setItem(k,JSON.stringify(L.map(x=>x.doc&&x.doc.delivered&&String(x.doc.delivered.photo||'').startsWith('data:')?Object.assign({},x,{nophoto:true,doc:Object.assign({},x.doc,{delivered:Object.assign({},x.doc.delivered,{photo:''})})}):x)))}}catch(e){}}
@@ -73,7 +88,7 @@ function srvNetBar(){let b=document.getElementById('srvnet');const n=SRV.nPend;
   b.hidden=false;b.textContent='Sem internet: '+n+(n>1?' alterações ainda não foram enviadas':' alteração ainda não foi enviada')+'. O app envia sozinho quando a conexão voltar. Não feche o app.'}
 window.addEventListener('online',()=>{if(SRV.me)srvSync()});
 async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
-  const {ch,order}=srvDiff();SRV.nPend=ch.length;if(!ch.length&&!Object.keys(order).length){srvPersist([]);SRV.offline=false;srvNetBar();return}
+  const {ch,order}=srvDiff();SRV.nPend=ch.length;if(SRV.offHit){SRV.offHit=false;srvAlert('Não foi gravado: função desligada para esta empresa.');srvSoftRender(true)}if(!ch.length&&!Object.keys(order).length){srvPersist([]);SRV.offline=false;srvNetBar();return}
   srvPersist(ch);
   SRV.busy=true;srvBadge(true);clearTimeout(SRV.retry);
   try{const sent={};ch.forEach(x=>{if(x.op==='put')sent[x.c+':'+x.id]=JSON.stringify(x.doc)});const r=await api('/api/sync',{changes:ch,order});
@@ -83,8 +98,8 @@ async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
         if(k>=0){if(b)arr[k]=JSON.parse(b);else arr.splice(k,1)}t.add(x.c)});
       srvAlert(r.rejected.map(x=>x.error).filter((v,i,a)=>a.indexOf(v)===i).join(' · '))}
     const left=srvDiff().ch;SRV.nPend=left.length;srvPersist(left);
-    if(ui.admin&&['customers','sellers','checkers','billers','vehicles','admins'].some(c=>t.has(c)))srvSoftRender((r.rejected||[]).length>0);else if(t.has('orders')||t.has('receivables')||t.has('products'))srvSoftRender((r.rejected||[]).length>0)}
-  catch(e){if(e.status===401){toast('Sua sessão terminou. Entre de novo.');setTimeout(()=>location.reload(),1200);return}
+    if(ui.admin&&['customers','sellers','checkers','billers','vehicles','admins'].some(c=>t.has(c)))srvSoftRender((r.rejected||[]).length>0);else if(t.has('orders')||t.has('receivables')||t.has('products')||(r.rejected||[]).length)srvSoftRender((r.rejected||[]).length>0)}
+  catch(e){if(e.status===401){toast('Sua sessão terminou. Entre de novo.');setTimeout(()=>location.reload(),1200);return}if(srvKicked(e))return;
     if(e.data&&e.data.mustReset){srvResetScreen();return}
     if(e.status===0||e.status>=500&&e.status!==501){/* sem internet ou servidor fora: guarda e tenta de novo sozinho */
       SRV.offline=e.status===0;srvNetBar();if(ui.view==='cliente'&&ui.cliPage==='ok')try{renderClient()}catch(_){}if(!SRV.offline)toast('O servidor não respondeu. Vamos tentar de novo em instantes.');
@@ -109,7 +124,10 @@ function srvSoftRender(force){const typing=(document.activeElement&&document.act
 function reloadState(){srvRefresh(true)}
 async function srvRefresh(force){if(!SRV.me||SRV.busy)return;const {ch}=srvDiff();if(ch.length){srvSync();return}
   try{const v=await api('/api/version');if(!force&&v.v===SRV.ver)return;SRV.ver=v.v;await loadState();srvSoftRender(force)}
-  catch(e){if(e.status===401){location.reload()}}}
+  catch(e){if(e.status===401){toast('Sua sessão terminou. Se você entrou em outra empresa neste navegador, só uma fica aberta por vez.');setTimeout(()=>location.reload(),3500)}else srvKicked(e)}}
+/* empresa suspensa, loja em preparo ou acesso desligado: avisa e sai (em vez de seguir na tela sem gravar nada) */
+function srvKicked(e){if(!(e&&e.status===403&&e.data&&e.data.login))return false;if(SRV.kicked)return true;SRV.kicked=true;clearInterval(SRV.poll);
+  try{localStorage.removeItem(srvDraftKey())}catch(_){}$('#app').innerHTML='<div class="empty" role="alert"><h2>'+esc(e.message)+'</h2><p>Você foi desconectado.</p></div>';setTimeout(()=>{api('/api/logout',{}).catch(()=>{}).then(()=>location.reload())},4000);return true}
 function srvStartPoll(){clearInterval(SRV.poll);SRV.poll=setInterval(()=>{if(document.visibilityState==='visible')srvRefresh(false)},20000);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')srvRefresh(false)})}
 /* entrar: o servidor confere a senha; o navegador nunca vê senha de ninguém */
@@ -127,10 +145,10 @@ function srvAfterLogin(){const me=SRV.me;SRV.lastPass='';ui.view=ROLE_VIEW[me.ro
   try{history.replaceState(null,'',location.pathname+(me.role==='cliente'?'':'#'+me.role))}catch(e){}
   srvDraftLoad();render();srvStartPoll();srvRestorePending();srvBackInit()}
 async function srvLogout(){if(srvDiff().ch.length&&!confirm('Há alterações que ainda não foram enviadas ao servidor. Sair mesmo assim? Elas serão perdidas.'))return;
-  try{localStorage.removeItem(srvPendKey());localStorage.removeItem(srvDraftKey())}catch(e){}try{await api('/api/logout',{})}catch(e){}try{history.replaceState(null,'',location.pathname)}catch(e){}location.reload()}
+  try{localStorage.removeItem(srvPendKey());localStorage.removeItem(srvDraftKey());if(typeof pdvSnapDrop==='function')pdvSnapDrop()}catch(e){}try{await api('/api/logout',{})}catch(e){}try{history.replaceState(null,'',location.pathname)}catch(e){}location.reload()}
 /* primeira entrada com senha provisória: a pessoa cria a senha dela */
 function srvResetScreen(){ui.view=ROLE_VIEW[SRV.me.role]||'cliente';const app=$('#app');try{renderTop()}catch(e){}$('#topbar').innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name||'ATACADO DAVILA')}</span><small>Crie sua senha</small></span></div>`;
-  app.innerHTML=`<div class="loginhero"><img src="${LOGO}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="rsf"><h2>Crie a sua senha</h2>
+  app.innerHTML=`<div class="loginhero"><img src="${brandLogo()}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="rsf"><h2>Crie a sua senha</h2>
     <div class="small muted">Olá, ${esc(SRV.me.name||SRV.me.login)}. A senha que você usou é provisória. Crie uma senha só sua${SRV.me.role==='admin'?' (mínimo 10 caracteres)':' (mínimo 8 caracteres)'}, com letras e números.</div>
     ${SRV.lastPass?'':'<div class="field"><label for="rso">Senha atual</label><input type="password" id="rso" autocomplete="current-password" required></div>'}
     <div class="field"><label for="rsn">Nova senha</label><input type="password" id="rsn" autocomplete="new-password" required></div>
@@ -151,7 +169,7 @@ function srvPassScreen(){const app=$('#app');app.innerHTML=`<form class="login p
 /* links de acesso da equipe na tela de login do cliente (cada pessoa entra pelo seu) */
 function srvTeamLinks(cur){return cur==='cliente'&&!CLIENT_ONLY?'<div class="teamlinks small">Equipe da loja (vendedor, conferente, faturamento, motorista e administrador) também entra por aqui, com o usuário e a senha que a loja passou.</div>':''}
 function srvBindTeamLinks(){document.querySelectorAll('[data-goview]').forEach(a=>a.onclick=e=>{e.preventDefault();ui.view=a.dataset.goview;try{history.replaceState(null,'','#'+VIEW_ROLE[ui.view])}catch(_){}render()})}
-function srvHashView(){if(CLIENT_ONLY)return 'cliente';const h=String(location.hash||'').replace('#','');const k=Object.keys(VIEW_ROLE).find(v=>VIEW_ROLE[v]===h);return k||'cliente'}
+function srvHashView(){if(CLIENT_ONLY)return 'cliente';if(PDV_PATH)return 'pdv';const h=String(location.hash||'').replace('#','');const k=Object.keys(VIEW_ROLE).find(v=>VIEW_ROLE[v]===h);return k||'cliente'}
 /* trava de margem do vendedor: o cálculo é feito no servidor (o vendedor não recebe custo) */
 const SRV_LK={};
 function srvLockKey(cli,L){return JSON.stringify([cli&&cli.id,L.cart,L.over||{},L.mode,L.pay,!!L.nf,L.editId||'',!!L._tblOk])}
@@ -172,7 +190,7 @@ async function srvTempPasswords(box){try{const r=await api('/api/temp-passwords'
 function srvPassLabel(x){return x.pass?'senha base (salvando…)':x.hasPass?(x.mustReset?'senha base · aguardando 1º acesso':'senha própria definida'):'sem senha'}
 /* primeiro acesso ao sistema novo: criar o administrador (exige o código de instalação) */
 async function srvMaybeSetup(){try{const r=await api('/api/setup-status');if(!r.needsSetup||SRV.me)return}catch(e){return}
-  const app=$('#app');app.innerHTML=`<div class="loginhero"><img src="${LOGO}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="stf"><h2>Criar o administrador</h2>
+  const app=$('#app');app.innerHTML=`<div class="loginhero"><img src="${brandLogo()}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="stf"><h2>Criar o administrador</h2>
     <div class="small muted">Use o <b>código de instalação</b> que você cadastrou na Vercel (SETUP_CODE). Depois de criado, este formulário não aparece mais.</div>
     <div class="field"><label for="stc">Código de instalação</label><input type="password" id="stc" autocomplete="off" required></div>
     <div class="field"><label for="stn">Seu nome</label><input type="text" id="stn" required></div>
@@ -231,7 +249,7 @@ function srvInstallBox(){document.querySelectorAll('.instbox').forEach(x=>x.remo
   const b=document.getElementById('instBtn');if(b)b.onclick=async()=>{if(!SRV_INSTALL)return;SRV_INSTALL.prompt();try{await SRV_INSTALL.userChoice}catch(e){}SRV_INSTALL=null;srvInstallBox()}}
 new MutationObserver(()=>{if(document.querySelector('form.login')&&!document.querySelector('.instbox')&&!SRV.me)srvInstallBox()}).observe(document.documentElement,{childList:true,subtree:true});
 /* rascunho: carrinho, pedido do vendedor em andamento e formulário de entrega sobrevivem a recarregar a página */
-function srvDraftKey(){return SRV.me?'srv-draft:'+SRV.me.role+':'+(SRV.me.refId||SRV.me.login):''}
+function srvDraftKey(){return SRV.me?'srv-draft:'+TKEY+SRV.me.role+':'+(SRV.me.refId||SRV.me.login):''}
 function srvDraftSnap(){const r=SRV.me&&SRV.me.role;if(!r)return null;
   if(r==='cliente')return {cart:ui.cart||{},note:ui.note||'',neg:ui.neg||{},negSt:ui.negSt||{}};
   if(r==='vendedor'||r==='admin')return {lanc:ui.lanc||null};

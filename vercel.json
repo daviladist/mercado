@@ -17,6 +17,30 @@
     {
       "source": "/api/(.*)",
       "destination": "/api/index"
+    },
+    {
+      "source": "/t/:empresa/pdv",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/pdv",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/t/:empresa/cliente",
+      "destination": "/cliente.html"
+    },
+    {
+      "source": "/t/:empresa/cliente/",
+      "destination": "/cliente.html"
+    },
+    {
+      "source": "/t/:empresa",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/t/:empresa/",
+      "destination": "/index.html"
     }
   ],
   "headers": [
@@ -54,6 +78,15 @@
         {
           "key": "Cache-Control",
           "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/central(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
         }
       ]
     }

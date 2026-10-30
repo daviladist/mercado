@@ -23,3 +23,18 @@ test('toda coleção e papel protegidos apontam para módulo que existe e não �
   ['admin', 'cliente', 'vendedor'].forEach(r => assert.strictEqual(M.ROLE_MODULE[r], undefined));
 });
 test('códigos únicos', () => { assert.strictEqual(new Set(M.MODULES.map(m => m.code)).size, M.MODULES.length); });
+test('módulo que diz "servidor" tem efeito no servidor (dados, configuração ou login)', () => {
+  M.MODULES.filter(m => m.enforced === 'servidor' && m.code !== 'negociacao').forEach(m => {
+    assert.ok((m.colls || []).length || (m.metas || []).length || (m.roles || []).length, m.code);
+  });
+  M.MODULES.filter(m => m.enforced === 'tela').forEach(m => assert.ok(!(m.colls || []).length && !(m.metas || []).length, m.code));
+});
+test('dados de módulo desligado não saem e não entram', () => {
+  const P = M.stripOff({ payables: [{ id: 1 }], receivables: [{ id: 2 }], lastWeek: { ids: [] }, orders: [{ id: 3 }] }, M.resolve({ default_on: false }));
+  assert.deepStrictEqual(P.payables, []); assert.deepStrictEqual(P.receivables, []); assert.strictEqual(P.lastWeek, undefined); assert.strictEqual(P.orders.length, 1);
+  const off = M.resolve({ default_on: false });
+  assert.strictEqual(M.blockedBy({ c: 'payables', id: 'x' }, off), 'pagar');
+  assert.strictEqual(M.blockedBy({ c: 'meta', id: 'lastWeek' }, off), 'ofertas');
+  assert.strictEqual(M.blockedBy({ c: 'orders', id: 'x' }, off), '');
+  assert.strictEqual(M.blockedBy({ c: 'constructor', id: 'x' }, off), '');
+});
