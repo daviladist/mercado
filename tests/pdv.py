@@ -167,6 +167,15 @@ s, st = A.req('/api/state'); pb = next(p for p in st['S']['products'] if p['id']
 check(pb['stock'] == 40, 'mudar a situação do pedido do balcão NÃO devolve nem baixa estoque de novo: %s' % pb['stock'])
 check(len(recs) == 2, 'nem gera conta a receber a mais: %s' % len(recs))
 
+print('== cancelar venda (gerente)')
+s, st = A.req('/api/state'); est = next(p for p in st['S']['products'] if p['id'] == 'pa')['stock']
+s, r = op.req('/api/pdv/cancelar', {'id': V1, 'motivo': 'teste de cancelamento'}); check(s == 403, 'operador não cancela venda')
+s, r = A.req('/api/pdv/cancelar', {'id': V1, 'motivo': 'x'}); check(s == 400, 'cancelar sem motivo é recusado')
+s, r = A.req('/api/pdv/cancelar', {'id': V1, 'motivo': 'cliente devolveu tudo'}); check(s == 200, 'gerente cancela a venda nº 1')
+s, st = A.req('/api/state'); check(next(p for p in st['S']['products'] if p['id'] == 'pa')['stock'] == est + 2, 'cancelar devolve o estoque (2 arroz)')
+s, r = A.req('/api/pdv/cancelar', {'id': V1, 'motivo': 'de novo, por engano'}); check(s == 409, 'não cancela duas vezes')
+s, r = A.req('/api/pdv/cancelar', {'id': FV, 'motivo': 'já virou pedido'}); check(s == 400, 'venda que já virou pedido da NF-e não é cancelada por aqui')
+
 print('== outra empresa não vê o caixa desta')
 s, r = cen.req('/api/central/tenant', {'name': 'Loja PDV ' + secrets.token_hex(2), 'segment': 'basico', 'status': 'ativa', 'modules': {'pdv': True}}); TB = r['tenant']['id']
 s, r = cen.req('/api/central/tenant-admin', {'id': TB, 'login': 'dono'}); B = C(TB); B.req('/api/login', {'role': 'admin', 'login': 'dono', 'password': r['password']}); NB = pw(); B.req('/api/password', {'current': r['password'], 'next': NB})
