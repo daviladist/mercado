@@ -34,8 +34,8 @@ function srvSnap(){SRV.base={meta:{}};SRV.ord={};
 /* Tino: módulos e marca da empresa, definidos na Central do sistema */
 let TENANT=null;
 /* antes do login: nome, cor e logo da empresa do endereço (empresa que não é a principal não mostra a marca da principal) */
-let SRV_NOCLI=false;
-async function srvLoadBrand(){try{const b=await api('/api/brand');SRV_NOCLI=!!(b&&b.clientes===false);if(b&&!b.primary){TENANT={id:b.id,primary:false,brand:{name:b.name,color:b.color,logo:b.logo},modules:null};{const m=document.querySelector('link[rel=manifest]');if(m)m.href='/api/manifest?t='+encodeURIComponent(TSLUG)+(CLIENT_ONLY?'&k=cliente':'');const ic=document.querySelector('link[rel=apple-touch-icon]');if(ic)ic.href='/icons/tino-180.png';const at=document.querySelector('meta[name=apple-mobile-web-app-title]');if(at)at.content=String(b.name||'Tino').slice(0,30)}S.store.name=String(b.name||'').toUpperCase();document.title=b.name||document.title;srvBrand()}}catch(e){if(e.status===404){document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>';throw e}}}
+let SRV_NOCLI=false,SRV_BNAME='';
+async function srvLoadBrand(){try{const b=await api('/api/brand');SRV_NOCLI=!!(b&&b.clientes===false);SRV_BNAME=String(b&&b.name||'');if(b&&!b.primary){TENANT={id:b.id,primary:false,brand:{name:b.name,color:b.color,logo:b.logo},modules:null};{const m=document.querySelector('link[rel=manifest]');if(m)m.href='/api/manifest?t='+encodeURIComponent(TSLUG)+(CLIENT_ONLY?'&k=cliente':'');const ic=document.querySelector('link[rel=apple-touch-icon]');if(ic)ic.href='/icons/tino-180.png';const at=document.querySelector('meta[name=apple-mobile-web-app-title]');if(at)at.content=String(b.name||'Tino').slice(0,30)}S.store.name=String(b.name||'').toUpperCase();document.title=b.name||document.title;srvBrand()}}catch(e){if(e.status===404){document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>';throw e}}}
 function srvBrand(){const c=TENANT&&TENANT.brand&&TENANT.brand.color;if(!c||!/^#[0-9A-Fa-f]{6}$/.test(c))return;
   const n=parseInt(c.slice(1),16),dk=[16,8,0].map(k=>Math.round(((n>>k)&255)*.78).toString(16).padStart(2,'0')).join(''),R=document.documentElement.style;
   R.setProperty('--brand',c);R.setProperty('--brand-dark','#'+dk);if(TENANT&&TENANT.primary===false){R.setProperty('--accent',c);R.setProperty('--stripe','#'+dk);R.setProperty('--accent-soft',c+'1F')}const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',c)}
@@ -297,3 +297,47 @@ document.addEventListener('change',e=>{const i=e.target;if(!i||!i.matches||!i.ma
   set();window.addEventListener('resize',later);window.addEventListener('orientationchange',()=>setTimeout(set,300));
   try{const h=document.querySelector('header.top');if(h&&window.ResizeObserver)new ResizeObserver(later).observe(h)}catch(e){}
   try{new MutationObserver(()=>{band();later()}).observe(document.body,{childList:true,subtree:true})}catch(e){}})();
+
+/* ===================== Telas de entrada com a marca da empresa + assinatura Tino =====================
+   Vale para todas as telas de login (cliente, administrador, vendedor, conferente, faturamento, motorista,
+   primeiro acesso). A empresa aparece em destaque (logo, nome, cor); embaixo, a assinatura do Tino. */
+const TINO_SPARK='<svg aria-hidden="true" viewBox="0 0 40 40" width="22" height="22"><path d="M20 0 C22 13 27 18 40 20 C27 22 22 27 20 40 C18 27 13 22 0 20 C13 18 18 13 20 0 Z" fill="currentColor"/></svg>';
+function tinoFontOnce(){if(document.getElementById('tinofont'))return;const l=document.createElement('link');l.id='tinofont';l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family=Sora:wght@500;700;800&display=swap';document.head.appendChild(l)}
+function tinoLoginCss(){if(document.getElementById('tlogincss'))return;const st=document.createElement('style');st.id='tlogincss';st.textContent=`
+body.tlogin{background:linear-gradient(160deg,var(--brand) 0%,var(--brand-dark,var(--brand)) 100%) top/100% clamp(300px,42vh,380px) no-repeat,var(--bg);min-height:100vh}
+body.tlogin::before{content:'';position:fixed;left:0;right:0;top:0;height:clamp(300px,42vh,380px);pointer-events:none;background:radial-gradient(600px 240px at 85% 0%,rgba(255,255,255,.14),transparent 70%),radial-gradient(500px 220px at 5% 100%,rgba(0,0,0,.12),transparent 70%);z-index:0}
+body.tlogin main{position:relative;z-index:1}
+body.tlogin header.top{display:none}
+body.tlogin #app{padding-top:clamp(18px,6vh,64px);padding-bottom:28px}
+body.tlogin .loginhero{max-width:420px;margin:0 auto;background:transparent;border:0;padding:6px 16px 22px;gap:10px;box-shadow:none}
+body.tlogin .loginhero img{width:170px;max-width:56%;height:auto;max-height:120px;object-fit:contain;filter:drop-shadow(0 6px 14px rgba(0,0,0,.28))}
+body.tlogin .loginhero .lhname{font-size:clamp(22px,4.2vw,28px);font-weight:800;letter-spacing:-.01em;line-height:1.1;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.18)}
+body.tlogin .loginhero>div:not(.lhname){font-weight:500;font-size:14px;color:rgba(255,255,255,.9)}
+body.tlogin .loginhero+.login,body.tlogin .loginhero+.panel,body.tlogin .loginhero+section{max-width:420px;margin:0 auto;border-radius:18px;box-shadow:0 18px 48px rgba(16,24,32,.16),0 2px 6px rgba(16,24,32,.06);border:1px solid color-mix(in srgb,var(--line,#ddd) 70%,transparent);padding:22px}
+body.tlogin .login h2{font-size:20px;margin:0 0 2px}
+body.tlogin .login .hint:empty{display:none}
+body.tlogin .login .btn[type=submit]{min-height:48px;font-size:16px}
+.tsig{max-width:420px;margin:22px auto 0;display:grid;justify-items:center;gap:6px;text-align:center;font-family:"Sora",system-ui,sans-serif;color:var(--muted,#667)}
+.tsig .tsig-line{display:flex;align-items:center;gap:8px}
+.tsig .tsig-ic{width:34px;height:34px;border-radius:10px;background:#1F3D2B;color:#E8A33D;display:grid;place-items:center;box-shadow:0 4px 12px rgba(31,61,43,.25)}
+.tsig .tsig-wm{font-weight:800;font-size:22px;letter-spacing:-.03em;color:#1F3D2B}
+.tsig .tsig-sl{font-size:13px;font-weight:500}.tsig .tsig-sl b{color:#C9861F;font-weight:700}
+.tsig .tsig-by{font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.75}
+@media (prefers-color-scheme:dark){.tsig .tsig-wm{color:#F6F1E7}.tsig .tsig-sl b{color:#E8A33D}}
+html[data-theme=dark] .tsig .tsig-wm{color:#F6F1E7}html[data-theme=dark] .tsig .tsig-sl b{color:#E8A33D}
+html[data-theme=light] .tsig .tsig-wm{color:#1F3D2B}
+`;document.head.appendChild(st)}
+function tinoCoName(){const n=SRV_BNAME||(TENANT&&TENANT.brand&&TENANT.brand.name)||'';return n||String(S&&S.store&&S.store.name||'')}
+function tinoLoginDecor(){
+  const app=document.getElementById('app');if(!app)return;
+  const hero=app.querySelector('.loginhero'),on=!!hero&&!document.body.classList.contains('pdvmode');
+  document.body.classList.toggle('tlogin',on);if(!on)return;
+  tinoFontOnce();tinoLoginCss();
+  if(!hero.querySelector('.lhname')){const nm=tinoCoName();if(nm){const d=document.createElement('div');d.className='lhname';d.textContent=nm;const img=hero.querySelector('img');if(img)img.after(d);else hero.prepend(d)}
+    const sub=[...hero.children].find(x=>x.tagName==='DIV'&&!x.classList.contains('lhname'));
+    if(sub&&TENANT&&!TENANT.primary&&/atacado com preço de distribuidor/i.test(sub.textContent))sub.textContent='Faça seu pedido online'}
+  if(!app.querySelector('.tsig')){const s=document.createElement('div');s.className='tsig';
+    s.innerHTML='<div class="tsig-line"><span class="tsig-ic">'+TINO_SPARK+'</span><span class="tsig-wm">tino</span></div><div class="tsig-sl">Quem tem Tino, <b>vende melhor.</b></div><div class="tsig-by">Sistema de pedidos e gestão Tino</div>';
+    app.appendChild(s)}
+}
+(()=>{const run=()=>{try{tinoLoginDecor()}catch(e){}};const a=document.getElementById('app');if(a)new MutationObserver(run).observe(a,{childList:true});run()})();

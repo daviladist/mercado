@@ -60,7 +60,7 @@ body.pdvmode{background:#F6F1E7}body.pdvmode main{padding:0}body.pdvmode main>.w
 .pdvqr{display:grid;justify-items:center;gap:6px}.pdvqr img{width:220px;height:220px;image-rendering:pixelated}.pdvqr code{font-size:11px;word-break:break-all;background:#F6F1E7;padding:6px;border-radius:6px;max-width:100%}
 .pdvpays{display:grid;gap:4px}.pdvpays div{display:flex;justify-content:space-between;background:#F6F1E7;border-radius:6px;padding:6px 10px}
 .pdvbig{font-size:34px;font-weight:800;font-variant-numeric:tabular-nums}
-.pdvlogin{max-width:420px;margin:40px auto;padding:0 16px}
+.pdvlogin{max-width:420px;margin:32px auto;padding:0 16px;display:grid;gap:14px}.pdvco{margin-bottom:4px}.pdvco{display:grid;justify-items:center;gap:8px;text-align:center}.pdvco img{width:120px;height:auto;max-height:90px;object-fit:contain;background:var(--brand,#1F3D2B);border-radius:16px;padding:12px 16px;box-shadow:0 6px 18px rgba(31,61,43,.18)}.pdvco b{font-size:22px;color:var(--g)}.pdvslog{text-align:center;color:var(--m);font-size:13px}.pdvslog b{color:#C9861F}
 #pdvprint{display:none}
 @media (max-height:700px),(max-width:1100px){.pdvf button{padding:4px 8px;font-size:12px;min-height:38px}.pdvin input{font-size:20px}.pdvtot .v{font-size:40px}.pdvt{max-height:calc(100vh - 230px)}.pdvm{padding:10px;gap:10px}}
 @media print{body *{visibility:hidden!important}#pdvprint,#pdvprint *{visibility:visible!important}#pdvprint{display:block!important;position:absolute;left:0;top:0;width:72mm;font:12px/1.35 monospace;color:#000}
@@ -71,8 +71,8 @@ const PDV_SPARK='<svg aria-hidden="true" viewBox="0 0 40 40" width="20" height="
 /* ---------------------------------------------------------------- tela principal */
 async function renderPdv(){pdvCss();document.body.classList.add('pdvmode');const app=$('#app');
   if(!SRV.me){app.innerHTML=`<div class="pdv"><div class="pdvh"><div class="b"><span class="ic">${PDV_SPARK}</span><span class="wm">tino</span><span class="s">Caixa de balcão</span></div></div>
-    <div class="pdvlogin"><form class="pdvmd" id="pdvl" style="width:100%"><h2>Entrar no caixa</h2><div><label for="pdvlu">Usuário</label><input id="pdvlu" autocomplete="username" autocapitalize="off" required></div>
-    <div><label for="pdvlp">Senha</label><input id="pdvlp" type="password" autocomplete="current-password" required></div><div class="pdverr" id="pdvle" role="alert"></div><div class="bt"><button class="ok" type="submit">Entrar</button></div></form></div></div>`;
+    <div class="pdvlogin"><div class="pdvco"><img src="${brandLogo()}" alt=""><b>${esc((typeof SRV_BNAME!=='undefined'&&SRV_BNAME)||S.store.name||'')}</b></div><form class="pdvmd" id="pdvl" style="width:100%"><h2>Entrar no caixa</h2><div><label for="pdvlu">Usuário</label><input id="pdvlu" autocomplete="username" autocapitalize="off" required></div>
+    <div><label for="pdvlp">Senha</label><input id="pdvlp" type="password" autocomplete="current-password" required></div><div class="pdverr" id="pdvle" role="alert"></div><div class="bt"><button class="ok" type="submit">Entrar</button></div></form><div class="pdvslog">Quem tem Tino, <b>vende melhor.</b></div></div></div>`;
     $('#pdvl').onsubmit=e=>{e.preventDefault();srvLogin('operador_caixa',$('#pdvlu').value.trim(),$('#pdvlp').value,$('#pdvle'),$('#pdvl button[type=submit]'))};setTimeout(()=>{const i=$('#pdvlu');if(i)i.focus()},50);return}
   const role=SRV.me.role;
   if(role!=='operador_caixa'&&role!=='admin'){app.innerHTML='<div class="empty">Este acesso não usa o caixa.</div>';return}
