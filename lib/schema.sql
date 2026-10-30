@@ -3,7 +3,7 @@
 -- (o arquivo é dividido em comandos por ";" + quebra de linha; o teste tests/unit/schema.test.js confere).
 -- Tino: tabelas com nome novo (_t). O código antigo procura users/docs/photos e passa a falhar em vez de
 -- misturar empresas (voltar para uma versão antiga do app nunca mais lê dados de outra empresa).
-do $$ begin if to_regclass('public.users') is not null and to_regclass('public.users_t') is null then alter table users_t rename to users_t; end if; if to_regclass('public.docs') is not null and to_regclass('public.docs_t') is null then alter table docs_t rename to docs_t; end if; if to_regclass('public.photos') is not null and to_regclass('public.photos_t') is null then alter table photos_t rename to photos_t; end if; end $$;
+do $$ begin if to_regclass('public.users') is not null and to_regclass('public.users_t') is null then alter table users rename to users_t; end if; if to_regclass('public.docs') is not null and to_regclass('public.docs_t') is null then alter table docs rename to docs_t; end if; if to_regclass('public.photos') is not null and to_regclass('public.photos_t') is null then alter table photos rename to photos_t; end if; end $$;
 create table if not exists users_t (
   id bigserial primary key,
   role text not null check (role in ('admin','cliente','vendedor','conferente','faturamento','entregador')),
@@ -132,6 +132,7 @@ do $$ begin if not exists (select 1 from pg_constraint where conname='photos_ten
 -- ===== Tino PDV (caixa de balcão). Tudo por empresa (tenant_id = empresa). =====
 -- novo perfil de acesso: operador de caixa
 alter table users_t drop constraint if exists users_role_check;
+alter table users_t drop constraint if exists users_t_role_check;
 alter table users_t add constraint users_role_check check (role in ('admin','cliente','vendedor','conferente','faturamento','entregador','operador_caixa'));
 -- turnos de caixa: abertura com fundo de troco, fechamento às cegas
 create table if not exists caixas (
