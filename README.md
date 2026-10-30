@@ -108,6 +108,23 @@ Não existe "recuperar": a senha não fica guardada. Gere outra com `node script
 ### Testes
 - `npm test` (regras, sem banco) e `PGURL=postgres://usuario:senha@host:porta bash tests/ci_banco.sh` (Central e separação por empresa com Postgres de teste; também roda no GitHub).
 
+## Caixa de balcão (PDV) — módulo "pdv"
+
+Venda no balcão ("pague e leve") no mesmo sistema e no mesmo banco, separada por empresa.
+
+- **Ligar:** Central do sistema › empresa › módulo "Caixa de balcão (PDV)" (começa desligado). Desligado, o operador de caixa não entra e a API do caixa responde 403.
+- **Quem usa:** perfil **operador de caixa** (Cadastros › Usuários › Operadores de caixa). Vende e recebe; **nunca** recebe custo, margem nem estoque. O administrador também pode operar.
+- **Endereço:** `https://SEU-SITE/pdv` (outras empresas: `/t/<empresa>/pdv`). No painel: aba **Caixa (PDV)**.
+- **Tela (teclado):** campo do código sempre com foco (leitor USB = teclado + Enter); `4*código` = 4 unidades; F2 busca por nome, F3 quantidade, F4 cliente (tabela e IE dele), F6 desconto, F7 cancela item com motivo, F8 reimprime, F9 consulta preço, F10 pagamento, F11 (ou Ctrl+E) venda em espera, F12 (ou Ctrl+K) caixa. Esc fecha janelas. Som de ok/erro. Código não cadastrado: aviso, e o gerente pode vincular o código a um produto.
+- **Pagamento:** misto (dinheiro, PIX, débito, crédito, fiado), troco automático (só sai do dinheiro), PIX com QR/"copia e cola" no valor exato e botão "Conferi o PIX", cartão só registra, fiado só para cliente com limite (gera conta a receber).
+- **Servidor confere tudo:** recalcula preço, desconto e margem; venda com valor diferente do servidor é recusada; desconto acima do limite (ou abaixo da margem mínima) só com senha de um administrador, gravando quem autorizou (autorização vale uma vez, para aquela venda, por 10 minutos); a mesma venda enviada duas vezes grava uma vez; venda, itens, pagamentos, estoque e fiado entram juntos ou nada entra; tudo auditado.
+- **Caixa:** abertura com fundo de troco; sangria/suprimento com senha do gerente; fechamento **às cegas** (o operador informa o que contou sem ver o esperado); diferença vira aviso no painel até ser justificada; relatório do turno.
+- **Sem internet:** a venda vai para uma fila no aparelho e é enviada sozinha. Se o valor não bater quando chegar, ela entra "a revisar" (já foi paga) para o gerente conferir.
+- **Integrações:** painel com o balcão separado (vendas, margem, avisos); Financeiro › Caixa da semana mostra o balcão por dia e por forma; botão **Enviar para faturamento** transforma a venda (com cliente) em pedido "A faturar" para a NF-e, sem baixar estoque de novo nem gerar outra conta. Comprovante 80 mm pelo navegador (não fiscal).
+- **NFC-e:** fase 2 (módulo "NFC-e no caixa", já registrado; a venda tem os campos `nfce_status`/`nfce_chave` reservados).
+- **Tabelas:** `caixas`, `pdv_vendas`, `pdv_itens` (custo e preço do momento), `pdv_pagamentos`, `caixa_movimentos`, `pdv_autorizacoes`, `pdv_seq` — todas com `tenant_id` (a empresa).
+- **Testes:** `tests/pdv.py` (66 verificações; roda no `tests/ci_banco.sh` e no GitHub).
+
 ## Desenvolver e testar no computador
 
 ```

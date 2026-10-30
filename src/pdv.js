@@ -73,7 +73,7 @@ async function renderPdv(){pdvCss();document.body.classList.add('pdvmode');const
   if(!PDV.st){app.innerHTML='<div class="pdv"><div class="empty" style="padding:40px">Abrindo o caixa…</div></div>';
     try{PDV.st=await api('/api/pdv/state')}catch(e){app.innerHTML='<div class="pdv"><div class="empty" style="padding:40px">'+esc(e.message)+'</div></div>';return}
     const draft=pdvLoad('venda',null);if(draft&&Array.isArray(draft.items)){Object.assign(PDV,{items:draft.items,cust:draft.cust||null,desc:draft.desc||null,saleId:draft.saleId||null})}
-    pdvStartQueue()}
+    pdvStartQueue();pdvQrLib().catch(()=>{})}
   if(!PDV.st.caixa){pdvOpenCaixa();return}
   if(!PDV.saleId)PDV.saleId=pdvNewId();
   app.innerHTML=`<div class="pdv" id="pdvroot">
@@ -243,8 +243,9 @@ function pdvBrCode(valor){const cf=PDV.st.cfg||{},clean=s=>String(s||'').normali
   return p+pdvCrc(p)}
 const pdvPixHtml=v=>`<div class="pdvqr"><div id="pdvqrimg" class="pdvmut">Gerando QR…</div><code id="pdvqrtxt">${esc(pdvBrCode(v))}</code><div class="pdvmut">Valor exato: ${pdvMoney(v)}. Confira no app do banco antes de apertar "Conferi o PIX".</div></div>`;
 function pdvPixQr(v){const draw=()=>{const box=$('#pdvqrimg');if(!box)return;try{const q=window.qrcode(0,'M');q.addData(pdvBrCode(v));q.make();box.innerHTML='<img alt="QR Code do PIX" src="'+q.createDataURL(6,8)+'">'}catch(e){box.textContent='QR indisponível: use o código abaixo (copia e cola).'}};
-  if(window.qrcode){draw();return}if(PDV.qrLib)return PDV.qrLib.then(draw,draw);
-  PDV.qrLib=new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';s.onload=ok;s.onerror=no;document.head.appendChild(s)});PDV.qrLib.then(draw,()=>{const b=$('#pdvqrimg');if(b)b.textContent='Sem QR (sem internet?): use o código abaixo.'})}
+  if(window.qrcode){draw();return}pdvQrLib().then(draw,()=>{const b=$('#pdvqrimg');if(b)b.textContent='Sem QR (sem internet?): use o código abaixo.'})}
+/* gerador de QR carregado ao abrir o caixa (com internet), para o PIX funcionar mesmo se a conexão cair depois */
+function pdvQrLib(){if(window.qrcode)return Promise.resolve();if(PDV.qrLib)return PDV.qrLib;PDV.qrLib=new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';s.onload=ok;s.onerror=()=>{PDV.qrLib=null;no()};document.head.appendChild(s)});return PDV.qrLib}
 async function pdvFinish(){if(PDV.busy)return;PDV.busy=true;const ok=$('#pdvpok');if(ok)ok.disabled=true;
   const body=Object.assign(pdvBody(),{id:PDV.saleId,caixaId:PDV.st.caixa.id,autorizacao:PDV.auth||'',pagamentos:PDV.pays.map(p=>({forma:p.forma,valor:p.valor,recebido:p.recebido,conferido:!!p.conferido})),totalEsperado:PDV.payTotal,clientAt:new Date().toISOString()});
   const snap={items:PDV.items.slice(),cust:PDV.cust,T:pdvTotals(),pays:PDV.pays.slice(),troco:Math.max(0,pdvPaid()-PDV.payTotal)};

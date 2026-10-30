@@ -36,7 +36,7 @@ sc = c.last.get('Set-Cookie', '')
 check('HttpOnly' in sc and 'SameSite=Strict' in sc and 'csid=' in sc, 'cookie da Central é HttpOnly e SameSite=Strict')
 s, st = c.req('/api/central/state'); check(s == 200 and st['me']['login'] == 'super_admin', 'Central carrega')
 dav = next(t for t in st['tenants'] if t['id'] == 'davila')
-check(dav['primary'] and all(dav['modules'].values()), 'empresa atual começa com todos os módulos ligados')
+check(dav['primary'] and all(v for k, v in dav['modules'].items() if k not in ('pdv', 'pdv_nfce')), 'empresa atual começa com todos os módulos ligados (menos os novos que o dono liga: PDV)')
 check(len(st['modules']) >= 20 and any(m['essential'] for m in st['modules']), 'catálogo de módulos com essenciais')
 check('hash' not in json.dumps(st) and 'scrypt' not in json.dumps(st), 'Central não devolve hash de senha')
 
@@ -81,7 +81,7 @@ ck2 = Client(); s, r = ck2.req('/api/login', {'role': 'conferente', 'login': 'co
 save(modules={'pagar': True, 'conferencia': True, 'negociacao': True})
 s, r = adm.req('/api/sync', {'changes': [{'c': 'payables', 'id': 'pg1', 'op': 'put', 'doc': doc}]})
 check(s == 200 and not r.get('rejected'), 'religado: conta a pagar grava normalmente')
-s, r = adm.req('/api/state'); check(all(r['T']['modules'].values()), 'empresa volta a ter todos os módulos ligados')
+s, r = adm.req('/api/state'); check(all(v for k, v in r['T']['modules'].items() if k not in ('pdv', 'pdv_nfce')), 'empresa volta a ter todos os módulos ligados')
 
 print('== nova empresa pelo segmento')
 s, r = c.req('/api/central/tenant', {'name': 'Distribuidora de Suplementos', 'segment': 'suplementos', 'color': '#1D4ED8', 'status': 'em_preparo'})
