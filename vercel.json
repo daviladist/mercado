@@ -20,27 +20,27 @@
     },
     {
       "source": "/t/:empresa/pdv",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/pdv",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/t/:empresa/cliente",
-      "destination": "/cliente.html"
+      "destination": "/cliente"
     },
     {
       "source": "/t/:empresa/cliente/",
-      "destination": "/cliente.html"
+      "destination": "/cliente"
     },
     {
       "source": "/t/:empresa",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/t/:empresa/",
-      "destination": "/index.html"
+      "destination": "/"
     }
   ],
   "headers": [
