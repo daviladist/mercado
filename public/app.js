@@ -1138,7 +1138,7 @@ function pdvAdmOperadores(c){const L=S.cashiers||(S.cashiers=[]);
   c.querySelectorAll('[data-opdel]').forEach(b=>b.onclick=()=>{if(!confirm('Excluir este operador? Ele deixa de entrar no caixa.'))return;S.cashiers=L.filter(x=>x.id!==b.dataset.opdel);save();pdvAdmOperadores(c)})}
 /* painel (Visão geral): cartão do balcão, separado das vendas de pedidos */
 async function pdvDashCard(){if(!modOn('pdv')||!SRV.me||SRV.me.role!=='admin'||ui.tab!=='hoje')return;const host=$('#tabc');if(!host)return;
-  try{const R=await api('/api/pdv/resumo?de='+new Date().toISOString().slice(0,10)+'&ate='+new Date().toISOString().slice(0,10));if(ui.tab!=='hoje'||!$('#tabc'))return;
+  try{const hj=new Date().toLocaleDateString('sv-SE');const R=await api('/api/pdv/resumo?de='+hj+'&ate='+hj);if(ui.tab!=='hoje'||!$('#tabc'))return;
     const d=document.createElement('div');d.className='panel';d.id='pdvdash';d.style.cssText='display:grid;gap:6px;margin-bottom:12px;border-left:5px solid #E8A33D';
     d.innerHTML=`<b>Balcão (PDV) hoje</b><div class="row" style="gap:16px;flex-wrap:wrap"><span>Vendas: <b>${R.vendas}</b></span><span>Total: <b>${brl(R.total)}</b></span><span>Margem: <b>${R.margem==null?'—':String(R.margem).replace('.',',')+'%'}</b></span></div>${R.diferencas.length?`<div class="warnc">${R.diferencas.length} caixa(s) com diferença aguardando justificativa</div>`:''}${R.revisar.length?`<div class="warnc">${R.revisar.length} venda(s) do balcão a revisar</div>`:''}`;
     const old=$('#pdvdash');if(old)old.remove();host.prepend(d)}catch(e){}}
