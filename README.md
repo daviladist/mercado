@@ -129,6 +129,9 @@ Venda no balcão ("pague e leve") no mesmo sistema e no mesmo banco, separada po
 - **Tabelas:** `caixas`, `pdv_vendas`, `pdv_itens` (custo e preço do momento), `pdv_pagamentos`, `caixa_movimentos`, `pdv_autorizacoes`, `pdv_seq` — todas com `tenant_id` (a empresa).
 - **Testes:** `tests/pdv.py` (108 verificações; roda no `tests/ci_banco.sh` e no GitHub).
 
+## Modelos por segmento (Central)
+Em "Modelo por segmento", **+ Criar segmento** monta um pacote de módulos com nome (ex.: Varejo), e dá para começar pelos módulos da empresa aberta. **Editar segmentos** lista todos: os de fábrica (Atacado completo, Distribuidora de suplementos, Só o básico) podem ser editados e voltar ao original; os criados podem ser editados ou apagados. Mudar ou apagar um modelo não mexe nas empresas que já existem. Módulo criado no futuro começa desligado nos modelos salvos. Fica na tabela `segments`. Testes em `tests/central.py`.
+
 ## Vitrine semanal x catálogo fixo (e o que o PDV vende)
 O **cadastro** (produtos com estoque) e a **vitrine** (o que cliente e vendedores veem no app) são coisas diferentes:
 - **Vitrine semanal** = módulo "Ofertas da semana" ligado na Central (D'Ávila). Você publica a semana em OFERTAS › Ofertas da semana (marca produtos, preços e validade). **Passou o dia final** (horário de Brasília), a vitrine fecha com "Nova tabela em breve": o servidor recusa pedido de cliente e de vendedor até você publicar de novo. A loja (administrador) continua lançando pedido.

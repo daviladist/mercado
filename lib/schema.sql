@@ -265,3 +265,11 @@ create index if not exists caixa_mov_caixa on caixa_movimentos(tenant_id, caixa_
 create index if not exists pdv_aut_expira on pdv_autorizacoes(expira_em);
 alter table caixas add column if not exists diferencas jsonb;
 alter table caixas add column if not exists tem_dif boolean not null default false;
+-- modelos por segmento da Central: os de fábrica podem ser editados (linha com o mesmo id) e o dono cria outros
+create table if not exists segments (
+  id text primary key,
+  name text not null,
+  modules jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
