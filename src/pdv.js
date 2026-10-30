@@ -398,14 +398,15 @@ const PDV_SNAP=()=>'pdv:'+(TSLUG||'@')+':snap';
    administrador: produto sem custo/estoque/tabelas/margem, cliente só com 5 campos, loja só com o público.
    Estas listas são as mesmas de lib/policy.js (P_SECRET, STORE_PUBLIC e a projeção de clientes do
    operador_caixa); tests/unit confere que continuam iguais. */
-const PDV_P_SECRET=['lastIn','cost','refCost','tablePrices','stock','minStock','idealStock','minMg','trib','commission'];
+const PDV_P_SECRET=['lastIn','cost','refCost','refGone','tablePrices','stock','minStock','idealStock','minMg','trib','commission'];
 const PDV_STORE_PUBLIC=['name','from','to','min','pickup','conds','billGate','pickupDisc','pickupOner','pickV','onerV','autoRec'];
 const PDV_CLI_KEYS=['id','name','doc','ieOk','creditLimit'];
 function pdvSnapCut(){const pk=(o,ks)=>{const x={};ks.forEach(k=>{if(o&&o[k]!==undefined)x[k]=o[k]});return x};
   const products=(S.products||[]).filter(p=>p.active!==false).map(p=>{const x=Object.assign({},p);PDV_P_SECRET.forEach(k=>delete x[k]);return x});
   const st=S.store||{},store=pk(st,PDV_STORE_PUBLIC);if(st.neg)store.neg={who:st.neg.who,on:st.neg.on,minItems:st.neg.minItems,minTotal:st.neg.minTotal,maxItems:st.neg.maxItems};
   const customers=(S.customers||[]).filter(c=>c.active!==false&&c.blocked!==true).map(c=>pk(c,PDV_CLI_KEYS));
-  return {store,products,categories:S.categories,combos:S.combos,customers,payments:S.payments,cashPays:S.cashPays,payDays:S.payDays,cities:S.cities,catTreeV1:S.catTreeV1}}
+  const categories=(S.categories||[]).map(c=>{if(!c||typeof c!=='object')return c;const x=JSON.parse(JSON.stringify(c));delete x.minMg;delete x.comm;(x.subs||[]).forEach(t=>{delete t.minMg;delete t.comm});return x});
+  return {store,products,categories,combos:S.combos,customers,payments:S.payments,cashPays:S.cashPays,payDays:S.payDays,cities:S.cities,catTreeV1:S.catTreeV1}}
 function pdvSnapSave(){if(!SRV.me||!PDV.st||!PDV.st.caixa)return;
   const snap={at:Date.now(),me:SRV.me,T:TENANT,st:PDV.st,S:pdvSnapCut()};
   try{localStorage.setItem(PDV_SNAP(),JSON.stringify(snap))}catch(e){}

@@ -92,13 +92,13 @@ with sync_playwright() as pw:
         pg.evaluate("()=>document.getElementById('pbP').click()"); pg.wait_for_timeout(400)
         pg.fill('#aq', 'whey teste'); pg.wait_for_timeout(400)
         dmsg = []; pg.on('dialog', lambda d: dmsg.append(d.message))
-        pg.check('#pbAll'); pg.fill('#bssub', 'Whey'); pg.select_option('#bsact', '0'); pg.click('#bsgo'); pg.wait_for_timeout(1500)
+        pg.check('#pbAll'); pg.fill('#bssub', 'Whey'); pg.select_option('#bsact', '0'); pg.fill('#bsref', '20'); pg.click('#bsgo'); pg.wait_for_timeout(1500)
         print('   diálogo:', dmsg, '| aviso:', pg.locator('#toast').inner_text() if pg.locator('#toast').count() else '')
         for _ in range(20):
             P = {p.get('code'): p for p in state()['S']['products']}
             if P['99001']['sub'] == 'Whey': break
             pg.wait_for_timeout(500)
-        chk(P['99001']['sub'] == 'Whey' and P['99002']['sub'] == 'Whey' and P['99001']['active'] is False and P['99003']['sub'] == 'Proteínas' and P['99003']['active'] is True, f"alteração em massa na lista de produtos ({P['99001']['sub']}, {P['99001']['active']}, {P['99003']['sub']!r})")
+        chk(P['99001']['sub'] == 'Whey' and P['99002']['sub'] == 'Whey' and P['99001']['active'] is False and P['99003']['sub'] == 'Proteínas' and P['99003']['active'] is True and P['99001'].get('refCost') == 120, f"alteração em massa na lista de produtos ({P['99001']['sub']}, {P['99001']['active']}, {P['99003']['sub']!r})")
         chk(not errs, 'sem erro de tela: ' + '; '.join(errs[:3]))
         # deixa uma importação pendente para o teste do celular
         post('/api/sync', {'changes': [{'c': 'imports', 'id': 'imtestecel', 'op': 'put', 'doc': {'id': 'imtestecel', 'kind': 'staria', 'status': 'pendente', 'terms': ['99001', '99003'], 'items': [

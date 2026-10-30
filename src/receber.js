@@ -185,6 +185,8 @@ function precEdit(el,r){r=liveDoc('receipts',r);const P=ui.prc;P.lk=P.lk||{};
         <label>Fardo c/<input type="text" inputmode="decimal" data-ppk="${i.k}" value="${rcQty(pk)}"></label>
         <label>Valor unit. (R$)<input type="text" inputmode="decimal" data-pc="${i.k}" value="${rcMoney(i.valor)}"></label>
         <span class="small muted pcunit">${pk>1&&c>0?brl(c/pk)+' por unidade':''}</span></div>
+      ${(()=>{const old=p&&Number(p.cost)>0?Number(p.cost):Number(i.prevCost)||0;if(!old)return '';const drop=c>0&&c<=old*0.9&&!(Number(p&&p.refCost)>0||Number(i.prevRef)>0);if(Number(i.refCost)>0)return `<div class="pcref on"><span>🛡 <b>Margem protegida:</b> a trava do vendedor usa ${brl(Number(i.refCost))} como custo (o seu custo real continua ${brl(c)}).</span><button type="button" class="link" data-pref="${i.k}">Tirar</button></div>`;
+        return drop?`<div class="pcref"><span>Comprou ${Math.round((1-c/old)*100)}% abaixo do custo anterior (${brl(old)}). Quer que o vendedor não gaste essa vantagem em desconto?</span><button type="button" class="btn ghost dlb" data-pref="${i.k}" data-prv="${old}">🛡 Proteger: usar ${brl(old)} como custo de referência</button></div>`:''})()}
       <div class="pcflags"><label class="switch small"><input type="checkbox" data-ptr="${i.k}" ${i.trib?'checked':''}> Tributado</label><label class="switch small"><input type="checkbox" data-pie="${i.k}" ${i.ieOn?'checked':''}> Preço com inscrição estadual</label></div>
       <div class="pcprices">
         <label>${i.ieOn?'Preço sem IE':'Preço de venda'} (R$)<input type="text" inputmode="decimal" data-pp="${i.k}" value="${rcMoney(i.price)}" placeholder="0,00"></label><span class="small pcmg" data-pmg="${i.k}">${rcMgTxt(c,Number(i.price),i.trib,false)}</span>
@@ -206,6 +208,7 @@ function precEdit(el,r){r=liveDoc('receipts',r);const P=ui.prc;P.lk=P.lk||{};
   num('data-pq','q',rcQty,0.001);num('data-ppk','perPack',rcQty,1);num('data-pc','valor',rcMoney,0);num('data-pp','price',rcMoney,0.01);num('data-pi','iePrice',rcMoney,0.01);
   el.querySelectorAll('[data-ptr]').forEach(b=>b.onchange=()=>{const i=it(b.dataset.ptr);i.trib=b.checked;save();rer()});
   el.querySelectorAll('[data-pie]').forEach(b=>b.onchange=()=>{const i=it(b.dataset.pie);i.ieOn=b.checked;if(!b.checked)i.iePrice='';save();rer(b.checked?'[data-pi="'+i.k+'"]':null)});
+  el.querySelectorAll('[data-pref]').forEach(b=>b.onclick=()=>{const i=it(b.dataset.pref);if(!i)return;i.refCost=Number(i.refCost)>0?'':Number(b.dataset.prv)||'';save();rer()});
   el.querySelectorAll('[data-pnew]').forEach(b=>b.onchange=()=>{const i=it(b.dataset.pnew);i.newProd=b.checked;save()});
   el.querySelectorAll('[data-plq]').forEach(inp=>inp.oninput=()=>{P.lk[inp.dataset.plq]={q:inp.value};const pos=inp.selectionStart;rer();const n=el.querySelector('[data-plq="'+inp.dataset.plq+'"]');n.focus();n.setSelectionRange(pos,pos)});
   el.querySelectorAll('[data-plp]').forEach(b=>b.onclick=()=>{const [k,pid]=b.dataset.plp.split('|'),i=it(k),p=(S.products||[]).find(x=>x.id===pid);if(!i||!p)return;
@@ -235,6 +238,9 @@ function rcAlert(){const c0=$('#tabc'),sj=(S.stariaJobs||[]).filter(j=>j.status=
   if(c0&&ui.tab!=='precnotas'&&typeof impOpen==='function'){impFillAll();const IL=impOpen();if(IL.length){const d=document.createElement('div');d.className='rcalert imalert';
     d.innerHTML=`<span><b>${IL.length} importaç${IL.length>1?'ões':'ão'} em massa esperando preço.</b> Os produtos só entram no catálogo quando você aprovar.</span><div class="row" style="gap:6px;flex-wrap:wrap">${IL.map((im,k)=>`<button type="button" class="btn dlb" data-ima="${im.id}">${im.status==='consultando'?'Importação '+(k+1)+' · aguardando StarIA':'Precificar importação'+(IL.length>1?' '+(k+1):'')+' ('+impLeft(im).length+')'}</button>`).join('')}</div>`;
     c0.prepend(d);d.querySelectorAll('[data-ima]').forEach(b=>b.onclick=()=>{ui.tab='precnotas';ui.prc={imp:b.dataset.ima};renderAdmin();window.scrollTo(0,0)});impWatch()}}
+  {const G=(S.products||[]).filter(p=>p.refGone&&Number(p.refGone.v)>0);if(c0&&G.length){const d=document.createElement('div');d.className='rcalert';
+    d.innerHTML=`<span><b>Custo de referência apagado em ${G.length} produto${G.length>1?'s':''}</b> porque o custo novo ficou igual ou maior: ${G.slice(0,3).map(p=>esc(p.name)+' (custo '+brl(Number(p.refGone.cost))+', referência era '+brl(Number(p.refGone.v))+')').join(' · ')}${G.length>3?' …':''}. A trava do vendedor voltou a usar o custo real.</span><button type="button" class="btn ghost dlb">Entendi</button>`;
+    c0.prepend(d);d.querySelector('button').onclick=()=>{G.forEach(p=>{delete p.refGone});save();d.remove()}}}
   const n=rcPend().length,c=$('#tabc');if(!n||!c||ui.tab==='precnotas')return;
   const d=document.createElement('div');d.className='rcalert';d.innerHTML=`<span><b>${n} nota${n>1?'s':''} de entrada esperando preço.</b> O estoque já entrou; aprove os preços em Produtos › Precificação de notas.</span><button type="button" class="btn dlb">Precificar agora</button>`;
   c.prepend(d);d.querySelector('button').onclick=()=>{ui.tab='precnotas';renderAdmin();window.scrollTo(0,0)}}

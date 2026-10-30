@@ -255,3 +255,24 @@ test('custo de referência some quando o custo real fica igual ou maior', () => 
   r = policy.applySync(S, V, U.admin, [{ c: 'products', id: 'p1', op: 'put', doc: drop, ver: 1 }]);
   assert.equal(r.writes[0].doc.refCost, undefined);
 });
+
+test('custo de referência apagado pelo custo novo deixa aviso (refGone) só para a loja', () => {
+  const S = base(); const V = { products: { p1: 1, p2: 1 }, meta: {} };
+  const drop = Object.assign({}, S.products[0], { cost: 50, refCost: 45 });
+  const r = policy.applySync(S, V, U.admin, [{ c: 'products', id: 'p1', op: 'put', doc: drop, ver: 1 }]);
+  assert.equal(r.writes[0].doc.refCost, undefined);
+  assert.equal(r.writes[0].doc.refGone.v, 45); assert.equal(r.writes[0].doc.refGone.cost, 50);
+  const blank = Object.assign({}, S.products[0], { refCost: '' });
+  const r2 = policy.applySync(S, V, U.admin, [{ c: 'products', id: 'p1', op: 'put', doc: blank, ver: 1 }]);
+  assert.equal(r2.writes[0].doc.refGone, undefined, 'apagar na mão não gera aviso');
+  S.products[0].refGone = { v: 45, cost: 50 };
+  for (const role of ['vendedor', 'conferente', 'faturamento', 'cliente']) assert.equal(policy.project(S, U[role]).products[0].refGone, undefined);
+});
+
+test('item do pedido guarda o custo de referência e só a loja vê', () => {
+  const S = base(); S.products[0].refCost = 50; const C = policy.coreFor(S, 'admin', {}).C;
+  assert.equal(C.refCOf(S.products[0]), 50);
+  assert.equal(C.refCOf(S.products[1]), undefined);
+  const o = order(S, { sellerId: 's1', items: [it('p1', 5, 60, { cost: 40, refC: 50 })] });
+  for (const role of ['vendedor', 'cliente']) { const x = policy.stripOrder(clone(o), role); assert.equal(x.items[0].refC, undefined, role); }
+});
