@@ -33,14 +33,15 @@ newdb tino_ci_migr
 psql "$PGURL/tino_ci_migr" -q -v ON_ERROR_STOP=1 -f tests/fixtures/schema_no_ar_f80a1ba.sql -f tests/fixtures/dados_no_ar.sql
 for vez in 1 2; do DATABASE_URL="$PGURL/tino_ci_migr?sslmode=$SSL" node -e "require('./lib/schema').ensureSchema().then(()=>process.exit(0),e=>{console.error(e);process.exit(1)})"; done
 q() { psql "$PGURL/tino_ci_migr" -tAq -c "$1"; }
-[ "$(q "select count(*) from docs where tenant_id='davila'")" = "7" ] || { echo "FALHA: registros não ficaram na empresa principal"; exit 1; }
-[ "$(q "select count(*) from users where tenant_id='davila'")" = "3" ] || { echo "FALHA: usuários"; exit 1; }
-[ "$(q "select count(*) from photos where tenant_id='davila'")" = "1" ] || { echo "FALHA: fotos"; exit 1; }
+[ "$(q "select count(*) from docs_t where tenant_id='davila'")" = "7" ] || { echo "FALHA: registros não ficaram na empresa principal"; exit 1; }
+[ "$(q "select count(*) from users_t where tenant_id='davila'")" = "3" ] || { echo "FALHA: usuários"; exit 1; }
+[ "$(q "select count(*) from photos_t where tenant_id='davila'")" = "1" ] || { echo "FALHA: fotos"; exit 1; }
 [ "$(q "select last_no from order_seq where tenant_id='davila'")" = "1002" ] || { echo "FALHA: numeração dos pedidos"; exit 1; }
 [ "$(q "select count(*) from schema_version")" = "1" ] || { echo "FALHA: schema_version"; exit 1; }
-if q "insert into docs(coll,id,data) values('products','px','{}')" 2>/dev/null; then echo "FALHA: gravou sem empresa"; exit 1; fi
-if q "insert into docs(tenant_id,coll,id,data) values('nao-existe','products','px','{}')" 2>/dev/null; then echo "FALHA: gravou em empresa inexistente"; exit 1; fi
-echo "  OK   dados, usuários, fotos e numeração preservados; rodar 2x não estraga; sem empresa é recusado"
+if q "insert into docs_t(coll,id,data) values('products','px','{}')" 2>/dev/null; then echo "FALHA: gravou sem empresa"; exit 1; fi
+if q "insert into docs_t(tenant_id,coll,id,data) values('nao-existe','products','px','{}')" 2>/dev/null; then echo "FALHA: gravou em empresa inexistente"; exit 1; fi
+[ "$(q "select to_regclass('public.docs') is null and to_regclass('public.users') is null")" = "t" ] || { echo "FALHA: nomes antigos das tabelas continuam existindo"; exit 1; }
+echo "  OK   dados, usuários, fotos e numeração preservados; rodar 2x não estraga; sem empresa é recusado; nomes antigos não existem (versão antiga não lê)"
 
 echo "== 2. Central do sistema"
 newdb tino_ci_central; serve tino_ci_central

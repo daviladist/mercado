@@ -18,7 +18,7 @@ test('schema.sql: cada comando é UM comando (nada colado no anterior por falta 
   }
 });
 
-test('toda consulta em docs e photos filtra/grava a empresa (tenant_id)', () => {
+test('toda consulta em docs_t e photos_t filtra/grava a empresa (tenant_id)', () => {
   const files = fs.readdirSync(path.join(ROOT, 'lib')).filter(f => f.endsWith('.js') && f !== 'core.generated.js');
   const bad = [];
   for (const f of files) {
@@ -27,11 +27,22 @@ test('toda consulta em docs e photos filtra/grava a empresa (tenant_id)', () => 
     const re = /(`[^`]*`|'[^'\n]*')/g; let m;
     while ((m = re.exec(src))) {
       const q = m[1];
-      if (!/\b(from|into|update|join)\s+(docs|photos)\b/i.test(q)) continue;
+      if (!/\b(from|into|update|join)\s+(docs|photos)(_t)?\b/i.test(q)) continue;
       if (/tenant_id/.test(q)) continue;
       const line = src.slice(0, m.index).split('\n').length;
       bad.push(f + ':' + line + '  ' + q.slice(0, 80).replace(/\s+/g, ' '));
     }
   }
   assert.deepStrictEqual(bad, [], 'consulta sem empresa:\n' + bad.join('\n'));
+});
+
+test('nenhuma consulta usa os nomes antigos das tabelas (users/docs/photos sem _t)', () => {
+  const files = fs.readdirSync(path.join(ROOT, 'lib')).filter(f => f.endsWith('.js') && f !== 'core.generated.js');
+  const bad = [];
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(ROOT, 'lib', f), 'utf8');
+    const re = /(`[^`]*`|'[^'\n]*')/g; let m;
+    while ((m = re.exec(src))) if (/\b(from|into|update|join)\s+(users|docs|photos)\b(?!_)/i.test(m[1])) bad.push(f + ': ' + m[1].slice(0, 70));
+  }
+  assert.deepStrictEqual(bad, []);
 });
