@@ -1464,9 +1464,10 @@ function scanCode(o,raw,mult){
 }
 function scanBar(o){const req=!!S.store.scanRequired;
   return `<div class="scanbar" id="scanbar">
-    <div class="row" style="gap:6px;flex-wrap:nowrap"><input type="text" id="scanin" inputmode="numeric" autocomplete="off" placeholder="Bipe ou digite o código de barras" aria-label="Código de barras" style="flex:1;min-width:0">
-      <label class="scanmul" title="Quantas embalagens cada bipe conta">×<input type="number" id="scanmul" min="1" value="${esc(ui.scanMul||1)}" aria-label="Embalagens por bipe"></label></div>
-    <div class="row" style="gap:6px"><button type="button" class="btn dlb" id="scancam">${scanCam?'Fechar câmera':'Câmera'}</button><label class="btn ghost dlb" for="scanfoto" style="cursor:pointer">Foto do código</label><input type="file" id="scanfoto" accept="image/*" capture="environment" hidden><span class="small muted" style="flex:1">${req?'Bipe obrigatório nos produtos com código de barras.':'Bipe cada embalagem; o item marca sozinho ao completar.'}</span></div>
+    <div class="scrow"><input type="text" id="scanin" inputmode="numeric" autocomplete="off" placeholder="${req?'Bipe (obrigatório)':'Bipe o código'}" aria-label="Código de barras" title="${req?'Bipe obrigatório nos produtos com código de barras.':'Bipe cada embalagem; o item marca sozinho ao completar.'}">
+      <label class="scanmul" title="Quantas embalagens cada bipe conta">×<input type="number" id="scanmul" min="1" value="${esc(ui.scanMul||1)}" aria-label="Embalagens por bipe"></label>
+      <button type="button" class="scico ${scanCam?'on':''}" id="scancam" aria-label="${scanCam?'Fechar câmera':'Ler com a câmera'}" title="${scanCam?'Fechar câmera':'Ler com a câmera'}"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M17 8v8"/></svg></button>
+      <label class="scico" for="scanfoto" aria-label="Foto do código" title="Foto do código" style="cursor:pointer"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></label><input type="file" id="scanfoto" accept="image/*" capture="environment" hidden></div>
     <div class="err" id="scanerr" style="min-height:0"></div></div>`}
 function scanOverlay(){let ov=document.getElementById('scanov');if(!ov){ov=document.createElement('div');ov.id='scanov';ov.innerHTML='<div id="scanview"></div><button type="button" class="btn block" id="scanclose">Fechar câmera</button>';document.body.appendChild(ov);
   ov.querySelector('#scanclose').onclick=async()=>{await stopScanCam();const y=window.scrollY;renderConf();window.scrollTo(0,y)}}return ov}
@@ -1485,7 +1486,7 @@ function bindScan(o,rerender){
       scanCam=new Html5Qrcode('scanview',fm.length?{formatsToSupport:fm,verbose:false}:undefined);
       await scanCam.start({facingMode:'environment'},{fps:10,qrbox:(w,h)=>({width:Math.min(300,w*.9),height:Math.min(140,h*.5)}),experimentalFeatures:{useBarCodeDetectorIfSupported:true}},
         txt=>{const cur=ui.confOrder&&S.orders.find(x=>x.id===ui.confOrder);if(!cur)return;scanCode(cur,txt,ui.scanMul||1);const y=window.scrollY;renderConf();window.scrollTo(0,y)},()=>{});
-      $('#scancam').textContent='Fechar câmera';
+      {const b=$('#scancam');if(b){b.classList.add('on');b.setAttribute('aria-label','Fechar câmera')}}
     }catch(e){scanCam=null;ov.style.display='none';er.textContent='A câmera não abriu ('+((e&&e.name)||'bloqueada')+'). Aqui no Claude ela pode ser bloqueada; no app online funciona. Use "Foto do código" ou um leitor.'}};
   $('#scanfoto').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const er=$('#scanerr');er.textContent='Lendo a foto…';
     try{let code='';
@@ -1593,6 +1594,10 @@ function sugPass(){const a='abcdefghjkmnpqrstuvwxyz23456789',b=new Uint8Array(8)
 const CONF_OPEN=['novo','separando'];
 function sugPending(o){return (o.sugs||[]).filter(s=>s.status==='pendente')}
 function confProgress(o){const its=o.items.filter(i=>i.q>0),ck=o.chk||{};return {done:its.filter(i=>ck[ikey(i)]).length,total:its.length}}
+/* embalagem abreviada para a coluna estreita da conferência: fd, cx, pct, un… */
+function unAbbr(unit,q){const w=String(unit||'un').replace(/\s*(c\/|com\b|x\s*\d).*$/i,'').trim().toLowerCase()||'un';
+  const A=[[/^fard/,'fd'],[/^cai?x/,'cx'],[/^pac|^pct/,'pct'],[/^sac/,'sc'],[/^unid|^un\b|^un\.?$/,'un'],[/^emb/,'emb'],[/^disp/,'disp'],[/^gal/,'gl'],[/^lata/,'lt'],[/^garr/,'gf'],[/^kg|^quil/,'kg'],[/^bal/,'bd'],[/^pot/,'pote'],[/^fr[ae]s/,'fr']];
+  const h=A.find(([re])=>re.test(w));if(h)return h[1];return w.length>5?w.slice(0,4)+'.':w}
 function qtyTxt(q,unit,pk){const w=String(unit||'un.').replace(/\s*c\/.*$/i,'').toLowerCase()||'un.';return q+' '+w+(q>1&&!/s$/.test(w)&&w!=='un.'?'s':'')+(pk>1?' ('+(q*pk).toLocaleString('pt-BR')+' un.)':'')}
 function confLoginForm(){
   return `<div class="loginhero"><img src="${LOGO}" alt="${esc(S.store.name)}"><div>Conferência e separação</div></div><form class="login panel" id="cfl">
@@ -1655,10 +1660,15 @@ function confOrderView(o){
     ${started||!open?confExtraHtml(o,open):''}
     ${o.status==='novo'?`<button class="btn block cfbig" id="cfStart">Começar conferência</button>`:''}
     ${open?scanBar(o):''}
-    <div class="cfitems">${its.map(i=>{const k=ikey(i),ok=!!ck[k],pk=packOfItem(i),s=sugFor(i),sc=(o.scan||{})[k]||0,lock=!!S.store.scanRequired&&hasBarcode(i)&&!ok;return `<div class="cfit ${ok?'ok':''}">
+    <div class="cfitems">${its.map(i=>{const k=ikey(i),ok=!!ck[k],pk=packOfItem(i),s=sugFor(i),sc=(o.scan||{})[k]||0,lock=!!S.store.scanRequired&&hasBarcode(i)&&!ok,more=ui.cfMore===k,uw=unAbbr(i.unit,i.q);
+      const extra=(sc&&!ok?`<span class="cfscan">bipados ${sc} de ${i.q}</span>`:'')+sugTag(s)+(i.qOrig!=null&&i.qOrig!==i.q?`<span class="small" style="color:var(--warn);font-weight:700">Pedido original: ${esc(qtyTxt(i.qOrig,i.unit,0))}</span>`:'');
+      return `<div class="cfit ${ok?'ok':''} ${more?'more':''}">
       <button type="button" class="cfchk" data-ck="${esc(k)}" aria-pressed="${ok}" aria-label="Conferido: ${esc(i.name)}" ${open&&!lock?'':'disabled'} title="${lock?'Bipe o código de barras para conferir':''}">${ok?'✓':lock?'<span class="cflock">bipar</span>':''}</button>
-      <div class="cft"><b>${esc(i.name)}</b><span class="cfq">${esc(qtyTxt(i.q,i.unit,pk))}</span>${sc&&!ok?`<span class="cfscan">bipados ${sc} de ${i.q}</span>`:''}${!hasBarcode(i)?'<span class="small muted">sem código de barras: confira no dedo</span>':''}<span class="codes">${esc(codesLine(i.code,i.ean)||'')}${i.combo?' · '+esc(compLine(i.components)):''}</span>${sugTag(s)}
-        ${open&&!(s&&s.status==='pendente')?`<div class="row" style="gap:14px">${i.combo?'':`<button type="button" class="link cflink" data-cfswap="${esc(k)}">Sugerir troca</button>`}<button type="button" class="link cflink" data-cfqty="${esc(k)}">Falta (alterar quantidade)</button></div>`:''}${i.qOrig!=null&&i.qOrig!==i.q?`<span class="small" style="color:var(--warn);font-weight:700">Pedido original: ${esc(qtyTxt(i.qOrig,i.unit,0))}</span>`:''}</div></div>`}).join('')}</div>
+      <span class="cfq num" title="${esc(qtyTxt(i.q,i.unit,0))}"><b>${esc(nfmt(i.q))}</b><small>${esc(uw)}</small></span>
+      <div class="cft"><b>${esc(i.name)}</b>${pk>1?`<span class="cfpk">${(i.q*pk).toLocaleString('pt-BR')} un. no total</span>`:''}${extra}</div>
+      <button type="button" class="cfmore" data-cfm="${esc(k)}" aria-expanded="${more}" aria-label="Mais opções de ${esc(i.name)}">⋯</button>
+      ${more?`<div class="cfx"><span class="codes">${esc(codesLine(i.code,i.ean)||'sem código')}${i.combo?' · '+esc(compLine(i.components)):''}${!hasBarcode(i)?' · sem código de barras: confira no dedo':''}</span>
+        ${open&&!(s&&s.status==='pendente')?`<div class="row" style="gap:6px;flex-wrap:wrap">${i.combo?'':`<button type="button" class="btn ghost dlb" data-cfswap="${esc(k)}">Sugerir troca</button>`}<button type="button" class="btn ghost dlb" data-cfqty="${esc(k)}">Falta (alterar quantidade)</button></div>`:''}</div>`:''}</div>`}).join('')}</div>
     ${sg.filter(s=>s.type==='inclusao').map(s=>`<div class="cfsug st-${s.status}">${s.status==='pendente'?'Inclusão sugerida (aguardando)':s.status==='aprovada'?'Inclusão aprovada':'Inclusão recusada'}: ${esc(qtyTxt(s.q,s.unit,s.pk))} · ${esc(s.name)}</div>`).join('')}
     ${SG?pform():open?`<button class="btn ghost block" id="cfAdd">+ Sugerir produto a mais</button>`:''}
     ${open?`<button class="btn block cfbig cfready" id="cfReady" ${canReady?'':'disabled'}>${needsBill(o)&&!o.billed?'Pedido separado · enviar para faturar':o.mode==='entrega'?'Separado · pronto para sair':'Pronto para retirada'}</button>
@@ -1668,13 +1678,14 @@ function confOrderView(o){
   const keepY=fn=>{const y=window.scrollY;fn();window.scrollTo(0,y)};
   {const b=$('#cfStart');if(b)b.onclick=()=>{o.checker=ui.checker;o.checkStartAt=o.checkStartAt||new Date().toISOString();setOrderStatus(o,'separando');save();toast('Conferência iniciada · o cliente foi avisado');keepY(renderConf)}}
   app.querySelectorAll('[data-ck]').forEach(b=>b.onclick=()=>{if(o.status==='novo'){o.checker=ui.checker;o.checkStartAt=o.checkStartAt||new Date().toISOString();setOrderStatus(o,'separando')}const k=b.dataset.ck;if(ck[k]){delete ck[k];if(o.scan)delete o.scan[k]}else ck[k]=true;save();keepY(renderConf)});
-  app.querySelectorAll('[data-cfqty]').forEach(b=>b.onclick=()=>{const i=its.find(x=>ikey(x)===b.dataset.cfqty);ui.confSug={type:'qtd',fromKey:ikey(i),fromName:i.name,qFrom:i.q,unit:i.unit,pk:packOfItem(i)};keepY(renderConf);const n=$('#cfqq');if(n)n.focus()});
+  app.querySelectorAll('[data-cfm]').forEach(b=>b.onclick=()=>{ui.cfMore=ui.cfMore===b.dataset.cfm?null:b.dataset.cfm;keepY(renderConf)});
+  app.querySelectorAll('[data-cfqty]').forEach(b=>b.onclick=()=>{ui.cfMore=null;const i=its.find(x=>ikey(x)===b.dataset.cfqty);ui.confSug={type:'qtd',fromKey:ikey(i),fromName:i.name,qFrom:i.q,unit:i.unit,pk:packOfItem(i)};keepY(renderConf);const n=$('#cfqq');if(n)n.focus()});
   {const b=$('#cfqok');if(b)b.onclick=()=>{const v=$('#cfqq').value.trim(),q=parseInt(v);if(v===''||isNaN(q)||q<0||q>=SG.qFrom){toast('Informe uma quantidade de 0 a '+(SG.qFrom-1)+'.');return}
     const ns={id:uid(),type:'qtd',fromKey:SG.fromKey,fromName:SG.fromName,qFrom:SG.qFrom,q,unit:SG.unit||'',pk:SG.pk||'',note:($('#cfqn').value||'').trim(),by:ui.checker,at:new Date().toISOString(),status:'pendente'};sg.push(ns);
     ck[SG.fromKey]=true;ui.confSug=null;
     if(ordSeller(o)){const r=approveSug(o,ns,0);if(r.startsWith('ok')){ns.auto=true;ns.decBy=ui.checker||'Conferente';ns.sellerSeen=false}save();toast('Falta registrada · vendedor '+ordSeller(o).name+' avisado');keepY(renderConf);return}
     save();toast('Falta informada ao administrador');keepY(renderConf)}}
-  app.querySelectorAll('[data-cfswap]').forEach(b=>b.onclick=()=>{const i=its.find(x=>ikey(x)===b.dataset.cfswap);ui.confSug={type:'troca',fromKey:ikey(i),fromName:i.name,defQ:i.q,q:''};keepY(renderConf);const s=$('#cfsearch');if(s)s.focus()});
+  app.querySelectorAll('[data-cfswap]').forEach(b=>b.onclick=()=>{ui.cfMore=null;const i=its.find(x=>ikey(x)===b.dataset.cfswap);ui.confSug={type:'troca',fromKey:ikey(i),fromName:i.name,defQ:i.q,q:''};keepY(renderConf);const s=$('#cfsearch');if(s)s.focus()});
   {const b=$('#cfAdd');if(b)b.onclick=()=>{ui.confSug={type:'inclusao',defQ:1,q:''};renderConf();const s=$('#cfsearch');if(s){s.focus();s.scrollIntoView({block:'center'})}}}
   {const s=$('#cfsearch');if(s)s.oninput=()=>{SG.q=s.value;const pos=s.selectionStart;keepY(renderConf);const n=$('#cfsearch');n.focus();n.setSelectionRange(pos,pos)}}
   app.querySelectorAll('[data-cfp]').forEach(b=>b.onclick=()=>{SG.pid=b.dataset.cfp;keepY(renderConf)});

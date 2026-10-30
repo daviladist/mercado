@@ -94,7 +94,7 @@ with sync_playwright() as pw:
         target.click(); cf.wait_for_timeout(400)
         if cf.locator('#cfStart').count(): cf.click('#cfStart'); wait_sync(cf, 500)
         if falta:
-            cf.locator('[data-cfqty]').first.click(); cf.wait_for_timeout(250); cf.fill('#cfqq', '3'); cf.click('#cfqok'); wait_sync(cf, 600)
+            cf.locator('[data-cfm]').first.click(); cf.wait_for_timeout(250); cf.locator('[data-cfqty]').first.click(); cf.wait_for_timeout(250); cf.fill('#cfqq', '3'); cf.click('#cfqok'); wait_sync(cf, 600)
         k = 0
         while cf.locator('[data-ck][aria-pressed=false]:not([disabled])').count() and k < 20:
             cf.locator('[data-ck][aria-pressed=false]:not([disabled])').first.click(); cf.wait_for_timeout(150); k += 1

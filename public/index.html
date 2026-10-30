@@ -531,9 +531,13 @@ a.mi{display:block;text-decoration:none;color:var(--fg)}
 .cfextra{display:grid;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
 .cfadm{background:var(--surface-2);border-radius:8px;padding:6px 10px}
 .scanbar{position:sticky;top:calc(var(--sat) + var(--toph,66px) + 4px);z-index:12;display:grid;gap:6px;background:var(--surface);border:2px solid var(--accent);border-radius:12px;padding:10px;margin:8px 0;box-shadow:0 6px 16px rgba(0,0,0,.08)}
-.scanbar #scanin{min-height:52px;font-size:18px;font-weight:700;letter-spacing:.5px}
+.scanbar #scanin{min-height:46px;font-size:17px;font-weight:700;letter-spacing:.3px;flex:1;min-width:0}
+.scanbar{padding:6px!important;gap:4px!important}
+.scrow{display:flex;gap:6px;align-items:center}
+.scico{flex:none;width:46px;height:46px;display:grid;place-items:center;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);color:var(--accent)}
+.scico.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .scanmul{display:flex;align-items:center;gap:4px;font-weight:800;color:var(--muted)}
-.scanmul input{width:64px;min-height:52px;text-align:center;font-weight:800}
+.scanmul input{width:50px;min-height:46px;text-align:center;font-weight:800;padding:4px}
 #scanflash{display:none;position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);z-index:90;padding:18px 22px;border-radius:16px;font-weight:800;font-size:19px;color:#fff;text-align:center;max-width:88vw;box-shadow:0 12px 40px rgba(0,0,0,.35);pointer-events:none}
 #scanflash.ok{background:var(--ok)} #scanflash.bad{background:var(--danger)}
 #scanov{display:none;position:fixed;left:0;right:0;bottom:0;z-index:80;background:#0F1B2D;padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px));gap:8px;box-shadow:0 -10px 30px rgba(0,0,0,.35)}
@@ -550,14 +554,20 @@ a.mi{display:block;text-decoration:none;color:var(--fg)}
 .cfhead{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:5px;margin:10px 0}
 .cfbig{min-height:58px;font-size:18px;margin:6px 0}
 .cfready{background:var(--ok)}
-.cfitems{display:grid;gap:8px;margin:8px 0}
-.cfit{display:grid;grid-template-columns:58px minmax(0,1fr);gap:12px;align-items:center;background:var(--surface);border:1.5px solid var(--line);border-radius:12px;padding:10px}
+.cfitems{display:grid;gap:4px;margin:8px 0}
+.cfit{display:grid;grid-template-columns:44px 56px minmax(0,1fr) 36px;gap:4px 10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:5px 6px 5px 5px}
 .cfit.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 8%,var(--surface))}
-.cfchk{width:54px;height:54px;border-radius:12px;border:2px solid var(--line);background:var(--surface);font-size:30px;font-weight:800;color:#fff;line-height:1}
+.cfchk{width:44px;height:44px;border-radius:10px;border:2px solid var(--line);background:var(--surface);font-size:24px;font-weight:800;color:#fff;line-height:1}
 .cfit.ok .cfchk{background:var(--ok);border-color:var(--ok)}
 .cft{display:grid;gap:2px;min-width:0}
-.cft b{font-size:16px;line-height:1.25}
-.cfq{font-family:var(--display);font-weight:800;font-size:20px;color:var(--accent)}
+.cft b{font-size:15px;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cfq{display:grid;justify-items:center;line-height:1;color:var(--accent);border-right:1px solid var(--line);padding-right:8px}
+.cfq b{font-family:var(--display);font-weight:800;font-size:22px}.cfq small{font-size:11px;font-weight:700;margin-top:2px;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cfpk{font-size:12px;color:var(--muted)}
+.cfmore{width:36px;height:44px;border:0;background:none;color:var(--muted);font-size:22px;font-weight:800;border-radius:8px;line-height:1}
+.cfmore[aria-expanded=true]{background:var(--surface-2);color:var(--fg)}
+.cfx{grid-column:1/-1;display:grid;gap:6px;border-top:1px dashed var(--line);padding:6px 2px 2px}
+.cfit.ok .cft b{color:var(--muted)}
 .cflink{color:var(--accent)!important;justify-self:start;font-size:13px}
 .cfsug{font-size:13px;font-weight:600;border-radius:8px;padding:5px 8px;margin-top:3px;background:color-mix(in srgb,var(--warn) 14%,var(--surface));color:var(--warn)}
 .cfsug.st-aprovada{background:color-mix(in srgb,var(--ok) 14%,var(--surface));color:var(--ok)}
@@ -1098,6 +1108,6 @@ h2{color:var(--fg)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="/app.js?v=e25584c8f2"></script>
+<script src="/app.js?v=3dc90fbf2a"></script>
 
 </body></html>
