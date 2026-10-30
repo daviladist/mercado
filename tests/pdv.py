@@ -156,7 +156,7 @@ s, r = A.req('/api/pdv/faturar', {'id': FV}); check(s == 200 and r.get('no'), 'v
 s, r2 = A.req('/api/pdv/faturar', {'id': FV}); check(s == 409, 'não envia duas vezes')
 s, st = A.req('/api/state'); o = next((x for x in st['S']['orders'] if x.get('pdvVenda') == FV), None)
 check(o and o['status'] == 'separado' and o.get('recLaunched') and o['stockApplied'].get('pb') == 5, 'pedido não baixa estoque de novo nem gera outra conta')
-pb = next(p for p in st['S']['products'] if p['id'] == 'pb'); check(pb['stock'] == 40 and pb['ean'] == '7891234567895', 'estoque do feijão: 50 - 5 (fiado) - 5 (fiado em paralelo) = 40; item cancelado não baixou: %s' % pb['stock'])
+pb = next(p for p in st['S']['products'] if p['id'] == 'pb'); check(pb['stock'] == 40 and pb['ean'] == '7890000000028' and '7891234567895' in pb.get('eans', []), 'estoque do feijão = 40 (item cancelado não baixou); código vinculado entrou JUNTO com o antigo: %s' % pb['stock'])
 
 check(abs(sum(i['price'] * i['q'] for i in o['items']) - o['total']) < 0.005 and o['total'] == 40, 'pedido da NF-e: soma dos itens = total pago')
 # o pedido segue o fluxo normal (pronto, depois cancelado): estoque e contas NÃO mudam

@@ -145,7 +145,7 @@ function srvAfterLogin(){const me=SRV.me;SRV.lastPass='';ui.view=ROLE_VIEW[me.ro
   try{history.replaceState(null,'',location.pathname+(me.role==='cliente'?'':'#'+me.role))}catch(e){}
   srvDraftLoad();render();srvStartPoll();srvRestorePending();srvBackInit()}
 async function srvLogout(){if(srvDiff().ch.length&&!confirm('Há alterações que ainda não foram enviadas ao servidor. Sair mesmo assim? Elas serão perdidas.'))return;
-  try{localStorage.removeItem(srvPendKey());localStorage.removeItem(srvDraftKey())}catch(e){}try{await api('/api/logout',{})}catch(e){}try{history.replaceState(null,'',location.pathname)}catch(e){}location.reload()}
+  try{localStorage.removeItem(srvPendKey());localStorage.removeItem(srvDraftKey());if(typeof pdvSnapDrop==='function')pdvSnapDrop()}catch(e){}try{await api('/api/logout',{})}catch(e){}try{history.replaceState(null,'',location.pathname)}catch(e){}location.reload()}
 /* primeira entrada com senha provisória: a pessoa cria a senha dela */
 function srvResetScreen(){ui.view=ROLE_VIEW[SRV.me.role]||'cliente';const app=$('#app');try{renderTop()}catch(e){}$('#topbar').innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name||'ATACADO DAVILA')}</span><small>Crie sua senha</small></span></div>`;
   app.innerHTML=`<div class="loginhero"><img src="${brandLogo()}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="rsf"><h2>Crie a sua senha</h2>

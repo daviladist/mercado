@@ -76,7 +76,7 @@ R("\n  $('#logout').onclick=()=>{ui.client=null;ui.cart={};render()};", "\n  $('
 R("function render(){\n", "function render(){if(SRV.me&&!SRV.me.mustReset)ui.view=PDV_PATH&&(SRV.me.role==='admin'||SRV.me.role==='operador_caixa')?'pdv':(ROLE_VIEW[SRV.me.role]||ui.view);\n");
 RX(/\/\* outra aba do mesmo navegador salvou[\s\S]*?\nrender\(\);\n\}\)\(\);/, () => `window.addEventListener('hashchange',()=>{if(!SRV.me){ui.view=srvHashView();render()}});
 ui.view=srvHashView();render();
-(async()=>{try{await srvLoadBrand();render()}catch(e){return}try{const me=await api('/api/me');if(CLIENT_ONLY&&me.role!=='cliente')return;SRV.me=me;if(me.mustReset){srvResetScreen();return}await loadState();srvAfterLogin()}catch(e){if(e.status&&e.status!==401)toast(e.message)}})();
+(async()=>{try{await srvLoadBrand();render()}catch(e){return}try{const me=await api('/api/me');if(CLIENT_ONLY&&me.role!=='cliente')return;SRV.me=me;if(me.mustReset){srvResetScreen();return}await loadState();srvAfterLogin()}catch(e){if(e.status===0&&typeof pdvOfflineBoot==='function'&&pdvOfflineBoot())return;if(e.status&&e.status!==401)toast(e.message)}})();
 window.addEventListener('pagehide',()=>{try{const d=srvDiff();if(SRV.me&&d.ch.length&&!SRV.busy)fetch('/api/sync',{method:'POST',keepalive:true,credentials:'same-origin',headers:{'Content-Type':'application/json','X-App':'1','X-Tenant':TSLUG||'@'},body:JSON.stringify({changes:d.ch,order:d.order})})}catch(e){}});
 })();`);
 
