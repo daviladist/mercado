@@ -56,7 +56,8 @@ function srvSnap(){SRV.base={meta:{}};SRV.ord={};
 /* Tino: módulos e marca da empresa, definidos na Central do sistema */
 let TENANT=null;
 /* antes do login: nome, cor e logo da empresa do endereço (empresa que não é a principal não mostra a marca da principal) */
-async function srvLoadBrand(){try{const b=await api('/api/brand');if(b&&!b.primary){TENANT={id:b.id,primary:false,brand:{name:b.name,color:b.color,logo:b.logo},modules:null};{const m=document.querySelector('link[rel=manifest]');if(m)m.href='/api/manifest?t='+encodeURIComponent(TSLUG)+(CLIENT_ONLY?'&k=cliente':'');const ic=document.querySelector('link[rel=apple-touch-icon]');if(ic)ic.href='/icons/tino-180.png';const at=document.querySelector('meta[name=apple-mobile-web-app-title]');if(at)at.content=String(b.name||'Tino').slice(0,30)}S.store.name=String(b.name||'').toUpperCase();document.title=b.name||document.title;srvBrand()}}catch(e){if(e.status===404){document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>';throw e}}}
+let SRV_NOCLI=false;
+async function srvLoadBrand(){try{const b=await api('/api/brand');SRV_NOCLI=!!(b&&b.clientes===false);if(b&&!b.primary){TENANT={id:b.id,primary:false,brand:{name:b.name,color:b.color,logo:b.logo},modules:null};{const m=document.querySelector('link[rel=manifest]');if(m)m.href='/api/manifest?t='+encodeURIComponent(TSLUG)+(CLIENT_ONLY?'&k=cliente':'');const ic=document.querySelector('link[rel=apple-touch-icon]');if(ic)ic.href='/icons/tino-180.png';const at=document.querySelector('meta[name=apple-mobile-web-app-title]');if(at)at.content=String(b.name||'Tino').slice(0,30)}S.store.name=String(b.name||'').toUpperCase();document.title=b.name||document.title;srvBrand()}}catch(e){if(e.status===404){document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>';throw e}}}
 function srvBrand(){const c=TENANT&&TENANT.brand&&TENANT.brand.color;if(!c||!/^#[0-9A-Fa-f]{6}$/.test(c))return;
   const n=parseInt(c.slice(1),16),dk=[16,8,0].map(k=>Math.round(((n>>k)&255)*.78).toString(16).padStart(2,'0')).join(''),R=document.documentElement.style;
   R.setProperty('--brand',c);R.setProperty('--brand-dark','#'+dk);if(TENANT&&TENANT.primary===false){R.setProperty('--accent',c);R.setProperty('--stripe','#'+dk);R.setProperty('--accent-soft',c+'1F')}const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',c)}
@@ -263,7 +264,7 @@ function srvStandalone(){return (window.matchMedia&&matchMedia('(display-mode: s
 function srvIsIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)}
 /* aparece só nas telas de entrada, para não atrapalhar o uso */
 function srvInstallBox(){document.querySelectorAll('.instbox').forEach(x=>x.remove());if(srvStandalone()||SRV.me)return;
-  const f=document.querySelector('form.login');if(!f)return;const name=CLIENT_ONLY?"D'Ávila Pedidos":"D'Ávila Equipe";let html='';
+  const f=document.querySelector('form.login');if(!f)return;const bn=TENANT&&TENANT.brand&&TENANT.brand.name?String(TENANT.brand.name):'',name=bn?(CLIENT_ONLY?bn:bn+' Equipe'):(CLIENT_ONLY?"D'Ávila Pedidos":"D'Ávila Equipe");let html='';
   if(SRV_INSTALL)html=`<button type="button" class="btn ghost block" id="instBtn">📲 Instalar o app ${esc(name)} no celular</button>`;
   else if(srvIsIOS())html=`<div class="small muted">📲 Para ter o app na tela do iPhone: no Safari, toque em <b>Compartilhar</b> (o quadrado com a seta) e depois em <b>Adicionar à Tela de Início</b>.</div>`;
   else if(/android/i.test(navigator.userAgent))html=`<div class="small muted">📲 Para ter o app na tela do celular: no Chrome, toque nos <b>três pontinhos</b> e em <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</div>`;
@@ -2046,7 +2047,10 @@ function clientOrderCard(o){
 }
 function renderClient(){
   const app=$('#app');
-  if(!ui.client){app.innerHTML=loginForm(false);bindLogin(false);return}
+  if(!ui.client&&typeof SRV_NOCLI!=='undefined'&&SRV_NOCLI&&typeof CLIENT_ONLY!=='undefined'&&CLIENT_ONLY){app.innerHTML=`<div class="loginhero"><img src="${brandLogo()}" alt="${esc(S.store.name)}"></div><section class="panel" style="max-width:520px;margin:16px auto;text-align:center;display:grid;gap:8px"><h2 style="margin:0">Pedidos pelo seu vendedor</h2><div>A ${esc(S.store.name)} atende os clientes pelos vendedores. Fale com o seu vendedor para fazer o pedido.</div></section>`;return}
+  if(!ui.client){app.innerHTML=loginForm(false);bindLogin(false);
+    if(typeof SRV_NOCLI!=='undefined'&&SRV_NOCLI){const h=app.querySelector('#lf h2');if(h)h.textContent='Acesso da equipe';const l=app.querySelector('label[for=lu]');if(l)l.textContent='Usuário';const hd=app.querySelector('.loginhero div');if(hd)hd.textContent='Sistema da equipe'}
+    return}
   if(ui.cliPage==='ok'){const o=ui.lastOrder;
     app.innerHTML=`<div class="success"><div class="check"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m5 12 5 5 9-10"/></svg></div>
       ${(st=>st==='rej'?`<h2>Pedido não enviado</h2><p class="neg" style="max-width:40ch;margin:0"><b>${esc(SRV.rej[o.id]||'A loja não aceitou o pedido.')}</b></p>`:st==='off'?`<h2>Pedido ainda não enviado</h2><p style="max-width:40ch;margin:0"><b>Sem internet agora.</b> O app envia sozinho quando a conexão voltar. Não feche o app até aparecer o número do pedido.</p>`:st==='wait'?`<h2>Enviando pedido…</h2><p class="muted" style="max-width:40ch;margin:0">Aguarde a confirmação.</p>`:`<h2>Pedido nº ${o.no} enviado</h2>`)(srvOrderState(o.id))}${o.appr==='pendente'?'<p style="max-width:40ch;margin:0"><b>Sua proposta de preço foi para a loja.</b> Assim que ela responder, você vê em Meus pedidos.</p>':''}<p class="muted" style="max-width:40ch;margin:0">Total de ${brl(o.total)} · ${o.mode==='entrega'?'para entrega':'para retirada na loja'}. Você acompanha a situação em "Meus pedidos".</p>
@@ -6129,8 +6133,9 @@ function admClients(){
       </div>
       <label class="switch iesw"><input type="checkbox" id="cie" ${e.ieOk?'checked':''}> <span><b>Contribuinte de ICMS com inscrição estadual ativa</b><br><span class="small muted">Comprando com nota fiscal, recebe o "Preço com IE" dos produtos. Marque depois de conferir a IE no Sintegra.</span></span></label>
       <label class="switch"><input type="checkbox" id="cneg" ${e.canNeg?'checked':''}> <span><b>Pode negociar preço no app</b><br><span class="small muted">Libera o botão "Negociar preço" no carrinho deste cliente (vale quando a negociação está em "Só os clientes marcados").</span></span></label>
-      <div class="grid2">
-        <div class="field"><label for="cl">Usuário de acesso</label><input type="text" id="cl" value="${esc(e.login)}" autocapitalize="none" placeholder="Ex.: mercearia.sj" required></div>
+      ${modOn('app_cliente')?'':'<div class="small muted">Esta empresa não usa o app do cliente: não é preciso usuário nem senha. Os pedidos dele entram pelo vendedor ou pela loja.</div>'}
+      <div class="grid2" ${modOn('app_cliente')?'':'hidden'}>
+        <div class="field"><label for="cl">Usuário de acesso</label><input type="text" id="cl" value="${esc(e.login)}" autocapitalize="none" placeholder="Ex.: mercearia.sj" ${modOn('app_cliente')?'required':''}></div>
         <div class="field"><label for="cp">Senha</label><input type="password" id="cp" value="" autocomplete="new-password" placeholder="${e.id&&e.hasPass?'Em branco = manter a senha atual':'Senha base (mín. 8): a pessoa troca no 1º acesso'}"></div>
       </div>
       <div class="grid2">
