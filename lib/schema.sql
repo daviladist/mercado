@@ -62,3 +62,30 @@ create table if not exists audit (
   action text not null,
   detail jsonb
 );
+
+-- ===== Tino: Central do sistema (dono do sistema). Só acrescenta tabelas; não mexe nas de cima. =====
+-- empresas que usam o sistema; a primeira (primary_tenant) é a dona dos dados atuais
+create table if not exists tenants (
+  id text primary key,
+  name text not null,
+  logo text,
+  color text,
+  segment text,
+  status text not null default 'ativa',
+  default_on boolean not null default false,
+  primary_tenant boolean not null default false,
+  modules jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+-- a empresa atual começa com todos os módulos ligados: nada muda para quem já usa
+insert into tenants(id,name,segment,status,default_on,primary_tenant) values('davila','Atacado D''Ávila','atacado','ativa',true,true) on conflict (id) do nothing;
+
+-- sessões da Central (separadas das sessões da loja). Guarda só o SHA-256 do token.
+create table if not exists central_sessions (
+  token_hash text primary key,
+  cred_rev text not null,
+  ip text,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null
+)
