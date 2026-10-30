@@ -129,6 +129,9 @@ Venda no balcão ("pague e leve") no mesmo sistema e no mesmo banco, separada po
 - **Tabelas:** `caixas`, `pdv_vendas`, `pdv_itens` (custo e preço do momento), `pdv_pagamentos`, `caixa_movimentos`, `pdv_autorizacoes`, `pdv_seq` — todas com `tenant_id` (a empresa).
 - **Testes:** `tests/pdv.py` (108 verificações; roda no `tests/ci_banco.sh` e no GitHub).
 
+## Quem usa o sistema: só a equipe ou equipe e clientes
+No topo da empresa, na Central: **Só a equipe** (módulo "app_cliente" desligado: cliente não entra, o endereço /cliente mostra "fale com seu vendedor", a vitrine semanal desliga junto e o cadastro do cliente não pede usuário nem senha; os pedidos entram pelos vendedores e pela loja) ou **Equipe e clientes**. O endereço principal da empresa continua servindo de entrada para a equipe. O botão "Instalar o app" usa o nome da empresa.
+
 ## Modelos por segmento (Central)
 Em "Modelo por segmento", **+ Criar segmento** monta um pacote de módulos com nome (ex.: Varejo), e dá para começar pelos módulos da empresa aberta. **Editar segmentos** lista todos: os de fábrica (Atacado completo, Distribuidora de suplementos, Só o básico) podem ser editados e voltar ao original; os criados podem ser editados ou apagados. Mudar ou apagar um modelo não mexe nas empresas que já existem. Módulo criado no futuro começa desligado nos modelos salvos. Fica na tabela `segments`. Testes em `tests/central.py`.
 
