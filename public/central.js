@@ -5,7 +5,7 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const SWATCHES = [['#1F3D2B', 'Verde Tino'], ['#E11F2C', 'Vermelho'], ['#0A66B2', 'Azul'], ['#B4410F', 'Laranja'], ['#6D28D9', 'Roxo']];
   const STATUS = { ativa: 'Ativa', em_preparo: 'Em preparo', suspensa: 'Suspensa' };
-  let D = null, sel = null, draft = null, dirty = false;
+  let D = null, sel = null, draft = null, dirty = false, pendingDraft = null;
 
   async function api(path, body) {
     const opt = body === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-App': '1' }, body: JSON.stringify(body) };
@@ -16,7 +16,7 @@
   }
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 3200); }
 
-  function showLogin() { $('#loginView').hidden = false; $('#appView').hidden = true; $('#who').hidden = true; setTimeout(() => $('#lu').focus(), 50); }
+  function showLogin(msg) { $('#lerr').textContent = msg || ''; $('#loginView').hidden = false; $('#appView').hidden = true; $('#who').hidden = true; setTimeout(() => $('#lu').focus(), 50); }
   $('#loginForm').addEventListener('submit', async e => {
     e.preventDefault();
     const b = $('#loginForm button[type=submit]'); b.disabled = true; $('#lerr').textContent = '';
@@ -30,6 +30,7 @@
     try { D = await api('/api/central/state'); }
     catch (e) { if (e.status === 401) return showLogin(); toast(e.message); return; }
     $('#loginView').hidden = true; $('#appView').hidden = false; $('#who').hidden = false; $('#whoName').textContent = D.me.login;
+    if (pendingDraft) { const p = pendingDraft; pendingDraft = null; sel = p.sel; pick(sel); draft = p.draft; dirty = true; renderList(); renderEditor(); return; }
     if (!keep || !D.tenants.some(t => t.id === sel)) sel = (D.tenants[0] || {}).id || null;
     pick(sel);
   }
@@ -78,7 +79,7 @@
       <div class="presets">${D.segments.map(s => `<button type="button" data-seg="${esc(s.id)}" aria-pressed="${seg === s.id}">${esc(s.name)}</button>`).join('')}${seg ? '' : '<button type="button" aria-pressed="true" disabled>Personalizado</button>'}</div>
     </section>
     ${groups.map(g => `<section class="card grp"><h2>${esc(g)}${g === 'Essenciais' ? '<small>Não podem ser desligados</small>' : ''}</h2>
-      ${D.modules.filter(m => m.group === g).map(m => `<div class="mod"><div class="t"><div class="n">${esc(m.name)}${!m.essential && !m.enforced ? '<span class="tag">efeito na próxima etapa</span>' : ''}</div><div class="d">${esc(m.desc)}</div></div>
+      ${D.modules.filter(m => m.group === g).map(m => `<div class="mod"><div class="t"><div class="n">${esc(m.name)}${!m.essential && !m.enforced ? '<span class="tag">efeito na próxima etapa</span>' : m.enforced === 'tela' ? '<span class="tag">só esconde a tela</span>' : ''}</div><div class="d">${esc(m.desc)}</div></div>
         ${m.essential ? '<span class="lock">Sempre ativo</span>' : `<button type="button" class="sw-t" role="switch" data-m="${esc(m.code)}" aria-checked="${!!t.modules[m.code]}" aria-label="${esc(m.name)}"><span></span></button>`}</div>`).join('')}</section>`).join('')}
     <div class="bar${dirty ? ' dirty' : ''}"><span>${dirty ? 'Há mudanças sem salvar.' : 'Tudo salvo.'}</span><div style="display:flex;gap:8px"><button class="btn ghost-light" type="button" id="undo" ${dirty ? '' : 'disabled'}>Desfazer</button><button class="btn primary" type="button" id="save" ${dirty ? '' : 'disabled'}>Salvar configuração</button></div></div>`;
     bind();
@@ -103,6 +104,7 @@
   }
   async function genAdmin() {
     const login = $('#alog').value.trim().toLowerCase();
+    if (!/^[a-z0-9._-]{3,40}$/.test(login)) { toast('Usuário: de 3 a 40 letras minúsculas, números, ponto ou traço (sem espaço nem acento).'); $('#alog').focus(); return; }
     if (draft.adminLogin && !confirm('Gerar uma nova senha derruba o acesso atual do administrador desta empresa. Continuar?')) return;
     const b = $('#agen'); b.disabled = true;
     try {
@@ -113,13 +115,13 @@
         <span class="small">No primeiro acesso, a pessoa cria a senha dela.</span></div>`;
       const t = D.tenants.find(x => x.id === draft.id); if (t) { t.adminLogin = r.login; draft.adminLogin = r.login; }
       b.textContent = 'Gerar nova senha';
-    } catch (e) { if (e.status === 401) return showLogin(); toast(e.message); }
+    } catch (e) { if (e.status === 401) return showLogin('Sua sessão terminou. Entre de novo.'); toast(e.message); }
     finally { b.disabled = false; }
   }
   function touch() { dirty = true; renderEditor(); }
   function bind() {
     const E = $('#editor');
-    $('#fname').addEventListener('input', e => { draft.name = e.target.value; dirty = true; E.querySelector('h1').textContent = draft.name || 'Nova empresa'; $('#save').disabled = false; $('#undo').disabled = false; });
+    $('#fname').addEventListener('input', e => { draft.name = e.target.value; dirty = true; E.querySelector('h1').textContent = draft.name || 'Nova empresa'; $('#save').disabled = false; $('#undo').disabled = false; const bar = E.querySelector('.bar'); bar.classList.add('dirty'); bar.querySelector('span').textContent = 'Há mudanças sem salvar.'; });
     $('#fst').addEventListener('change', e => { draft.status = e.target.value; touch(); });
     E.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => { draft.color = b.dataset.c; touch(); }));
     $('#fcolor').addEventListener('change', e => { draft.color = e.target.value.toUpperCase(); touch(); });
@@ -151,7 +153,7 @@
     try {
       const r = await api('/api/central/tenant', { id: draft.id, name: draft.name, logo: draft.logo, color: draft.color, segment: matchSegment() || draft.segment, status: draft.status, modules: mods });
       sel = r.tenant.id; toast('Configuração salva'); await load(true);
-    } catch (e) { if (e.status === 401) return showLogin(); toast(e.message); b.disabled = false; }
+    } catch (e) { if (e.status === 401) { pendingDraft = { sel, draft }; return showLogin('Sua sessão terminou. Entre de novo: suas mudanças continuam aqui para salvar.'); } toast(e.message); b.disabled = false; }
   }
   window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
   load();

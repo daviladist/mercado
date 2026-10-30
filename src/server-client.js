@@ -4,8 +4,8 @@
  * Nada de senha, custo ou comissão fica guardado neste aparelho.            */
 /* /cliente: link só para clientes (sem textos da equipe; só aceita login de cliente) */
 /* Tino: cada empresa tem o seu endereço /t/<empresa> (a principal fica em /). Vai em toda chamada ao servidor. */
-const TSLUG=(location.pathname.match(/^\/t\/([a-z0-9-]{1,40})(?:\/|$)/)||[])[1]||'';
-const TBASE=TSLUG?'/t/'+TSLUG:'';
+if(/^\/t\/[^/]*[A-Z]/.test(location.pathname)){location.replace(location.pathname.replace(/^\/t\/[^/]+/,m=>m.toLowerCase())+location.search+location.hash)}
+const TSLUG=(location.pathname.match(/^\/t\/([a-zA-Z0-9-]{1,40})(?:\/|$)/)||[])[1]||'';
 const CLIENT_ONLY=/^(?:\/t\/[a-z0-9-]{1,40})?\/cliente\/?$/.test(location.pathname);
 const SRV={me:null,V:{meta:{}},base:{meta:{}},ord:{},t:null,busy:false,again:false,ver:'',poll:null,lastPass:'',offline:false,retry:null,rej:{},nPend:0};
 const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins','suppliers','receipts','stariaJobs','imports'];
@@ -31,7 +31,7 @@ let TENANT=null;
 async function srvLoadBrand(){try{const b=await api('/api/brand');if(b&&!b.primary){TENANT={id:b.id,primary:false,brand:{name:b.name,color:b.color,logo:b.logo},modules:null};S.store.name=String(b.name||'').toUpperCase();document.title=b.name||document.title;srvBrand()}}catch(e){if(e.status===404){document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>';throw e}}}
 function srvBrand(){const c=TENANT&&TENANT.brand&&TENANT.brand.color;if(!c||!/^#[0-9A-Fa-f]{6}$/.test(c))return;
   const n=parseInt(c.slice(1),16),dk=[16,8,0].map(k=>Math.round(((n>>k)&255)*.78).toString(16).padStart(2,'0')).join(''),R=document.documentElement.style;
-  R.setProperty('--brand',c);R.setProperty('--brand-dark','#'+dk);const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',c)}
+  R.setProperty('--brand',c);R.setProperty('--brand-dark','#'+dk);if(TENANT&&TENANT.primary===false){R.setProperty('--accent',c);R.setProperty('--stripe','#'+dk);R.setProperty('--accent-soft',c+'1F')}const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',c)}
 async function loadState(){const r=await api('/api/state');SRV.me=r.me;S=r.S;SRV.V=r.V||{meta:{}};TENANT=r.T||null;srvBrand();srvFix();srvSnap();
   if(ui.client)ui.client=S.customers.find(c=>c.id===ui.client.id)||null;
   if(SRV.me&&SRV.me.role==='cliente')ui.client=S.customers.find(c=>c.id===SRV.me.refId)||ui.client}
@@ -61,7 +61,9 @@ function save(){clearTimeout(SRV.t);SRV.t=setTimeout(srvSync,120)}
 function srvIsPending(c,id){const d=(S[c]||[]).find(x=>x&&x.id===id);return !!d&&(SRV.base[c]||{})[id]!==JSON.stringify(d)}
 function srvOrderState(id){if(SRV.rej[id]&&!S.orders.some(o=>o.id===id))return 'rej';if(srvIsPending('orders',id))return SRV.offline?'off':'wait';return 'ok'}
 /* o que não foi enviado fica guardado no aparelho até o servidor confirmar (inclusive se a página recarregar) */
-function srvPendKey(){return SRV.me?'srv-pend:'+SRV.me.role+':'+(SRV.me.refId||SRV.me.login):''}
+/* chaves guardadas no aparelho levam a empresa: o que ficou pendente numa empresa nunca é enviado para outra */
+const TKEY=TSLUG?TSLUG+':':'';
+function srvPendKey(){return SRV.me?'srv-pend:'+TKEY+SRV.me.role+':'+(SRV.me.refId||SRV.me.login):''}
 function srvPersist(ch){const k=srvPendKey();if(!k)return;try{if(!ch||!ch.length){localStorage.removeItem(k);return}
   const L=ch.filter(x=>x.op==='put').map(x=>({c:x.c,id:x.id,doc:x.doc,ver:x.ver,base:x.base}));
   try{localStorage.setItem(k,JSON.stringify(L))}catch(e){localStorage.setItem(k,JSON.stringify(L.map(x=>x.doc&&x.doc.delivered&&String(x.doc.delivered.photo||'').startsWith('data:')?Object.assign({},x,{nophoto:true,doc:Object.assign({},x.doc,{delivered:Object.assign({},x.doc.delivered,{photo:''})})}):x)))}}catch(e){}}
@@ -89,7 +91,7 @@ async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
       srvAlert(r.rejected.map(x=>x.error).filter((v,i,a)=>a.indexOf(v)===i).join(' · '))}
     const left=srvDiff().ch;SRV.nPend=left.length;srvPersist(left);
     if(ui.admin&&['customers','sellers','checkers','billers','vehicles','admins'].some(c=>t.has(c)))srvSoftRender((r.rejected||[]).length>0);else if(t.has('orders')||t.has('receivables')||t.has('products'))srvSoftRender((r.rejected||[]).length>0)}
-  catch(e){if(e.status===401){toast('Sua sessão terminou. Entre de novo.');setTimeout(()=>location.reload(),1200);return}
+  catch(e){if(e.status===401){toast('Sua sessão terminou. Entre de novo.');setTimeout(()=>location.reload(),1200);return}if(srvKicked(e))return;
     if(e.data&&e.data.mustReset){srvResetScreen();return}
     if(e.status===0||e.status>=500&&e.status!==501){/* sem internet ou servidor fora: guarda e tenta de novo sozinho */
       SRV.offline=e.status===0;srvNetBar();if(ui.view==='cliente'&&ui.cliPage==='ok')try{renderClient()}catch(_){}if(!SRV.offline)toast('O servidor não respondeu. Vamos tentar de novo em instantes.');
@@ -114,7 +116,10 @@ function srvSoftRender(force){const typing=(document.activeElement&&document.act
 function reloadState(){srvRefresh(true)}
 async function srvRefresh(force){if(!SRV.me||SRV.busy)return;const {ch}=srvDiff();if(ch.length){srvSync();return}
   try{const v=await api('/api/version');if(!force&&v.v===SRV.ver)return;SRV.ver=v.v;await loadState();srvSoftRender(force)}
-  catch(e){if(e.status===401){location.reload()}}}
+  catch(e){if(e.status===401){location.reload()}else srvKicked(e)}}
+/* empresa suspensa, loja em preparo ou acesso desligado: avisa e sai (em vez de seguir na tela sem gravar nada) */
+function srvKicked(e){if(!(e&&e.status===403&&e.data&&e.data.login))return false;if(SRV.kicked)return true;SRV.kicked=true;clearInterval(SRV.poll);
+  try{localStorage.removeItem(srvDraftKey())}catch(_){}$('#app').innerHTML='<div class="empty" role="alert"><h2>'+esc(e.message)+'</h2><p>Você foi desconectado.</p></div>';setTimeout(()=>{api('/api/logout',{}).catch(()=>{}).then(()=>location.reload())},4000);return true}
 function srvStartPoll(){clearInterval(SRV.poll);SRV.poll=setInterval(()=>{if(document.visibilityState==='visible')srvRefresh(false)},20000);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')srvRefresh(false)})}
 /* entrar: o servidor confere a senha; o navegador nunca vê senha de ninguém */
@@ -135,7 +140,7 @@ async function srvLogout(){if(srvDiff().ch.length&&!confirm('Há alterações qu
   try{localStorage.removeItem(srvPendKey());localStorage.removeItem(srvDraftKey())}catch(e){}try{await api('/api/logout',{})}catch(e){}try{history.replaceState(null,'',location.pathname)}catch(e){}location.reload()}
 /* primeira entrada com senha provisória: a pessoa cria a senha dela */
 function srvResetScreen(){ui.view=ROLE_VIEW[SRV.me.role]||'cliente';const app=$('#app');try{renderTop()}catch(e){}$('#topbar').innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name||'ATACADO DAVILA')}</span><small>Crie sua senha</small></span></div>`;
-  app.innerHTML=`<div class="loginhero"><img src="${LOGO}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="rsf"><h2>Crie a sua senha</h2>
+  app.innerHTML=`<div class="loginhero"><img src="${brandLogo()}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="rsf"><h2>Crie a sua senha</h2>
     <div class="small muted">Olá, ${esc(SRV.me.name||SRV.me.login)}. A senha que você usou é provisória. Crie uma senha só sua${SRV.me.role==='admin'?' (mínimo 10 caracteres)':' (mínimo 8 caracteres)'}, com letras e números.</div>
     ${SRV.lastPass?'':'<div class="field"><label for="rso">Senha atual</label><input type="password" id="rso" autocomplete="current-password" required></div>'}
     <div class="field"><label for="rsn">Nova senha</label><input type="password" id="rsn" autocomplete="new-password" required></div>
@@ -177,7 +182,7 @@ async function srvTempPasswords(box){try{const r=await api('/api/temp-passwords'
 function srvPassLabel(x){return x.pass?'senha base (salvando…)':x.hasPass?(x.mustReset?'senha base · aguardando 1º acesso':'senha própria definida'):'sem senha'}
 /* primeiro acesso ao sistema novo: criar o administrador (exige o código de instalação) */
 async function srvMaybeSetup(){try{const r=await api('/api/setup-status');if(!r.needsSetup||SRV.me)return}catch(e){return}
-  const app=$('#app');app.innerHTML=`<div class="loginhero"><img src="${LOGO}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="stf"><h2>Criar o administrador</h2>
+  const app=$('#app');app.innerHTML=`<div class="loginhero"><img src="${brandLogo()}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="stf"><h2>Criar o administrador</h2>
     <div class="small muted">Use o <b>código de instalação</b> que você cadastrou na Vercel (SETUP_CODE). Depois de criado, este formulário não aparece mais.</div>
     <div class="field"><label for="stc">Código de instalação</label><input type="password" id="stc" autocomplete="off" required></div>
     <div class="field"><label for="stn">Seu nome</label><input type="text" id="stn" required></div>
@@ -236,7 +241,7 @@ function srvInstallBox(){document.querySelectorAll('.instbox').forEach(x=>x.remo
   const b=document.getElementById('instBtn');if(b)b.onclick=async()=>{if(!SRV_INSTALL)return;SRV_INSTALL.prompt();try{await SRV_INSTALL.userChoice}catch(e){}SRV_INSTALL=null;srvInstallBox()}}
 new MutationObserver(()=>{if(document.querySelector('form.login')&&!document.querySelector('.instbox')&&!SRV.me)srvInstallBox()}).observe(document.documentElement,{childList:true,subtree:true});
 /* rascunho: carrinho, pedido do vendedor em andamento e formulário de entrega sobrevivem a recarregar a página */
-function srvDraftKey(){return SRV.me?'srv-draft:'+SRV.me.role+':'+(SRV.me.refId||SRV.me.login):''}
+function srvDraftKey(){return SRV.me?'srv-draft:'+TKEY+SRV.me.role+':'+(SRV.me.refId||SRV.me.login):''}
 function srvDraftSnap(){const r=SRV.me&&SRV.me.role;if(!r)return null;
   if(r==='cliente')return {cart:ui.cart||{},note:ui.note||'',neg:ui.neg||{},negSt:ui.negSt||{}};
   if(r==='vendedor'||r==='admin')return {lanc:ui.lanc||null};

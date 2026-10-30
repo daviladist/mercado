@@ -111,4 +111,13 @@ create table if not exists order_seq (
   tenant_id text primary key,
   last_no bigint not null
 );
-insert into order_seq(tenant_id,last_no) select 'davila', case when is_called then last_value else last_value-1 end from order_no on conflict (tenant_id) do nothing
+insert into order_seq(tenant_id,last_no) select 'davila', case when is_called then last_value else last_value-1 end from order_no on conflict (tenant_id) do nothing;
+-- acesso principal de cada empresa, gerado pela Central (sempre o mesmo cadastro)
+alter table tenants add column if not exists admin_ref text;
+-- depois de preencher o que já existia: toda gravação nova PRECISA dizer a empresa (sem "cair" na principal por esquecimento)
+alter table users alter column tenant_id drop default;
+alter table docs alter column tenant_id drop default;
+alter table photos alter column tenant_id drop default;
+do $$ begin if not exists (select 1 from pg_constraint where conname='users_tenant_fk') then alter table users add constraint users_tenant_fk foreign key (tenant_id) references tenants(id); end if; end $$;
+do $$ begin if not exists (select 1 from pg_constraint where conname='docs_tenant_fk') then alter table docs add constraint docs_tenant_fk foreign key (tenant_id) references tenants(id); end if; end $$;
+do $$ begin if not exists (select 1 from pg_constraint where conname='photos_tenant_fk') then alter table photos add constraint photos_tenant_fk foreign key (tenant_id) references tenants(id); end if; end $$

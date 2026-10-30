@@ -1342,7 +1342,7 @@ function renderTop(bump){
 
 /* ---------- cliente ---------- */
 function loginForm(isAdmin){
-  return `<div class="loginhero"><img src="${LOGO}" alt="${esc(S.store.name)}"><div>${isAdmin?'Painel do administrador':'Compras de atacado com preço de distribuidor'}</div></div><form class="login panel" id="lf">
+  return `<div class="loginhero"><img src="${brandLogo()}" alt="${esc(S.store.name)}"><div>${isAdmin?'Painel do administrador':'Compras de atacado com preço de distribuidor'}</div></div><form class="login panel" id="lf">
     <h2>${isAdmin?'Acesso do administrador':'Entrar para fazer pedido'}</h2>
     <div class="field"><label for="lu">${isAdmin?'Usuário':'Usuário ou CNPJ/CPF'}</label><input type="text" id="lu" autocomplete="username" autocapitalize="none" required></div>
     <div class="field"><label for="lp">Senha</label><input type="password" id="lp" autocomplete="current-password" required></div>
@@ -1976,7 +1976,7 @@ function unAbbr(unit,q){const w=String(unit||'un').replace(/\s*(c\/|com\b|x\s*\d
   const h=A.find(([re])=>re.test(w));if(h)return h[1];return w.length>5?w.slice(0,4)+'.':w}
 function qtyTxt(q,unit,pk){const w=String(unit||'un.').replace(/\s*c\/.*$/i,'').toLowerCase()||'un.';return q+' '+w+(q>1&&!/s$/.test(w)&&w!=='un.'?'s':'')+(pk>1?' ('+(q*pk).toLocaleString('pt-BR')+' un.)':'')}
 function confLoginForm(){
-  return `<div class="loginhero"><img src="${LOGO}" alt="${esc(S.store.name)}"><div>Conferência e separação</div></div><form class="login panel" id="cfl">
+  return `<div class="loginhero"><img src="${brandLogo()}" alt="${esc(S.store.name)}"><div>Conferência e separação</div></div><form class="login panel" id="cfl">
     <h2>Acesso do conferente</h2>
     <div class="field"><label for="cflu">Usuário</label><input type="text" id="cflu" autocomplete="username" autocapitalize="none" required></div>
     <div class="field"><label for="cflp">Senha</label><input type="password" id="cflp" autocomplete="current-password" required></div>
@@ -2313,7 +2313,7 @@ function retApply(o,R,reason,who){const its=o.items.filter(i=>i.q>0),out=[];
 function admEntregas(){const c=$('#tabc');c.innerHTML=`<div class="sectionhead"><h2>Entregas</h2></div>${entregasHtml(null)}`;bindEntregas(c,null,()=>{const y=window.scrollY;admEntregas();window.scrollTo(0,y)})}
 function renderEnt(){const app=$('#app');
   if(!ui.driver){try{const k=localStorage.getItem('pa-driver');if(k&&drvById(k))ui.driver=k}catch(e){}}
-  if(!ui.driver){app.innerHTML=`<div class="loginhero"><img src="${LOGO}" alt="${esc(S.store.name)}"><div>Entregas</div></div><form class="login panel" id="dvl"><h2>Acesso do entregador</h2>
+  if(!ui.driver){app.innerHTML=`<div class="loginhero"><img src="${brandLogo()}" alt="${esc(S.store.name)}"><div>Entregas</div></div><form class="login panel" id="dvl"><h2>Acesso do entregador</h2>
     <div class="field"><label for="dvlu">Usuário</label><input type="text" id="dvlu" autocapitalize="none" required></div><div class="field"><label for="dvlp">Senha</label><input type="password" id="dvlp" required></div>
     <div class="err" id="dvle"></div><button class="btn block" type="submit">Entrar</button><div class="hint">O acesso é criado pelo administrador em CADASTROS &gt; Motoristas e veículos.</div></form>`;
     $('#dvl').onsubmit=e=>{e.preventDefault();const u=$('#dvlu').value.trim().toLowerCase(),p=$('#dvlp').value,k=drvList().find(v=>v.login&&v.login.toLowerCase()===u&&v.pass===p);if(!k){$('#dvle').textContent='Usuário ou senha incorretos.';return}ui.driver=k.id;try{localStorage.setItem('pa-driver',k.id)}catch(e){}render()};return}
@@ -4187,7 +4187,7 @@ function varAfterSave(p,e){
 
 /* ================= FATURAMENTO: escritório imprime, exporta e marca faturado (não vê custo, margem nem comissão) ================= */
 function fatLoginForm(){
-  return `<div class="loginhero"><img src="${LOGO}" alt="${esc(S.store.name)}"><div>Faturamento</div></div><form class="login panel" id="fbl">
+  return `<div class="loginhero"><img src="${brandLogo()}" alt="${esc(S.store.name)}"><div>Faturamento</div></div><form class="login panel" id="fbl">
     <h2>Acesso do faturamento</h2>
     <div class="field"><label for="fblu">Usuário</label><input type="text" id="fblu" autocomplete="username" autocapitalize="none" required></div>
     <div class="field"><label for="fblp">Senha</label><input type="password" id="fblp" autocomplete="current-password" required></div>
@@ -4384,7 +4384,7 @@ function lnLockBox(K){if(!K)return '';const me=SVme();
   return K.ok?`<div class="lockbox ok"><span class="lki"><span class="mgdot big mg-green"></span></span><div><b>Preços liberados</b><div class="small">Pode enviar o pedido.</div></div></div>`
   :`<div class="lockbox no"><span class="lki"><span class="mgdot big mg-red"></span></span><div><b>Preços abaixo do permitido</b><div class="small">${K.need!=null?`Para liberar, aumente cerca de <b>${brl(K.need)}</b> no total do pedido, subindo o preço de um ou mais produtos.`:'Tem produto sem custo cadastrado: fale com a loja.'} Se combinou um preço especial com a loja, envie para análise.</div></div></div>`}
 function vendLoginForm(){
-  return `<div class="loginhero"><img src="${LOGO}" alt="${esc(S.store.name)}"><div>Vendas</div></div><form class="login panel" id="vdl">
+  return `<div class="loginhero"><img src="${brandLogo()}" alt="${esc(S.store.name)}"><div>Vendas</div></div><form class="login panel" id="vdl">
     <h2>Acesso do vendedor</h2>
     <div class="field"><label for="vdlu">Usuário</label><input type="text" id="vdlu" autocomplete="username" autocapitalize="none" required></div>
     <div class="field"><label for="vdlp">Senha</label><input type="password" id="vdlp" autocomplete="current-password" required></div>

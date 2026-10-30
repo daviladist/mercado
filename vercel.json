@@ -23,6 +23,10 @@
       "destination": "/cliente.html"
     },
     {
+      "source": "/t/:empresa/cliente/",
+      "destination": "/cliente.html"
+    },
+    {
       "source": "/t/:empresa",
       "destination": "/index.html"
     },

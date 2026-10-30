@@ -74,29 +74,39 @@ Alternativa pelo terminal (no lugar dos passos 4 a 6):
 DATABASE_URL="postgres://...neon..." ADMIN_LOGIN=eduardo ADMIN_PASSWORD='...' node scripts/migrate.js backup.json
 ```
 
-## Tino — Central do sistema (dono do sistema)
+## Tino — Central do sistema e várias empresas
 
-Este app é a base do **Tino** (*Quem tem Tino, vende melhor.*). A **Central do sistema** fica em `https://SEU-SITE/central` e é só do dono do sistema (usuário `super_admin`), separada do painel da loja.
+Este app é a base do **Tino** (*Quem tem Tino, vende melhor.*). Vários negócios usam o mesmo sistema e o mesmo banco, cada um vendo só os próprios dados.
 
-- **O que faz:** cadastra empresas, troca nome, logo e cor, aplica um modelo por segmento (Atacado completo, Distribuidora de suplementos, Só o básico) e liga/desliga cada módulo.
-- **Efeito já hoje (empresa principal, D'Ávila):** módulo desligado some da tela **e** o servidor recusa gravar nele (comissão, ofertas, negociação, entrada de mercadoria, conferência, contagem, entregas, faturamento, a receber/a pagar/caixa, relatórios, decisões, StarIA). Desligar Conferência, Entregas ou Faturamento também tira o login desses papéis. Os marcados como "efeito na próxima etapa" ficam só registrados.
-- **Empresas novas** ficam "em preparo": a configuração fica pronta, mas os dados por empresa só existem depois da **separação dos dados por empresa** (próxima etapa).
-- **Nada muda para quem já usa:** a empresa atual começa com tudo ligado; as tabelas novas (`tenants`, `central_sessions`) são só acrescentadas.
+### Endereços
+- Empresa principal (D'Ávila): `https://SEU-SITE/` (equipe em `/#admin` etc.), como sempre.
+- Outras empresas: `https://SEU-SITE/t/<empresa>/#admin` (equipe) e `https://SEU-SITE/t/<empresa>/cliente` (clientes).
+- Central do sistema (só o dono do sistema): `https://SEU-SITE/central`, usuário `super_admin`.
+
+### Como os dados ficam separados
+- Toda linha de `users`, `docs` e `photos` tem `tenant_id` (sem valor padrão: quem grava é obrigado a dizer a empresa) ligado a `tenants`.
+- O navegador manda a empresa no cabeçalho `X-Tenant` (`@` = principal). A sessão pertence a UMA empresa: aberta no endereço de outra, vale como não logado. Sem cabeçalho (foto num `<img>`), vale a empresa da sessão.
+- Número do pedido por empresa (`order_seq`), nunca repetido. Rascunhos e alterações sem internet guardados no aparelho também levam a empresa.
+
+### Central
+- Cadastra empresas (nome, logo, cor, modelo por segmento), liga/desliga módulos e cria o **acesso principal do administrador** de cada empresa (senha provisória mostrada uma vez; gerar de novo, mesmo com outro usuário, substitui o anterior e derruba as sessões dele).
+- Situação: **ativa**; **em preparo** (só o administrador entra, para cadastrar tudo); **suspensa** (ninguém entra; quem estiver com o app aberto é avisado e sai). A principal não pode ser suspensa.
+- Módulos: os marcados como servidor não enviam os dados nem aceitam gravação quando desligados (e tiram o login de conferente, entregador ou faturamento); Caixa, Relatórios e Decisões só escondem a tela (são visões de outros dados); os marcados "efeito na próxima etapa" ficam só registrados.
 
 ### Segurança da Central
-- Login separado da loja: outro cookie (`__Host-csid`, HttpOnly, Secure, SameSite=Strict), outra tabela de sessões, sessão de 8 h. Sessão da loja não abre a Central e vice-versa.
-- Senha do `super_admin` com hash **scrypt** em `lib/central-cred.js` (só o hash, nunca a senha). Senha sorteada com ~115 bits.
-- 5 senhas erradas do mesmo IP bloqueiam por 15 min (60 no total, de todos os IPs).
-- Mesma proteção CSRF, CSP e cabeçalhos do resto do app; logo só PNG/JPG/WEBP até 300 KB; tudo registrado na tabela `audit`.
-- Testes: `python3 tests/central.py` (40 verificações, banco de TESTE) e `npm test`.
+- Login separado da loja: outro cookie (`__Host-csid`, HttpOnly, Secure, SameSite=Strict), outra tabela de sessões, 8 h.
+- Senha do `super_admin`: só o **hash** scrypt. Vem da variável **`CENTRAL_HASH`** da Vercel, se existir (recomendado); senão, de `lib/central-cred.js`.
+- 5 tentativas por IP a cada 15 min, contadas antes de conferir a senha (tentativas em paralelo não furam o limite). Sem bloqueio geral, para ninguém trancar o dono do lado de fora.
 
-### Esqueceu ou perdeu a senha do super_admin
-Não existe "recuperar": a senha não fica guardada em lugar nenhum. Gere outra:
-```
-node scripts/central-senha.js   # mostra a senha nova uma vez e grava o hash
-git add lib/central-cred.js && git commit -m "Central: nova senha do super_admin" && git push
-```
-Ao publicar, as sessões antigas da Central caem.
+### Perdeu a senha do super_admin
+Não existe "recuperar": a senha não fica guardada. Gere outra com `node scripts/central-senha.js` (mostra a senha uma vez e grava o hash em `lib/central-cred.js`; para usar a variável, copie o hash para `CENTRAL_HASH` na Vercel) e publique. As sessões antigas da Central caem.
+
+### Atualização do banco (importante)
+- `lib/schema.sql` é aplicado sozinho, **numa transação só e com trava**, e só quando o arquivo muda (a impressão digital fica em `schema_version`).
+- A conversão para várias empresas **não tem volta automática**: depois de publicada, **não use "Instant Rollback"/"Promote" de uma versão anterior na Vercel** (a versão antiga não entende `tenant_id`: gravaria com erro e misturaria empresas). Para desfazer algo, publique uma correção para frente. Publique fora do horário de uso.
+
+### Testes
+- `npm test` (regras, sem banco) e `PGURL=postgres://usuario:senha@host:porta bash tests/ci_banco.sh` (Central e separação por empresa com Postgres de teste; também roda no GitHub).
 
 ## Desenvolver e testar no computador
 
@@ -116,7 +126,7 @@ node scripts/dev-server.js   # http://localhost:3000
 
 - Repositório **privado**.
 - **Nunca** colocar aqui backups (`.json`), planilhas ou PDFs com dados de clientes. O `.gitignore` já bloqueia esses arquivos.
-- Senhas nunca vão no código nem em variável de ambiente, com uma exceção: `SETUP_CODE`, que só cria o primeiro administrador. O `lib/central-cred.js` guarda só o **hash** da senha da Central (nunca a senha).
+- Senhas nunca vão no código nem em variável de ambiente, com uma exceção: `SETUP_CODE`, que só cria o primeiro administrador. A senha da Central existe só como **hash** (variável `CENTRAL_HASH` ou `lib/central-cred.js`), nunca a senha.
 
 ## Pendências conhecidas
 
