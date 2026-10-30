@@ -26,8 +26,11 @@ const uid=()=>Math.random().toString(36).slice(2,9);
  * Nada de senha, custo ou comissão fica guardado neste aparelho.            */
 /* /cliente: link só para clientes (sem textos da equipe; só aceita login de cliente) */
 /* Tino: cada empresa tem o seu endereço /t/<empresa> (a principal fica em /). Vai em toda chamada ao servidor. */
-if(/^\/t\/[^/]*[A-Z]/.test(location.pathname)){location.replace(location.pathname.replace(/^\/t\/[^/]+/,m=>m.toLowerCase())+location.search+location.hash)}
-const TSLUG=(location.pathname.match(/^\/t\/([a-zA-Z0-9-]{1,40})(?:\/|$)/)||[])[1]||'';
+if(/^\/t\/[^/]*[A-Z]/.test(location.pathname)){location.replace(location.pathname.replace(/^\/t\/[^/]+/,m=>m.toLowerCase())+location.search+location.hash);throw new Error('indo para o endereço em minúsculas')}
+/* endereço /t/... com nome de empresa inválido (sublinhado, acento...): nunca cai na empresa principal */
+const TBAD=/^\/t(\/|$)/.test(location.pathname)&&!/^\/t\/[a-z0-9-]{1,40}(?:\/(?:cliente\/?)?)?$/.test(location.pathname);
+if(TBAD){const nf=()=>{document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>'};if(document.body)nf();else document.addEventListener('DOMContentLoaded',nf);throw new Error('endereço de empresa inválido')}
+const TSLUG=(location.pathname.match(/^\/t\/([a-z0-9-]{1,40})(?:\/|$)/)||[])[1]||'';
 const CLIENT_ONLY=/^(?:\/t\/[a-z0-9-]{1,40})?\/cliente\/?$/.test(location.pathname);
 const SRV={me:null,V:{meta:{}},base:{meta:{}},ord:{},t:null,busy:false,again:false,ver:'',poll:null,lastPass:'',offline:false,retry:null,rej:{},nPend:0};
 const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins','suppliers','receipts','stariaJobs','imports'];
@@ -50,7 +53,7 @@ function srvSnap(){SRV.base={meta:{}};SRV.ord={};
 /* Tino: módulos e marca da empresa, definidos na Central do sistema */
 let TENANT=null;
 /* antes do login: nome, cor e logo da empresa do endereço (empresa que não é a principal não mostra a marca da principal) */
-async function srvLoadBrand(){try{const b=await api('/api/brand');if(b&&!b.primary){TENANT={id:b.id,primary:false,brand:{name:b.name,color:b.color,logo:b.logo},modules:null};S.store.name=String(b.name||'').toUpperCase();document.title=b.name||document.title;srvBrand()}}catch(e){if(e.status===404){document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>';throw e}}}
+async function srvLoadBrand(){try{const b=await api('/api/brand');if(b&&!b.primary){TENANT={id:b.id,primary:false,brand:{name:b.name,color:b.color,logo:b.logo},modules:null};{const m=document.querySelector('link[rel=manifest]');if(m)m.href='/api/manifest?t='+encodeURIComponent(TSLUG)+(CLIENT_ONLY?'&k=cliente':'');const ic=document.querySelector('link[rel=apple-touch-icon]');if(ic)ic.href='/icons/tino-180.png';const at=document.querySelector('meta[name=apple-mobile-web-app-title]');if(at)at.content=String(b.name||'Tino').slice(0,30)}S.store.name=String(b.name||'').toUpperCase();document.title=b.name||document.title;srvBrand()}}catch(e){if(e.status===404){document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>';throw e}}}
 function srvBrand(){const c=TENANT&&TENANT.brand&&TENANT.brand.color;if(!c||!/^#[0-9A-Fa-f]{6}$/.test(c))return;
   const n=parseInt(c.slice(1),16),dk=[16,8,0].map(k=>Math.round(((n>>k)&255)*.78).toString(16).padStart(2,'0')).join(''),R=document.documentElement.style;
   R.setProperty('--brand',c);R.setProperty('--brand-dark','#'+dk);if(TENANT&&TENANT.primary===false){R.setProperty('--accent',c);R.setProperty('--stripe','#'+dk);R.setProperty('--accent-soft',c+'1F')}const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',c)}
@@ -59,11 +62,13 @@ async function loadState(){const r=await api('/api/state');SRV.me=r.me;S=r.S;SRV
   if(SRV.me&&SRV.me.role==='cliente')ui.client=S.customers.find(c=>c.id===SRV.me.refId)||ui.client}
 function srvInPlace(t,s){Object.keys(t).forEach(k=>{if(!(k in s))delete t[k]});return Object.assign(t,s)}
 function srvDiff(){const ch=[],order={},role=SRV.me&&SRV.me.role,can=c=>role==='admin'||(SRV_WRITE[role]||[]).includes(c);
+  const off=(TENANT&&TENANT.off)||{keepColls:[],keepMetas:[]};
   SRV_COLLS.forEach(c=>{const arr=S[c]||[],B=SRV.base[c]=SRV.base[c]||{},V=SRV.V[c]||{},ids=new Set();
+    if(off.keepColls.includes(c)){const was=Object.values(B);if(arr.length!==was.length||arr.some(d=>d&&B[d.id]!==JSON.stringify(d))){S[c]=was.map(x=>JSON.parse(x));SRV.offHit=true}return}
     arr.forEach(d=>{if(!d||typeof d!=='object')return;if(!d.id)d.id=uid();ids.add(d.id);const s=JSON.stringify(d);if(B[d.id]!==s){if(can(c))ch.push({c,id:d.id,op:'put',doc:d,ver:V[d.id],base:V[d.id]?B[d.id]:undefined});else B[d.id]=s}});
     Object.keys(B).forEach(id=>{if(!ids.has(id)){if(role==='admin')ch.push({c,id,op:'del',ver:V[id]});else delete B[id]}});
     if(role==='admin'&&SRV_ORDERED.includes(c)){const now=arr.map(d=>d&&d.id);if(JSON.stringify(now)!==JSON.stringify(SRV.ord[c]||[]))order[c]=now}});
-  Object.keys(S).forEach(k=>{if(SRV_COLLS.includes(k)||k==='seq')return;const s=JSON.stringify(S[k]);if(SRV.base.meta[k]!==s){if(role==='admin')ch.push({c:'meta',id:k,op:'put',doc:S[k],ver:(SRV.V.meta||{})[k]});else SRV.base.meta[k]=s}});
+  Object.keys(S).forEach(k=>{if(SRV_COLLS.includes(k)||k==='seq')return;if(off.keepMetas.includes(k)){if(SRV.base.meta[k]!==JSON.stringify(S[k])){if(SRV.base.meta[k]===undefined)delete S[k];else S[k]=JSON.parse(SRV.base.meta[k]);SRV.offHit=true}return}const s=JSON.stringify(S[k]);if(SRV.base.meta[k]!==s){if(role==='admin')ch.push({c:'meta',id:k,op:'put',doc:S[k],ver:(SRV.V.meta||{})[k]});else SRV.base.meta[k]=s}});
   return {ch,order}}
 function srvApply(r,order,sent){const touched=new Set();
   (r.docs||[]).forEach(d=>{touched.add(d.c);
@@ -102,7 +107,7 @@ function srvNetBar(){let b=document.getElementById('srvnet');const n=SRV.nPend;
   b.hidden=false;b.textContent='Sem internet: '+n+(n>1?' alterações ainda não foram enviadas':' alteração ainda não foi enviada')+'. O app envia sozinho quando a conexão voltar. Não feche o app.'}
 window.addEventListener('online',()=>{if(SRV.me)srvSync()});
 async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
-  const {ch,order}=srvDiff();SRV.nPend=ch.length;if(!ch.length&&!Object.keys(order).length){srvPersist([]);SRV.offline=false;srvNetBar();return}
+  const {ch,order}=srvDiff();SRV.nPend=ch.length;if(SRV.offHit){SRV.offHit=false;srvAlert('Não foi gravado: função desligada para esta empresa.');srvSoftRender(true)}if(!ch.length&&!Object.keys(order).length){srvPersist([]);SRV.offline=false;srvNetBar();return}
   srvPersist(ch);
   SRV.busy=true;srvBadge(true);clearTimeout(SRV.retry);
   try{const sent={};ch.forEach(x=>{if(x.op==='put')sent[x.c+':'+x.id]=JSON.stringify(x.doc)});const r=await api('/api/sync',{changes:ch,order});
@@ -112,7 +117,7 @@ async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
         if(k>=0){if(b)arr[k]=JSON.parse(b);else arr.splice(k,1)}t.add(x.c)});
       srvAlert(r.rejected.map(x=>x.error).filter((v,i,a)=>a.indexOf(v)===i).join(' · '))}
     const left=srvDiff().ch;SRV.nPend=left.length;srvPersist(left);
-    if(ui.admin&&['customers','sellers','checkers','billers','vehicles','admins'].some(c=>t.has(c)))srvSoftRender((r.rejected||[]).length>0);else if(t.has('orders')||t.has('receivables')||t.has('products'))srvSoftRender((r.rejected||[]).length>0)}
+    if(ui.admin&&['customers','sellers','checkers','billers','vehicles','admins'].some(c=>t.has(c)))srvSoftRender((r.rejected||[]).length>0);else if(t.has('orders')||t.has('receivables')||t.has('products')||(r.rejected||[]).length)srvSoftRender((r.rejected||[]).length>0)}
   catch(e){if(e.status===401){toast('Sua sessão terminou. Entre de novo.');setTimeout(()=>location.reload(),1200);return}if(srvKicked(e))return;
     if(e.data&&e.data.mustReset){srvResetScreen();return}
     if(e.status===0||e.status>=500&&e.status!==501){/* sem internet ou servidor fora: guarda e tenta de novo sozinho */
@@ -138,7 +143,7 @@ function srvSoftRender(force){const typing=(document.activeElement&&document.act
 function reloadState(){srvRefresh(true)}
 async function srvRefresh(force){if(!SRV.me||SRV.busy)return;const {ch}=srvDiff();if(ch.length){srvSync();return}
   try{const v=await api('/api/version');if(!force&&v.v===SRV.ver)return;SRV.ver=v.v;await loadState();srvSoftRender(force)}
-  catch(e){if(e.status===401){location.reload()}else srvKicked(e)}}
+  catch(e){if(e.status===401){toast('Sua sessão terminou. Se você entrou em outra empresa neste navegador, só uma fica aberta por vez.');setTimeout(()=>location.reload(),3500)}else srvKicked(e)}}
 /* empresa suspensa, loja em preparo ou acesso desligado: avisa e sai (em vez de seguir na tela sem gravar nada) */
 function srvKicked(e){if(!(e&&e.status===403&&e.data&&e.data.login))return false;if(SRV.kicked)return true;SRV.kicked=true;clearInterval(SRV.poll);
   try{localStorage.removeItem(srvDraftKey())}catch(_){}$('#app').innerHTML='<div class="empty" role="alert"><h2>'+esc(e.message)+'</h2><p>Você foi desconectado.</p></div>';setTimeout(()=>{api('/api/logout',{}).catch(()=>{}).then(()=>location.reload())},4000);return true}

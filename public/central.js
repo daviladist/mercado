@@ -57,7 +57,7 @@
     $('#editor').innerHTML = `
     <section class="card top">
       <div><h1>${esc(t.name || 'Nova empresa')}</h1><p class="muted small" style="margin:4px 0 0">${on} de ${D.modules.length} módulos ligados · essenciais sempre ativos</p></div>
-      <div class="field" style="min-width:180px"><label for="fst">Situação</label><select id="fst">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${t.status === k ? 'selected' : ''} ${t.primary && k === 'suspensa' ? 'disabled' : ''}>${v}</option>`).join('')}</select></div>
+      <div class="field" style="min-width:180px"><label for="fst">Situação</label><select id="fst">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${t.status === k ? 'selected' : ''} ${t.primary && k !== 'ativa' ? 'disabled' : ''}>${v}</option>`).join('')}</select></div>
     </section>
     ${t.id ? accessCard(t) : '<div class="note">Salve a empresa para gerar o endereço e o acesso do administrador dela.</div>'}
     <section class="card" style="display:grid;gap:16px" aria-labelledby="hid">

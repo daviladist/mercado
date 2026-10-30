@@ -1,4 +1,6 @@
 -- Banco do App D'Ávila Pedidos (Postgres / Neon). Pode rodar mais de uma vez.
+-- REGRAS DESTE ARQUIVO: todo comando termina com ";" no fim da linha; bloco "do $$ ... $$" fica em UMA linha só
+-- (o arquivo é dividido em comandos por ";" + quebra de linha; o teste tests/unit/schema.test.js confere).
 create table if not exists users (
   id bigserial primary key,
   role text not null check (role in ('admin','cliente','vendedor','conferente','faturamento','entregador')),
@@ -120,4 +122,4 @@ alter table docs alter column tenant_id drop default;
 alter table photos alter column tenant_id drop default;
 do $$ begin if not exists (select 1 from pg_constraint where conname='users_tenant_fk') then alter table users add constraint users_tenant_fk foreign key (tenant_id) references tenants(id); end if; end $$;
 do $$ begin if not exists (select 1 from pg_constraint where conname='docs_tenant_fk') then alter table docs add constraint docs_tenant_fk foreign key (tenant_id) references tenants(id); end if; end $$;
-do $$ begin if not exists (select 1 from pg_constraint where conname='photos_tenant_fk') then alter table photos add constraint photos_tenant_fk foreign key (tenant_id) references tenants(id); end if; end $$
+do $$ begin if not exists (select 1 from pg_constraint where conname='photos_tenant_fk') then alter table photos add constraint photos_tenant_fk foreign key (tenant_id) references tenants(id); end if; end $$;
