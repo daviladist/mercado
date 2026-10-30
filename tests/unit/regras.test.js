@@ -229,3 +229,29 @@ test('acerto: entrega em dinheiro/PIX fica aguardando até o faturamento confirm
   const d = upd(S, U.entregador, o, Object.assign(clone(o), { status: 'concluido', delivered: { name: 'F', photo: PHOTO, how: '' } }));
   assert.equal(d.delivered.settled, true);   // boleto/prazo: vira conta a receber, não precisa de acerto
 });
+
+test('custo de referência: a trava do vendedor usa o maior custo; a margem real não muda', () => {
+  const S = base(); S.sellers[0].minMg = 10;
+  const req = { cid: 'c1', cart: { p1: 5 }, mode: 'retirada', pay: 'Pix', nf: false };
+  const a = policy.lockCheck(S, U.vendedor, req);
+  assert.equal(a.K.ok, true, 'sem custo de referência: preço de tabela liberado');
+  S.products[0].refCost = 58;
+  const b = policy.lockCheck(S, U.vendedor, req);
+  assert.equal(b.K.ok, false, 'com custo de referência 58: o mesmo preço precisa de aprovação');
+  assert.equal(b.levels.p1 === 'red' || b.levels.p1 === 'yellow', true);
+  S.products[0].refCost = 30;
+  const c = policy.lockCheck(S, U.vendedor, req);
+  assert.equal(c.K.ok, true, 'custo de referência menor que o custo real: vale o custo real');
+  const P = policy.project(S, U.vendedor).products[0];
+  assert.equal(P.refCost, undefined, 'vendedor não recebe o custo de referência');
+});
+
+test('custo de referência some quando o custo real fica igual ou maior', () => {
+  const S = base(); const V = { products: { p1: 1, p2: 1 }, meta: {} };
+  const keep = Object.assign({}, S.products[0], { refCost: 45 });
+  let r = policy.applySync(S, V, U.admin, [{ c: 'products', id: 'p1', op: 'put', doc: keep, ver: 1 }]);
+  assert.equal(r.writes[0].doc.refCost, 45);
+  const drop = Object.assign({}, S.products[0], { cost: 46, refCost: 45 });
+  r = policy.applySync(S, V, U.admin, [{ c: 'products', id: 'p1', op: 'put', doc: drop, ver: 1 }]);
+  assert.equal(r.writes[0].doc.refCost, undefined);
+});
