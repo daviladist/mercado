@@ -167,6 +167,22 @@ s, st = A.req('/api/state'); pb = next(p for p in st['S']['products'] if p['id']
 check(pb['stock'] == 40, 'mudar a situação do pedido do balcão NÃO devolve nem baixa estoque de novo: %s' % pb['stock'])
 check(len(recs) == 2, 'nem gera conta a receber a mais: %s' % len(recs))
 
+print('== venda sem internet lançada pelo gerente e diferença por forma')
+s, r = op.req('/api/pdv/caixa/abrir', {'fundo': 50}); CX2 = r['caixa']['id']
+FL = sid(); s, r = op.req('/api/pdv/venda', {'id': FL, 'caixaId': CX2, 'items': [{'pid': 'pa', 'q': 2}], 'pagamentos': [{'forma': 'dinheiro', 'valor': 45}], 'totalEsperado': 45, 'offline': True})
+check(r.get('status') == 'falha', 'venda sem internet com preço antigo (45 por 2 arroz) fica com problema')
+s, st = A.req('/api/state'); e0 = next(p for p in st['S']['products'] if p['id'] == 'pa')['stock']
+s, r = op.req('/api/pdv/falha/lancar', {'id': FL}); check(s == 403, 'operador não lança venda com problema')
+s, r = A.req('/api/pdv/falha/lancar', {'id': FL}); check(s == 200 and r.get('numero'), 'gerente lança como venda nº %s' % r.get('numero'))
+s, st = A.req('/api/state'); check(next(p for p in st['S']['products'] if p['id'] == 'pa')['stock'] == e0 - 2, 'estoque baixou ao lançar')
+s, r = A.req('/api/pdv/falha/lancar', {'id': FL}); check(s == 404, 'não lança duas vezes')
+s, R = A.req('/api/pdv/resumo'); v = next(x for x in R['lista'] if x['id'] == FL); check(v['total'] == 45 and v['desconto'] == 5 and v['autorizou'], 'vale o valor cobrado; a diferença é desconto autorizado pelo gerente')
+s, r = op.req('/api/pdv/venda', {'id': sid(), 'caixaId': CX2, 'items': [{'pid': 'pa', 'q': 1}], 'pagamentos': [{'forma': 'pix', 'valor': 25, 'conferido': True}], 'totalEsperado': 25})
+# dinheiro esperado: 50 + 45 = 95; PIX esperado 25. Contado: dinheiro 120 (sobra 25), PIX 0 (falta 25)
+s, r = op.req('/api/pdv/caixa/fechar', {'contado': {'dinheiro': 120, 'pix': 0, 'debito': 0, 'credito': 0}})
+check(s == 200 and r['diferencas'] == {'dinheiro': 25, 'pix': -25}, 'diferença por forma: falta no PIX não some com sobra no dinheiro: %s' % r.get('diferencas'))
+s, R = A.req('/api/pdv/resumo'); check(any(d['porForma'].get('pix') == -25 for d in R['diferencas']), 'painel avisa a diferença mesmo com total zero')
+
 print('== cancelar venda (gerente)')
 s, st = A.req('/api/state'); est = next(p for p in st['S']['products'] if p['id'] == 'pa')['stock']
 s, r = op.req('/api/pdv/cancelar', {'id': V1, 'motivo': 'teste de cancelamento'}); check(s == 403, 'operador não cancela venda')

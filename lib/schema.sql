@@ -263,3 +263,5 @@ create table if not exists pdv_falhas (
 create index if not exists pdv_vendas_revisar on pdv_vendas(tenant_id) where status='revisar';
 create index if not exists caixa_mov_caixa on caixa_movimentos(tenant_id, caixa_id);
 create index if not exists pdv_aut_expira on pdv_autorizacoes(expira_em);
+alter table caixas add column if not exists diferencas jsonb;
+alter table caixas add column if not exists tem_dif boolean not null default false;
