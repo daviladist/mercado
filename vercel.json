@@ -17,6 +17,18 @@
     {
       "source": "/api/(.*)",
       "destination": "/api/index"
+    },
+    {
+      "source": "/t/:empresa/cliente",
+      "destination": "/cliente.html"
+    },
+    {
+      "source": "/t/:empresa",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/t/:empresa/",
+      "destination": "/index.html"
     }
   ],
   "headers": [

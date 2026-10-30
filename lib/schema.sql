@@ -88,4 +88,27 @@ create table if not exists central_sessions (
   ip text,
   created_at timestamptz not null default now(),
   expires_at timestamptz not null
-)
+);
+
+-- ===== Tino: dados separados por empresa (tenant_id). Pode rodar mais de uma vez. =====
+-- tudo o que já existe pertence à empresa principal (davila)
+alter table users add column if not exists tenant_id text not null default 'davila';
+alter table docs add column if not exists tenant_id text not null default 'davila';
+alter table photos add column if not exists tenant_id text not null default 'davila';
+alter table audit add column if not exists tenant_id text;
+-- usuário e cadastro são únicos DENTRO da empresa (duas empresas podem ter um "eduardo")
+create unique index if not exists users_t_role_login on users(tenant_id, role, login);
+create unique index if not exists users_t_role_ref on users(tenant_id, role, ref_id);
+alter table users drop constraint if exists users_role_login_key;
+alter table users drop constraint if exists users_role_ref_id_key;
+drop index if exists users_doc;
+create index if not exists users_t_doc on users(tenant_id, role, doc);
+-- registros e fotos: a chave passa a incluir a empresa
+do $$ begin if exists (select 1 from pg_constraint where conname='docs_pkey' and array_length(conkey,1)=2) then alter table docs drop constraint docs_pkey; alter table docs add constraint docs_pkey primary key (tenant_id, coll, id); end if; end $$;
+do $$ begin if exists (select 1 from pg_constraint where conname='photos_pkey' and array_length(conkey,1)=1) then alter table photos drop constraint photos_pkey; alter table photos add constraint photos_pkey primary key (tenant_id, id); end if; end $$;
+-- número do pedido por empresa (a principal continua de onde parou)
+create table if not exists order_seq (
+  tenant_id text primary key,
+  last_no bigint not null
+);
+insert into order_seq(tenant_id,last_no) select 'davila', case when is_called then last_value else last_value-1 end from order_no on conflict (tenant_id) do nothing

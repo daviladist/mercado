@@ -13,7 +13,9 @@ const headersFor = p => (vercel.headers || []).filter(h => new RegExp('^' + h.so
 http.createServer((req, res) => {
   const p = req.url.split('?')[0];
   if (p.startsWith('/api/')) return handle(req, res);
-  let f = path.join(PUB, p === '/' ? 'index.html' : p);
+  // /t/<empresa> e /t/<empresa>/cliente: mesmo app, outra empresa (como os rewrites do vercel.json)
+  const tm = /^\/t\/[a-z0-9-]{1,40}(\/cliente)?\/?$/.exec(p);
+  let f = tm ? path.join(PUB, tm[1] ? 'cliente.html' : 'index.html') : path.join(PUB, p === '/' ? 'index.html' : p);
   if (!fs.existsSync(f) && fs.existsSync(f + '.html')) f += '.html'; // como o cleanUrls da Vercel
   if (!f.startsWith(PUB) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) f = path.join(PUB, 'index.html');
   headersFor(p).forEach(h => res.setHeader(h.key, h.value));

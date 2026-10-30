@@ -3,7 +3,10 @@
  * Toda gravação vai para o servidor, que confere e recalcula antes de aceitar.
  * Nada de senha, custo ou comissão fica guardado neste aparelho.            */
 /* /cliente: link só para clientes (sem textos da equipe; só aceita login de cliente) */
-const CLIENT_ONLY=/^\/cliente\/?$/.test(location.pathname);
+/* Tino: cada empresa tem o seu endereço /t/<empresa> (a principal fica em /). Vai em toda chamada ao servidor. */
+const TSLUG=(location.pathname.match(/^\/t\/([a-z0-9-]{1,40})(?:\/|$)/)||[])[1]||'';
+const TBASE=TSLUG?'/t/'+TSLUG:'';
+const CLIENT_ONLY=/^(?:\/t\/[a-z0-9-]{1,40})?\/cliente\/?$/.test(location.pathname);
 const SRV={me:null,V:{meta:{}},base:{meta:{}},ord:{},t:null,busy:false,again:false,ver:'',poll:null,lastPass:'',offline:false,retry:null,rej:{},nPend:0};
 const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins','suppliers','receipts','stariaJobs','imports'];
 const SRV_ORDERED=['suppliers','products','customers','sellers','checkers','billers','vehicles','cities','categories','combos','admins','payables','receivables'];
@@ -11,7 +14,7 @@ const SRV_WRITE={cliente:['orders','customers'],vendedor:['orders'],conferente:[
 const ROLE_VIEW={admin:'admin',cliente:'cliente',vendedor:'vend',conferente:'conf',faturamento:'fat',entregador:'ent'};
 const VIEW_ROLE={admin:'admin',cliente:'cliente',vend:'vendedor',conf:'conferente',fat:'faturamento',ent:'entregador'};
 async function api(path,body){
-  const opt=body===undefined?{credentials:'same-origin'}:{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-App':'1'},body:JSON.stringify(body)};
+  const opt=body===undefined?{credentials:'same-origin',headers:{'X-Tenant':TSLUG||'@'}}:{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-App':'1','X-Tenant':TSLUG||'@'},body:JSON.stringify(body)};
   let r;try{r=await fetch(path,opt)}catch(e){const er=new Error('Sem conexão com o servidor. Confira a internet.');er.status=0;throw er}
   let j={};try{j=await r.json()}catch(e){}
   if(!r.ok){const e=new Error(j.error||('Erro '+r.status));e.status=r.status;e.data=j;throw e}
@@ -24,6 +27,8 @@ function srvSnap(){SRV.base={meta:{}};SRV.ord={};
   Object.keys(S).forEach(k=>{if(!SRV_COLLS.includes(k)&&k!=='seq')SRV.base.meta[k]=JSON.stringify(S[k])})}
 /* Tino: módulos e marca da empresa, definidos na Central do sistema */
 let TENANT=null;
+/* antes do login: nome, cor e logo da empresa do endereço (empresa que não é a principal não mostra a marca da principal) */
+async function srvLoadBrand(){try{const b=await api('/api/brand');if(b&&!b.primary){TENANT={id:b.id,primary:false,brand:{name:b.name,color:b.color,logo:b.logo},modules:null};S.store.name=String(b.name||'').toUpperCase();document.title=b.name||document.title;srvBrand()}}catch(e){if(e.status===404){document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>';throw e}}}
 function srvBrand(){const c=TENANT&&TENANT.brand&&TENANT.brand.color;if(!c||!/^#[0-9A-Fa-f]{6}$/.test(c))return;
   const n=parseInt(c.slice(1),16),dk=[16,8,0].map(k=>Math.round(((n>>k)&255)*.78).toString(16).padStart(2,'0')).join(''),R=document.documentElement.style;
   R.setProperty('--brand',c);R.setProperty('--brand-dark','#'+dk);const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',c)}
