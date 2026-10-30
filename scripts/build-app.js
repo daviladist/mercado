@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 let s = fs.readFileSync(path.join(ROOT, 'src/app.source.html'), 'utf8');
-const client = fs.readFileSync(path.join(ROOT, 'src/server-client.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/receber.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/importar.js'), 'utf8');
+const client = fs.readFileSync(path.join(ROOT, 'src/server-client.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/receber.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/importar.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/pdv.js'), 'utf8');
 let n = 0;
 const EXPECTED = 65;      // número de trocas deste arquivo: mude junto quando incluir/tirar uma
 const COUNT_LS = 3;      // gravações antigas no aparelho espalhadas pelo código (depois de tirar o save antigo)
@@ -73,7 +73,7 @@ R("    $('#logout').onclick=()=>{ui.client=null;ui.cart={};render()};", "    $('
 R("\n  $('#logout').onclick=()=>{ui.client=null;ui.cart={};render()};", "\n  $('#logout').onclick=srvLogout;{const b=document.createElement('button');b.className='btn ghost';b.style.minHeight='40px';b.textContent='Trocar senha';b.onclick=srvPassScreen;$('#logout').before(b)}");
 
 // ---------- 5. cada pessoa fica na tela do seu papel; troca de tela só antes de entrar
-R("function render(){\n", "function render(){if(SRV.me&&!SRV.me.mustReset)ui.view=ROLE_VIEW[SRV.me.role]||ui.view;\n");
+R("function render(){\n", "function render(){if(SRV.me&&!SRV.me.mustReset)ui.view=PDV_PATH&&(SRV.me.role==='admin'||SRV.me.role==='operador_caixa')?'pdv':(ROLE_VIEW[SRV.me.role]||ui.view);\n");
 RX(/\/\* outra aba do mesmo navegador salvou[\s\S]*?\nrender\(\);\n\}\)\(\);/, () => `window.addEventListener('hashchange',()=>{if(!SRV.me){ui.view=srvHashView();render()}});
 ui.view=srvHashView();render();
 (async()=>{try{await srvLoadBrand();render()}catch(e){return}try{const me=await api('/api/me');if(CLIENT_ONLY&&me.role!=='cliente')return;SRV.me=me;if(me.mustReset){srvResetScreen();return}await loadState();srvAfterLogin()}catch(e){if(e.status&&e.status!==401)toast(e.message)}})();

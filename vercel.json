@@ -19,6 +19,14 @@
       "destination": "/api/index"
     },
     {
+      "source": "/t/:empresa/pdv",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/pdv",
+      "destination": "/index.html"
+    },
+    {
       "source": "/t/:empresa/cliente",
       "destination": "/cliente.html"
     },

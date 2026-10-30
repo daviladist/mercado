@@ -6,23 +6,26 @@
 /* Tino: cada empresa tem o seu endereço /t/<empresa> (a principal fica em /). Vai em toda chamada ao servidor. */
 if(/^\/t\/[^/]*[A-Z]/.test(location.pathname)){location.replace(location.pathname.replace(/^\/t\/[^/]+/,m=>m.toLowerCase())+location.search+location.hash);throw new Error('indo para o endereço em minúsculas')}
 /* endereço /t/... com nome de empresa inválido (sublinhado, acento...): nunca cai na empresa principal */
-const TBAD=/^\/t(\/|$)/.test(location.pathname)&&!/^\/t\/[a-z0-9-]{1,40}(?:\/(?:cliente\/?)?)?$/.test(location.pathname);
+const TBAD=/^\/t(\/|$)/.test(location.pathname)&&!/^\/t\/[a-z0-9-]{1,40}(?:\/(?:(?:cliente|pdv)\/?)?)?$/.test(location.pathname);
 if(TBAD){const nf=()=>{document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>'};if(document.body)nf();else document.addEventListener('DOMContentLoaded',nf);throw new Error('endereço de empresa inválido')}
 const TSLUG=(location.pathname.match(/^\/t\/([a-z0-9-]{1,40})(?:\/|$)/)||[])[1]||'';
 const CLIENT_ONLY=/^(?:\/t\/[a-z0-9-]{1,40})?\/cliente\/?$/.test(location.pathname);
+/* /pdv (ou /t/<empresa>/pdv): caixa de balcão em tela cheia */
+const PDV_PATH=/^(?:\/t\/[a-z0-9-]{1,40})?\/pdv\/?$/.test(location.pathname);
+const TBASE=TSLUG?'/t/'+TSLUG:'';
 const SRV={me:null,V:{meta:{}},base:{meta:{}},ord:{},t:null,busy:false,again:false,ver:'',poll:null,lastPass:'',offline:false,retry:null,rej:{},nPend:0};
-const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins','suppliers','receipts','stariaJobs','imports'];
-const SRV_ORDERED=['suppliers','products','customers','sellers','checkers','billers','vehicles','cities','categories','combos','admins','payables','receivables'];
+const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins','suppliers','receipts','stariaJobs','imports','cashiers'];
+const SRV_ORDERED=['suppliers','products','customers','sellers','checkers','billers','vehicles','cities','categories','combos','admins','payables','receivables','cashiers'];
 const SRV_WRITE={cliente:['orders','customers'],vendedor:['orders'],conferente:['orders','counts','receipts'],faturamento:['orders','receipts'],entregador:['orders','romaneios']};
-const ROLE_VIEW={admin:'admin',cliente:'cliente',vendedor:'vend',conferente:'conf',faturamento:'fat',entregador:'ent'};
-const VIEW_ROLE={admin:'admin',cliente:'cliente',vend:'vendedor',conf:'conferente',fat:'faturamento',ent:'entregador'};
+const ROLE_VIEW={admin:'admin',cliente:'cliente',vendedor:'vend',conferente:'conf',faturamento:'fat',entregador:'ent',operador_caixa:'pdv'};
+const VIEW_ROLE={admin:'admin',cliente:'cliente',vend:'vendedor',conf:'conferente',fat:'faturamento',ent:'entregador',pdv:'operador_caixa'};
 async function api(path,body){
   const opt=body===undefined?{credentials:'same-origin',headers:{'X-Tenant':TSLUG||'@'}}:{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-App':'1','X-Tenant':TSLUG||'@'},body:JSON.stringify(body)};
   let r;try{r=await fetch(path,opt)}catch(e){const er=new Error('Sem conexão com o servidor. Confira a internet.');er.status=0;throw er}
   let j={};try{j=await r.json()}catch(e){}
   if(!r.ok){const e=new Error(j.error||('Erro '+r.status));e.status=r.status;e.data=j;throw e}
   return j}
-function emptyState(){return {store:{name:'ATACADO DAVILA',pickupDisc:0,pickV:1,onerV:2,pickupOner:false},payments:[],cashPays:[],payDays:{},products:[],customers:[],orders:[],receivables:[],payables:[],sellers:[],checkers:[],billers:[],vehicles:[],cities:[],categories:[],combos:[],counts:[],commPayouts:[],trips:[],romaneios:[],admins:[],suppliers:[],receipts:[],stariaJobs:[],imports:[],seq:1001,catTreeV1:true}}
+function emptyState(){return {store:{name:'ATACADO DAVILA',pickupDisc:0,pickV:1,onerV:2,pickupOner:false},payments:[],cashPays:[],payDays:{},products:[],customers:[],orders:[],receivables:[],payables:[],sellers:[],checkers:[],billers:[],vehicles:[],cities:[],categories:[],combos:[],counts:[],commPayouts:[],trips:[],romaneios:[],admins:[],suppliers:[],receipts:[],stariaJobs:[],imports:[],cashiers:[],seq:1001,catTreeV1:true}}
 function srvFix(){const E=emptyState();Object.keys(E).forEach(k=>{if(S[k]==null)S[k]=E[k]});S.store=Object.assign({},E.store,S.store||{});
   (S.products||[]).forEach(p=>{if(p.perPack===undefined)p.perPack=parsePack(p.unit);if(p.code==null)p.code='';if(p.ean==null)p.ean='';p.rules=Object.assign(emptyRules(),p.rules||{})})}
 function srvSnap(){SRV.base={meta:{}};SRV.ord={};
@@ -166,7 +169,7 @@ function srvPassScreen(){const app=$('#app');app.innerHTML=`<form class="login p
 /* links de acesso da equipe na tela de login do cliente (cada pessoa entra pelo seu) */
 function srvTeamLinks(cur){return cur==='cliente'&&!CLIENT_ONLY?'<div class="teamlinks small">Equipe da loja (vendedor, conferente, faturamento, motorista e administrador) também entra por aqui, com o usuário e a senha que a loja passou.</div>':''}
 function srvBindTeamLinks(){document.querySelectorAll('[data-goview]').forEach(a=>a.onclick=e=>{e.preventDefault();ui.view=a.dataset.goview;try{history.replaceState(null,'','#'+VIEW_ROLE[ui.view])}catch(_){}render()})}
-function srvHashView(){if(CLIENT_ONLY)return 'cliente';const h=String(location.hash||'').replace('#','');const k=Object.keys(VIEW_ROLE).find(v=>VIEW_ROLE[v]===h);return k||'cliente'}
+function srvHashView(){if(CLIENT_ONLY)return 'cliente';if(PDV_PATH)return 'pdv';const h=String(location.hash||'').replace('#','');const k=Object.keys(VIEW_ROLE).find(v=>VIEW_ROLE[v]===h);return k||'cliente'}
 /* trava de margem do vendedor: o cálculo é feito no servidor (o vendedor não recebe custo) */
 const SRV_LK={};
 function srvLockKey(cli,L){return JSON.stringify([cli&&cli.id,L.cart,L.over||{},L.mode,L.pay,!!L.nf,L.editId||'',!!L._tblOk])}

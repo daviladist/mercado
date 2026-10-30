@@ -2407,7 +2407,7 @@ function admConferentes(){
 }
 
 /* aba -> módulo da Central que precisa estar ligado */
-const TAB_MOD={relatorios:'painel',decisoes:'decisoes',entregas:'entregas',semana:'ofertas',recmerc:'entrada',precnotas:'entrada',receber:['receber','pagar','caixa']};
+const TAB_MOD={pdv:'pdv',relatorios:'painel',decisoes:'decisoes',entregas:'entregas',semana:'ofertas',recmerc:'entrada',precnotas:'entrada',receber:['receber','pagar','caixa']};
 function renderAdmin(){
   const app=$('#app');
   if(!ui.admin){app.innerHTML=loginForm(true);bindLogin(true);return}
@@ -2416,7 +2416,7 @@ function renderAdmin(){
   const novos=S.orders.filter(o=>o.status==='novo').length,nsug=S.orders.reduce((n,o)=>n+(OPEN.includes(o.status)?sugPending(o).length:0),0);
   const nan=S.orders.filter(o=>o.appr==='pendente'&&o.status!=='cancelado').length,ncnt=(S.counts||[]).filter(x=>x.status==='finalizada').length,venc=(S.receivables||[]).filter(r=>recStatus(r)==='vencido').length,crit=S.products.filter(isCritical).length;
   /* menu em grupos: poucas abas em cima, micro abas dentro */
-  const G=[['Dashboard',[['hoje','Visão geral'],['relatorios','Relatórios']]],['Pedidos',[['pedidos','Pedidos'],['decisoes','Decisões'],['entregas','Entregas']]],['Ofertas',[['semana','Ofertas da semana']]],['Produtos',[['produtos','Produtos'],['recmerc','Receber mercadoria'],['precnotas','Precificação de notas']]],['Financeiro',[['receber','Financeiro']]],['Cadastros',[['cadastros','Cadastros'],['clientes',''],['config','']]]]
+  const G=[['Dashboard',[['hoje','Visão geral'],['relatorios','Relatórios']]],['Pedidos',[['pedidos','Pedidos'],['decisoes','Decisões'],['entregas','Entregas']]],['Ofertas',[['semana','Ofertas da semana']]],['Caixa (PDV)',[['pdv','Caixa (PDV)']]],['Produtos',[['produtos','Produtos'],['recmerc','Receber mercadoria'],['precnotas','Precificação de notas']]],['Financeiro',[['receber','Financeiro']]],['Cadastros',[['cadastros','Cadastros'],['clientes',''],['config','']]]]
     .map(g=>[g[0],g[1].filter(x=>{const m=TAB_MOD[x[0]];return !m||(Array.isArray(m)?m.some(modOn):modOn(m))})]).filter(g=>g[1].some(x=>x[1]));
   if(!G.some(g=>g[1].some(x=>x[0]===ui.tab)))ui.tab='hoje';
   const BD={pedidos:novos?{n:novos,c:''}:null,decisoes:(nan+nsug)?{n:nan+nsug,c:''}:null,entregas:nprog?{n:nprog,c:'var(--accent)'}:null,semana:ncnt?{n:ncnt,c:'var(--accent)'}:null,receber:venc?{n:venc,c:''}:null,produtos:crit?{n:crit,c:'var(--warn)'}:null,precnotas:(()=>{const n=(S.receipts||[]).filter(r=>r.status==='conferida').length+(S.imports||[]).filter(x=>x.status==='pendente'||x.status==='consultando').length;return n?{n,c:''}:null})()};
@@ -2426,7 +2426,7 @@ function renderAdmin(){
   const subs=grp[1].filter(x=>x[1]);
   app.innerHTML=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" data-tab="${t.k}" aria-selected="${t.sel}">${t.label}${cnt(t.b)}</button>`).join('')}</div>${subs.length>1?`<div class="subnavwrap"><div class="seg repseg subnav" role="group" aria-label="${grp[0]}">${subs.map(([k,v])=>`<button data-tab="${k}" aria-pressed="${ui.tab===k}">${v}${cnt(BD[k])}</button>`).join('')}</div></div>`:''}<div id="tabc"></div>`;
   app.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ui.tab=b.dataset.tab;ui.backWeek=false;ui.romView=false;ui.lanc=null;ui.stBulk=null;ui.stCost=null;ui.combosView=false;ui.comboEdit=null;ui.adj=null;ui.recNew=null;ui.edit=null;ui.bulk=null;ui.confirmDel=null;renderAdmin()});
-  ({recmerc:()=>recScreen($('#tabc')),precnotas:()=>precScreen($('#tabc')),entregas:admEntregas,decisoes:admDecisoes,separacao:admSep,cadastros:admCadastros,hoje:admHoje,pedidos:admOrders,receber:admFin,relatorios:admRelatorios,produtos:admProducts,semana:admSemana,analise:admAnalise,clientes:admClients,config:admConfig})[ui.tab]();rcAlert();
+  ({pdv:()=>pdvAdmin($('#tabc')),recmerc:()=>recScreen($('#tabc')),precnotas:()=>precScreen($('#tabc')),entregas:admEntregas,decisoes:admDecisoes,separacao:admSep,cadastros:admCadastros,hoje:()=>{admHoje();pdvDashCard()},pedidos:admOrders,receber:admFin,relatorios:admRelatorios,produtos:admProducts,semana:admSemana,analise:admAnalise,clientes:admClients,config:admConfig})[ui.tab]();rcAlert();
 }
 /* ---------- baixar pedidos em PDF ou Excel ---------- */
 const FILTER_NAME={ativos:'em-aberto',concluido:'concluidos',cancelado:'cancelados',todos:'todos'};
@@ -3344,15 +3344,15 @@ function admCategorias(){
 }
 function admCadastros(){
   /* três grupos: Clientes, Usuários (equipe que entra no app) e Configurações */
-  const GR=[['clientes','Clientes',[['clientes','Clientes']]],['fornecedores','Fornecedores',[['fornecedores','Fornecedores']]],['usuarios','Usuários',[['vendedores','Vendedores'],['conferentes','Conferentes'],['faturamento','Faturamento'],['veiculos','Motoristas']]],['config','Configurações',[['loja','Loja e regras'],['categorias','Categorias'],['pagamentos','Pagamento'],['cidades','Cidades de entrega']]]]
-    .map(x=>[x[0],x[1],x[2].filter(y=>{const m={fornecedores:'entrada',veiculos:'entregas',conferentes:'conferencia',faturamento:'faturamento'}[y[0]];return !m||modOn(m)})]).filter(x=>x[2].length);
+  const GR=[['clientes','Clientes',[['clientes','Clientes']]],['fornecedores','Fornecedores',[['fornecedores','Fornecedores']]],['usuarios','Usuários',[['vendedores','Vendedores'],['conferentes','Conferentes'],['faturamento','Faturamento'],['veiculos','Motoristas'],['caixas','Operadores de caixa']]],['config','Configurações',[['loja','Loja e regras'],['categorias','Categorias'],['pagamentos','Pagamento'],['cidades','Cidades de entrega']]]]
+    .map(x=>[x[0],x[1],x[2].filter(y=>{const m={fornecedores:'entrada',veiculos:'entregas',conferentes:'conferencia',faturamento:'faturamento',caixas:'pdv'}[y[0]];return !m||modOn(m)})]).filter(x=>x[2].length);
   const k=ui.cadSub||'clientes',g=GR.find(x=>x[2].some(y=>y[0]===k))||GR[0];ui.cadLast=ui.cadLast||{};ui.cadLast[g[0]]=k;
   $('#tabc').innerHTML=`<div class="seg repseg cadg" role="group" aria-label="Cadastros">${GR.map(x=>`<button data-cadg="${x[0]}" aria-pressed="${x===g}">${x[1]}</button>`).join('')}</div>
     ${g[2].length>1?`<div class="seg cadsub" role="group" aria-label="${g[1]}">${g[2].map(([a,b])=>`<button data-cad="${a}" aria-pressed="${k===a}">${b}</button>`).join('')}</div>`:''}<div id="cadc"></div>`;
   const go=v=>{ui.cadSub=v;ui.selEdit=null;ui.edit=null;ui.payEdit=null;ui.confirmDel=null;ui.catMove=null;admCadastros()};
   document.querySelectorAll('[data-cadg]').forEach(b=>b.onclick=()=>{const x=GR.find(y=>y[0]===b.dataset.cadg);go(x===g?x[2][0][0]:(ui.cadLast[x[0]]||x[2][0][0]))});
   document.querySelectorAll('[data-cad]').forEach(b=>b.onclick=()=>go(b.dataset.cad));
-  ({fornecedores:admFornecedores,conferentes:admConferentes,faturamento:admFaturamento,categorias:admCategorias,vendedores:admVendedores,clientes:admClients,pagamentos:admPagamentos,cidades:admCidades,veiculos:admVeiculos,loja:admConfig})[k]();
+  ({caixas:()=>pdvAdmOperadores($('#cadc')),fornecedores:admFornecedores,conferentes:admConferentes,faturamento:admFaturamento,categorias:admCategorias,vendedores:admVendedores,clientes:admClients,pagamentos:admPagamentos,cidades:admCidades,veiculos:admVeiculos,loja:admConfig})[k]();
 }
 /* formas de pagamento com prazo próprio, reconhecido no pedido e no contas a receber */
 function admPagamentos(){
@@ -5458,7 +5458,7 @@ function recForm(){
 function finSeg(){const T=ui.finTab||'receber',nv=(S.payables||[]).filter(p=>!p.paidAt&&p.due<today()).length;
   return `<div class="seg repseg finseg" role="group" aria-label="Financeiro">${modOn('receber')?`<button data-fin="receber" aria-pressed="${T==='receber'}">A receber</button>`:''}${modOn('pagar')?`<button data-fin="pagar" aria-pressed="${T==='pagar'}">A pagar${nv?` <span class="tabbadge">${nv}</span>`:''}</button>`:''}${modOn('caixa')?`<button data-fin="caixa" aria-pressed="${T==='caixa'}">Caixa da semana</button>`:''}</div>`}
 function bindFinSeg(c){c.querySelectorAll('[data-fin]').forEach(b=>b.onclick=()=>{ui.finTab=b.dataset.fin;admFin()})}
-function admFin(){const ok=['receber','pagar','caixa'].filter(modOn);if(!ok.includes(ui.finTab))ui.finTab=ok[0]||'receber';const T=ui.finTab;if(T==='pagar')admPagar();else if(T==='caixa')admCaixa();else admReceber()}
+function admFin(){const ok=['receber','pagar','caixa'].filter(modOn);if(!ok.includes(ui.finTab))ui.finTab=ok[0]||'receber';const T=ui.finTab;if(T==='pagar')admPagar();else if(T==='caixa'){admCaixa();pdvCaixaSemana()}else admReceber()}
 const payStatus=p=>p.paidAt?'pago':p.due<today()?'vencido':'aberto';
 const PAY_CATS=['Fornecedor','Frete e combustível','Salários','Aluguel','Impostos','Comissão','Outros'];
 function admPagar(){const c=$('#tabc');S.payables=S.payables||[];const F=ui.payF||(ui.payF={st:'aberto'}),E=ui.payNew;
@@ -6009,7 +6009,7 @@ function render(){
   $('#vCli').setAttribute('aria-pressed',ui.view==='cliente');$('#vAdm').setAttribute('aria-pressed',ui.view==='admin');$('#vConf').setAttribute('aria-pressed',ui.view==='conf');$('#vFat').setAttribute('aria-pressed',ui.view==='fat');$('#vVend').setAttribute('aria-pressed',ui.view==='vend');$('#vEnt').setAttribute('aria-pressed',ui.view==='ent');
   if(ui.view!=='conf'||!ui.confOrder)stopScanCam();
   renderTop();
-  if(ui.view==='cliente')renderClient();else if(ui.view==='conf'){ui.cartOpen=false;renderConf()}else if(ui.view==='fat'){ui.cartOpen=false;renderFat()}else if(ui.view==='vend'){ui.cartOpen=false;renderVend()}else if(ui.view==='ent'){ui.cartOpen=false;renderEnt()}else{ui.cartOpen=false;renderAdmin()}
+  if(ui.view==='cliente')renderClient();else if(ui.view==='conf'){ui.cartOpen=false;renderConf()}else if(ui.view==='fat'){ui.cartOpen=false;renderFat()}else if(ui.view==='vend'){ui.cartOpen=false;renderVend()}else if(ui.view==='ent'){ui.cartOpen=false;renderEnt()}else if(ui.view==='pdv'){ui.cartOpen=false;renderPdv()}else{ui.cartOpen=false;renderAdmin()}
   renderCart();
   window.scrollTo(0,0);
 }
