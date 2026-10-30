@@ -113,7 +113,7 @@ function pdvNet(){const n=$('#pdvnet');if(n){n.className='net'+(PDV.online?'':' 
 
 /* ---------------------------------------------------------------- itens */
 function pdvFind(code){const c=String(code||'').trim();if(!c)return null;const d=c.replace(/\D/g,'');
-  return S.products.find(p=>p.active!==false&&d&&(String(p.ean||'')===d||String(p.ean2||'')===d||(Array.isArray(p.eans)&&p.eans.includes(d))))||S.products.find(p=>p.active!==false&&String(p.code||'').toLowerCase()===c.toLowerCase())||null}
+  return S.products.find(p=>d&&(String(p.ean||'')===d||String(p.ean2||'')===d||(Array.isArray(p.eans)&&p.eans.includes(d))))||S.products.find(p=>String(p.code||'').toLowerCase()===c.toLowerCase())||null}
 function pdvUnit(p,q){const ie=!!(PDV.cust&&PDV.cust.ie);try{return Math.round(withIe(ie,()=>withOner('retirada',()=>priceFor(p,q,'retirada','').price))*100)/100}catch(e){return Number(p.price)||0}}
 function pdvScan(raw){let v=String(raw||'').trim();if(!v)return;let q=PDV.qty||1;
   if(v.includes('*')){const m=/^(\d+(?:[.,]\d+)?)\s*\*\s*(\S+)$/.exec(v);if(!m){pdvBeep(false);toast('Quantidade inválida. Use: quantidade*código (ex.: 4*789...).');return}q=pdvQtyNum(m[1]);v=m[2].trim()}
@@ -121,6 +121,7 @@ function pdvScan(raw){let v=String(raw||'').trim();if(!v)return;let q=PDV.qty||1
   if(q>999){pdvBeep(false);toast('Quantidade muito alta numa leitura só (máximo 999). Confira.');return}
   const p=pdvFind(v);
   if(!p){pdvBeep(false);pdvUnknown(v);return}
+  if(p.pdvBlock){pdvBeep(false);toast(p.name+': bloqueado para venda no caixa.');return}
   if(!isKg(p)&&Math.abs(q-Math.round(q))>1e-9){pdvBeep(false);toast('Este produto é vendido por unidade.');return}
   pdvNote('');PDV.items.push({pid:p.id,name:p.name,ean:p.ean||'',q,unit:pdvUnit(p,q)});PDV.qty=null;PDV.auth=null;pdvBeep(true);pdvChanged()}
 function pdvChanged(){pdvSave('venda',{items:PDV.items,cust:PDV.cust,desc:PDV.desc,saleId:PDV.saleId});PDV.quote=null;
@@ -170,9 +171,9 @@ function pdvListNav(input,listSel,onPick){let i=0;const items=()=>[...document.q
   return ()=>{i=0;mark();items().forEach(b=>b.onclick=()=>onPick(b.dataset.id))}}
 /* F2: busca por nome */
 function pdvSearch(onPick){pdvModal('busca',`<h2>Buscar produto</h2><input id="pdvsq" placeholder="Nome, código ou parte do nome" autocomplete="off"><div class="pdvlist" id="pdvsl" role="listbox"></div><div class="pdvmut">↑ ↓ para escolher · Enter confirma · Esc volta</div>`,()=>$('#pdvsq').focus());
-  const inp=$('#pdvsq');const bind=pdvListNav(inp,'#pdvsl',id=>{const p=S.products.find(x=>x.id===id);if(!p)return;if(onPick){onPick(p);return}pdvClose();const q=PDV.qty||1;if(!isKg(p)&&Math.abs(q-Math.round(q))>1e-9){pdvBeep(false);toast('Este produto é vendido por unidade.');return}PDV.items.push({pid:p.id,name:p.name,ean:p.ean||'',q,unit:pdvUnit(p,q)});PDV.qty=null;PDV.auth=null;pdvBeep(true);pdvChanged()});
-  const run=()=>{const t=inp.value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');const L=(t?S.products.filter(p=>p.active!==false&&(String(p.name).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').includes(t)||String(p.code||'')===t||String(p.ean||'')===t)):[]).slice(0,40);
-    $('#pdvsl').innerHTML=L.map(p=>`<button type="button" role="option" data-id="${esc(p.id)}"><span>${esc(p.name)} <span class="pdvmut">${esc(p.unit||'')}</span></span><b>${pdvMoney(pdvUnit(p,1))}</b></button>`).join('')||(t?'<div class="pdvmut">Nada encontrado.</div>':'');bind()};
+  const inp=$('#pdvsq');const bind=pdvListNav(inp,'#pdvsl',id=>{const p=S.products.find(x=>x.id===id);if(!p)return;if(onPick){onPick(p);return}pdvClose();if(p.pdvBlock){pdvBeep(false);toast(p.name+': bloqueado para venda no caixa.');return}const q=PDV.qty||1;if(!isKg(p)&&Math.abs(q-Math.round(q))>1e-9){pdvBeep(false);toast('Este produto é vendido por unidade.');return}PDV.items.push({pid:p.id,name:p.name,ean:p.ean||'',q,unit:pdvUnit(p,q)});PDV.qty=null;PDV.auth=null;pdvBeep(true);pdvChanged()});
+  const run=()=>{const t=inp.value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');const L=(t?S.products.filter(p=>(String(p.name).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').includes(t)||String(p.code||'')===t||String(p.ean||'')===t)):[]).slice(0,40);
+    $('#pdvsl').innerHTML=L.map(p=>`<button type="button" role="option" data-id="${esc(p.id)}"><span>${esc(p.name)} <span class="pdvmut">${esc(p.unit||'')}${p.pdvBlock?' · bloqueado no caixa':''}</span></span><b>${pdvMoney(pdvUnit(p,1))}</b></button>`).join('')||(t?'<div class="pdvmut">Nada encontrado.</div>':'');bind()};
   inp.oninput=run}
 /* F3: quantidade para o próximo item */
 function pdvQty(){pdvModal('qtd',`<h2>Quantidade do próximo item</h2><input id="pdvqq" inputmode="decimal" autocomplete="off"><div class="pdvmut">Dica: no campo do código, "4*código" também funciona.</div>`,()=>$('#pdvqq').focus());
@@ -399,10 +400,10 @@ const PDV_SNAP=()=>'pdv:'+(TSLUG||'@')+':snap';
    Estas listas são as mesmas de lib/policy.js (P_SECRET, STORE_PUBLIC e a projeção de clientes do
    operador_caixa); tests/unit confere que continuam iguais. */
 const PDV_P_SECRET=['lastIn','cost','refCost','refGone','tablePrices','stock','minStock','idealStock','minMg','trib','commission'];
-const PDV_STORE_PUBLIC=['name','from','to','min','pickup','conds','billGate','pickupDisc','pickupOner','pickV','onerV','autoRec'];
+const PDV_STORE_PUBLIC=['name','from','to','min','pickup','conds','billGate','pickupDisc','pickupOner','pickV','onerV','autoRec','semEstoque'];
 const PDV_CLI_KEYS=['id','name','doc','ieOk','creditLimit'];
 function pdvSnapCut(){const pk=(o,ks)=>{const x={};ks.forEach(k=>{if(o&&o[k]!==undefined)x[k]=o[k]});return x};
-  const products=(S.products||[]).filter(p=>p.active!==false).map(p=>{const x=Object.assign({},p);PDV_P_SECRET.forEach(k=>delete x[k]);return x});
+  const products=(S.products||[]).map(p=>{const x=Object.assign({},p);PDV_P_SECRET.forEach(k=>delete x[k]);return x});
   const st=S.store||{},store=pk(st,PDV_STORE_PUBLIC);if(st.neg)store.neg={who:st.neg.who,on:st.neg.on,minItems:st.neg.minItems,minTotal:st.neg.minTotal,maxItems:st.neg.maxItems};
   const customers=(S.customers||[]).filter(c=>c.active!==false&&c.blocked!==true).map(c=>pk(c,PDV_CLI_KEYS));
   const categories=(S.categories||[]).map(c=>{if(!c||typeof c!=='object')return c;const x=JSON.parse(JSON.stringify(c));delete x.minMg;delete x.comm;(x.subs||[]).forEach(t=>{delete t.minMg;delete t.comm});return x});

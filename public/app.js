@@ -916,7 +916,7 @@ function pdvNet(){const n=$('#pdvnet');if(n){n.className='net'+(PDV.online?'':' 
 
 /* ---------------------------------------------------------------- itens */
 function pdvFind(code){const c=String(code||'').trim();if(!c)return null;const d=c.replace(/\D/g,'');
-  return S.products.find(p=>p.active!==false&&d&&(String(p.ean||'')===d||String(p.ean2||'')===d||(Array.isArray(p.eans)&&p.eans.includes(d))))||S.products.find(p=>p.active!==false&&String(p.code||'').toLowerCase()===c.toLowerCase())||null}
+  return S.products.find(p=>d&&(String(p.ean||'')===d||String(p.ean2||'')===d||(Array.isArray(p.eans)&&p.eans.includes(d))))||S.products.find(p=>String(p.code||'').toLowerCase()===c.toLowerCase())||null}
 function pdvUnit(p,q){const ie=!!(PDV.cust&&PDV.cust.ie);try{return Math.round(withIe(ie,()=>withOner('retirada',()=>priceFor(p,q,'retirada','').price))*100)/100}catch(e){return Number(p.price)||0}}
 function pdvScan(raw){let v=String(raw||'').trim();if(!v)return;let q=PDV.qty||1;
   if(v.includes('*')){const m=/^(\d+(?:[.,]\d+)?)\s*\*\s*(\S+)$/.exec(v);if(!m){pdvBeep(false);toast('Quantidade inválida. Use: quantidade*código (ex.: 4*789...).');return}q=pdvQtyNum(m[1]);v=m[2].trim()}
@@ -924,6 +924,7 @@ function pdvScan(raw){let v=String(raw||'').trim();if(!v)return;let q=PDV.qty||1
   if(q>999){pdvBeep(false);toast('Quantidade muito alta numa leitura só (máximo 999). Confira.');return}
   const p=pdvFind(v);
   if(!p){pdvBeep(false);pdvUnknown(v);return}
+  if(p.pdvBlock){pdvBeep(false);toast(p.name+': bloqueado para venda no caixa.');return}
   if(!isKg(p)&&Math.abs(q-Math.round(q))>1e-9){pdvBeep(false);toast('Este produto é vendido por unidade.');return}
   pdvNote('');PDV.items.push({pid:p.id,name:p.name,ean:p.ean||'',q,unit:pdvUnit(p,q)});PDV.qty=null;PDV.auth=null;pdvBeep(true);pdvChanged()}
 function pdvChanged(){pdvSave('venda',{items:PDV.items,cust:PDV.cust,desc:PDV.desc,saleId:PDV.saleId});PDV.quote=null;
@@ -973,9 +974,9 @@ function pdvListNav(input,listSel,onPick){let i=0;const items=()=>[...document.q
   return ()=>{i=0;mark();items().forEach(b=>b.onclick=()=>onPick(b.dataset.id))}}
 /* F2: busca por nome */
 function pdvSearch(onPick){pdvModal('busca',`<h2>Buscar produto</h2><input id="pdvsq" placeholder="Nome, código ou parte do nome" autocomplete="off"><div class="pdvlist" id="pdvsl" role="listbox"></div><div class="pdvmut">↑ ↓ para escolher · Enter confirma · Esc volta</div>`,()=>$('#pdvsq').focus());
-  const inp=$('#pdvsq');const bind=pdvListNav(inp,'#pdvsl',id=>{const p=S.products.find(x=>x.id===id);if(!p)return;if(onPick){onPick(p);return}pdvClose();const q=PDV.qty||1;if(!isKg(p)&&Math.abs(q-Math.round(q))>1e-9){pdvBeep(false);toast('Este produto é vendido por unidade.');return}PDV.items.push({pid:p.id,name:p.name,ean:p.ean||'',q,unit:pdvUnit(p,q)});PDV.qty=null;PDV.auth=null;pdvBeep(true);pdvChanged()});
-  const run=()=>{const t=inp.value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');const L=(t?S.products.filter(p=>p.active!==false&&(String(p.name).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').includes(t)||String(p.code||'')===t||String(p.ean||'')===t)):[]).slice(0,40);
-    $('#pdvsl').innerHTML=L.map(p=>`<button type="button" role="option" data-id="${esc(p.id)}"><span>${esc(p.name)} <span class="pdvmut">${esc(p.unit||'')}</span></span><b>${pdvMoney(pdvUnit(p,1))}</b></button>`).join('')||(t?'<div class="pdvmut">Nada encontrado.</div>':'');bind()};
+  const inp=$('#pdvsq');const bind=pdvListNav(inp,'#pdvsl',id=>{const p=S.products.find(x=>x.id===id);if(!p)return;if(onPick){onPick(p);return}pdvClose();if(p.pdvBlock){pdvBeep(false);toast(p.name+': bloqueado para venda no caixa.');return}const q=PDV.qty||1;if(!isKg(p)&&Math.abs(q-Math.round(q))>1e-9){pdvBeep(false);toast('Este produto é vendido por unidade.');return}PDV.items.push({pid:p.id,name:p.name,ean:p.ean||'',q,unit:pdvUnit(p,q)});PDV.qty=null;PDV.auth=null;pdvBeep(true);pdvChanged()});
+  const run=()=>{const t=inp.value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');const L=(t?S.products.filter(p=>(String(p.name).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').includes(t)||String(p.code||'')===t||String(p.ean||'')===t)):[]).slice(0,40);
+    $('#pdvsl').innerHTML=L.map(p=>`<button type="button" role="option" data-id="${esc(p.id)}"><span>${esc(p.name)} <span class="pdvmut">${esc(p.unit||'')}${p.pdvBlock?' · bloqueado no caixa':''}</span></span><b>${pdvMoney(pdvUnit(p,1))}</b></button>`).join('')||(t?'<div class="pdvmut">Nada encontrado.</div>':'');bind()};
   inp.oninput=run}
 /* F3: quantidade para o próximo item */
 function pdvQty(){pdvModal('qtd',`<h2>Quantidade do próximo item</h2><input id="pdvqq" inputmode="decimal" autocomplete="off"><div class="pdvmut">Dica: no campo do código, "4*código" também funciona.</div>`,()=>$('#pdvqq').focus());
@@ -1202,10 +1203,10 @@ const PDV_SNAP=()=>'pdv:'+(TSLUG||'@')+':snap';
    Estas listas são as mesmas de lib/policy.js (P_SECRET, STORE_PUBLIC e a projeção de clientes do
    operador_caixa); tests/unit confere que continuam iguais. */
 const PDV_P_SECRET=['lastIn','cost','refCost','refGone','tablePrices','stock','minStock','idealStock','minMg','trib','commission'];
-const PDV_STORE_PUBLIC=['name','from','to','min','pickup','conds','billGate','pickupDisc','pickupOner','pickV','onerV','autoRec'];
+const PDV_STORE_PUBLIC=['name','from','to','min','pickup','conds','billGate','pickupDisc','pickupOner','pickV','onerV','autoRec','semEstoque'];
 const PDV_CLI_KEYS=['id','name','doc','ieOk','creditLimit'];
 function pdvSnapCut(){const pk=(o,ks)=>{const x={};ks.forEach(k=>{if(o&&o[k]!==undefined)x[k]=o[k]});return x};
-  const products=(S.products||[]).filter(p=>p.active!==false).map(p=>{const x=Object.assign({},p);PDV_P_SECRET.forEach(k=>delete x[k]);return x});
+  const products=(S.products||[]).map(p=>{const x=Object.assign({},p);PDV_P_SECRET.forEach(k=>delete x[k]);return x});
   const st=S.store||{},store=pk(st,PDV_STORE_PUBLIC);if(st.neg)store.neg={who:st.neg.who,on:st.neg.on,minItems:st.neg.minItems,minTotal:st.neg.minTotal,maxItems:st.neg.maxItems};
   const customers=(S.customers||[]).filter(c=>c.active!==false&&c.blocked!==true).map(c=>pk(c,PDV_CLI_KEYS));
   const categories=(S.categories||[]).map(c=>{if(!c||typeof c!=='object')return c;const x=JSON.parse(JSON.stringify(c));delete x.minMg;delete x.comm;(x.subs||[]).forEach(t=>{delete t.minMg;delete t.comm});return x});
@@ -1615,8 +1616,13 @@ function bindLogin(isAdmin){srvBindTeamLinks();if(isAdmin)srvMaybeSetup();
   $('#lf').onsubmit=e=>{e.preventDefault();srvLogin(isAdmin?'admin':'cliente',$('#lu').value.trim(),$('#lp').value,$('#le'),$('#lf button[type=submit]'))};
 }
 
+/* vitrine semanal fechada: passou o dia final das ofertas (o servidor também recusa o pedido) */
+function vitrineClosed(){return modOn('ofertas')&&/^\d{4}-\d{2}-\d{2}$/.test(String(S.store&&S.store.to||''))&&today()>S.store.to}
+function vitrineClosedHtml(who){return `<section class="panel" style="text-align:center;padding:28px 18px;display:grid;gap:8px;max-width:620px;margin:20px auto"><h2 style="margin:0">Nova tabela em breve</h2>
+  <div>As ofertas de ${fmtDate(S.store.from)} a ${fmtDate(S.store.to)} terminaram.</div><div class="small muted">${who==='vend'?'Assim que a loja publicar a nova semana, os produtos voltam a aparecer aqui.':'Assim que a nova semana for publicada, os produtos aparecem aqui. Seus pedidos e dados continuam disponíveis no menu.'}</div></section>`}
 function renderCatalog(){
   const app=$('#app');
+  if(vitrineClosed()){app.innerHTML=vitrineClosedHtml('cli');return}
   const prods=S.products.filter(p=>p.active);
   const cats=['Todos',...[...new Set(prods.map(p=>p.cat).filter(Boolean))].sort(catSort)];
   if(!cats.includes(ui.cat)&&ui.cat!=='__mine'&&ui.cat!=='__combo')ui.cat='Todos';
@@ -1668,7 +1674,7 @@ function rowCard(p,vars){
     <div class="li">${vars?`<b>${esc(p.fam)}</b>${famChips(p,vars)}`:`<b>${esc(p.name)}</b>`}<span>${vars?'Sabor: <b>'+esc(p.var||'')+'</b> · ':''}${esc(p.unit)}${p.code?' · Cód. '+esc(p.code):''}${promo?` · <em>Promoção${R.promo.until?' até '+fmtDate(R.promo.until):''}</em>`:''}</span></div>
     <div class="lo">${off.join('')}${now&&now.price<baseOf(p)?`<span class="yours">Seu preço: ${uP(now.price,p)}</span>`:''}${tiersOk.length?'<small class="pmc">Pague menos comprando mais</small>':''}</div>
     <div class="lp num">${ieNow(p)?`<s class="ieold">sem IE ${uP(p.price*onerF(p),p)}</s>`:promo?`<s>${uP(baseOf(p),p)}</s>`:''}<span class="ltrow">${ieNow(p)?'<span class="iebadge">com IE</span>':''}<span class="lt">${n?brl(Math.round(shown/n*100)/100)+'<small>/'+uw(p)+'</small>':brl(shown)}</span></span>${n?`<span class="upx num">${esc(packWord(p).replace(/^./,x=>x.toUpperCase()))} c/ ${nfmt(n)}${isKg(p)?' kg':''}: ${brl(shown)}</span>`:''}${ieTag(p)}</div>
-    <div class="la">${q?`<div class="stepper"><button data-dec="${p.id}" aria-label="Diminuir">−</button><input type="number" inputmode="numeric" min="0" max="${maxQty(p)}" value="${q}" data-qty="${p.id}" aria-label="Quantidade de ${esc(p.name)}"><button data-inc="${p.id}" aria-label="Aumentar" ${q>=maxQty(p)?'disabled':''}>+</button></div>${n?`<span class="upx" style="display:block;text-align:center">${pkq(p,q*n)}</span>`:''}`:`<button class="addbtn" data-add="${p.id}">Adicionar</button>`}</div>
+    <div class="la">${q?`<div class="stepper"><button data-dec="${p.id}" aria-label="Diminuir">−</button><input type="number" inputmode="numeric" min="0" max="${maxQty(p)}" value="${q}" data-qty="${p.id}" aria-label="Quantidade de ${esc(p.name)}"><button data-inc="${p.id}" aria-label="Aumentar" ${q>=maxQty(p)?'disabled':''}>+</button></div>${n?`<span class="upx" style="display:block;text-align:center">${pkq(p,q*n)}</span>`:''}`:`${p.soldOut?'<button class="addbtn" disabled>Esgotado</button>':`<button class="addbtn" data-add="${p.id}">Adicionar</button>`}`}</div>
   </article>`;
 }
 function card(p,vars){
@@ -1699,7 +1705,7 @@ function card(p,vars){
       ${now&&now.price<baseOf(p)?`<div class="yours num">Seu preço agora: ${uP(now.price,p)}</div>`:''}
       ${vars?`<div class="vsel small">Sabor escolhido: <b>${esc(p.var||'')}</b></div>`:''}
       ${q?`<div class="stepper"><button data-dec="${p.id}" aria-label="Diminuir">−</button><input type="number" inputmode="numeric" min="0" max="${maxQty(p)}" value="${q}" data-qty="${p.id}" aria-label="Quantidade de ${esc(p.name)}"><button data-inc="${p.id}" aria-label="Aumentar" ${q>=maxQty(p)?'disabled':''}>+</button></div>${n?`<div class="upx" style="text-align:center">${q} ${esc(packWord(p,q>1))} = ${pkq(p,q*n)}</div>`:''}`
-         :`<button class="addbtn" data-add="${p.id}">Adicionar</button>`}
+         :`${p.soldOut?'<button class="addbtn" disabled>Esgotado</button>':`<button class="addbtn" data-add="${p.id}">Adicionar</button>`}`}
     </div></article>`;
 }
 /* quantidade digitada: só número inteiro; apagar o campo não tira o produto; zero pergunta antes */
@@ -3054,6 +3060,7 @@ function lnCliList(q,pool){pool=pool||S.customers;
 }
 function admLancar0(){
   const c=$('#tabc'),L=ui.lanc;
+  if(SVme()&&vitrineClosed()){c.innerHTML=vitrineClosedHtml('vend')+`<div style="text-align:center"><button class="btn ghost" id="lnBackC">Voltar</button></div>`;$('#lnBackC').onclick=()=>{ui.lanc=null;lnExit()};return}
   const cli=S.customers.find(x=>x.id===L.cid);
   if(!cli){
     c.innerHTML=`<div class="sectionhead"><h2>Lançar pedido para cliente</h2><button class="btn ghost" id="lnBack">Voltar aos pedidos</button></div>
@@ -3413,6 +3420,7 @@ function painelSemana(){const K=ui.pnK||'passada',[a,b,lbl]=weekRange(K),inR=d=>
     </div>
     ${par.length?`<div class="small"><b>${par.length} cliente${par.length>1?'s':''} sem comprar há 14 dias ou mais:</b> ${par.slice(0,6).map(r=>esc(r.x.name)+' <span class="muted">('+r.d+' dias)</span>').join(' · ')}${par.length>6?' …':''}</div>`:''}</section>`}
 
+function vitrineAdmBanner(){return vitrineClosed()?`<div class="notice" style="margin-bottom:12px"><b>A vitrine está fechada:</b> as ofertas terminaram em ${fmtDate(S.store.to)}. Clientes e vendedores não fazem pedido até você publicar a nova semana em <b>Ofertas › Ofertas da semana</b>.</div>`:''}
 function admHoje(){
   const c=$('#tabc'),t=today();
   const sum=a=>a.reduce((s,o)=>s+o.total,0);
@@ -3422,7 +3430,7 @@ function admHoje(){
   const recs=(S.receivables||[]).filter(r=>!r.paidAt),recHoje=recs.filter(r=>r.due===t),venc=recs.filter(r=>recStatus(r)==='vencido');
   const crit=S.products.filter(isCritical).length,parados=S.customers.filter(x=>{const d=idleDays(x);return d!=null&&d>=15}).length;
   const tile=(go,lbl,big,small,cls)=>`<button class="tile ${cls||''}" data-go="${go}"><span class="lbl">${lbl}</span><b class="num">${big}</b><span class="small muted">${small}</span></button>`;
-  c.innerHTML=`<div class="sectionhead"><h2>Dashboard</h2><div class="row" style="gap:6px"><button class="btn ghost" id="hRom" aria-label="Romaneio de entrega em PDF">${PDFI}Romaneio</button><button class="btn" id="hLan">+ Lançar pedido</button></div></div>
+  c.innerHTML=`${vitrineAdmBanner()}<div class="sectionhead"><h2>Dashboard</h2><div class="row" style="gap:6px"><button class="btn ghost" id="hRom" aria-label="Romaneio de entrega em PDF">${PDFI}Romaneio</button><button class="btn" id="hLan">+ Lançar pedido</button></div></div>
     ${(()=>{const a=backupAge();return a==null||a>=3?`<div class="notice bkwarn"><span>${a==null?'Você ainda não fez backup dos dados.':'Último backup há '+a+' dias.'} Os dados ficam no servidor; o backup é uma cópia extra.</span><button class="btn dlb" id="hBk">Baixar backup agora</button></div>`:''})()}
     ${dashHtml()}
     <h3 class="dech dbsec">Hoje · ${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})}</h3>
@@ -4344,7 +4352,7 @@ function admSemana(){
       <div class="t"><b>${partial?'Em andamento · ':''}${new Date(d).toLocaleDateString('pt-BR')} ${hm(d)} · ${esc(C.finishedBy||C.by||'')}</b>
       <span class="small muted">${t.n} produto${t.n===1?'':'s'} contado${t.n===1?'':'s'}${t.sem?' · <span class="warnc">'+t.sem+' sem cadastro</span>':''}${C.status==='usada'?' · usada em '+fmtDate(C.usedAt||''):C.status==='finalizada'?' · <b>nova</b>':''}${C.note?' · “'+esc(C.note)+'”':''}</span></div>
       <button class="btn ${C.status==='finalizada'?'':'ghost'} dlb" data-wcount="${C.id}">${partial?'Abrir parcial':'Abrir'}</button></div>`};
-  c.innerHTML=`<div class="sectionhead"><h2>Ofertas da semana</h2></div>
+  c.innerHTML=`${vitrineAdmBanner()}<div class="sectionhead"><h2>Ofertas da semana</h2></div>
     <div class="wkstart">
       <div class="panel wkopt"><h3>Pela contagem do conferente</h3>
         <div class="small muted">O que o conferente contou entra marcado, com a quantidade ao lado. O resto fica de fora, e você marca o que quiser. Dá para comparar com o estoque do ERP.</div>
@@ -5033,7 +5041,7 @@ function ruleBox(k,title,help,inner){const on=ui.edit.rules[k].on;return `<div c
 /* copia o que está digitado no formulário para o rascunho, antes de redesenhar */
 function collect(){
   const e=ui.edit,R=e.rules,v=id=>{const x=document.getElementById(id);return x?x.value:null};
-  collectVar(e);e.name=v('pn');e.code=v('pcode').trim();e.ean=v('pean').replace(/\s/g,'');{const e2=v('pean2');if(e2!==null)e.ean2=e2.replace(/\D/g,'')}e.cat=v('pc')==='__new'?(v('pcnew')||'').trim():v('pc');{const sv=v('psub');if(sv!==null)e.sub=sv==='__new'?(v('psubnew')||'').trim():sv}e.unit=v('pu');{const k=v('ppk');e.perPack=k==null||String(k).trim()===''?'':ppkV(k)}{const kg=$('#pkg');if(kg)e.kg=kg.checked}e.price=pnum(v('pp'));e.cost=pnum(v('pcost'));{const rv=v('prefc');if(rv!==null)e.refCost=pnum(rv)}e.tablePrices={A:pnum(v('ptA')),B:pnum(v('ptB'))};{const cv=v('pcom');e.commission=cv==null?e.commission:pnum(cv)}{const mv=v('pminmg');if(mv!==null){const n=pnum(mv);e.minMg=String(mv).trim()===''||n===''||isNaN(n)?'':n}}{const sv=v('pstk');e.stock=sv===null||String(sv).trim()===''?'':Number(sv);const mv=v('pmin');e.minStock=mv===null||String(mv).trim()===''?'':Number(mv);const iv=v('pideal');e.idealStock=iv===null||String(iv).trim()===''?'':Number(iv)}e.active=$('#pa').checked;{const su=$('#psu');if(su)e.showUnit=su.checked}{const tb=$('#ptrib');if(tb)e.trib=tb.checked}
+  collectVar(e);e.name=v('pn');e.code=v('pcode').trim();e.ean=v('pean').replace(/\s/g,'');{const e2=v('pean2');if(e2!==null)e.ean2=e2.replace(/\D/g,'')}e.cat=v('pc')==='__new'?(v('pcnew')||'').trim():v('pc');{const sv=v('psub');if(sv!==null)e.sub=sv==='__new'?(v('psubnew')||'').trim():sv}e.unit=v('pu');{const k=v('ppk');e.perPack=k==null||String(k).trim()===''?'':ppkV(k)}{const kg=$('#pkg');if(kg)e.kg=kg.checked}e.price=pnum(v('pp'));e.cost=pnum(v('pcost'));{const rv=v('prefc');if(rv!==null)e.refCost=pnum(rv)}e.tablePrices={A:pnum(v('ptA')),B:pnum(v('ptB'))};{const cv=v('pcom');e.commission=cv==null?e.commission:pnum(cv)}{const mv=v('pminmg');if(mv!==null){const n=pnum(mv);e.minMg=String(mv).trim()===''||n===''||isNaN(n)?'':n}}{const sv=v('pstk');e.stock=sv===null||String(sv).trim()===''?'':Number(sv);const mv=v('pmin');e.minStock=mv===null||String(mv).trim()===''?'':Number(mv);const iv=v('pideal');e.idealStock=iv===null||String(iv).trim()===''?'':Number(iv)}e.active=$('#pa').checked;{const pb=$('#ppdvb');if(pb)e.pdvBlock=pb.checked}{const su=$('#psu');if(su)e.showUnit=su.checked}{const tb=$('#ptrib');if(tb)e.trib=tb.checked}
   const CN=e.perPack>1?e.perPack:1,pm=x=>{const n=pnum(x);return n===''||isNaN(n)?n:Math.round(n*CN*100)/100};
   {const iv=v('pie');if(iv!==null)e.iePrice=pm(iv);const io=$('#ron-ie');if(io){e.ieOn=io.checked;if(!io.checked)e.iePrice=''}}
   if(R.qty.on)R.qty.tiers=R.qty.tiers.map((t,i)=>({min:v('tmin'+i)?parseInt(v('tmin'+i)):'',price:pm(v('tpr'+i))}));
@@ -5242,6 +5250,7 @@ function productForm(){
     </div>
     <div class="small muted" style="margin-top:-6px">Na unidade de venda. Baixa sozinho quando um pedido é concluído. Chegando no mínimo, o produto fica marcado como "Comprar". Não bloqueia pedidos e o cliente não vê.</div>
     <label class="switch"><input type="checkbox" id="pa" ${e.active?'checked':''}> Aparece para os clientes</label>
+    ${modOn('pdv')?`<label class="switch"><input type="checkbox" id="ppdvb" ${e.pdvBlock?'checked':''}> Bloquear venda no caixa (PDV) <span class="small muted">· marque só se este produto NÃO pode ser vendido no balcão</span></label>`:''}
     </div>
     <div class="psec" data-sec="prec">
     <div class="rules">
@@ -5369,7 +5378,7 @@ function productForm(){
     if(e.cost!==''&&!(e.cost>0))return err('Preço de custo inválido. Deixe em branco ou digite um valor, ex.: 32,50.');
     {const rv=$('#prefc');if(rv&&rv.value.trim()&&!(e.refCost>0))return err('Custo de referência inválido. Deixe em branco ou digite um valor, ex.: 19,00.')}
     {const ve=varCheck(e,code,ean);if(ve)return err(ve)}
-    const p={id:e.id||uid(),kg:!!e.kg&&e.perPack>1,fam:e.fam||'',var:e.fam?e.var||'':'',famSync:e.famSync!==false,code,ean,ean2:e.ean2||'',...(Array.isArray(e.eans)&&e.eans.length?{eans:e.eans.slice()}:{}),trib:!!e.trib,name,cat:(e.cat||'').trim()||'Outros',sub:(e.sub||'').trim(),unit:(e.unit||'').trim()||'Unidade',perPack:e.perPack>1?Math.round(e.perPack*1000)/1000:'',showUnit:e.showUnit!==false,price,cost:e.cost||'',refCost:e.refCost>0&&!(Number(e.cost)>=e.refCost)?e.refCost:'',tablePrices:e.tablePrices||{},commission:hasVal(e.commission)?e.commission:'',minMg:setV(e.minMg)?e.minMg:'',iePrice:e.iePrice>0?e.iePrice:'',stock:e.stock===''||isNaN(e.stock)?'':e.stock,minStock:e.minStock===''||isNaN(e.minStock)?'':e.minStock,idealStock:e.idealStock===''||isNaN(e.idealStock)?'':e.idealStock,photo:e.photo||ph(name,150),active:e.active,rules:R};
+    const p={id:e.id||uid(),kg:!!e.kg&&e.perPack>1,fam:e.fam||'',var:e.fam?e.var||'':'',famSync:e.famSync!==false,code,ean,ean2:e.ean2||'',...(Array.isArray(e.eans)&&e.eans.length?{eans:e.eans.slice()}:{}),trib:!!e.trib,name,cat:(e.cat||'').trim()||'Outros',sub:(e.sub||'').trim(),unit:(e.unit||'').trim()||'Unidade',perPack:e.perPack>1?Math.round(e.perPack*1000)/1000:'',showUnit:e.showUnit!==false,price,cost:e.cost||'',refCost:e.refCost>0&&!(Number(e.cost)>=e.refCost)?e.refCost:'',tablePrices:e.tablePrices||{},commission:hasVal(e.commission)?e.commission:'',minMg:setV(e.minMg)?e.minMg:'',iePrice:e.iePrice>0?e.iePrice:'',stock:e.stock===''||isNaN(e.stock)?'':e.stock,minStock:e.minStock===''||isNaN(e.minStock)?'':e.minStock,idealStock:e.idealStock===''||isNaN(e.idealStock)?'':e.idealStock,photo:e.photo||ph(name,150),active:e.active,...(e.pdvBlock?{pdvBlock:true}:{}),rules:R};
     const i=S.products.findIndex(x=>x.id===p.id);if(i>=0)S.products[i]=p;else S.products.unshift(p);
     const vmsg=varAfterSave(p,e);
     catList();save();ui.edit=null;toast('Produto salvo'+vmsg+(e.refCost>0&&!(p.refCost>0)?' · custo de referência apagado: o custo já é igual ou maior':''));if(weekBack())return;renderAdmin();
@@ -6251,6 +6260,12 @@ function admConfig(){
       <div class="field"><label for="sfrom">Ofertas válidas de</label><input type="date" id="sfrom" value="${esc(st.from)}"></div>
       <div class="field"><label for="sto">até</label><input type="date" id="sto" value="${esc(st.to)}"></div>
     </div>
+    ${modOn('ofertas')?`<div class="small muted" style="margin-top:-8px">Vitrine semanal: depois do dia final, a vitrine fecha para clientes e vendedores até você publicar a nova semana.</div>`:''}
+    <div class="field"><label for="ssem">Produto com estoque zerado</label><select id="ssem">
+      <option value="manter" ${(st.semEstoque||'manter')==='manter'?'selected':''}>Continua aparecendo (você controla na mão)</option>
+      <option value="esconder" ${st.semEstoque==='esconder'?'selected':''}>Some da vitrine sozinho e volta quando entrar estoque</option>
+      <option value="esgotado" ${st.semEstoque==='esgotado'?'selected':''}>Aparece como "Esgotado", sem poder pedir</option></select>
+      <div class="small muted">Vale para o app do cliente e dos vendedores. Produto sem estoque preenchido não é afetado. O caixa (PDV) vende sempre.</div></div>
     <div class="grid2">
       <div class="field"><span class="lbl">Retirada no depósito</span><div class="small muted">Não há desconto geral para retirada. Para dar preço diferente a quem retira, cadastre o <b>preço retirando</b> no produto, em Precificar.</div>
       </div>
@@ -6291,7 +6306,7 @@ function admConfig(){
   const num=v=>parseFloat(String(v).replace(/\./g,'').replace(',','.'))||0;
   $('#reset').onclick=()=>{if(ui.confirmDel==='reset'){S=seed();save();ui.confirmDel=null;toast('Dados de exemplo restaurados');render()}else{ui.confirmDel='reset';admConfig()}};
   $('#sf').onsubmit=ev=>{ev.preventDefault();
-    Object.assign(S.store,{name:$('#sn').value.trim()||S.store.name,from:$('#sfrom').value,to:$('#sto').value,pickupDisc:0,pickupOner:false,min:num($('#smin').value),pickup:$('#spick').value.trim(),autoRec:$('#sauto').checked,scanRequired:$('#sscan').checked,billGate:$('#sbg').value,conds:Object.fromEntries([...document.querySelectorAll('[data-scond]')].map(x=>[x.dataset.scond,x.checked])),mgTol:Math.max(0,num($('#smtol').value)),pendWarnH:Math.max(0,num($('#spw').value)),pendExpH:Math.max(0,num($('#spe').value)),neg:{who:$('#sngwho').value,minItems:Math.max(0,Math.round(num($('#sngmi').value))),minTotal:num($('#sngmt').value),maxItems:Math.max(1,Math.round(num($('#sngmx').value))||1),autoPct:Math.max(0,num($('#sngap').value)),defMin:num($('#sngdm').value)},tax:{pc:num($('#txpc').value),ic:num($('#txic').value),pd:num($('#txpd').value),idNo:num($('#txidno').value),idIe:num($('#txidie').value)}});
+    Object.assign(S.store,{semEstoque:$('#ssem')?$('#ssem').value:'manter',name:$('#sn').value.trim()||S.store.name,from:$('#sfrom').value,to:$('#sto').value,pickupDisc:0,pickupOner:false,min:num($('#smin').value),pickup:$('#spick').value.trim(),autoRec:$('#sauto').checked,scanRequired:$('#sscan').checked,billGate:$('#sbg').value,conds:Object.fromEntries([...document.querySelectorAll('[data-scond]')].map(x=>[x.dataset.scond,x.checked])),mgTol:Math.max(0,num($('#smtol').value)),pendWarnH:Math.max(0,num($('#spw').value)),pendExpH:Math.max(0,num($('#spe').value)),neg:{who:$('#sngwho').value,minItems:Math.max(0,Math.round(num($('#sngmi').value))),minTotal:num($('#sngmt').value),maxItems:Math.max(1,Math.round(num($('#sngmx').value))||1),autoPct:Math.max(0,num($('#sngap').value)),defMin:num($('#sngdm').value)},tax:{pc:num($('#txpc').value),ic:num($('#txic').value),pd:num($('#txpd').value),idNo:num($('#txidno').value),idIe:num($('#txidie').value)}});
     save();toast('Configurações salvas');renderTop();
   };
 }
