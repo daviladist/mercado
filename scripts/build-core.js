@@ -16,7 +16,7 @@ const code = src.slice(start + '<script>\n(function(){'.length, end);
 const sf = ts.createSourceFile('app.js', code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
 
 const ROOTS = `priceFor calcCartFor cartItems cartSub pickupDisc cartTotal negCfg negAllowed negState negEval negApply
-orderTotals reTotal anItemCalc itemCommRate polMin pCommOwn catComm lnCommRate lnLock lnMargin lnTarget lnItemLevel lnItemMin mgTol
+refCOf lockCost orderTotals reTotal anItemCalc itemCommRate polMin pCommOwn catComm lnCommRate lnLock lnMargin lnTarget lnItemLevel lnItemMin mgTol
 effCost itemProduct itemCost orderIeSale syncStock autoReceivables addEvent statusMsg payOptions creditInfo allowedPays isCash
 tableOf packOf isKg baseOf resolveCart comboAsProduct withOner withIe withClient noDisc ieClient ieF needsBill billGate
 sellerById cityById OPEN origQ today recStatus splitParcels parseDays daysFromPay addDays setOrderStatus itemNet orderComm pickAmt

@@ -487,6 +487,8 @@ function precEdit(el,r){r=liveDoc('receipts',r);const P=ui.prc;P.lk=P.lk||{};
         <label>Fardo c/<input type="text" inputmode="decimal" data-ppk="${i.k}" value="${rcQty(pk)}"></label>
         <label>Valor unit. (R$)<input type="text" inputmode="decimal" data-pc="${i.k}" value="${rcMoney(i.valor)}"></label>
         <span class="small muted pcunit">${pk>1&&c>0?brl(c/pk)+' por unidade':''}</span></div>
+      ${(()=>{const old=p&&Number(p.cost)>0?Number(p.cost):Number(i.prevCost)||0;if(!old)return '';const drop=c>0&&c<=old*0.9&&!(Number(p&&p.refCost)>0||Number(i.prevRef)>0);if(Number(i.refCost)>0)return `<div class="pcref on"><span>🛡 <b>Margem protegida:</b> a trava do vendedor usa ${brl(Number(i.refCost))} como custo (o seu custo real continua ${brl(c)}).</span><button type="button" class="link" data-pref="${i.k}">Tirar</button></div>`;
+        return drop?`<div class="pcref"><span>Comprou ${Math.round((1-c/old)*100)}% abaixo do custo anterior (${brl(old)}). Quer que o vendedor não gaste essa vantagem em desconto?</span><button type="button" class="btn ghost dlb" data-pref="${i.k}" data-prv="${old}">🛡 Proteger: usar ${brl(old)} como custo de referência</button></div>`:''})()}
       <div class="pcflags"><label class="switch small"><input type="checkbox" data-ptr="${i.k}" ${i.trib?'checked':''}> Tributado</label><label class="switch small"><input type="checkbox" data-pie="${i.k}" ${i.ieOn?'checked':''}> Preço com inscrição estadual</label></div>
       <div class="pcprices">
         <label>${i.ieOn?'Preço sem IE':'Preço de venda'} (R$)<input type="text" inputmode="decimal" data-pp="${i.k}" value="${rcMoney(i.price)}" placeholder="0,00"></label><span class="small pcmg" data-pmg="${i.k}">${rcMgTxt(c,Number(i.price),i.trib,false)}</span>
@@ -508,6 +510,7 @@ function precEdit(el,r){r=liveDoc('receipts',r);const P=ui.prc;P.lk=P.lk||{};
   num('data-pq','q',rcQty,0.001);num('data-ppk','perPack',rcQty,1);num('data-pc','valor',rcMoney,0);num('data-pp','price',rcMoney,0.01);num('data-pi','iePrice',rcMoney,0.01);
   el.querySelectorAll('[data-ptr]').forEach(b=>b.onchange=()=>{const i=it(b.dataset.ptr);i.trib=b.checked;save();rer()});
   el.querySelectorAll('[data-pie]').forEach(b=>b.onchange=()=>{const i=it(b.dataset.pie);i.ieOn=b.checked;if(!b.checked)i.iePrice='';save();rer(b.checked?'[data-pi="'+i.k+'"]':null)});
+  el.querySelectorAll('[data-pref]').forEach(b=>b.onclick=()=>{const i=it(b.dataset.pref);if(!i)return;i.refCost=Number(i.refCost)>0?'':Number(b.dataset.prv)||'';save();rer()});
   el.querySelectorAll('[data-pnew]').forEach(b=>b.onchange=()=>{const i=it(b.dataset.pnew);i.newProd=b.checked;save()});
   el.querySelectorAll('[data-plq]').forEach(inp=>inp.oninput=()=>{P.lk[inp.dataset.plq]={q:inp.value};const pos=inp.selectionStart;rer();const n=el.querySelector('[data-plq="'+inp.dataset.plq+'"]');n.focus();n.setSelectionRange(pos,pos)});
   el.querySelectorAll('[data-plp]').forEach(b=>b.onclick=()=>{const [k,pid]=b.dataset.plp.split('|'),i=it(k),p=(S.products||[]).find(x=>x.id===pid);if(!i||!p)return;
@@ -537,6 +540,9 @@ function rcAlert(){const c0=$('#tabc'),sj=(S.stariaJobs||[]).filter(j=>j.status=
   if(c0&&ui.tab!=='precnotas'&&typeof impOpen==='function'){impFillAll();const IL=impOpen();if(IL.length){const d=document.createElement('div');d.className='rcalert imalert';
     d.innerHTML=`<span><b>${IL.length} importaç${IL.length>1?'ões':'ão'} em massa esperando preço.</b> Os produtos só entram no catálogo quando você aprovar.</span><div class="row" style="gap:6px;flex-wrap:wrap">${IL.map((im,k)=>`<button type="button" class="btn dlb" data-ima="${im.id}">${im.status==='consultando'?'Importação '+(k+1)+' · aguardando StarIA':'Precificar importação'+(IL.length>1?' '+(k+1):'')+' ('+impLeft(im).length+')'}</button>`).join('')}</div>`;
     c0.prepend(d);d.querySelectorAll('[data-ima]').forEach(b=>b.onclick=()=>{ui.tab='precnotas';ui.prc={imp:b.dataset.ima};renderAdmin();window.scrollTo(0,0)});impWatch()}}
+  {const G=(S.products||[]).filter(p=>p.refGone&&Number(p.refGone.v)>0);if(c0&&G.length){const d=document.createElement('div');d.className='rcalert';
+    d.innerHTML=`<span><b>Custo de referência apagado em ${G.length} produto${G.length>1?'s':''}</b> porque o custo novo ficou igual ou maior: ${G.slice(0,3).map(p=>esc(p.name)+' (custo '+brl(Number(p.refGone.cost))+', referência era '+brl(Number(p.refGone.v))+')').join(' · ')}${G.length>3?' …':''}. A trava do vendedor voltou a usar o custo real.</span><button type="button" class="btn ghost dlb">Entendi</button>`;
+    c0.prepend(d);d.querySelector('button').onclick=()=>{G.forEach(p=>{delete p.refGone});save();d.remove()}}}
   const n=rcPend().length,c=$('#tabc');if(!n||!c||ui.tab==='precnotas')return;
   const d=document.createElement('div');d.className='rcalert';d.innerHTML=`<span><b>${n} nota${n>1?'s':''} de entrada esperando preço.</b> O estoque já entrou; aprove os preços em Produtos › Precificação de notas.</span><button type="button" class="btn dlb">Precificar agora</button>`;
   c.prepend(d);d.querySelector('button').onclick=()=>{ui.tab='precnotas';renderAdmin();window.scrollTo(0,0)}}
@@ -622,16 +628,17 @@ function bsHtml(n,withMg){const B=ui.bs=ui.bs||{},v=k=>esc(B[k]||''),sel=(k,a,b)
       <label>Unidades na embalagem<input type="number" id="bspk" min="1" step="1" value="${v('pk')}" placeholder="Ex.: 1"></label>
       <label>Tributado<select id="bstr">${sel('tr','Sim','Não')}</select></label>
       <label>Aparece para clientes<select id="bsact">${sel('act','Sim','Não')}</select></label>
+      <label>Custo de referência (% acima do custo)<input type="text" inputmode="decimal" id="bsref" value="${v('ref')}" placeholder="Ex.: 20 · - apaga"></label>
       ${withMg?`<label>Margem sem IE (%)<input type="text" inputmode="decimal" id="bsmg" value="${v('mg')}" placeholder="Ex.: 30"></label>
       <label>Margem com IE (%)<input type="text" inputmode="decimal" id="bsmi" value="${v('mi')}" placeholder="só tributados"></label>`:''}
     </div>
     <div class="small muted">A família junta os sabores do mesmo produto: o sabor vem do resto do nome.${withMg?' A margem calcula o preço de cada marcado pelo custo dele.':' Mudar as unidades na embalagem não muda preço nem custo.'}</div>
     <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" type="button" id="bsgo" ${n?'':'disabled'}>Aplicar aos marcados</button><button class="btn ghost" type="button" id="bsclr">Limpar campos</button>${withMg?'<button class="btn ghost" type="button" id="bsrm" '+(n?'':'disabled')+'>Tirar marcados da importação</button>':''}</div></details>`}
-function bsKeep(){const B=ui.bs=ui.bs||{};[['cat','bscat'],['sub','bssub'],['fam','bsfam'],['unit','bsunit'],['pk','bspk'],['tr','bstr'],['act','bsact'],['mg','bsmg'],['mi','bsmi']].forEach(([k,id])=>{const x=document.getElementById(id);if(x)B[k]=x.value});return B}
+function bsKeep(){const B=ui.bs=ui.bs||{};[['cat','bscat'],['sub','bssub'],['fam','bsfam'],['unit','bsunit'],['pk','bspk'],['tr','bstr'],['act','bsact'],['mg','bsmg'],['mi','bsmi'],['ref','bsref']].forEach(([k,id])=>{const x=document.getElementById(id);if(x)B[k]=x.value});return B}
 function bsBind(){bsKeep();{const d=$('#bsbox');if(d)d.addEventListener('toggle',()=>{ui.bsOpen=d.open})}
-  ['bscat','bssub','bsfam','bsunit','bspk','bstr','bsact','bsmg','bsmi'].forEach(id=>{const x=document.getElementById(id);if(x)x.addEventListener('input',bsKeep)});
+  ['bscat','bssub','bsfam','bsunit','bspk','bstr','bsact','bsmg','bsmi','bsref'].forEach(id=>{const x=document.getElementById(id);if(x)x.addEventListener('input',bsKeep)});
   const c=$('#bscat');if(c)c.addEventListener('change',()=>{const dl=$('#bssubl');if(dl)dl.innerHTML=(c.value.trim()?subNames(c.value.trim()):[]).map(x=>`<option value="${esc(x)}">`).join('')});
-  const z=$('#bsclr');if(z)z.onclick=()=>{ui.bs={};['bscat','bssub','bsfam','bsunit','bspk','bsmg','bsmi'].forEach(id=>{const x=document.getElementById(id);if(x)x.value=''});['bstr','bsact'].forEach(id=>{const x=document.getElementById(id);if(x)x.value=''})}}
+  const z=$('#bsclr');if(z)z.onclick=()=>{ui.bs={};['bscat','bssub','bsfam','bsunit','bspk','bsmg','bsmi','bsref'].forEach(id=>{const x=document.getElementById(id);if(x)x.value=''});['bstr','bsact'].forEach(id=>{const x=document.getElementById(id);if(x)x.value=''})}}
 /* lê o formulário: devolve só o que foi preenchido (ou um texto de erro) */
 function bsRead(){const B=bsKeep(),o={},t=k=>String(B[k]||'').trim();
   if(t('cat'))o.cat=t('cat');if(t('sub'))o.sub=t('sub')==='-'?'':t('sub');if(t('fam'))o.fam=t('fam')==='-'?'':t('fam');if(t('unit'))o.unit=t('unit');
@@ -639,6 +646,7 @@ function bsRead(){const B=bsKeep(),o={},t=k=>String(B[k]||'').trim();
   if(B.tr)o.trib=B.tr==='1';if(B.act)o.active=B.act==='1';
   if(t('mg')){const m=pnum(t('mg'));if(m===''||!(m<95))return 'Margem sem IE inválida. Ex.: 30';o.mg=m}
   if(t('mi')){const m=pnum(t('mi'));if(m===''||!(m<95))return 'Margem com IE inválida. Ex.: 25';o.mi=m}
+  if(t('ref')){if(t('ref')==='-')o.ref=null;else{const m=pnum(t('ref'));if(!(m>0&&m<=300))return 'Custo de referência: informe quantos % acima do custo. Ex.: 20';o.ref=m}}
   if(!Object.keys(o).length)return 'Preencha pelo menos um campo para alterar.';return o}
 /* estrutura: categoria, subcategoria, família/sabor, unidade e embalagem, tributado, ativo */
 function bsApplyStruct(x,o){
@@ -673,7 +681,8 @@ function impEdit(el,im){im=liveDoc('imports',im);if(im.status==='consultando'){i
     return `<div class="imline ${ready(i)?'ok':''} ${SEL[i.k]?'sel':''}" data-k="${i.k}">
       <label class="imck"><input type="checkbox" data-isel="${i.k}" ${SEL[i.k]?'checked':''} aria-label="Marcar ${esc(i.name)}"></label>
       <div class="imn"><input type="text" data-in="${i.k}" value="${esc(i.name)}" aria-label="Nome do produto">
-        <span class="small muted">${[i.code&&'Cód. '+esc(i.code),i.ean&&'EAN '+esc(i.ean),esc((i.cat||'sem categoria')+(i.sub?' › '+i.sub:'')),i.fam?'família '+esc(i.fam):'',esc(i.unit||'Unidade')+(Number(i.perPack)>1?' ('+i.perPack+' un.)':''),i.active===false?'<b>não aparece para clientes</b>':'',ex?'<b>já cadastrado: atualiza</b>'+(Number(ex.refCost)>0?' · <b style="color:var(--accent)">custo de referência '+brl(Number(ex.refCost))+'</b>':''):'<b class="mgok">novo</b>'].filter(Boolean).join(' · ')}</span></div>
+        <span class="small muted">${[i.code&&'Cód. '+esc(i.code),i.ean&&'EAN '+esc(i.ean),esc((i.cat||'sem categoria')+(i.sub?' › '+i.sub:'')),i.fam?'família '+esc(i.fam):'',esc(i.unit||'Unidade')+(Number(i.perPack)>1?' ('+i.perPack+' un.)':''),i.active===false?'<b>não aparece para clientes</b>':'',ex?'<b>já cadastrado: atualiza</b>'+(Number(ex.refCost)>0?' · <b style="color:var(--accent)">custo de referência '+brl(Number(ex.refCost))+'</b>':''):'<b class="mgok">novo</b>'].filter(Boolean).join(' · ')}</span>
+        ${Number(i.refCost)>0?`<span class="small" style="color:var(--accent)">🛡 Margem protegida: a trava do vendedor usa ${brl(Number(i.refCost))} <button type="button" class="link" data-iref="${i.k}">tirar</button></span>`:ex&&Number(ex.cost)>0&&imCost(i)>0&&imCost(i)<=Number(ex.cost)*0.9&&!(Number(ex.refCost)>0)?`<span class="small"><button type="button" class="link" data-iref="${i.k}" data-irv="${Number(ex.cost)}">🛡 Comprou ${Math.round((1-imCost(i)/Number(ex.cost))*100)}% abaixo do custo anterior: proteger usando ${brl(Number(ex.cost))} como referência</button></span>`:''}</div>
       <label class="imf imc"><span class="imlbl">Custo (R$)</span><input type="text" inputmode="decimal" class="imnum" data-ic="${i.k}" value="${rcMoney(imCost(i))}" placeholder="0,00" aria-label="Custo de ${esc(i.name)}"></label>
       <label class="imtr switch small"><input type="checkbox" data-itr="${i.k}" ${i.trib?'checked':''}> Tributado</label>
       <label class="imf imp1"><span class="imlbl">Preço s/ IE</span><input type="text" inputmode="decimal" class="imnum imp" data-ip="${i.k}" value="${rcMoney(i.price)}" placeholder="0,00" aria-label="Preço sem IE de ${esc(i.name)}"></label>
@@ -717,6 +726,7 @@ function impEdit(el,im){im=liveDoc('imports',im);if(im.status==='consultando'){i
     x.oninput=()=>{const i=it(k),m=pnum(x.value);if(!i)return;const c=imCost(i);if(!(c>0)){return}if(m!==''&&m<95){const p=imPriceFor(c,m,i.trib,ie);if(p>0){i[f]=p;later();upLine(i,x)}}};
     x.onchange=()=>{const i=it(k);if(!i)return;if(x.value.trim()&&!(imCost(i)>0)){toast('Informe o custo primeiro.')}x.value=mgCell(i,ie);save();upLine(i)}});
   marg('data-im','price',false);marg('data-imi','iePrice',true);
+  el.querySelectorAll('[data-iref]').forEach(b=>b.onclick=()=>{const i=it(b.dataset.iref);if(!i)return;i.refCost=Number(i.refCost)>0?'':Number(b.dataset.irv)||'';save();rer()});
   el.querySelectorAll('[data-itr]').forEach(b=>b.onchange=()=>{const i=it(b.dataset.itr);if(!i)return;i.trib=b.checked;if(!b.checked)i.iePrice='';save();rer()});
   /* marcar: só atualiza a contagem (o que está escrito no formulário em massa continua) */
   const upSel=()=>{const n=nSel();const a=$('#bsn');if(a)a.textContent=n;['bsgo','bsrm'].forEach(id=>{const b=document.getElementById(id);if(b)b.disabled=!n});const all=$('#imAll');if(all)all.checked=LL().length&&n===LL().length};
@@ -726,7 +736,8 @@ function impEdit(el,im){im=liveDoc('imports',im);if(im.status==='consultando'){i
     let semCusto=0;ks.forEach(i=>{bsApplyStruct(i,o);
       if(i.trib===false)i.iePrice='';
       if(o.mg!==undefined){const c=imCost(i);if(c>0)i.price=imPriceFor(c,o.mg,i.trib,false);else semCusto++}
-      if(o.mi!==undefined&&i.trib){const c=imCost(i);if(c>0)i.iePrice=imPriceFor(c,o.mi,true,true)}});
+      if(o.mi!==undefined&&i.trib){const c=imCost(i);if(c>0)i.iePrice=imPriceFor(c,o.mi,true,true)}
+      if(o.ref!==undefined){const c=imCost(i);i.refCost=o.ref===null||!(c>0)?'':imR2(c*(1+o.ref/100))}});
     save();toast('Alterado em '+ks.length+' produto'+(ks.length===1?'':'s')+(semCusto?' ('+semCusto+' sem custo ficaram sem preço)':''));rer()};
   $('#bsrm').onclick=()=>{const ks=LL().filter(i=>SEL[i.k]);if(!ks.length)return;if(!confirm('Tirar '+ks.length+' produto(s) desta importação? Eles não serão cadastrados.'))return;
     im.items=im.items.filter(i=>!ks.includes(i));ks.forEach(i=>delete SEL[i.k]);if(!impLeft(im).length)im.status=(im.items||[]).length?'aprovada':'cancelada';save();
@@ -743,6 +754,7 @@ function impEdit(el,im){im=liveDoc('imports',im);if(im.status==='consultando'){i
     R.forEach(i=>{const cost=imCost(i),pk=Number(i.perPack)>1?Number(i.perPack):'';const ie=i.trib&&Number(i.iePrice)>0?Number(i.iePrice):'';
       let p=i.pid&&S.products.find(x=>x.id===i.pid);if(!p)p=imMatch(i.code,i.ean);
       const d={name:String(i.name).trim(),cat:String(i.cat||'').trim()||'Outros',sub:String(i.sub||'').trim(),fam:String(i.fam||'').trim(),var:i.fam?String(i.var||imVarOf(i.name,i.fam)):'',unit:String(i.unit||'').trim()||'Unidade',perPack:pk,price:imR2(i.price),trib:!!i.trib,active:i.active!==false};
+      if(Number(i.refCost)>cost)d.refCost=imR2(i.refCost);
       if(p){Object.assign(p,d);if(i.code)p.code=i.code;if(i.ean)p.ean=i.ean;if(cost>0)p.cost=cost;if(d.fam)p.famSync=false;if(i.trib)p.iePrice=ie}
       else{p={id:uid(),code:i.code||'',ean:i.ean||'',...d,famSync:false,cost:cost>0?cost:'',iePrice:ie,tablePrices:{},commission:'',stock:'',minStock:'',idealStock:'',showUnit:true,photo:ph(d.name,(d.name.length*37)%360),rules:emptyRules()};S.products.unshift(p)}
       i.pid=p.id;i.done=true;i.doneAt=new Date().toISOString()});
@@ -764,9 +776,11 @@ function prodBulkBind(list,rer){const M=ui.pbulk;if(!M)return;bsBind();const c=$
   c.querySelectorAll('[data-psel]').forEach(b=>b.onchange=()=>{M.sel[b.dataset.psel]=b.checked;upSel()});
   $('#pbAll').onchange=e=>{list.forEach(p=>{M.sel[p.id]=e.target.checked});c.querySelectorAll('[data-psel]').forEach(b=>b.checked=e.target.checked);upSel()};
   $('#bsgo').onclick=()=>{const o=bsRead();if(typeof o==='string'){toast(o);return}const ps=S.products.filter(p=>M.sel[p.id]);if(!ps.length){toast('Marque os produtos primeiro.');return}
-    const what=[o.cat!==undefined&&'categoria "'+o.cat+'"',o.sub!==undefined&&(o.sub?'subcategoria "'+o.sub+'"':'sem subcategoria'),o.fam!==undefined&&(o.fam?'família "'+o.fam+'"':'sem família'),o.unit!==undefined&&'unidade "'+o.unit+'"',o.pk!==undefined&&o.pk+' un. na embalagem',o.trib!==undefined&&(o.trib?'tributado':'não tributado'),o.active!==undefined&&(o.active?'aparece para clientes':'escondido dos clientes')].filter(Boolean);
+    const what=[o.cat!==undefined&&'categoria "'+o.cat+'"',o.sub!==undefined&&(o.sub?'subcategoria "'+o.sub+'"':'sem subcategoria'),o.fam!==undefined&&(o.fam?'família "'+o.fam+'"':'sem família'),o.unit!==undefined&&'unidade "'+o.unit+'"',o.pk!==undefined&&o.pk+' un. na embalagem',o.trib!==undefined&&(o.trib?'tributado':'não tributado'),o.active!==undefined&&(o.active?'aparece para clientes':'escondido dos clientes'),o.ref!==undefined&&(o.ref===null?'sem custo de referência':'custo de referência = custo + '+String(o.ref).replace('.',',')+'%')].filter(Boolean);
     if(!confirm('Alterar '+ps.length+' produto(s): '+what.join(', ')+'?'+(o.pk!==undefined?'\nPreço e custo não mudam.':'')))return;
-    ps.forEach(p=>{bsApplyStruct(p,o);if(o.fam!==undefined)p.famSync=false});save();toast('Alterado em '+ps.length+' produto'+(ps.length===1?'':'s'));rer()}}
+    let semCusto=0;ps.forEach(p=>{bsApplyStruct(p,o);if(o.fam!==undefined)p.famSync=false;
+      if(o.ref!==undefined){if(o.ref===null){p.refCost='';delete p.refGone}else if(Number(p.cost)>0)p.refCost=Math.round(Number(p.cost)*(1+o.ref/100)*100)/100;else semCusto++}});
+    if(semCusto)toast(semCusto+' sem preço de custo ficaram sem referência');save();toast('Alterado em '+ps.length+' produto'+(ps.length===1?'':'s'));rer()}}
 
 
 /* foto provisória: etiqueta colorida com as iniciais do produto */
@@ -1165,7 +1179,7 @@ function finish(){
   if(nfd&&items.some(i=>i.ie)&&(!nfd.ie||nfd.ie==='ISENTO')){$('#ce').textContent='Para o preço com inscrição estadual, informe a inscrição estadual nos dados da nota.';return}
   const disc=pickupDisc();
   const o={id:uid(),no:S.seq++,date:new Date().toISOString(),customerId:ui.client.id,customer:ui.client.name,doc:ui.client.doc||'',phone:ui.client.phone||'',
-    sellerId:sellerById(ui.client.sellerId)?ui.client.sellerId:'',sellerRate:sellerById(ui.client.sellerId)?Number(sellerById(ui.client.sellerId).commission)||0:'',items:items.map(({p,q,price,label,ie,rp,neg})=>({...(neg?{negFrom:neg.from,negAsk:neg.asked,negSt:neg.st}:{}),ie:!!ie,rp:!!rp,commP:pCommOwn(p),pid:p.id,cat:p.cat||'',cost:p.cost>0?p.cost:'',name:p.name,unit:p.unit,perPack:packOf(p)||'',kg:isKg(p)||undefined,code:p.code||'',ean:p.ean||'',base:p.isCombo?p.listPrice:withOner(ui.mode,()=>baseOf(p)),price,label,q,...(p.isCombo?{combo:true,comboId:p.comboId,components:p.components}:{})})),sub:cartSub(),disc,discPct:ui.mode==='retirada'&&!onerOn()?Number(S.store.pickupDisc)||0:0,total:cartTotal(),
+    sellerId:sellerById(ui.client.sellerId)?ui.client.sellerId:'',sellerRate:sellerById(ui.client.sellerId)?Number(sellerById(ui.client.sellerId).commission)||0:'',items:items.map(({p,q,price,label,ie,rp,neg})=>({...(neg?{negFrom:neg.from,negAsk:neg.asked,negSt:neg.st}:{}),ie:!!ie,rp:!!rp,commP:pCommOwn(p),pid:p.id,cat:p.cat||'',cost:p.cost>0?p.cost:'',refC:refCOf(p),name:p.name,unit:p.unit,perPack:packOf(p)||'',kg:isKg(p)||undefined,code:p.code||'',ean:p.ean||'',base:p.isCombo?p.listPrice:withOner(ui.mode,()=>baseOf(p)),price,label,q,...(p.isCombo?{combo:true,comboId:p.comboId,components:p.components}:{})})),sub:cartSub(),disc,discPct:ui.mode==='retirada'&&!onerOn()?Number(S.store.pickupDisc)||0:0,total:cartTotal(),
     nf:nfd,mode:ui.mode,addr:ui.mode==='entrega'?ui.addr.trim():'',bairro:ui.mode==='entrega'?(ui.bairro||'').trim():'',city:ui.client.city||'',cityName:(cityById(ui.client.city)||{}).name||'',table:tableOf(ui.client),pay:ui.pay||allowedPays(ui.client)[0]||'',note:ui.note.trim(),status:'novo'};
   {const ng=o.items.filter(i=>i.negAsk!=null);if(ng.length){o.negCli=true;S.negLog=S.negLog||[];ng.forEach(i=>S.negLog.push({at:o.date,pid:i.pid,name:i.name,cid:o.customerId,from:i.negFrom,asked:i.negAsk,st:i.negSt,no:o.no}));if(S.negLog.length>2000)S.negLog=S.negLog.slice(-2000);
     if(ng.some(i=>i.negSt==='an')){o.appr='pendente';let T=0,C=0,CM=0,W=0,M=0;o.items.forEach(i=>{const x=anItemCalc(o,i,itemCommRate(o,i));T+=x.net;C+=x.cost;CM+=x.comm;const pm=polMin(itemProduct(i));W+=x.net;M+=x.net*(pm?pm.v:negCfg().defMin)});o.apprMg=T>0?Math.round((T-C-CM)/T*1000)/10:0;o.apprMin=W>0?Math.round(M/W*10)/10:0;(o.apprHist=o.apprHist||[]).push({at:o.date,by:o.customer,what:'proposta de preço do cliente'})}}}
@@ -1729,7 +1743,7 @@ function approveSug(o,s,packPrice){
     let extra='';if(o.recLaunched&&Math.abs(o.total-before)>0.004)extra=dropRec(o);return 'ok'+extra}
   const p=S.products.find(x=>x.id===s.pid);if(!p)return 'Produto não encontrado.';
   const std=sugStdPrice(o,p,s.q),price=packPrice>0?Math.round(packPrice*100)/100:std.price,neg=Math.abs(price-std.price)>=0.005,before=o.total;
-  const item={ie:!!std.ie,rp:!!std.rp,commP:pCommOwn(p),pid:p.id,cat:p.cat||'',cost:p.cost>0?p.cost:'',name:p.name,unit:p.unit,perPack:packOf(p)||'',kg:isKg(p)||undefined,code:p.code||'',ean:p.ean||'',base:baseOf(p),price,label:neg?'Preço negociado':std.label,q:s.q};
+  const item={ie:!!std.ie,rp:!!std.rp,commP:pCommOwn(p),pid:p.id,cat:p.cat||'',cost:p.cost>0?p.cost:'',refC:refCOf(p),name:p.name,unit:p.unit,perPack:packOf(p)||'',kg:isKg(p)||undefined,code:p.code||'',ean:p.ean||'',base:baseOf(p),price,label:neg?'Preço negociado':std.label,q:s.q};
   o.chk=o.chk||{};let msg;
   if(s.type==='troca'){const k=o.items.findIndex(i=>ikey(i)===s.fromKey);if(k<0)return 'O item original não está mais no pedido.';const old=o.items[k];o.items.splice(k,1,item);delete o.chk[s.fromKey];o.chk[ikey(item)]=true;
     msg='Seu pedido nº '+o.no+': '+old.name+' foi substituído por '+p.name+' ('+s.q+'). '}
@@ -1854,7 +1868,7 @@ function occApply(o){const C=occCalc(o),O=C.O;if(!O.list.length&&!O.extras.lengt
     if(x.u!=='un'){i.qOcc=(i.qOcc||0)+x.q;i.q-=x.q;return}
     const whole=Math.floor(x.q/pk+1e-9),rest=Math.round((x.q-whole*pk)*1000)/1000;if(whole>0){i.qOcc=(i.qOcc||0)+whole;i.q-=whole}
     if(rest>0)o.items.push({name:occLbl(x.t)+': '+nfmt(rest)+' '+innerWord(i,rest>1)+' de '+i.name,unit:'ajuste na entrega',q:1,price:-Math.round(rest*i.price/pk*100)/100,label:'Ocorrência na entrega',occLine:true,src:ikey(i),units:rest,t:x.t})});
-  O.extras.forEach(x=>{const p=S.products.find(y=>y.id===x.pid);if(!p)return;o.items.push({pid:p.id,cat:p.cat||'',cost:p.cost>0?p.cost:'',commP:pCommOwn(p),name:p.name,unit:p.unit,perPack:packOf(p)||'',code:p.code||'',ean:p.ean||'',base:baseOf(p),price:x.price,label:'Adicionado na entrega',q:x.q,extra:true})});
+  O.extras.forEach(x=>{const p=S.products.find(y=>y.id===x.pid);if(!p)return;o.items.push({pid:p.id,cat:p.cat||'',cost:p.cost>0?p.cost:'',refC:refCOf(p),commP:pCommOwn(p),name:p.name,unit:p.unit,perPack:packOf(p)||'',code:p.code||'',ean:p.ean||'',base:baseOf(p),price:x.price,label:'Adicionado na entrega',q:x.q,extra:true})});
   Object.assign(o,orderTotals(o));const extra=C.extra,cash=isCash(o.pay);
   o.occ={at:new Date().toISOString(),items:rec,extras:O.extras.map(x=>({...x,amount:Math.round(x.q*x.price*100)/100})),desc:C.desc,extra,from:before,to:o.total,cash,collect:cash?C.now:0,reboleto:!cash};
   if(cash&&extra>0)(S.receivables=S.receivables||[]).push({id:uid(),group:uid(),orderId:o.id,customerId:o.customerId,customer:o.customer,orderNo:String(o.no),desc:'Produto a mais na entrega',parcel:'1/1',amount:extra,due:today(),paidAt:'',created:new Date().toISOString()});
@@ -2550,7 +2564,7 @@ function admLancar0(){
     let nfd=null;if(L.nf){const er=validateNf(L.nfData);if(er){$('#lnerr').textContent=er;return}nfd=nfClean(L.nfData);cli.fiscal=nfd}
     const F=calcCartFor(cli,L.cart,L.mode,L.pay,L.over,L.nf,KP());
     if(nfd&&F.items.some(i=>i.ie)&&(!nfd.ie||nfd.ie==='ISENTO')){$('#lnerr').textContent='Para o preço com IE, preencha a inscrição estadual nos dados da nota.';return}
-    const mkItems=()=>F.items.map(({p,q,price,label,base,ie,rp})=>({ie:!!ie,rp:!!rp,commP:pCommOwn(p),pid:p.id,cat:p.cat||'',cost:p.cost>0?p.cost:'',name:p.name,unit:p.unit,perPack:packOf(p)||'',kg:isKg(p)||undefined,code:p.code||'',ean:p.ean||'',base,price,label,q,...(p.isCombo?{combo:true,comboId:p.comboId,components:p.components}:{})}));
+    const mkItems=()=>F.items.map(({p,q,price,label,base,ie,rp})=>({ie:!!ie,rp:!!rp,commP:pCommOwn(p),pid:p.id,cat:p.cat||'',cost:p.cost>0?p.cost:'',refC:refCOf(p),name:p.name,unit:p.unit,perPack:packOf(p)||'',kg:isKg(p)||undefined,code:p.code||'',ean:p.ean||'',base,price,label,q,...(p.isCombo?{combo:true,comboId:p.comboId,components:p.components}:{})}));
     if(L.editId){const eo=S.orders.find(x=>x.id===L.editId);if(!eo){$('#lnerr').textContent='Pedido não encontrado.';return}
       const changed=Math.abs(F.total-eo.total)>0.004;let msg='';
       const sameSeller=eo.sellerId===(sellerById(L.sel)?L.sel:'');
@@ -2569,7 +2583,7 @@ function admLancar0(){
       addEvent(eo,'Seu pedido nº '+eo.no+' foi alterado '+(SV?'pelo vendedor':'pela loja')+': '+F.count+' itens, total '+brl(F.total)+'.');
       save();ui.lanc=null;ui.ofilter='ativos';toast('Pedido nº '+eo.no+' alterado'+(changed?' · novo total '+brl(F.total):'')+msg);lnExit();window.scrollTo(0,0);return}
     const o={id:uid(),no:S.seq++,date:new Date().toISOString(),customerId:cli.id,customer:cli.name,doc:cli.doc||'',phone:cli.phone||'',
-      sellerId:sellerById(L.sel)?L.sel:'',sellerRate:sellerById(L.sel)?Number(sellerById(L.sel).commission)||0:'',items:F.items.map(({p,q,price,label,base,ie,rp})=>({ie:!!ie,rp:!!rp,commP:pCommOwn(p),pid:p.id,cat:p.cat||'',cost:p.cost>0?p.cost:'',name:p.name,unit:p.unit,perPack:packOf(p)||'',kg:isKg(p)||undefined,code:p.code||'',ean:p.ean||'',base,price,label,q,...(p.isCombo?{combo:true,comboId:p.comboId,components:p.components}:{})})),
+      sellerId:sellerById(L.sel)?L.sel:'',sellerRate:sellerById(L.sel)?Number(sellerById(L.sel).commission)||0:'',items:F.items.map(({p,q,price,label,base,ie,rp})=>({ie:!!ie,rp:!!rp,commP:pCommOwn(p),pid:p.id,cat:p.cat||'',cost:p.cost>0?p.cost:'',refC:refCOf(p),name:p.name,unit:p.unit,perPack:packOf(p)||'',kg:isKg(p)||undefined,code:p.code||'',ean:p.ean||'',base,price,label,q,...(p.isCombo?{combo:true,comboId:p.comboId,components:p.components}:{})})),
       sub:F.sub,disc:F.disc,discPct:F.pct,total:F.total,mode:L.mode,addr:L.mode==='entrega'?(L.addr||'').trim():'',bairro:L.mode==='entrega'?(L.bairro||'').trim():'',
       city:cli.city||'',cityName:(cityById(cli.city)||{}).name||'',table:tableOf(cli),pay:L.pay,note:(L.note||'').trim(),nf:nfd,status:'novo',...(SV?{bySeller:SVme().name}:{byAdmin:ui.adminName||'Loja'})};
     let apMsg='';if(SV){const K=lnLock(F,cli,L);if(K&&!K.ok&&!L._ask){$('#lnerr').textContent='A margem do pedido está abaixo do permitido. Ajuste os preços para liberar.';return}if(K&&!K.ok){o.appr='pendente';o.apprMin=K.min;o.apprMg=Math.round(K.mg*10)/10;o.apprNeed=K.need;apMsg=' · aguardando análise da loja'}if(K&&K.ok&&K.tol)o.tolUsed={mg:Math.round(K.mg*10)/10,min:Math.round(K.min*10)/10,at:new Date().toISOString()}}L._ask=false;
@@ -3352,14 +3366,14 @@ const comboById=id=>(S.combos||[]).find(c=>c.id===id);
 /* soma do combo: preço de venda em separado (na tabela do cliente) e custo */
 function comboTotals(cb,cli){
   let list=0,cost=0,miss=0;const parts=[];
-  (cb.items||[]).forEach(it=>{const p=S.products.find(x=>x.id===it.pid);if(!p)return;const pv=p.price;list+=pv*it.q;if(p.cost>0)cost+=p.cost*it.q;else miss++;parts.push({p,q:it.q,pv})});
-  return {list:Math.round(list*100)/100,cost:Math.round(cost*100)/100,miss,parts};
+  let lock=0;(cb.items||[]).forEach(it=>{const p=S.products.find(x=>x.id===it.pid);if(!p)return;const pv=p.price;list+=pv*it.q;if(p.cost>0){cost+=p.cost*it.q;lock+=lockCost(p)*it.q}else miss++;parts.push({p,q:it.q,pv})});
+  return {list:Math.round(list*100)/100,cost:Math.round(cost*100)/100,lock:Math.round(lock*100)/100,miss,parts};
 }
 /* o combo vira um "produto" para o carrinho, o pedido e os relatórios */
 function comboAsProduct(cb,cli){
   const T=comboTotals(cb,cli===undefined?ui.client:cli);
   return {id:'c:'+cb.id,isCombo:true,comboId:cb.id,name:'Combo: '+cb.name,unit:'Combo',code:'',ean:'',cat:'Combos',active:cb.active!==false&&T.parts.length>0,
-    price:cb.price,cost:T.miss?'':T.cost,commission:'',rules:emptyRules(),photo:(T.parts[0]&&T.parts[0].p.photo)||ph(cb.name,30),
+    price:cb.price,cost:T.miss?'':T.cost,refCost:!T.miss&&T.lock>T.cost+0.004?T.lock:'',commission:'',rules:emptyRules(),photo:(T.parts[0]&&T.parts[0].p.photo)||ph(cb.name,30),
     listPrice:T.list,components:T.parts.map(x=>({pid:x.p.id,name:x.p.name,code:x.p.code||'',ean:x.p.ean||'',unit:x.p.unit||'',q:x.q})),desc:cb.desc||''};
 }
 function resolveCart(id){if(String(id).startsWith('c:')){const cb=comboById(id.slice(2));return cb?comboAsProduct(cb):null}return S.products.find(x=>x.id===id)}
@@ -4601,7 +4615,7 @@ function productForm(){
     <div class="grid2">
       <div class="field"><label for="pcom">Comissão deste produto (exceção, %)</label><input type="text" inputmode="decimal" id="pcom" value="${hasVal(e.commission)?String(e.commission).replace('.',','):''}" placeholder="${(()=>{const cc=catComm(e);return cc!=null?'Em branco = categoria ('+String(cc).replace('.',',')+'%)':'Em branco = comissão do vendedor'})()}"><span class="small muted">A regra é a comissão da categoria. Preencha aqui só para produto especial, ex.: produto parado que você quer girar.</span></div>
       <div class="field"><label for="pminmg">Margem mínima p/ vendedor (%)</label><input type="text" inputmode="decimal" id="pminmg" value="${setV(e.minMg)?String(e.minMg).replace('.',','):''}" placeholder="${(()=>{const sb=subObj(e.cat,e.sub),c=catObj(e.cat);return sb&&setV(sb.minMg)?'Subcategoria: '+String(sb.minMg).replace('.',',')+'%':c&&setV(c.minMg)?'Categoria: '+String(c.minMg).replace('.',',')+'%':'Em branco = categoria'})()}"></div>
-      <div class="field"><label for="prefc">Custo de referência p/ trava (R$)</label><input type="text" inputmode="decimal" id="prefc" value="${money(e.refCost)}" placeholder="Opcional"><span class="small muted">Comprou bem abaixo do mercado? A trava do vendedor e das propostas de cliente usa o maior entre este valor e o custo. Sua margem continua real. Some sozinho quando entrar um custo igual ou maior.</span></div>
+      <div class="field"><label for="prefc">Custo de referência p/ trava (R$)</label><input type="text" inputmode="decimal" id="prefc" value="${money(e.refCost)}" placeholder="Opcional"><span class="small muted">Comprou bem abaixo do mercado? A trava do vendedor e das propostas de cliente usa o maior entre este valor e o custo. Sua margem continua real. Some sozinho quando entrar um custo igual ou maior.</span><span class="small" id="prefh" style="color:var(--accent)"></span></div>
     </div>
     </div>
     <div class="psec" data-sec="cad">
@@ -4646,6 +4660,17 @@ function productForm(){
   /* custo, venda, margem e markup ligados: venda muda margem/markup; margem ou markup mudam a venda */
   const iC=$('#pcost'),iP=$('#pp'),iM=$('#pmg'),iK=$('#pmk');
   const pct=v=>isFinite(v)?(Math.round(v*100)/100).toFixed(2).replace('.',','):'';
+  /* custo de referência: mostra até onde o vendedor desce sem aprovação, com e sem a referência */
+  const refHint=()=>{const h=$('#prefh');if(!h)return;const c=pnum(iC.value),r=pnum(($('#prefc')||{}).value),TB=!!($('#ptrib')&&$('#ptrib').checked);
+    if(!(r>0)){h.textContent='';return}
+    if(c>0&&r<=c){h.innerHTML='<span class="neg">Igual ou menor que o custo: não muda nada e é apagado ao salvar.</span>';return}
+    const mv=($('#pminmg')||{}).value,mi=pnum(mv),pm=String(mv||'').trim()!==''&&mi!==''?mi:(polMin(Object.assign({},e,{minMg:''}))||{}).v;
+    const sm=(S.sellers||[]).map(x=>setV(x.minMg)?Number(x.minMg):null).filter(v=>v!=null),m=pm!=null?pm:(sm.length?Math.min(...sm):null);
+    if(m==null){h.textContent='Defina a margem mínima (aqui, na subcategoria ou na categoria) para a trava valer.';return}
+    const own=pnum(($('#pcom')||{}).value),rate=own!==''?own:Math.max(0,...(S.sellers||[]).map(x=>Number(x.commission)||0)),t=taxCfg();
+    const fl=cc=>{if(!(cc>0))return null;const den=TB?1-(t.pd+t.idNo)/100-m/100-rate/100:1-m/100-rate/100;return den>0.02?(TB?cc*(1-(t.pc+t.ic)/100):cc)/den:null};
+    const a=fl(r),b=fl(c);h.innerHTML=a?`Com a referência, o vendedor desce até <b>${brl(a)}</b> sem aprovação${b?` (sem ela: ${brl(b)})`:''} · margem mínima ${String(m).replace('.',',')}%${rate?' com comissão de '+String(rate).replace('.',',')+'%':''}.`:''};
+  ['prefc','pminmg','pcom'].forEach(id=>{const x=document.getElementById(id);if(x)x.addEventListener('input',refHint)});
   const fill=(skip)=>{const c=pnum(iC.value),pv=pnum(iP.value),ok=c>0;
     iM.disabled=iK.disabled=!ok;
     const TB=!!($('#ptrib')&&$('#ptrib').checked),ce=TB&&ok&&pv>0?effCostRaw(c,pv):c;
@@ -4659,7 +4684,7 @@ function productForm(){
     {const so=$('#pcsimout'),si=$('#pcsim');if(so&&si){const r=pnum(si.value)||0,N=ppkV(($('#ppk')||{}).value)>1?ppkV($('#ppk').value):1,kg=($('#pkg')||{}).checked,cm=pv>0?pv*r/100:0;
       so.innerHTML=!(pv>0)?'<span class="muted">Informe o preço de venda.</span>':`<div>Com comissão de <b>${String(r).replace('.',',')}%</b>, o vendedor recebe <b>${brl(cm)}</b>${N>1?' por embalagem ('+brl(cm/N)+'/'+(kg?'kg':'un.')+')':''}.</div>`+(ok?`<div>Margem fica <b class="${(pv-ce-cm)<0?'neg':(pv-ce-cm)/pv*100<8?'wkwarn':''}">${pct((pv-ce-cm)/pv*100)}%</b> <span class="muted">(sem comissão: ${pct((pv-ce)/pv*100)}%)</span> · lucro ${brl(pv-ce-cm)}</div>`:'<div class="muted">Informe o custo para ver a margem.</div>')}}
     $('#pmhint').classList.toggle('neg',ok&&pv>0&&pv<ce);
-    hints();syncU();ieHint();};
+    hints();syncU();ieHint();refHint();};
   let syncU=()=>{};
   const ieHint=()=>{const h=$('#piehint'),ip=$('#pie');if(!h||!ip)return;const N=ppkV(($('#ppk')||{}).value)>1?ppkV($('#ppk').value):1,ie=pnum(ip.value)*N,pv=pnum(iP.value),c=pnum(iC.value);
     if(!(ie>0)){h.textContent='Para cliente com inscrição estadual comprando com nota fiscal. A mesma redução vale nas faixas, à vista, retirada e promoção.';h.classList.remove('neg');return}
@@ -5205,6 +5230,7 @@ function taxCfg(){const t=S.store.tax||{},g=(v,d)=>v===''||v==null||isNaN(Number
 function icmsVenda(ie){const t=taxCfg();return ie?t.idIe:t.idNo}
 function effCostRaw(cost,price,ie){const t=taxCfg();return Number(cost)*(1-(t.pc+t.ic)/100)+Number(price)*((t.pd+icmsVenda(ie))/100)}
 /* custo usado na trava do vendedor e nas propostas do cliente: o maior entre o custo real e o custo de referência (opcional) */
+function refCOf(p){const r=lockCost(p);return r>(Number(p&&p.cost)||0)+0.004?Math.round(r*100)/100:undefined}
 function lockCost(p){const c=Number(p&&p.cost)||0,r=Number(p&&p.refCost)||0;return r>c?r:c}
 function effCost(p,cost,price,ie){return p&&p.trib&&Number(cost)>0?effCostRaw(cost,price,ie):Number(cost)}
 function taxBreak(cost,price,ie){const t=taxCfg(),cr=cost*(t.pc+t.ic)/100,db=price*(t.pd+icmsVenda(ie))/100;return {cr,db,net:cost-cr,eff:cost-cr+db}}
@@ -5376,12 +5402,36 @@ function admCompra(){
 }
 function admRelatorios(){
   const k=ui.repKind||'ranking',nc=S.products.filter(isCritical).length;
-  $('#tabc').innerHTML=`<div class="seg repseg" role="group" aria-label="Tipo de relatório"><button id="rkR" aria-pressed="${k==='ranking'}">Ranking de vendas</button><button id="rkC" aria-pressed="${k==='compra'}">Sugestão de compra${nc?` <span class="cnt" style="background:var(--warn)">${nc}</span>`:''}</button><button id="rkV" aria-pressed="${k==='comissao'}">Comissão de vendedores</button><button id="rkF" aria-pressed="${k==='conf'}">Conferência</button></div><div id="repc"></div>`;
+  $('#tabc').innerHTML=`<div class="seg repseg" role="group" aria-label="Tipo de relatório"><button id="rkR" aria-pressed="${k==='ranking'}">Ranking de vendas</button><button id="rkC" aria-pressed="${k==='compra'}">Sugestão de compra${nc?` <span class="cnt" style="background:var(--warn)">${nc}</span>`:''}</button><button id="rkV" aria-pressed="${k==='comissao'}">Comissão de vendedores</button><button id="rkF" aria-pressed="${k==='conf'}">Conferência</button><button id="rkB" aria-pressed="${k==='boa'}">Boas compras</button></div><div id="repc"></div>`;
   $('#rkR').onclick=()=>{ui.repKind='ranking';admRelatorios()};
   $('#rkC').onclick=()=>{ui.repKind='compra';admRelatorios()};
   $('#rkV').onclick=()=>{ui.repKind='comissao';admRelatorios()};
   $('#rkF').onclick=()=>{ui.repKind='conf';admRelatorios()};
-  ({compra:admCompra,comissao:admComissao,conf:admConfRep}[k]||admRanking)();
+  $('#rkB').onclick=()=>{ui.repKind='boa';admRelatorios()};
+  ({compra:admCompra,comissao:admComissao,conf:admConfRep,boa:admBoaCompra}[k]||admRanking)();
+}
+/* ---------- relatório: o que a boa compra rendeu (custo de referência) ---------- */
+function admBoaCompra(){
+  const c=$('#repc'),F=ui.bcR||(ui.bcR=monthRange()),bad=F.from>F.to,by=new Map();let tot=0,qt=0;
+  if(!bad)S.orders.filter(o=>o.status==='concluido'&&orderDay(o)>=F.from&&orderDay(o)<=F.to).forEach(o=>o.items.forEach(i=>{
+    const rc=Number(i.refC),co=Number(i.cost);if(!(i.q>0)||!(rc>co)||!(co>0))return;const g=(rc-co)*i.q,k=i.pid||i.comboId||i.name;
+    const x=by.get(k)||{name:i.name,q:0,g:0,ped:new Set(),rc,co};x.q+=i.q;x.g+=g;x.ped.add(o.id);x.rc=rc;x.co=co;by.set(k,x);tot+=g;qt+=i.q}));
+  const rows=[...by.values()].sort((a,b)=>b.g-a.g),now=S.products.filter(p=>Number(p.refCost)>Number(p.cost)&&Number(p.cost)>0).sort((a,b)=>(b.refCost-b.cost)-(a.refCost-a.cost));
+  const pc=v=>(Math.round(v*10)/10).toLocaleString('pt-BR');
+  c.innerHTML=`<div class="sectionhead"><h2>Boas compras</h2></div>
+    <div class="panel" style="display:grid;gap:12px;margin-bottom:14px">
+      <div class="repf" style="grid-template-columns:repeat(2,1fr)"><div class="field"><label for="bcfrom">De</label><input type="date" id="bcfrom" value="${F.from}"></div><div class="field"><label for="bcto">Até</label><input type="date" id="bcto" value="${F.to}"></div></div>
+      ${bad?'<div class="err">A data final precisa ser depois da inicial.</div>':''}
+      <div class="small muted">Produtos que você comprou abaixo do mercado e protegeu com o custo de referência. O ganho é a diferença entre a referência e o que você pagou, nas vendas concluídas: esse dinheiro ficou com você porque a trava não deixou ele virar desconto.</div></div>
+    <div class="tiles" style="margin-bottom:14px"><div class="tile t-pago"><span class="lbl">Ganho das boas compras</span><b class="num">${brl(tot)}</b><span class="small muted">no período</span></div>
+      <div class="tile"><span class="lbl">Vendido com proteção</span><b class="num">${qt.toLocaleString('pt-BR')}</b><span class="small muted">embalagens em ${rows.length} produto${rows.length===1?'':'s'}</span></div>
+      <div class="tile"><span class="lbl">Protegidos agora</span><b class="num">${now.length}</b><span class="small muted">produtos com custo de referência</span></div></div>
+    ${rows.length?`<div class="tablewrap" style="margin-bottom:14px"><table class="btable"><thead><tr><th>Produto</th><th class="r">Vendido</th><th class="r">Pedidos</th><th class="r">Custo pago</th><th class="r">Referência</th><th class="r">Ganho</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr><td><b>${esc(r.name)}</b></td><td class="r num">${r.q.toLocaleString('pt-BR')}</td><td class="r num">${r.ped.size}</td><td class="r num">${brl(r.co)}</td><td class="r num">${brl(r.rc)}</td><td class="r num"><b>${brl(r.g)}</b></td></tr>`).join('')}</tbody></table></div>`
+      :'<div class="empty">Nenhuma venda concluída com custo de referência nesse período.</div>'}
+    ${now.length?`<h3 class="dech">Protegidos agora</h3><div class="tablewrap"><table class="btable"><thead><tr><th>Produto</th><th class="r">Custo</th><th class="r">Referência</th><th class="r">Vantagem na compra</th></tr></thead><tbody>
+      ${now.map(p=>`<tr><td><b>${esc(p.name)}</b></td><td class="r num">${brl(Number(p.cost))}</td><td class="r num">${brl(Number(p.refCost))}</td><td class="r num">${pc((1-p.cost/p.refCost)*100)}% abaixo</td></tr>`).join('')}</tbody></table></div>`:''}`;
+  $('#bcfrom').onchange=e=>{F.from=e.target.value;admBoaCompra()};$('#bcto').onchange=e=>{F.to=e.target.value;admBoaCompra()};
 }
 /* ---------- cliente pelo StarIA (CNPJ / CPF) ---------- */
 /* dados públicos do CNPJ (Receita Federal, via BrasilAPI). Inscrição estadual não vem por aqui. */

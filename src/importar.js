@@ -60,16 +60,17 @@ function bsHtml(n,withMg){const B=ui.bs=ui.bs||{},v=k=>esc(B[k]||''),sel=(k,a,b)
       <label>Unidades na embalagem<input type="number" id="bspk" min="1" step="1" value="${v('pk')}" placeholder="Ex.: 1"></label>
       <label>Tributado<select id="bstr">${sel('tr','Sim','Não')}</select></label>
       <label>Aparece para clientes<select id="bsact">${sel('act','Sim','Não')}</select></label>
+      <label>Custo de referência (% acima do custo)<input type="text" inputmode="decimal" id="bsref" value="${v('ref')}" placeholder="Ex.: 20 · - apaga"></label>
       ${withMg?`<label>Margem sem IE (%)<input type="text" inputmode="decimal" id="bsmg" value="${v('mg')}" placeholder="Ex.: 30"></label>
       <label>Margem com IE (%)<input type="text" inputmode="decimal" id="bsmi" value="${v('mi')}" placeholder="só tributados"></label>`:''}
     </div>
     <div class="small muted">A família junta os sabores do mesmo produto: o sabor vem do resto do nome.${withMg?' A margem calcula o preço de cada marcado pelo custo dele.':' Mudar as unidades na embalagem não muda preço nem custo.'}</div>
     <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" type="button" id="bsgo" ${n?'':'disabled'}>Aplicar aos marcados</button><button class="btn ghost" type="button" id="bsclr">Limpar campos</button>${withMg?'<button class="btn ghost" type="button" id="bsrm" '+(n?'':'disabled')+'>Tirar marcados da importação</button>':''}</div></details>`}
-function bsKeep(){const B=ui.bs=ui.bs||{};[['cat','bscat'],['sub','bssub'],['fam','bsfam'],['unit','bsunit'],['pk','bspk'],['tr','bstr'],['act','bsact'],['mg','bsmg'],['mi','bsmi']].forEach(([k,id])=>{const x=document.getElementById(id);if(x)B[k]=x.value});return B}
+function bsKeep(){const B=ui.bs=ui.bs||{};[['cat','bscat'],['sub','bssub'],['fam','bsfam'],['unit','bsunit'],['pk','bspk'],['tr','bstr'],['act','bsact'],['mg','bsmg'],['mi','bsmi'],['ref','bsref']].forEach(([k,id])=>{const x=document.getElementById(id);if(x)B[k]=x.value});return B}
 function bsBind(){bsKeep();{const d=$('#bsbox');if(d)d.addEventListener('toggle',()=>{ui.bsOpen=d.open})}
-  ['bscat','bssub','bsfam','bsunit','bspk','bstr','bsact','bsmg','bsmi'].forEach(id=>{const x=document.getElementById(id);if(x)x.addEventListener('input',bsKeep)});
+  ['bscat','bssub','bsfam','bsunit','bspk','bstr','bsact','bsmg','bsmi','bsref'].forEach(id=>{const x=document.getElementById(id);if(x)x.addEventListener('input',bsKeep)});
   const c=$('#bscat');if(c)c.addEventListener('change',()=>{const dl=$('#bssubl');if(dl)dl.innerHTML=(c.value.trim()?subNames(c.value.trim()):[]).map(x=>`<option value="${esc(x)}">`).join('')});
-  const z=$('#bsclr');if(z)z.onclick=()=>{ui.bs={};['bscat','bssub','bsfam','bsunit','bspk','bsmg','bsmi'].forEach(id=>{const x=document.getElementById(id);if(x)x.value=''});['bstr','bsact'].forEach(id=>{const x=document.getElementById(id);if(x)x.value=''})}}
+  const z=$('#bsclr');if(z)z.onclick=()=>{ui.bs={};['bscat','bssub','bsfam','bsunit','bspk','bsmg','bsmi','bsref'].forEach(id=>{const x=document.getElementById(id);if(x)x.value=''});['bstr','bsact'].forEach(id=>{const x=document.getElementById(id);if(x)x.value=''})}}
 /* lê o formulário: devolve só o que foi preenchido (ou um texto de erro) */
 function bsRead(){const B=bsKeep(),o={},t=k=>String(B[k]||'').trim();
   if(t('cat'))o.cat=t('cat');if(t('sub'))o.sub=t('sub')==='-'?'':t('sub');if(t('fam'))o.fam=t('fam')==='-'?'':t('fam');if(t('unit'))o.unit=t('unit');
@@ -77,6 +78,7 @@ function bsRead(){const B=bsKeep(),o={},t=k=>String(B[k]||'').trim();
   if(B.tr)o.trib=B.tr==='1';if(B.act)o.active=B.act==='1';
   if(t('mg')){const m=pnum(t('mg'));if(m===''||!(m<95))return 'Margem sem IE inválida. Ex.: 30';o.mg=m}
   if(t('mi')){const m=pnum(t('mi'));if(m===''||!(m<95))return 'Margem com IE inválida. Ex.: 25';o.mi=m}
+  if(t('ref')){if(t('ref')==='-')o.ref=null;else{const m=pnum(t('ref'));if(!(m>0&&m<=300))return 'Custo de referência: informe quantos % acima do custo. Ex.: 20';o.ref=m}}
   if(!Object.keys(o).length)return 'Preencha pelo menos um campo para alterar.';return o}
 /* estrutura: categoria, subcategoria, família/sabor, unidade e embalagem, tributado, ativo */
 function bsApplyStruct(x,o){
@@ -111,7 +113,8 @@ function impEdit(el,im){im=liveDoc('imports',im);if(im.status==='consultando'){i
     return `<div class="imline ${ready(i)?'ok':''} ${SEL[i.k]?'sel':''}" data-k="${i.k}">
       <label class="imck"><input type="checkbox" data-isel="${i.k}" ${SEL[i.k]?'checked':''} aria-label="Marcar ${esc(i.name)}"></label>
       <div class="imn"><input type="text" data-in="${i.k}" value="${esc(i.name)}" aria-label="Nome do produto">
-        <span class="small muted">${[i.code&&'Cód. '+esc(i.code),i.ean&&'EAN '+esc(i.ean),esc((i.cat||'sem categoria')+(i.sub?' › '+i.sub:'')),i.fam?'família '+esc(i.fam):'',esc(i.unit||'Unidade')+(Number(i.perPack)>1?' ('+i.perPack+' un.)':''),i.active===false?'<b>não aparece para clientes</b>':'',ex?'<b>já cadastrado: atualiza</b>'+(Number(ex.refCost)>0?' · <b style="color:var(--accent)">custo de referência '+brl(Number(ex.refCost))+'</b>':''):'<b class="mgok">novo</b>'].filter(Boolean).join(' · ')}</span></div>
+        <span class="small muted">${[i.code&&'Cód. '+esc(i.code),i.ean&&'EAN '+esc(i.ean),esc((i.cat||'sem categoria')+(i.sub?' › '+i.sub:'')),i.fam?'família '+esc(i.fam):'',esc(i.unit||'Unidade')+(Number(i.perPack)>1?' ('+i.perPack+' un.)':''),i.active===false?'<b>não aparece para clientes</b>':'',ex?'<b>já cadastrado: atualiza</b>'+(Number(ex.refCost)>0?' · <b style="color:var(--accent)">custo de referência '+brl(Number(ex.refCost))+'</b>':''):'<b class="mgok">novo</b>'].filter(Boolean).join(' · ')}</span>
+        ${Number(i.refCost)>0?`<span class="small" style="color:var(--accent)">🛡 Margem protegida: a trava do vendedor usa ${brl(Number(i.refCost))} <button type="button" class="link" data-iref="${i.k}">tirar</button></span>`:ex&&Number(ex.cost)>0&&imCost(i)>0&&imCost(i)<=Number(ex.cost)*0.9&&!(Number(ex.refCost)>0)?`<span class="small"><button type="button" class="link" data-iref="${i.k}" data-irv="${Number(ex.cost)}">🛡 Comprou ${Math.round((1-imCost(i)/Number(ex.cost))*100)}% abaixo do custo anterior: proteger usando ${brl(Number(ex.cost))} como referência</button></span>`:''}</div>
       <label class="imf imc"><span class="imlbl">Custo (R$)</span><input type="text" inputmode="decimal" class="imnum" data-ic="${i.k}" value="${rcMoney(imCost(i))}" placeholder="0,00" aria-label="Custo de ${esc(i.name)}"></label>
       <label class="imtr switch small"><input type="checkbox" data-itr="${i.k}" ${i.trib?'checked':''}> Tributado</label>
       <label class="imf imp1"><span class="imlbl">Preço s/ IE</span><input type="text" inputmode="decimal" class="imnum imp" data-ip="${i.k}" value="${rcMoney(i.price)}" placeholder="0,00" aria-label="Preço sem IE de ${esc(i.name)}"></label>
@@ -155,6 +158,7 @@ function impEdit(el,im){im=liveDoc('imports',im);if(im.status==='consultando'){i
     x.oninput=()=>{const i=it(k),m=pnum(x.value);if(!i)return;const c=imCost(i);if(!(c>0)){return}if(m!==''&&m<95){const p=imPriceFor(c,m,i.trib,ie);if(p>0){i[f]=p;later();upLine(i,x)}}};
     x.onchange=()=>{const i=it(k);if(!i)return;if(x.value.trim()&&!(imCost(i)>0)){toast('Informe o custo primeiro.')}x.value=mgCell(i,ie);save();upLine(i)}});
   marg('data-im','price',false);marg('data-imi','iePrice',true);
+  el.querySelectorAll('[data-iref]').forEach(b=>b.onclick=()=>{const i=it(b.dataset.iref);if(!i)return;i.refCost=Number(i.refCost)>0?'':Number(b.dataset.irv)||'';save();rer()});
   el.querySelectorAll('[data-itr]').forEach(b=>b.onchange=()=>{const i=it(b.dataset.itr);if(!i)return;i.trib=b.checked;if(!b.checked)i.iePrice='';save();rer()});
   /* marcar: só atualiza a contagem (o que está escrito no formulário em massa continua) */
   const upSel=()=>{const n=nSel();const a=$('#bsn');if(a)a.textContent=n;['bsgo','bsrm'].forEach(id=>{const b=document.getElementById(id);if(b)b.disabled=!n});const all=$('#imAll');if(all)all.checked=LL().length&&n===LL().length};
@@ -164,7 +168,8 @@ function impEdit(el,im){im=liveDoc('imports',im);if(im.status==='consultando'){i
     let semCusto=0;ks.forEach(i=>{bsApplyStruct(i,o);
       if(i.trib===false)i.iePrice='';
       if(o.mg!==undefined){const c=imCost(i);if(c>0)i.price=imPriceFor(c,o.mg,i.trib,false);else semCusto++}
-      if(o.mi!==undefined&&i.trib){const c=imCost(i);if(c>0)i.iePrice=imPriceFor(c,o.mi,true,true)}});
+      if(o.mi!==undefined&&i.trib){const c=imCost(i);if(c>0)i.iePrice=imPriceFor(c,o.mi,true,true)}
+      if(o.ref!==undefined){const c=imCost(i);i.refCost=o.ref===null||!(c>0)?'':imR2(c*(1+o.ref/100))}});
     save();toast('Alterado em '+ks.length+' produto'+(ks.length===1?'':'s')+(semCusto?' ('+semCusto+' sem custo ficaram sem preço)':''));rer()};
   $('#bsrm').onclick=()=>{const ks=LL().filter(i=>SEL[i.k]);if(!ks.length)return;if(!confirm('Tirar '+ks.length+' produto(s) desta importação? Eles não serão cadastrados.'))return;
     im.items=im.items.filter(i=>!ks.includes(i));ks.forEach(i=>delete SEL[i.k]);if(!impLeft(im).length)im.status=(im.items||[]).length?'aprovada':'cancelada';save();
@@ -181,6 +186,7 @@ function impEdit(el,im){im=liveDoc('imports',im);if(im.status==='consultando'){i
     R.forEach(i=>{const cost=imCost(i),pk=Number(i.perPack)>1?Number(i.perPack):'';const ie=i.trib&&Number(i.iePrice)>0?Number(i.iePrice):'';
       let p=i.pid&&S.products.find(x=>x.id===i.pid);if(!p)p=imMatch(i.code,i.ean);
       const d={name:String(i.name).trim(),cat:String(i.cat||'').trim()||'Outros',sub:String(i.sub||'').trim(),fam:String(i.fam||'').trim(),var:i.fam?String(i.var||imVarOf(i.name,i.fam)):'',unit:String(i.unit||'').trim()||'Unidade',perPack:pk,price:imR2(i.price),trib:!!i.trib,active:i.active!==false};
+      if(Number(i.refCost)>cost)d.refCost=imR2(i.refCost);
       if(p){Object.assign(p,d);if(i.code)p.code=i.code;if(i.ean)p.ean=i.ean;if(cost>0)p.cost=cost;if(d.fam)p.famSync=false;if(i.trib)p.iePrice=ie}
       else{p={id:uid(),code:i.code||'',ean:i.ean||'',...d,famSync:false,cost:cost>0?cost:'',iePrice:ie,tablePrices:{},commission:'',stock:'',minStock:'',idealStock:'',showUnit:true,photo:ph(d.name,(d.name.length*37)%360),rules:emptyRules()};S.products.unshift(p)}
       i.pid=p.id;i.done=true;i.doneAt=new Date().toISOString()});
@@ -202,6 +208,8 @@ function prodBulkBind(list,rer){const M=ui.pbulk;if(!M)return;bsBind();const c=$
   c.querySelectorAll('[data-psel]').forEach(b=>b.onchange=()=>{M.sel[b.dataset.psel]=b.checked;upSel()});
   $('#pbAll').onchange=e=>{list.forEach(p=>{M.sel[p.id]=e.target.checked});c.querySelectorAll('[data-psel]').forEach(b=>b.checked=e.target.checked);upSel()};
   $('#bsgo').onclick=()=>{const o=bsRead();if(typeof o==='string'){toast(o);return}const ps=S.products.filter(p=>M.sel[p.id]);if(!ps.length){toast('Marque os produtos primeiro.');return}
-    const what=[o.cat!==undefined&&'categoria "'+o.cat+'"',o.sub!==undefined&&(o.sub?'subcategoria "'+o.sub+'"':'sem subcategoria'),o.fam!==undefined&&(o.fam?'família "'+o.fam+'"':'sem família'),o.unit!==undefined&&'unidade "'+o.unit+'"',o.pk!==undefined&&o.pk+' un. na embalagem',o.trib!==undefined&&(o.trib?'tributado':'não tributado'),o.active!==undefined&&(o.active?'aparece para clientes':'escondido dos clientes')].filter(Boolean);
+    const what=[o.cat!==undefined&&'categoria "'+o.cat+'"',o.sub!==undefined&&(o.sub?'subcategoria "'+o.sub+'"':'sem subcategoria'),o.fam!==undefined&&(o.fam?'família "'+o.fam+'"':'sem família'),o.unit!==undefined&&'unidade "'+o.unit+'"',o.pk!==undefined&&o.pk+' un. na embalagem',o.trib!==undefined&&(o.trib?'tributado':'não tributado'),o.active!==undefined&&(o.active?'aparece para clientes':'escondido dos clientes'),o.ref!==undefined&&(o.ref===null?'sem custo de referência':'custo de referência = custo + '+String(o.ref).replace('.',',')+'%')].filter(Boolean);
     if(!confirm('Alterar '+ps.length+' produto(s): '+what.join(', ')+'?'+(o.pk!==undefined?'\nPreço e custo não mudam.':'')))return;
-    ps.forEach(p=>{bsApplyStruct(p,o);if(o.fam!==undefined)p.famSync=false});save();toast('Alterado em '+ps.length+' produto'+(ps.length===1?'':'s'));rer()}}
+    let semCusto=0;ps.forEach(p=>{bsApplyStruct(p,o);if(o.fam!==undefined)p.famSync=false;
+      if(o.ref!==undefined){if(o.ref===null){p.refCost='';delete p.refGone}else if(Number(p.cost)>0)p.refCost=Math.round(Number(p.cost)*(1+o.ref/100)*100)/100;else semCusto++}});
+    if(semCusto)toast(semCusto+' sem preço de custo ficaram sem referência');save();toast('Alterado em '+ps.length+' produto'+(ps.length===1?'':'s'));rer()}}

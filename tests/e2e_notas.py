@@ -19,6 +19,9 @@ num = lambda v: float(v) if str(v).strip() not in ('', 'None') else 0.0
 cands = [p for p in S0['products'] if p.get('active') is not False and p.get('ean') and str(p.get('stock', '')).strip() not in ('', 'None')]
 P1 = cands[0]; P2 = [p for p in S0['products'] if p.get('active') is not False and p['id'] != P1['id']][1]
 st1 = num(P1['stock']); st2 = num(P2.get('stock'))
+# custo anterior bem acima do que vem na nota (40,50): a precificação sugere proteger a margem
+J0 = json.loads(op.open(BASE + '/api/state').read())
+op.open(urllib.request.Request(BASE + '/api/sync', data=json.dumps({'changes': [{'c': 'products', 'id': P1['id'], 'op': 'put', 'doc': dict(P1, cost=60), 'ver': J0['V']['products'][P1['id']]}]}).encode(), headers={'Content-Type': 'application/json', 'X-App': '1'}))
 errs = []
 with sync_playwright() as pw:
     b = pw.chromium.launch()
@@ -70,6 +73,9 @@ with sync_playwright() as pw:
     chk('Precificar notas (1)' in ft.locator('#app').inner_text(), 'faturamento vê "Precificar notas (1)"')
     ft.click('[data-ft="prec"]'); ft.wait_for_timeout(400); ft.locator('[data-pco]').first.click(); ft.wait_for_timeout(400)
     k1 = ft.locator('.pcline').first.get_attribute('data-k')
+    chk(ft.locator(f'[data-pref="{k1}"]').count() == 1, 'sugere proteger a margem (comprou bem abaixo do custo anterior)')
+    ft.locator(f'[data-pref="{k1}"]').click(); wait_sync(ft)
+    chk('Margem protegida' in ft.locator('.pcline').first.inner_text(), 'linha mostra a margem protegida')
     ft.locator(f'[data-ptr="{k1}"]').check(); wait_sync(ft); ft.locator(f'[data-pie="{k1}"]').check(); wait_sync(ft)
     pp = ft.locator(f'[data-pp="{k1}"]'); pp.fill('55,90'); pp.press('Tab'); wait_sync(ft)
     pi = ft.locator(f'[data-pi="{k1}"]'); pi.fill('52,50'); pi.press('Tab'); wait_sync(ft)
@@ -83,6 +89,14 @@ with sync_playwright() as pw:
     chk(R['status'] == 'aprovada' and R.get('aprovadaBy'), f"nota aprovada ({R['status']})")
     chk(p1['price'] == 55.9 and p1['iePrice'] == 52.5 and p1['cost'] == 40.5 and p1['trib'] is True, f"produto atualizado: preço {p1['price']}, IE {p1['iePrice']}, custo {p1['cost']}, tributado {p1['trib']}")
     chk(abs(num(p1['stock']) - (st1 + 5)) < 1e-6, 'estoque não soma de novo na aprovação')
+    chk(p1.get('refCost') == 60 and not p1.get('refGone'), f"custo de referência foi para o produto ({p1.get('refCost')})")
+    # nova nota com custo igual ou maior apaga a referência e avisa a loja
+    J = json.loads(op.open(BASE + '/api/state').read())
+    op.open(urllib.request.Request(BASE + '/api/sync', data=json.dumps({'changes': [{'c': 'products', 'id': P1['id'], 'op': 'put', 'doc': dict(p1, cost=61), 'ver': J['V']['products'][P1['id']]}]}).encode(), headers={'Content-Type': 'application/json', 'X-App': '1'}))
+    p1b = [p for p in server()['products'] if p['id'] == P1['id']][0]
+    chk(not p1b.get('refCost') and p1b.get('refGone', {}).get('v') == 60, f"custo maior apaga a referência e deixa aviso ({p1b.get('refGone')})")
+    adm.reload(); adm.wait_for_timeout(1800)
+    chk('Custo de referência apagado' in adm.locator('#tabc').inner_text(), 'aviso aparece no painel')
     ft.reload(); ft.wait_for_timeout(1800); chk('Precificar notas (' not in ft.locator('#app').inner_text(), 'aviso some depois de aprovada')
     b.close()
 chk(not errs, 'sem erro de tela nem da API: ' + '; '.join(errs[:4]))
