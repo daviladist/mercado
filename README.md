@@ -129,6 +129,14 @@ Venda no balcão ("pague e leve") no mesmo sistema e no mesmo banco, separada po
 - **Tabelas:** `caixas`, `pdv_vendas`, `pdv_itens` (custo e preço do momento), `pdv_pagamentos`, `caixa_movimentos`, `pdv_autorizacoes`, `pdv_seq` — todas com `tenant_id` (a empresa).
 - **Testes:** `tests/pdv.py` (108 verificações; roda no `tests/ci_banco.sh` e no GitHub).
 
+## Vitrine semanal x catálogo fixo (e o que o PDV vende)
+O **cadastro** (produtos com estoque) e a **vitrine** (o que cliente e vendedores veem no app) são coisas diferentes:
+- **Vitrine semanal** = módulo "Ofertas da semana" ligado na Central (D'Ávila). Você publica a semana em OFERTAS › Ofertas da semana (marca produtos, preços e validade). **Passou o dia final** (horário de Brasília), a vitrine fecha com "Nova tabela em breve": o servidor recusa pedido de cliente e de vendedor até você publicar de novo. A loja (administrador) continua lançando pedido.
+- **Catálogo fixo** = módulo desligado (pacote "Distribuidora de suplementos"). Não existe semana: tudo o que está ativo aparece sempre; você ativa e desativa produto pelo cadastro.
+- **Produto com estoque zerado** (CADASTROS › Configurações › Loja e regras): continua aparecendo (padrão) / some da vitrine e volta quando entrar estoque / aparece como "Esgotado" sem poder pedir. Produto com estoque em branco não é afetado. O servidor aplica a mesma regra nos pedidos.
+- **PDV vende todo o cadastro**, esteja ou não na oferta da semana, menos o produto marcado em **Bloquear venda no caixa (PDV)** (no cadastro do produto; sempre desmarcado de início).
+- Testes: `tests/vitrine.py`.
+
 ## Frete de terceiro — módulo "frete3"
 Para quem paga uma transportadora por entrega, com um % combinado sobre o valor da nota. Começa **desligado** (na D'Ávila e no pacote "Atacado completo"); vem ligado no pacote "Distribuidora de suplementos". Liga e desliga na Central.
 - **Cadastro:** CADASTROS › Fornecedores › Transportadoras (nome e % combinado).
