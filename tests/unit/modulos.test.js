@@ -15,7 +15,7 @@ test('empresa principal (default_on) liga módulo novo que ainda não foi gravad
 });
 test('empresa nova começa desligada no que não veio no pacote', () => {
   const r = M.resolve({ default_on: false, modules: M.presetFor('suplementos') });
-  assert.deepStrictEqual(Object.keys(r).filter(k => r[k] && !M.BY_CODE[k].essential).sort(), ['comissao', 'margem', 'painel', 'sabores', 'tabela_ie']);
+  assert.deepStrictEqual(Object.keys(r).filter(k => r[k] && !M.BY_CODE[k].essential).sort(), ['comissao', 'frete3', 'margem', 'painel', 'sabores', 'tabela_ie']);
 });
 test('toda coleção e papel protegidos apontam para módulo que existe e não é essencial', () => {
   Object.values(M.COLL_MODULE).concat(Object.values(M.ROLE_MODULE)).forEach(c => { assert.ok(M.BY_CODE[c]); assert.ok(!M.BY_CODE[c].essential); });
@@ -37,4 +37,11 @@ test('dados de módulo desligado não saem e não entram', () => {
   assert.strictEqual(M.blockedBy({ c: 'meta', id: 'lastWeek' }, off), 'ofertas');
   assert.strictEqual(M.blockedBy({ c: 'orders', id: 'x' }, off), '');
   assert.strictEqual(M.blockedBy({ c: 'constructor', id: 'x' }, off), '');
+});
+test('frete de terceiro: começa desligado na empresa principal e fora do pacote "atacado"', () => {
+  const r = M.resolve({ default_on: true, modules: {} });
+  assert.strictEqual(r.frete3, false);
+  assert.strictEqual(M.presetFor('atacado').frete3, false);
+  assert.strictEqual(M.COLL_MODULE.carriers, 'frete3');
+  assert.strictEqual(M.COLL_MODULE.carrierPays, 'frete3');
 });

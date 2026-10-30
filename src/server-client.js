@@ -14,8 +14,8 @@ const CLIENT_ONLY=/^(?:\/t\/[a-z0-9-]{1,40})?\/cliente\/?$/.test(location.pathna
 const PDV_PATH=/^(?:\/t\/[a-z0-9-]{1,40})?\/pdv\/?$/.test(location.pathname);
 const TBASE=TSLUG?'/t/'+TSLUG:'';
 const SRV={me:null,V:{meta:{}},base:{meta:{}},ord:{},t:null,busy:false,again:false,ver:'',poll:null,lastPass:'',offline:false,retry:null,rej:{},nPend:0};
-const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins','suppliers','receipts','stariaJobs','imports','cashiers'];
-const SRV_ORDERED=['suppliers','products','customers','sellers','checkers','billers','vehicles','cities','categories','combos','admins','payables','receivables','cashiers'];
+const SRV_COLLS=['products','customers','orders','receivables','payables','sellers','checkers','billers','vehicles','cities','categories','combos','counts','commPayouts','trips','romaneios','admins','suppliers','receipts','stariaJobs','imports','cashiers','carriers','carrierPays'];
+const SRV_ORDERED=['suppliers','products','customers','sellers','checkers','billers','vehicles','cities','categories','combos','admins','payables','receivables','cashiers','carriers'];
 const SRV_WRITE={cliente:['orders','customers'],vendedor:['orders'],conferente:['orders','counts','receipts'],faturamento:['orders','receipts'],entregador:['orders','romaneios']};
 const ROLE_VIEW={admin:'admin',cliente:'cliente',vendedor:'vend',conferente:'conf',faturamento:'fat',entregador:'ent',operador_caixa:'pdv'};
 const VIEW_ROLE={admin:'admin',cliente:'cliente',vend:'vendedor',conf:'conferente',fat:'faturamento',ent:'entregador',pdv:'operador_caixa'};
@@ -25,7 +25,7 @@ async function api(path,body){
   let j={};try{j=await r.json()}catch(e){}
   if(!r.ok){const e=new Error(j.error||('Erro '+r.status));e.status=r.status;e.data=j;throw e}
   return j}
-function emptyState(){return {store:{name:'ATACADO DAVILA',pickupDisc:0,pickV:1,onerV:2,pickupOner:false},payments:[],cashPays:[],payDays:{},products:[],customers:[],orders:[],receivables:[],payables:[],sellers:[],checkers:[],billers:[],vehicles:[],cities:[],categories:[],combos:[],counts:[],commPayouts:[],trips:[],romaneios:[],admins:[],suppliers:[],receipts:[],stariaJobs:[],imports:[],cashiers:[],seq:1001,catTreeV1:true}}
+function emptyState(){return {store:{name:'ATACADO DAVILA',pickupDisc:0,pickV:1,onerV:2,pickupOner:false},payments:[],cashPays:[],payDays:{},products:[],customers:[],orders:[],receivables:[],payables:[],sellers:[],checkers:[],billers:[],vehicles:[],cities:[],categories:[],combos:[],counts:[],commPayouts:[],trips:[],romaneios:[],admins:[],suppliers:[],receipts:[],stariaJobs:[],imports:[],cashiers:[],carriers:[],carrierPays:[],seq:1001,catTreeV1:true}}
 function srvFix(){const E=emptyState();Object.keys(E).forEach(k=>{if(S[k]==null)S[k]=E[k]});S.store=Object.assign({},E.store,S.store||{});
   (S.products||[]).forEach(p=>{if(p.perPack===undefined)p.perPack=parsePack(p.unit);if(p.code==null)p.code='';if(p.ean==null)p.ean='';p.rules=Object.assign(emptyRules(),p.rules||{})})}
 function srvSnap(){SRV.base={meta:{}};SRV.ord={};

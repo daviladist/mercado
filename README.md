@@ -129,6 +129,13 @@ Venda no balcão ("pague e leve") no mesmo sistema e no mesmo banco, separada po
 - **Tabelas:** `caixas`, `pdv_vendas`, `pdv_itens` (custo e preço do momento), `pdv_pagamentos`, `caixa_movimentos`, `pdv_autorizacoes`, `pdv_seq` — todas com `tenant_id` (a empresa).
 - **Testes:** `tests/pdv.py` (108 verificações; roda no `tests/ci_banco.sh` e no GitHub).
 
+## Frete de terceiro — módulo "frete3"
+Para quem paga uma transportadora por entrega, com um % combinado sobre o valor da nota. Começa **desligado** (na D'Ávila e no pacote "Atacado completo"); vem ligado no pacote "Distribuidora de suplementos". Liga e desliga na Central.
+- **Cadastro:** CADASTROS › Fornecedores › Transportadoras (nome e % combinado).
+- **No pedido:** ao lançar/editar pelo painel, ou no cartão do pedido em PEDIDOS, marcar **Frete terceiro**: a transportadora e o % vêm sozinhos (dá para ajustar o % daquele pedido). O valor é sempre % × total do pedido; pedido cancelado não gera frete. O lucro estimado do pedido já desconta o frete.
+- **Relatório e pagamentos:** FINANCEIRO › Frete de terceiro: frete gerado, já pago e saldo a pagar por transportadora; lista por período com Excel; "Registrar pagamento" (data, valor, observação) abate do saldo.
+- **Segurança:** só o administrador vê. O servidor esconde frete, transportadoras e pagamentos dos outros papéis, guarda o % e o nome vindos do cadastro e preserva o frete quando o vendedor mexe no pedido. Testes: `tests/frete.py`.
+
 ## Desenvolver e testar no computador
 
 ```
