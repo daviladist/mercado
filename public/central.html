@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#1F3D2B">
+<title>Tino — Central do sistema</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap">
+<style>
+/* Tino: verde #1F3D2B, dourado #E8A33D, creme #F6F1E7, fonte Sora */
+:root{--green:#1F3D2B;--green-2:#2C5139;--gold:#E8A33D;--gold-soft:#FBEFD9;--cream:#F6F1E7;--surface:#FFFFFF;--line:#E6DCC8;--line-2:#EFE7D6;--input:#D6CBB4;--muted:#5E6A5F;--ink:#1F3D2B;--danger:#B3261E;--off:#C9BEA6}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--cream);color:var(--ink);font:15px/1.45 "Sora",system-ui,sans-serif;min-height:100vh}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+[hidden]{display:none!important}
+.spark{display:block}
+header{background:var(--green);color:#fff;border-bottom:4px solid var(--gold)}
+header .in{max-width:1360px;margin:0 auto;padding:12px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:14px}
+.ico{width:44px;height:44px;border-radius:12px;background:var(--gold);display:grid;place-items:center;flex:none}
+.wm{display:flex;align-items:baseline;gap:10px}
+.wm b{font-size:26px;font-weight:800;letter-spacing:-1px;line-height:1;color:var(--cream)}
+.wm span{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--gold)}
+.slogan{font-size:13px;color:#E9E1D0;margin-top:4px}.slogan em{font-style:normal;color:var(--gold);font-weight:700}
+.who{display:flex;gap:8px;align-items:center}
+.chip{background:var(--green-2);color:var(--cream);padding:6px 10px;border-radius:6px;font-size:13px}
+.btn{min-height:44px;padding:0 18px;border-radius:8px;border:1px solid var(--input);background:var(--surface);font-weight:600}
+.btn.primary{background:var(--gold);border-color:var(--gold);color:var(--green);font-weight:700}
+.btn.dark{background:var(--green);border-color:var(--green);color:#fff}
+.btn.ghost-light{background:transparent;border-color:#5E7F6A;color:var(--cream)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.wrap{max-width:1360px;margin:0 auto;padding:24px 16px;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px}
+h1{margin:0;font-size:26px;font-weight:700}
+h2{margin:0;font-size:17px;font-weight:600}
+.muted{color:var(--muted)}.small{font-size:13px}
+/* login */
+.login{max-width:420px;margin:48px auto;padding:0 16px}
+.login .card{display:grid;gap:14px}
+.field{display:grid;gap:6px}
+.field label{font-size:13px;font-weight:600;color:#3B4A3F}
+input[type=text],input[type=password],select{min-height:44px;padding:0 12px;border:1px solid var(--input);border-radius:8px;background:#fff;width:100%}
+.err{color:var(--danger);font-weight:600;font-size:14px;min-height:20px}
+/* lista de empresas */
+nav{flex:1 1 260px;max-width:320px;display:flex;flex-direction:column;gap:8px}
+nav .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+nav .head h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#4A5A4E}
+.tn{display:block;width:100%;text-align:left;padding:12px;border-radius:8px;border:1px solid var(--line);background:#fff}
+.tn b{display:block;font-size:15px}.tn span{font-size:13px;color:var(--muted)}
+.tn[aria-current=true]{background:var(--gold-soft);border:2px solid var(--gold);padding:11px}
+.st{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;margin-left:6px;vertical-align:middle}
+.st.ativa{background:#E3EFE6;color:#1F5A33}.st.em_preparo{background:var(--gold-soft);color:#7A4E08}.st.suspensa{background:#F8E1DF;color:var(--danger)}
+main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:20px}
+.top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-start}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;align-items:start}
+.logo-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo-box{width:56px;height:56px;border-radius:10px;border:1px dashed #B5A988;display:grid;place-items:center;font-size:11px;color:var(--muted);overflow:hidden;background:#fff}
+.logo-box img{width:100%;height:100%;object-fit:contain}
+.sw{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sw button{width:44px;height:44px;border-radius:8px;border:1px solid var(--line)}
+.sw button[aria-pressed=true]{border:3px solid var(--green)}
+.sw input[type=color]{width:44px;height:44px;border:1px solid var(--line);border-radius:8px;padding:2px;background:#fff}
+.preview{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px;border-radius:8px;background:var(--cream)}
+.pv-btn{display:inline-block;padding:10px 18px;border-radius:8px;color:#fff;font-weight:600;font-size:14px}
+.presets{display:flex;flex-wrap:wrap;gap:8px}
+.presets button{min-height:44px;padding:0 16px;border-radius:8px;border:1px solid var(--input);background:#fff;font-weight:500}
+.presets button[aria-pressed=true]{background:var(--green);border-color:var(--green);color:#fff}
+.grp h2{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:8px}
+.grp h2 small{font-size:13px;font-weight:400;color:var(--muted)}
+.mod{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid var(--line-2)}
+.mod .t{min-width:0}.mod .n{font-weight:500}.mod .d{font-size:13px;color:var(--muted)}
+.tag{font-size:11px;font-weight:600;color:#7A4E08;background:var(--gold-soft);border-radius:999px;padding:1px 7px;margin-left:6px;white-space:nowrap}
+.lock{flex:none;font-size:12px;font-weight:600;color:#3B4A3F;background:var(--line-2);padding:6px 10px;border-radius:999px}
+.sw-t{flex:none;position:relative;width:52px;height:30px;border-radius:999px;border:0;padding:0;background:var(--off)}
+.sw-t span{position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .15s}
+.sw-t[aria-checked=true]{background:var(--green)}.sw-t[aria-checked=true] span{left:25px}
+.bar{position:static;background:var(--green);color:var(--cream);border-radius:12px;padding:12px 16px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.bar.dirty{position:sticky;bottom:12px;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--green);color:#fff;padding:12px 18px;border-radius:10px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.2);z-index:9}
+.note{background:var(--gold-soft);border-radius:8px;padding:10px 12px;font-size:13px;color:#5C3D00}
+@media (max-width:640px){nav{max-width:none}}
+</style>
+</head>
+<body>
+<header><div class="in">
+  <div class="brand">
+    <div class="ico"><svg class="spark" role="img" aria-label="Ícone do Tino" viewBox="0 0 40 40" width="24" height="24"><path d="M20 0 C22 13 27 18 40 20 C27 22 22 27 20 40 C18 27 13 22 0 20 C13 18 18 13 20 0 Z" fill="#1F3D2B"/></svg></div>
+    <div><div class="wm"><b>tino</b><span>Central do sistema</span></div><div class="slogan">Quem tem Tino, <em>vende melhor.</em></div></div>
+  </div>
+  <div class="who" id="who" hidden><span class="chip" id="whoName">super_admin</span><button class="btn ghost-light" id="logout" type="button">Sair</button></div>
+</div></header>
+
+<section class="login" id="loginView" hidden>
+  <form class="card" id="loginForm" autocomplete="on">
+    <h1>Entrar na Central</h1>
+    <p class="muted small" style="margin:0">Acesso exclusivo do dono do sistema.</p>
+    <div class="field"><label for="lu">Usuário</label><input type="text" id="lu" autocomplete="username" autocapitalize="off" spellcheck="false" required></div>
+    <div class="field"><label for="lp">Senha</label><input type="password" id="lp" autocomplete="current-password" required></div>
+    <div class="err" id="lerr" role="alert"></div>
+    <button class="btn primary" type="submit">Entrar</button>
+  </form>
+</section>
+
+<div class="wrap" id="appView" hidden>
+  <nav aria-label="Empresas">
+    <div class="head"><h2>Empresas</h2><button class="btn" id="newT" type="button">+ Nova</button></div>
+    <div id="tlist" style="display:flex;flex-direction:column;gap:8px"></div>
+  </nav>
+  <main id="editor"></main>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+<script src="/central.js"></script>
+</body>
+</html>

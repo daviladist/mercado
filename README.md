@@ -74,6 +74,30 @@ Alternativa pelo terminal (no lugar dos passos 4 a 6):
 DATABASE_URL="postgres://...neon..." ADMIN_LOGIN=eduardo ADMIN_PASSWORD='...' node scripts/migrate.js backup.json
 ```
 
+## Tino — Central do sistema (dono do sistema)
+
+Este app é a base do **Tino** (*Quem tem Tino, vende melhor.*). A **Central do sistema** fica em `https://SEU-SITE/central` e é só do dono do sistema (usuário `super_admin`), separada do painel da loja.
+
+- **O que faz:** cadastra empresas, troca nome, logo e cor, aplica um modelo por segmento (Atacado completo, Distribuidora de suplementos, Só o básico) e liga/desliga cada módulo.
+- **Efeito já hoje (empresa principal, D'Ávila):** módulo desligado some da tela **e** o servidor recusa gravar nele (comissão, ofertas, negociação, entrada de mercadoria, conferência, contagem, entregas, faturamento, a receber/a pagar/caixa, relatórios, decisões, StarIA). Desligar Conferência, Entregas ou Faturamento também tira o login desses papéis. Os marcados como "efeito na próxima etapa" ficam só registrados.
+- **Empresas novas** ficam "em preparo": a configuração fica pronta, mas os dados por empresa só existem depois da **separação dos dados por empresa** (próxima etapa).
+- **Nada muda para quem já usa:** a empresa atual começa com tudo ligado; as tabelas novas (`tenants`, `central_sessions`) são só acrescentadas.
+
+### Segurança da Central
+- Login separado da loja: outro cookie (`__Host-csid`, HttpOnly, Secure, SameSite=Strict), outra tabela de sessões, sessão de 8 h. Sessão da loja não abre a Central e vice-versa.
+- Senha do `super_admin` com hash **scrypt** em `lib/central-cred.js` (só o hash, nunca a senha). Senha sorteada com ~115 bits.
+- 5 senhas erradas do mesmo IP bloqueiam por 15 min (60 no total, de todos os IPs).
+- Mesma proteção CSRF, CSP e cabeçalhos do resto do app; logo só PNG/JPG/WEBP até 300 KB; tudo registrado na tabela `audit`.
+- Testes: `python3 tests/central.py` (40 verificações, banco de TESTE) e `npm test`.
+
+### Esqueceu ou perdeu a senha do super_admin
+Não existe "recuperar": a senha não fica guardada em lugar nenhum. Gere outra:
+```
+node scripts/central-senha.js   # mostra a senha nova uma vez e grava o hash
+git add lib/central-cred.js && git commit -m "Central: nova senha do super_admin" && git push
+```
+Ao publicar, as sessões antigas da Central caem.
+
 ## Desenvolver e testar no computador
 
 ```
@@ -92,7 +116,7 @@ node scripts/dev-server.js   # http://localhost:3000
 
 - Repositório **privado**.
 - **Nunca** colocar aqui backups (`.json`), planilhas ou PDFs com dados de clientes. O `.gitignore` já bloqueia esses arquivos.
-- Senhas nunca vão no código nem em variável de ambiente, com uma exceção: `SETUP_CODE`, que só cria o primeiro administrador.
+- Senhas nunca vão no código nem em variável de ambiente, com uma exceção: `SETUP_CODE`, que só cria o primeiro administrador. O `lib/central-cred.js` guarda só o **hash** da senha da Central (nunca a senha).
 
 ## Pendências conhecidas
 
