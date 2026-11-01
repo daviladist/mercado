@@ -138,11 +138,11 @@ function recEdit(el,r){r=liveDoc('receipts',r);const R=ui.rcv;R.q=R.q||'';
   el.querySelectorAll('[data-rv]').forEach(i=>{i.oninput=()=>{const it=r.items.find(x=>x.k===i.dataset.rv),v=pnum(i.value);if(it&&v!==''){it.valor=v;rcLater();$('#rctot').textContent=brl(tot())}};i.onchange=()=>{const it=r.items.find(x=>x.k===i.dataset.rv),v=pnum(i.value);if(!it)return;if(i.value.trim()&&v===''){toast('Valor inválido. Use números, ex.: 45,90');i.value=rcMoney(it.valor);return}it.valor=v===''?'':v;i.value=rcMoney(it.valor);save();$('#rctot').textContent=brl(tot())};
     i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();i.blur();const n=$('#rcin');if(n)n.focus()}}});
   el.querySelectorAll('[data-rx]').forEach(b=>b.onclick=()=>{r.items=r.items.filter(x=>x.k!==b.dataset.rx);save();rer()});
-  $('#rcDel').onclick=()=>{if(!confirm('Cancelar a nota '+r.nf+'? Ela some da lista de conferência.'))return;r.status='cancelada';save();R.id=null;toast('Nota cancelada');recScreen(el)};
-  $('#rcOk').onclick=()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
+  $('#rcDel').onclick=async()=>{if(!await ask('Cancelar a nota '+r.nf+'? Ela some da lista de conferência.','Cancelar nota'))return;r.status='cancelada';save();R.id=null;toast('Nota cancelada');recScreen(el)};
+  $('#rcOk').onclick=async()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
     const semValor=r.items.filter(i=>!(Number(i.valor)>0)),n=r.items.reduce((a,i)=>a+(Number(i.q)||0),0);
-    if(semValor.length&&!confirm(semValor.length+' produto(s) sem valor da nota ('+semValor.map(i=>i.name).slice(0,3).join(', ')+'). Conferir mesmo assim? A loja completa na precificação.'))return;
-    if(!confirm('Confirmar a conferência da NF '+r.nf+'?\n'+r.items.length+' produto(s), '+rcQty(n)+' embalagem(ns), total '+brl(tot())+'.\nO estoque soma agora.'))return;
+    if(semValor.length&&!await ask(semValor.length+' produto(s) sem valor da nota ('+semValor.map(i=>i.name).slice(0,3).join(', ')+'). Conferir mesmo assim? A loja completa na precificação.','Conferir mesmo assim'))return;
+    if(!await ask('Confirmar a conferência da NF '+r.nf+'?\n'+r.items.length+' produto(s), '+rcQty(n)+' embalagem(ns), total '+brl(tot())+'.\nO estoque soma agora.','Confirmar conferência'))return;
     r.items.forEach(i=>{if(!(Number(i.valor)>=0)||i.valor==='')i.valor=0});
     r.status='conferida';save();R.id=null;toast('NF '+r.nf+' conferida: estoque atualizado. Foi para a precificação.');if(ui.admin&&ui.tab==='recmerc')renderAdmin();else recScreen(el);window.scrollTo(0,0)};
 }
@@ -215,11 +215,11 @@ function precEdit(el,r){r=liveDoc('receipts',r);const P=ui.prc;P.lk=P.lk||{};
     i.pid=p.id;i.name=p.name;i.unit=p.unit||'';delete i.newProd;if(Number(p.perPack)>1&&!(Number(i.perPack)>1))i.perPack=Number(p.perPack);if(i.price===''||i.price==null)i.price=Number(p.price)||'';i.trib=!!p.trib;delete P.lk[k];save();rer()});
   $('#pcBack').onclick=()=>{P.id=null;precScreen(el)};
   $('#pcSave').onclick=()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();save();toast('Precificação salva. A nota continua aguardando aprovação.');P.id=null;precScreen(el)};
-  $('#pcOk').onclick=()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
+  $('#pcOk').onclick=async()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
     const bad=r.items.map(i=>!i.pid&&!i.newProd?i.name+': ligue a um produto ou marque "criar produto novo"':!(Number(i.price)>0)?i.name+': falta o preço de venda':i.ieOn&&!(Number(i.iePrice)>0&&Number(i.iePrice)<Number(i.price))?i.name+': o preço com IE precisa ser menor que o preço normal':'').filter(Boolean);
-    if(bad.length){toast(bad[0]+(bad.length>1?' (e mais '+(bad.length-1)+')':''));return}
+    if(bad.length){pageAlert('A NF '+r.nf+' ainda não pode ser aprovada.','Corrija e tente de novo:',bad);return}
     const neg=r.items.filter(i=>{const m=rcMargins(Number(i.valor),Number(i.price),i.trib,false);return m&&m.mg<0});
-    if(!confirm('Aprovar a NF '+r.nf+' e atualizar custo e preço de '+r.items.length+' produto(s)?'+(neg.length?'\nAtenção: '+neg.length+' com margem negativa ('+neg.map(i=>i.name).slice(0,3).join(', ')+').':'')))return;
+    if(!await ask('Aprovar a NF '+r.nf+' e atualizar custo e preço de '+r.items.length+' produto(s)?'+(neg.length?'\nAtenção: '+neg.length+' com margem negativa ('+neg.map(i=>i.name).slice(0,3).join(', ')+').':''),'Aprovar'))return;
     r.status='aprovada';save();P.id=null;toast('NF '+r.nf+' aprovada: preços e custos atualizados.');precScreen(el);window.scrollTo(0,0)};
 }
 /* faturamento: aba "Precificar notas" dentro da tela dela */
@@ -258,8 +258,8 @@ function fatAcertoView(app,F){const L=S.orders.filter(pendSettle).sort((a,b)=>St
       :'<div class="empty">Nenhuma entrega aguardando acerto.</div>'}`;
   app.querySelectorAll('[data-ft]').forEach(b=>b.onclick=()=>{F.tab=b.dataset.ft;F.sel={};renderFat()});
   const done=o=>{o.delivered.settled=true;o.delivered.settledAt=new Date().toISOString();o.delivered.settledBy=ui.biller||ui.adminName||''};
-  app.querySelectorAll('[data-acok]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.acok);if(!o||!pendSettle(o))return;
-    if(!confirm((o.delivered.how==='pix'?'Confirma que o PIX de ':'Confirma que recebeu em dinheiro ')+brl(Number(o.delivered.collect)||o.total)+' do pedido nº '+o.no+'?'))return;done(o);save();toast('Pedido nº '+o.no+' concluído');renderFat()});
-  app.querySelectorAll('[data-acall]').forEach(b=>b.onclick=()=>{const os=(byDrv[b.dataset.acall]||[]).filter(o=>o.delivered.how==='dinheiro');const tot=os.reduce((a,o)=>a+(Number(o.delivered.collect)||0),0);
-    if(!confirm('Confirma que recebeu '+brl(tot)+' em dinheiro de '+(drvName(b.dataset.acall)||'motorista')+' ('+os.length+' pedidos)?'))return;os.forEach(done);save();toast('Acerto registrado');renderFat()});
+  app.querySelectorAll('[data-acok]').forEach(b=>b.onclick=async()=>{const o=S.orders.find(x=>x.id===b.dataset.acok);if(!o||!pendSettle(o))return;
+    if(!await ask((o.delivered.how==='pix'?'Confirma que o PIX de ':'Confirma que recebeu em dinheiro ')+brl(Number(o.delivered.collect)||o.total)+' do pedido nº '+o.no+'?','Confirmar'))return;done(o);save();toast('Pedido nº '+o.no+' concluído');renderFat()});
+  app.querySelectorAll('[data-acall]').forEach(b=>b.onclick=async()=>{const os=(byDrv[b.dataset.acall]||[]).filter(o=>o.delivered.how==='dinheiro');const tot=os.reduce((a,o)=>a+(Number(o.delivered.collect)||0),0);
+    if(!await ask('Confirma que recebeu '+brl(tot)+' em dinheiro de '+(drvName(b.dataset.acall)||'motorista')+' ('+os.length+' pedidos)?','Confirmar'))return;os.forEach(done);save();toast('Acerto registrado');renderFat()});
 }

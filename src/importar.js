@@ -98,7 +98,7 @@ function impWaitView(el,im){const P=ui.prc;
       <div class="pbar"><span style="width:35%" class="pulse"></span></div>
       <div><button class="btn ghost dlb" id="imDel">Cancelar esta importação</button></div></div>`;
   $('#imBack').onclick=()=>{P.imp=null;precScreen(el)};
-  $('#imDel').onclick=()=>{if(!confirm('Cancelar esta importação?'))return;im.status='cancelada';save();P.imp=null;precScreen(el)};
+  $('#imDel').onclick=async()=>{if(!await ask('Cancelar esta importação?','Cancelar importação'))return;im.status='cancelada';save();P.imp=null;precScreen(el)};
   impWatch()}
 function impEdit(el,im){im=liveDoc('imports',im);if(im.status==='consultando'){impFillAll();if(im.status==='consultando')return impWaitView(el,im)}
   const P=ui.prc;if(P.selFor!==im.id){P.sel={};ui.bs={}}const SEL=P.sel=P.sel||{};P.selFor=im.id;
@@ -171,27 +171,34 @@ function impEdit(el,im){im=liveDoc('imports',im);if(im.status==='consultando'){i
       if(o.mi!==undefined&&i.trib){const c=imCost(i);if(c>0)i.iePrice=imPriceFor(c,o.mi,true,true)}
       if(o.ref!==undefined){const c=imCost(i);i.refCost=o.ref===null||!(c>0)?'':imR2(c*(1+o.ref/100))}});
     save();toast('Alterado em '+ks.length+' produto'+(ks.length===1?'':'s')+(semCusto?' ('+semCusto+' sem custo ficaram sem preço)':''));rer()};
-  $('#bsrm').onclick=()=>{const ks=LL().filter(i=>SEL[i.k]);if(!ks.length)return;if(!confirm('Tirar '+ks.length+' produto(s) desta importação? Eles não serão cadastrados.'))return;
+  $('#bsrm').onclick=async()=>{const ks=LL().filter(i=>SEL[i.k]);if(!ks.length)return;if(!await ask('Tirar '+ks.length+' produto(s) desta importação? Eles não serão cadastrados.','Tirar da importação'))return;
     im.items=im.items.filter(i=>!ks.includes(i));ks.forEach(i=>delete SEL[i.k]);if(!impLeft(im).length)im.status=(im.items||[]).length?'aprovada':'cancelada';save();
     if(im.status!=='pendente'){P.imp=null;precScreen(el);return}rer()};
   $('#imBack').onclick=()=>{save();P.imp=null;precScreen(el);window.scrollTo(0,0)};
   $('#imSave').onclick=()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();save();toast('Importação salva. Ela continua pendente em Precificação de notas.');P.imp=null;precScreen(el);window.scrollTo(0,0)};
-  $('#imDel').onclick=()=>{if(!confirm('Cancelar a importação inteira? Os '+LL().length+' produtos pendentes não serão cadastrados.'))return;im.status='cancelada';save();P.imp=null;precScreen(el)};
-  $('#imOk').onclick=()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
-    const R=LL().filter(ready);if(!R.length){toast('Nenhum produto com preço ainda.');return}
+  $('#imDel').onclick=async()=>{if(!await ask('Cancelar a importação inteira? Os '+LL().length+' produtos pendentes não serão cadastrados.','Cancelar importação'))return;im.status='cancelada';save();P.imp=null;precScreen(el)};
+  /* por que cada produto ainda não pode ser aprovado */
+  const why=i=>!String(i.name||'').trim()?'Cód. '+(i.code||i.ean||'?')+': falta o nome do produto'
+    :!(Number(i.price)>0)?i.name+': falta o preço sem IE'
+    :i.trib&&Number(i.iePrice)>0&&Number(i.iePrice)>=Number(i.price)?i.name+': o preço com IE precisa ser menor que o sem IE':'';
+  $('#imOk').onclick=async()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
+    const R=LL().filter(ready),out=LL().filter(i=>!ready(i)).map(why).filter(Boolean);
+    if(!R.length){pageAlert('Nenhum produto pronto para aprovar.','Corrija e tente de novo:',out);return}
     const bad=LL().filter(i=>i.trib&&Number(i.iePrice)>0&&Number(i.price)>0&&Number(i.iePrice)>=Number(i.price));
     const ng=R.filter(i=>neg(i,false)||(i.trib&&Number(i.iePrice)>0&&neg(i,true)));
     const nNew=R.filter(i=>!(i.pid&&(S.products||[]).some(p=>p.id===i.pid))&&!imMatch(i.code,i.ean)).length;
-    if(!confirm('Aprovar '+R.length+' produto(s)? '+nNew+' novo(s) e '+(R.length-nNew)+' atualizado(s).'+(LL().length>R.length?'\n'+(LL().length-R.length)+' sem preço continuam pendentes aqui.':'')+(bad.length?'\n'+bad.length+' com preço com IE maior que o sem IE ficam de fora.':'')+(ng.length?'\nAtenção: '+ng.length+' com margem negativa ('+ng.map(i=>i.name).slice(0,3).join(', ')+').':'')))return;
-    R.forEach(i=>{const cost=imCost(i),pk=Number(i.perPack)>1?Number(i.perPack):'';const ie=i.trib&&Number(i.iePrice)>0?Number(i.iePrice):'';
+    if(!await ask('Aprovar '+R.length+' produto(s)? '+nNew+' novo(s) e '+(R.length-nNew)+' atualizado(s).'+(LL().length>R.length?'\n'+(LL().length-R.length)+' sem preço continuam pendentes aqui.':'')+(bad.length?'\n'+bad.length+' com preço com IE maior que o sem IE ficam de fora.':'')+(ng.length?'\nAtenção: '+ng.length+' com margem negativa ('+ng.map(i=>i.name).slice(0,3).join(', ')+').':''),'Aprovar'))return;
+    try{R.forEach(i=>{const cost=imCost(i),pk=Number(i.perPack)>1?Number(i.perPack):'';const ie=i.trib&&Number(i.iePrice)>0?Number(i.iePrice):'';
       let p=i.pid&&S.products.find(x=>x.id===i.pid);if(!p)p=imMatch(i.code,i.ean);
       const d={name:String(i.name).trim(),cat:String(i.cat||'').trim()||'Outros',sub:String(i.sub||'').trim(),fam:String(i.fam||'').trim(),var:i.fam?String(i.var||imVarOf(i.name,i.fam)):'',unit:String(i.unit||'').trim()||'Unidade',perPack:pk,price:imR2(i.price),trib:!!i.trib,active:i.active!==false};
       if(Number(i.refCost)>cost)d.refCost=imR2(i.refCost);
       if(p){Object.assign(p,d);if(i.code)p.code=i.code;if(i.ean)p.ean=i.ean;if(cost>0)p.cost=cost;if(d.fam)p.famSync=false;if(i.trib)p.iePrice=ie}
       else{p={id:uid(),code:i.code||'',ean:i.ean||'',...d,famSync:false,cost:cost>0?cost:'',iePrice:ie,tablePrices:{},commission:'',stock:'',minStock:'',idealStock:'',showUnit:true,photo:ph(d.name,(d.name.length*37)%360),rules:emptyRules()};S.products.unshift(p)}
-      i.pid=p.id;i.done=true;i.doneAt=new Date().toISOString()});
+      i.pid=p.id;i.done=true;i.doneAt=new Date().toISOString()})}
+    catch(e){console.error(e);pageAlert('Não foi possível aprovar:',(e&&e.message)||String(e),['Nada foi gravado. Tire um print deste aviso e mande para o suporte.']);try{await loadState()}catch(_){}P.imp=null;precScreen(el);return}
     if(!impLeft(im).length){im.status='aprovada';im.aprovadaAt=new Date().toISOString();im.aprovadaBy=ui.adminName||''}
     save();toast(R.length+' produto(s) aprovado(s)'+(im.status==='aprovada'?': importação concluída.':'. Os outros continuam pendentes.'));
+    if(out.length)pageAlert(out.length+' produto(s) ficaram pendentes.','O que falta:',out);
     if(im.status==='aprovada'){P.imp=null;precScreen(el);window.scrollTo(0,0)}else rer()};
 }
 /* cartões das importações na lista de Precificação de notas */
@@ -207,9 +214,9 @@ function prodBulkBind(list,rer){const M=ui.pbulk;if(!M)return;bsBind();const c=$
   const upSel=()=>{const a=$('#bsn');if(a)a.textContent=n();const b=$('#bsgo');if(b)b.disabled=!n();const all=$('#pbAll');if(all)all.checked=list.length&&list.every(p=>M.sel[p.id])};
   c.querySelectorAll('[data-psel]').forEach(b=>b.onchange=()=>{M.sel[b.dataset.psel]=b.checked;upSel()});
   $('#pbAll').onchange=e=>{list.forEach(p=>{M.sel[p.id]=e.target.checked});c.querySelectorAll('[data-psel]').forEach(b=>b.checked=e.target.checked);upSel()};
-  $('#bsgo').onclick=()=>{const o=bsRead();if(typeof o==='string'){toast(o);return}const ps=S.products.filter(p=>M.sel[p.id]);if(!ps.length){toast('Marque os produtos primeiro.');return}
+  $('#bsgo').onclick=async()=>{const o=bsRead();if(typeof o==='string'){toast(o);return}const ps=S.products.filter(p=>M.sel[p.id]);if(!ps.length){toast('Marque os produtos primeiro.');return}
     const what=[o.cat!==undefined&&'categoria "'+o.cat+'"',o.sub!==undefined&&(o.sub?'subcategoria "'+o.sub+'"':'sem subcategoria'),o.fam!==undefined&&(o.fam?'família "'+o.fam+'"':'sem família'),o.unit!==undefined&&'unidade "'+o.unit+'"',o.pk!==undefined&&o.pk+' un. na embalagem',o.trib!==undefined&&(o.trib?'tributado':'não tributado'),o.active!==undefined&&(o.active?'aparece para clientes':'escondido dos clientes'),o.ref!==undefined&&(o.ref===null?'sem custo de referência':'custo de referência = custo + '+String(o.ref).replace('.',',')+'%')].filter(Boolean);
-    if(!confirm('Alterar '+ps.length+' produto(s): '+what.join(', ')+'?'+(o.pk!==undefined?'\nPreço e custo não mudam.':'')))return;
+    if(!await ask('Alterar '+ps.length+' produto(s): '+what.join(', ')+'?'+(o.pk!==undefined?'\nPreço e custo não mudam.':''),'Alterar'))return;
     let semCusto=0;ps.forEach(p=>{bsApplyStruct(p,o);if(o.fam!==undefined)p.famSync=false;
       if(o.ref!==undefined){if(o.ref===null){p.refCost='';delete p.refGone}else if(Number(p.cost)>0)p.refCost=Math.round(Number(p.cost)*(1+o.ref/100)*100)/100;else semCusto++}});
     if(semCusto)toast(semCusto+' sem preço de custo ficaram sem referência');save();toast('Alterado em '+ps.length+' produto'+(ps.length===1?'':'s'));rer()}}
