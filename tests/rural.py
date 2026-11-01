@@ -102,6 +102,8 @@ check(s == 200, 'cria a roça de banana: Pisaia 60% · Lucas 40%, adubo dividido
 s, _ = R.req('/api/rural/roca', {'id': BAN, 'nome': 'Banana Minas', 'cultura': 'Banana', 'icone': '🍌', 'local': 'Minas Gerais', 'modo': 'meeiro', 'parceria': {LUCAS: 40}, 'regras': {'adubo': {'dono': 60, LUCAS: 40}, 'matamato': {LUCAS: 100}}})
 s2, st = R.req('/api/rural/state'); bn = next(x for x in st['rocas'] if x['id'] == BAN)
 check(s == 200 and bn['icone'] == '🍌' and any(c['icone'] == '🍌' and c['nome'] == 'Banana' for c in st['culturas']), 'roça de banana fica com o ícone 🍌 (cara da cultura)')
+R.req('/api/rural/roca', {'id': BAN, 'nome': 'Banana Minas', 'cultura': 'Banana', 'local': 'Minas Gerais', 'modo': 'meeiro', 'parceria': {LUCAS: 40}, 'regras': {'adubo': {'dono': 60, LUCAS: 40}, 'matamato': {LUCAS: 100}}})
+s2, st = R.req('/api/rural/state'); check(next(x for x in st['rocas'] if x['id'] == BAN)['icone'] == '🍌', 'salvar a roça sem mandar o ícone mantém o ícone gravado')
 s, _ = R.req('/api/rural/roca', {'id': rid(), 'nome': 'Minúscula', 'modo': 'meeiro', 'parceria': {LUCAS: 0.001}}); check(s == 400, 'meeiro com porcentagem que arredonda para zero é recusado')
 s, _ = R.req('/api/rural/roca', {'id': rid(), 'nome': 'Tipo errado', 'modo': 'meeiro', 'parceria': {LUCAS: True}}); check(s == 400, 'porcentagem que não é número é recusada')
 s, _ = R.req('/api/rural/roca', {'id': rid(), 'nome': 'Ícone falso', 'modo': 'funcionarios', 'icone': '<img src=x>'}); check(s == 400, 'ícone fora da lista é recusado')

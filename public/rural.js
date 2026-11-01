@@ -155,7 +155,7 @@
   function visual(x) {
     const C = (S && S.culturas) || [];
     let c = x && x.icone ? C.find(k => k.icone === x.icone) : null;
-    if (!c && x && x.cultura) { const n = semAcento(x.cultura); c = C.find(k => semAcento(k.nome) === n) || C.find(k => n.includes(semAcento(k.nome))); }
+    if (!c && x && x.cultura) { const n = semAcento(x.cultura); const pal = n.split(/[^a-z0-9]+/); c = C.find(k => semAcento(k.nome) === n) || C.find(k => pal.includes(semAcento(k.nome))); }
     c = c || C.find(k => k.nome === 'Outra') || { icone: '🌿', cor: '#2C5139' };
     return { icone: c.icone, cor: /^#[0-9a-f]{6}$/i.test(c.cor) ? c.cor : '#2C5139' };
   }
@@ -548,7 +548,7 @@
 
   /* ---------- nova roça / editar (passo a passo) ---------- */
   function wizard(r0) {
-    const W = r0 ? { id: r0.id, nome: r0.nome, icone: r0.icone || '', cultura: r0.cultura || '', local: r0.local || '', area: r0.area || '', inicio: r0.inicio || '', modo: r0.modo, parceria: Object.assign({}, r0.parceria), regras: JSON.parse(JSON.stringify(r0.regras || {})), obs: r0.obs || '', ativa: r0.ativa, novos: [], func: S.pessoas.filter(p => p.tipo === 'funcionario' && p.rocaId === r0.id).map(p => p.id), novosF: [], step: 0 }
+    const W = r0 ? { id: r0.id, nome: r0.nome, icone: r0.icone || '', iconeMao: !!r0.icone, cultura: r0.cultura || '', local: r0.local || '', area: r0.area || '', inicio: r0.inicio || '', modo: r0.modo, parceria: Object.assign({}, r0.parceria), regras: JSON.parse(JSON.stringify(r0.regras || {})), obs: r0.obs || '', ativa: r0.ativa, novos: [], func: S.pessoas.filter(p => p.tipo === 'funcionario' && p.rocaId === r0.id).map(p => p.id), novosF: [], step: 0 }
       : { id: newId('r'), nome: '', icone: '', cultura: '', local: '', area: '', inicio: hoje(), modo: M('r_meeiros') ? '' : 'funcionarios', parceria: {}, regras: {}, obs: '', ativa: true, novos: [], func: [], novosF: [], step: 0 };
     const CULT = (S.culturas || []).filter(c => c.nome !== 'Outra');
     const temMeeiro = () => W.modo === 'meeiro' || W.modo === 'misto';
@@ -563,7 +563,7 @@
       let h = `<div class="steps" aria-label="Passo ${W.step + 1} de ${st.length}">${st.map((_, i) => `<i class="${i <= W.step ? 'on' : ''}"></i>`).join('')}</div>`;
       if (k === 'dados') h += `<div class="field"><label for="wn">Nome da roça</label><input type="text" id="wn" maxlength="60" value="${esc(W.nome)}" placeholder="Ex.: Banana do Córrego"></div>
         <div class="field"><span class="lbl">O que vai plantar / criar?</span><div class="chips">${CULT.map(c => `<button type="button" class="chip" data-cu="${esc(c.nome)}" aria-pressed="${W.cultura === c.nome}">${c.icone} ${esc(c.nome)}</button>`).join('')}</div><input type="text" id="wc" maxlength="40" value="${esc(W.cultura)}" placeholder="Ou escreva aqui"></div>
-        <div class="field"><span class="lbl">Cara da roça</span><div class="row" style="flex-wrap:nowrap">${tile(W, true)}<span class="small muted">${W.icone ? 'Ícone escolhido por você.' : 'O ícone vem da cultura. Toque em outro, se quiser.'}</span></div>
+        <div class="field"><span class="lbl">Cara da roça</span><div class="row" style="flex-wrap:nowrap">${tile(W, true)}<span class="small muted">${W.iconeMao ? 'Ícone escolhido por você.' : 'O ícone vem da cultura. Toque em outro, se quiser.'}</span></div>
           <div class="icgrid" role="group" aria-label="Escolher ícone">${(S.culturas || []).map(c => `<button type="button" data-ic="${esc(c.icone)}" aria-pressed="${visual(W).icone === c.icone}" aria-label="${esc(c.nome)}" style="border-color:${c.cor}55">${c.icone}</button>`).join('')}</div></div>
         <div class="field"><label for="wl">Onde fica</label><input type="text" id="wl" maxlength="80" value="${esc(W.local)}" placeholder="Ex.: Sítio São José, Minas Gerais"></div>
         <div class="grid2"><div class="field"><label for="wa">Tamanho (opcional)</label><input type="text" id="wa" maxlength="40" value="${esc(W.area)}" placeholder="Ex.: 5 hectares, 3 mil pés"></div><div class="field"><label for="wi">Começou em</label><input type="date" id="wi" value="${esc(W.inicio)}"></div></div>`;
@@ -620,8 +620,9 @@
     function bind(pn) {
       const redraw = () => { const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
       const err = m => { $('#we').textContent = m; };
-      pn.querySelectorAll('[data-cu]').forEach(b => b.addEventListener('click', () => { keep(); W.cultura = W.cultura === b.dataset.cu ? '' : b.dataset.cu; const c = (S.culturas || []).find(x => x.nome === W.cultura); W.icone = c ? c.icone : ''; redraw(); }));
-      pn.querySelectorAll('[data-ic]').forEach(b => b.addEventListener('click', () => { keep(); W.icone = b.dataset.ic; redraw(); }));
+      pn.querySelectorAll('[data-cu]').forEach(b => b.addEventListener('click', () => { keep(); W.cultura = W.cultura === b.dataset.cu ? '' : b.dataset.cu; if (!W.iconeMao) W.icone = ''; redraw(); }));
+      pn.querySelectorAll('[data-ic]').forEach(b => b.addEventListener('click', () => { keep(); W.icone = b.dataset.ic; W.iconeMao = true; redraw(); }));
+      const wc = $('#wc'); if (wc) wc.addEventListener('change', () => { keep(); redraw(); });
       pn.querySelectorAll('[data-mo]').forEach(b => b.addEventListener('click', () => { keep(); W.modo = b.dataset.mo; if (W.modo === 'funcionarios') { W.parceria = {}; W.regras = {}; } redraw(); }));
       pn.querySelectorAll('[data-me]').forEach(b => b.addEventListener('click', () => { keep(); const k = b.dataset.me; if (W.parceria[k] != null) delete W.parceria[k]; else W.parceria[k] = Math.max(1, Math.min(50, r2(100 - soma()))); redraw(); }));
       pn.querySelectorAll('[data-sl]').forEach(s => { s.addEventListener('input', () => { W.parceria[s.dataset.sl] = Number(s.value); const n = pn.querySelector('[data-pn="' + s.dataset.sl + '"]'); if (n) n.value = s.value; }); s.addEventListener('change', () => { keep(); redraw(); }); });
@@ -651,7 +652,7 @@
         try {
           for (const n of W.novos) if (W.parceria[n.id] != null) await api('/api/rural/pessoa', { id: n.id, tipo: 'meeiro', nome: n.nome, telefone: n.telefone });
           const regras = {}; if (temMeeiro()) Object.entries(W.regras).forEach(([c, p]) => { const o = {}; Object.entries(p).forEach(([kk, v]) => { if (Number(v) > 0 && (kk === 'dono' || W.parceria[kk] != null)) o[kk] = Number(v); }); if (Object.keys(o).length) regras[c] = o; });
-          await api('/api/rural/roca', { id: W.id, nome: W.nome, icone: W.icone || null, cultura: W.cultura, local: W.local, area: W.area, inicio: W.inicio || null, modo: W.modo, parceria: temMeeiro() ? W.parceria : {}, regras, obs: W.obs, ativa: W.ativa });
+          await api('/api/rural/roca', { id: W.id, nome: W.nome, icone: W.iconeMao ? W.icone : (visual(W).icone || null), cultura: W.cultura, local: W.local, area: W.area, inicio: W.inicio || null, modo: W.modo, parceria: temMeeiro() ? W.parceria : {}, regras, obs: W.obs, ativa: W.ativa });
           if (temFunc()) {
             for (const f of W.novosF) await api('/api/rural/pessoa', { id: f.id, tipo: 'funcionario', nome: f.nome, salario: f.salario, rocaId: W.id });
             for (const p of S.pessoas.filter(x => x.tipo === 'funcionario')) {
