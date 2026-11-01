@@ -10,7 +10,7 @@
     "api/index.js": {
       "memory": 1024,
       "maxDuration": 30,
-      "includeFiles": "{lib/**,public/index.html,public/cliente.html}"
+      "includeFiles": "{lib/**,public/index.html,public/cliente.html,public/rural.html,public/loja.html,public/lojaadm.html}"
     }
   },
   "rewrites": [
@@ -28,6 +28,14 @@
     },
     {
       "source": "/t/:empresa/cliente",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/t/:empresa/loja",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/t/:empresa/loja/",
       "destination": "/api/index"
     },
     {

@@ -150,6 +150,38 @@ Para quem paga uma transportadora por entrega, com um % combinado sobre o valor 
 - **Relatório e pagamentos:** FINANCEIRO › Frete de terceiro: frete gerado, já pago e saldo a pagar por transportadora; lista por período com Excel; "Registrar pagamento" (data, valor, observação) abate do saldo.
 - **Segurança:** só o administrador vê. O servidor esconde frete, transportadoras e pagamentos dos outros papéis, guarda o % e o nome vindos do cadastro e preserva o frete quando o vendedor mexe no pedido. Testes: `tests/frete.py`.
 
+## Segmentos (abas da Central)
+Na Central, as empresas ficam em três abas fixas, uma por segmento: **Atacado e varejo** (o app de pedidos, como sempre: D'Ávila, Red…), **Rural** (app do produtor) e **Loja online** (vitrine para o cliente comprar pelo celular). O segmento (`tenants.ramo`: `atacado`, `rural`, `loja`) se escolhe ao criar e não muda depois; cada um tem o próprio catálogo de funções e as rotas de um não existem para o outro.
+
+## Segmento Rural (ramo "rural")
+Para quem toca roça, no mesmo sistema e no mesmo banco.
+- **Endereço:** `https://SEU-SITE/t/<empresa>/` abre o **app do produtor** (`public/rural.html` + `public/rural.js`), feito para celular. `/cliente` e `/pdv` voltam para ele. O acesso é o do administrador criado na Central (senha provisória, troca no primeiro acesso).
+- **O dono das divisões é a empresa:** o nome cadastrado na Central (ex.: "Pisaia") aparece no lugar de "dono": *Pisaia 60% · Lucas 40%*.
+- **Cada roça é um projeto:** nome, cultura, local, tamanho; quem toca (só funcionários, meeiro, ou meeiro e funcionários); meeiros com a porcentagem de cada um **sobre o valor vendido (bruto)**; e a regra de **quem paga cada tipo de despesa** (o dono, um meeiro, dividido igual à meação ou outra divisão em %). A regra já vem marcada no lançamento e pode ser trocada naquela compra.
+- **Lançamentos:** venda (quantidade × preço), despesa por tipo (adubo, defensivo, mata-mato, salário, diarista, combustível, energia…), adiantamento ao meeiro, diarista (quem, o que fez, dias × valor do dia, sem vínculo) e "pagar salários do mês". Fora de uma roça = gasto geral da fazenda (veículos e máquinas, energia, etc.).
+- **Acerto com o meeiro:** quando quiser (não há período fixo). Parte dele nas vendas − despesas dele − adiantamentos = saldo (o dono paga ou o meeiro deve). Calculado no servidor; os lançamentos ficam marcados e não entram de novo; dá para desfazer (com histórico).
+- **Painel e relatório:** vendido, gastos do dono, quanto sobrou (ganhou ou perdeu), por roça, por mês, por tipo de despesa (com o maior gasto destacado), por meeiro e por veículo; imprimir/PDF.
+- **Funções que a Central liga e desliga:** meeiros, funcionários fixos, diaristas, veículos e máquinas, gastos gerais. Desligada, o servidor recusa a gravação.
+- **Regras no servidor (`lib/rural.js`):** só o administrador da empresa; a divisão da venda vem da parceria da roça no dia (o aparelho não escolhe, e mudar a porcentagem depois não muda vendas antigas); divisão de despesa só com gente da roça e somando 100%; acerto recusado se algo mudou desde a prévia; lançamento acertado não muda nem sai; rotas do atacado não existem para a empresa rural e as do produtor não existem para o atacado.
+- **Tabelas:** `rural_pessoas`, `rural_rocas`, `rural_veiculos`, `rural_lanc`, `rural_acertos`, `rural_seq` (todas com `tenant_id`); coluna `tenants.ramo`.
+- **Testes:** `tests/rural.py` (roda no `tests/ci_banco.sh` e no GitHub).
+- **Voltar versão:** como no resto do Tino, **não use "Instant Rollback"** na Vercel: a versão antiga não conhece o app do produtor e abriria o app de pedidos no endereço da empresa rural. Para desfazer, publique uma correção para frente.
+- **Para depois:** acesso do meeiro só para ver a parte dele; o app não guarda lançamentos sem internet (avisa e pede para tentar de novo).
+
+## Segmento Loja online (ramo "loja")
+Para a loja que quer vender pelo celular (loja de roupa, supermercado, bazar…): a dona publica os produtos e o cliente faz o pedido sozinho.
+- **Endereços:** `/t/<empresa>/loja` é a **vitrine** (pública, sem login: é o link que vai no WhatsApp e no Instagram); `/t/<empresa>/` é o **painel da loja** (acesso criado na Central). `/cliente` leva para a vitrine.
+- **Produtos:** fotos (até 6, reduzidas no aparelho; JPG/PNG/WEBP), preço, preço "de" riscado, categoria, descrição, unidade, **tamanhos/cores/opções** (modelos prontos: PP–GG, 34–44, calçado, cores) com estoque por opção, estoque simples, destaque, fora da vitrine.
+- **Preço por quantidade:** até 5 faixas ("a partir de 3 unidades: R$ X cada"), definidas pela comerciante; vale somando as opções do mesmo produto.
+- **Pedido:** carrinho guardado no aparelho do cliente; retirada e/ou entrega com taxa fixa; pedido mínimo; pagamento PIX/dinheiro/cartão **combinado com a loja** (o app não cobra online); o cliente acompanha pelo link do pedido (chave só dele) e avisa a loja pelo WhatsApp.
+- **Painel:** pedidos novos (confere sozinho a cada 30 s), confirmar → pronto → entregue ou cancelar (com motivo; o estoque volta), mensagem pronta para o WhatsApp do cliente, mais vendidos, link da loja para copiar/compartilhar, loja aberta/fechada.
+- **Funções que a Central liga e desliga:** tamanhos e variações, preço por quantidade, controle de estoque, entrega com taxa.
+- **Regras no servidor (`lib/loja.js`):** o total é recalculado (preço, faixa, taxa) e, se mudou desde que o cliente viu, o pedido é recusado com o total novo; estoque conferido e baixado na mesma transação, com os produtos travados; o mesmo pedido enviado duas vezes grava uma vez; até 30 pedidos por aparelho/IP e 400 pela loja a cada 15 min; a vitrine mostra só disponível/esgotado (não a quantidade); loja em preparo, suspensa ou fechada não recebe pedido; no banco fica só o SHA-256 da chave do link.
+- **Tabelas:** `loja_config`, `loja_produtos`, `loja_fotos`, `loja_pedidos`, `loja_seq` (todas com `tenant_id`).
+- **Testes:** `tests/loja.py` (roda no `tests/ci_banco.sh` e no GitHub).
+- **Voltar versão:** **não use "Instant Rollback"** na Vercel: a versão antiga não conhece a loja online e abriria o app de pedidos no endereço dela. Para desfazer, publique uma correção para frente.
+- **Para depois:** pagamento online (PIX automático/cartão), cupom de desconto, aviso automático por WhatsApp.
+
 ## Desenvolver e testar no computador
 
 ```

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1F3D2B">
+<link rel="manifest" href="/equipe.webmanifest">
+<link rel="apple-touch-icon" href="/icons/tino-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/tino-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tino">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>Tino · Painel da loja</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="/tino-app.css">
+<style>
+.thumb{width:56px;height:56px;border-radius:12px;background:var(--cream);flex:none;overflow:hidden;display:grid;place-items:center;font-size:22px}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.fotos{display:flex;gap:8px;flex-wrap:wrap}
+.fotos .f{position:relative;width:84px;height:84px;border-radius:12px;overflow:hidden;background:var(--cream);border:1px solid var(--line)}
+.fotos .f img{width:100%;height:100%;object-fit:cover}
+.fotos .f button{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:16px;line-height:1}
+.fotos .f .cap{position:absolute;left:4px;bottom:4px;font-size:10px;font-weight:700;background:var(--gold);color:#2A1E05;border-radius:6px;padding:1px 5px}
+.fotos label.add{width:84px;height:84px;border-radius:12px;border:2px dashed var(--input);display:grid;place-items:center;text-align:center;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;background:#fff}
+.vrow{display:grid;grid-template-columns:1fr 110px 42px;gap:8px;align-items:center}
+.frow{display:grid;grid-template-columns:auto 80px auto 1fr 42px;gap:8px;align-items:center;font-size:14px}
+.x{width:42px;height:42px;border-radius:10px;border:1px solid var(--input);background:#fff;font-size:18px}
+.st{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:2px 10px}
+.st.novo{background:var(--gold-soft);color:#7A4E08}.st.confirmado{background:var(--blue-bg);color:var(--blue)}.st.pronto{background:#EEE6FB;color:#5B2BB5}.st.entregue{background:var(--green-bg);color:var(--green)}.st.cancelado{background:var(--red-bg);color:var(--red)}
+.link-box{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.link-box code{flex:1 1 220px;background:var(--cream);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;overflow-wrap:anywhere}
+.badge{display:inline-grid;place-items:center;min-width:20px;height:20px;border-radius:99px;background:var(--red);color:#fff;font-size:11px;font-weight:800;padding:0 6px;margin-left:4px}
+</style>
+</head><body>
+<header class="hd"><div class="in">
+  <div class="co"><div class="lg" id="lg"><svg viewBox="0 0 40 40" width="20" height="20" aria-hidden="true"><path d="M20 0 C22 13 27 18 40 20 C27 22 22 27 20 40 C18 27 13 22 0 20 C13 18 18 13 20 0 Z" fill="#E8A33D"/></svg></div>
+  <div style="min-width:0"><b id="coName">Tino</b><small>Painel da loja</small></div></div>
+  <button class="out" id="sair" type="button" hidden>Sair</button>
+</div></header>
+<main id="main" aria-live="polite"><p class="muted">Carregando…</p></main>
+<nav class="bn" id="bn" hidden aria-label="Menu"><div class="in">
+  <button type="button" data-go="inicio"><i>🏠</i>Início</button>
+  <button type="button" data-go="pedidos"><i>🧾</i><span>Pedidos<span id="nnovos"></span></span></button>
+  <button type="button" class="plus" data-go="novo" aria-label="Novo produto"><i>+</i>Produto</button>
+  <button type="button" data-go="produtos"><i>🏷️</i>Produtos</button>
+  <button type="button" data-go="loja"><i>⚙️</i>Minha loja</button>
+</div></nav>
+<div id="sheet"></div>
+<div class="toast" id="toast" role="status" hidden></div>
+<script src="/lojaadm.js"></script>
+</body></html>
