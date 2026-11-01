@@ -89,15 +89,24 @@
     <div class="bar${dirty ? ' dirty' : ''}"><span>${dirty ? 'Há mudanças sem salvar.' : 'Tudo salvo.'}</span><div style="display:flex;gap:8px"><button class="btn ghost-light" type="button" id="undo" ${dirty ? '' : 'disabled'}>Desfazer</button><button class="btn primary" type="button" id="save" ${dirty ? '' : 'disabled'}>Salvar configuração</button></div></div>`;
     bind();
   }
+  /* todos os endereços da empresa, conforme os módulos ligados */
+  function accessLinks(t, base) {
+    const m = t.modules || {}, L = [['Painel do administrador', base + '/#admin', 'Dono e gerentes']];
+    L.push(['Vendedores', base + '/#vendedor', 'Lançar pedidos dos clientes']);
+    if (m.app_cliente) L.push(['App dos clientes', base + '/cliente', 'Clientes fazem pedido sozinhos']);
+    if (m.pdv) L.push(['Caixa (PDV)', base + '/pdv', 'Operador de caixa, no computador do balcão']);
+    if (m.conferencia) L.push(['Conferente', base + '/#conferente', 'Separação e conferência']);
+    if (m.faturamento) L.push(['Faturamento', base + '/#faturamento', 'Notas e pedidos para faturar']);
+    if (m.entregas) L.push(['Motoristas', base + '/#entregador', 'Entregas e canhotos']);
+    return L;
+  }
   /* endereço e acesso do administrador da empresa */
   function accessCard(t) {
     const base = location.origin + (t.primary ? '' : '/t/' + t.id), st = t.stats || {};
     return `<section class="card" style="display:grid;gap:12px" aria-labelledby="hac">
       <h2 id="hac">Acesso da empresa</h2>
-      <div class="grid">
-        <div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Endereço da equipe</span><code class="link">${esc(base + '/#admin')}</code></div>
-        ${t.modules.app_cliente ? `<div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Endereço dos clientes</span><code class="link">${esc(base + '/cliente')}</code></div>` : '<div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Clientes</span><span class="small muted">Sem app do cliente: compram pelo vendedor.</span></div>'}
-      </div>
+      <div class="links">${accessLinks(t, base).map(([lb, url, note]) => `<div class="lk"><div class="lk-t"><b>${esc(lb)}</b>${note ? `<span class="small muted">${esc(note)}</span>` : ''}</div><code class="link">${esc(url)}</code><div class="lk-b"><button type="button" class="btn" data-copy="${esc(url)}">Copiar</button><a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Abrir</a></div></div>`).join('')}</div>
+      ${t.modules.app_cliente ? '' : '<p class="small muted" style="margin:0">Sem app do cliente: os clientes compram pelo vendedor (não há endereço de cliente).</p>'}
       <p class="small muted" style="margin:0">${st.products || 0} produtos · ${st.orders || 0} pedidos · ${st.users || 0} usuários${t.adminLogin ? ' · administrador: ' + esc(t.adminLogin) : ''}</p>
       ${t.primary ? '<p class="small muted" style="margin:0">A empresa principal cuida dos próprios acessos pelo painel dela.</p>' : `
       <div class="logo-row">
@@ -138,6 +147,7 @@
     $('#undo').addEventListener('click', () => pick(sel));
     $('#save').addEventListener('click', save);
     const ag = $('#agen'); if (ag) ag.addEventListener('click', genAdmin);
+    E.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Endereço copiado'); } catch (e) { toast('Não consegui copiar: selecione o endereço e copie.'); } }));
     $('#segNew').addEventListener('click', () => { segUI = { edit: { id: null, name: '', modules: segMods(draft.modules) }, fromCo: true }; renderSegs(); });
     $('#segList').addEventListener('click', () => { segUI = { edit: null }; renderSegs(); });
   }
