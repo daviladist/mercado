@@ -100,7 +100,13 @@
   const donoPct = r => r2(100 - Object.values((r && r.parceria) || {}).reduce((a, b) => a + Number(b || 0), 0));
   const vendaPartes = r => { const o = {}; meeirosDe(r).forEach(k => { o[k] = Number(r.parceria[k]); }); const d = donoPct(r); if (d > 0) o.dono = d; return Object.keys(o).length ? o : { dono: 100 }; };
   const partesDe = l => (l.partes && Object.keys(l.partes).length ? l.partes : { dono: 100 });
-  const parte = (l, k) => r2(l.valor * (Number(partesDe(l)[k]) || 0) / 100);
+  /* parte de cada um em reais: cada meeiro arredonda os centavos dele e o dono fica com o resto (a soma sempre fecha com o valor) */
+  const parte = (l, k) => {
+    const ps = partesDe(l);
+    if (k !== 'dono') return r2(l.valor * (Number(ps[k]) || 0) / 100);
+    const outros = Object.keys(ps).filter(x => x !== 'dono').reduce((a, x) => a + r2(l.valor * (Number(ps[x]) || 0) / 100), 0);
+    return r2(l.valor - outros);
+  };
   function periodo() {
     const d = new Date(), y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0');
     if (per === 'mes') return { de: y + '-' + m + '-01', ate: '9999', nome: 'neste mês' };
@@ -443,8 +449,8 @@
       let partes;
       if (F.tipo === 'despesa' && F.rocaId && meeirosDe(roca(F.rocaId)).length) {
         partes = {}; Object.entries(F.partes || {}).forEach(([k, v]) => { if (Number(v) > 0) partes[k] = Number(v); });
-        const soma = Object.values(partes).reduce((a, b) => a + b, 0);
-        if (Math.abs(soma - 100) > 0.01) return err('A divisão precisa somar 100% (agora soma ' + pctTxt(soma) + ').');
+        const soma = Object.values(partes).reduce((a, b) => a + Math.round(b * 100), 0) / 100;
+        if (soma !== 100) return err('A divisão precisa somar 100% (agora soma ' + pctTxt(soma) + ').');
       }
       const b = { id: F.id || newId('l'), novo: !edit, tipo: F.tipo, rocaId: F.rocaId || null, data: F.data, valor, categoria: F.categoria || null, descricao: F.descricao || '', qtd: toNum(F.qtd), unidade: F.unidade || null, preco: toNum(F.preco), comprador: F.comprador || '', pessoaId: F.pessoaId || null, pessoaNome: F.pessoaNome || '', dias: toNum(F.dias), veiculoId: F.veiculoId || null, partes };
       F.id = b.id; // tocar duas vezes não lança duas vezes
@@ -615,7 +621,7 @@
         if (k === 'dados' && W.nome.trim().length < 2) return err('Dê um nome para a roça.');
         if (k === 'modo' && !W.modo) return err('Escolha quem toca a roça.');
         if (k === 'meeiros') { if (!Object.keys(W.parceria).length) return err('Marque pelo menos um meeiro.'); if (soma() > 100) return err('Os meeiros passam de 100%.'); }
-        if (k === 'regras') { for (const c of S.cats) { const p = W.regras[c.id]; if (!p) continue; const s = Object.values(p).reduce((a, b) => a + Number(b || 0), 0); if (Math.abs(s - 100) > 0.01) return err(c.nome + ': a divisão precisa somar 100%.'); } }
+        if (k === 'regras') { for (const c of S.cats) { const p = W.regras[c.id]; if (!p) continue; const s = Object.values(p).reduce((a, b) => a + Math.round(Number(b || 0) * 100), 0); if (s !== 10000) return err(c.nome + ': a divisão precisa somar 100%.'); } }
         if (k !== 'revisar') { W.step++; return draw(); }
         // grava: meeiros e funcionários novos, a roça e quem é da equipe
         const bt = $('#wf'); bt.disabled = true;
