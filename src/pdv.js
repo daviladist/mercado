@@ -23,37 +23,39 @@ function pdvBeep(ok){try{const A=window.AudioContext||window.webkitAudioContext;
 function pdvCss(){if(document.getElementById('pdvcss'))return;const st=document.createElement('style');st.id='pdvcss';st.textContent=`
 body.pdvmode header.top,body.pdvmode .demo,body.pdvmode #srvbar{display:none!important}
 body.pdvmode{background:#F6F1E7}body.pdvmode main{padding:0}body.pdvmode main>.wrap{max-width:none;padding:0}
-.pdv{--g:#1F3D2B;--g2:#2C5139;--o:#E8A33D;--c:#F6F1E7;--l:#E6DCC8;--m:#5E6A5F;font-family:var(--body);color:var(--g);display:grid;grid-template-rows:auto 1fr auto;min-height:100vh;background:var(--c)}
-.pdvh{background:var(--g);color:#fff;border-bottom:4px solid var(--o);display:flex;gap:14px;align-items:center;justify-content:space-between;padding:8px 16px;flex-wrap:wrap}
-.pdvh .b{display:flex;align-items:center;gap:10px}.pdvh .ic{width:36px;height:36px;border-radius:10px;background:var(--o);display:grid;place-items:center}
-.pdvh .wm{font-weight:800;font-size:22px;letter-spacing:-1px;color:var(--c)}.pdvh .s{font-size:13px;color:#E9E1D0}
+.pdv{--g:#1F3D2B;--g2:#2C5139;--o:#E8A33D;--c:#F6F1E7;--l:#E6DCC8;--m:#5E6A5F;--bar:#1F3D2B;--barfg:#FFFFFF;--bar2:#2C5139;--acc:#E8A33D;--accfg:#1F3D2B;--acconbar:#E8A33D;--bg:#F6F1E7;--fs:1;font-family:var(--pdvfont,var(--body));color:var(--g);display:grid;grid-template-rows:auto 1fr auto;min-height:100vh;background:var(--bg)}
+.pdvh,.pdvm,.pdvf,.pdvlogin,.pdvmd{zoom:var(--fs)}
+body.pdvmode .pdvmd{font-family:var(--pdvfont,var(--body))}
+.pdvh{background:var(--bar);color:var(--barfg);border-bottom:4px solid var(--acc);display:flex;gap:14px;align-items:center;justify-content:space-between;padding:8px 16px;flex-wrap:wrap}
+.pdvh .b{display:flex;align-items:center;gap:10px}.pdvh .ic{width:36px;height:36px;border-radius:10px;background:var(--acc);color:var(--accfg);display:grid;place-items:center}.pdvh .lg{height:40px;max-width:160px;object-fit:contain}.pdvh .co{font-weight:800;font-size:18px;color:var(--barfg)}
+.pdvh .wm{font-weight:800;font-size:22px;letter-spacing:-1px;color:var(--barfg)}.pdvh .s{font-size:13px;color:var(--barfg);opacity:.88}
 .pdvh .net{font-size:13px;font-weight:700;border-radius:999px;padding:4px 10px;background:#E3EFE6;color:#1F5A33}.pdvh .net.off{background:#F8E1DF;color:#8C1D18}
 .pdvm{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:14px;padding:14px;min-height:0}
 @media (max-width:820px){.pdvm{grid-template-columns:1fr}}
 .pdvl{display:flex;flex-direction:column;gap:10px;min-width:0}
 .pdvin{display:flex;gap:10px;align-items:center;background:#fff;border:3px solid var(--g);border-radius:12px;padding:8px 12px}
 .pdvin label{font-weight:700;font-size:14px;white-space:nowrap}.pdvin input{flex:1;min-width:0;border:0;font-size:26px;font-weight:700;letter-spacing:1px;outline:none;background:transparent;color:var(--g);min-height:44px}
-.pdvin .qt{background:var(--o);color:var(--g);font-weight:800;border-radius:8px;padding:4px 10px;font-size:18px}
+.pdvin .qt{background:var(--acc);color:var(--accfg);font-weight:800;border-radius:8px;padding:4px 10px;font-size:18px}
 .pdvt{background:#fff;border:1px solid var(--l);border-radius:12px;overflow:auto;flex:1;min-height:240px;max-height:calc(100vh - 260px)}
 .pdvt table{width:100%;border-collapse:collapse;font-size:16px}.pdvt th{position:sticky;top:0;background:#EFE7D6;text-align:left;padding:8px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#3B4A3F}
 .pdvt td{padding:8px;border-top:1px solid #EFE7D6}.pdvt td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pdvt tr.cx td{text-decoration:line-through;color:#9A8F7A}.pdvt tr.last td{background:#FBEFD9}
 .pdvr{display:flex;flex-direction:column;gap:10px}
 .pdvbox{background:#fff;border:1px solid var(--l);border-radius:12px;padding:12px 14px}
-.pdvtot{background:var(--g);color:#fff;border-radius:12px;padding:16px;display:grid;gap:4px}
-.pdvtot .lb{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#E9E1D0}.pdvtot .v{font-size:clamp(40px,6vw,64px);font-weight:800;line-height:1;color:var(--o);font-variant-numeric:tabular-nums}
+.pdvtot{background:var(--bar);color:var(--barfg);border-radius:12px;padding:16px;display:grid;gap:4px}
+.pdvtot .lb{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--barfg);opacity:.88}.pdvtot .v{font-size:clamp(40px,6vw,64px);font-weight:800;line-height:1;color:var(--acconbar);font-variant-numeric:tabular-nums}
 .pdvrow{display:flex;justify-content:space-between;gap:10px;font-size:15px}.pdvrow b{font-variant-numeric:tabular-nums}
 .pdvlast{font-size:18px;font-weight:700}.pdvmut{color:var(--m);font-size:13px}
-.pdvf{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;background:var(--g2);border-top:1px solid var(--g)}
-.pdvf button{background:var(--g);color:#fff;border:1px solid #5E7F6A;border-radius:8px;padding:6px 10px;font-size:13px;min-height:44px;font-family:inherit}
-.pdvf button b{color:var(--o);margin-right:4px}
+.pdvf{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;background:var(--bar2);border-top:1px solid var(--bar)}
+.pdvf button{background:var(--bar);color:var(--barfg);border:1px solid color-mix(in srgb,var(--barfg) 35%,var(--bar));border-radius:8px;padding:6px 10px;font-size:13px;min-height:44px;font-family:inherit}
+.pdvf button b{color:var(--acconbar);margin-right:4px}.pdvf button:hover,.pdvf button:focus-visible{outline:3px solid var(--acc);outline-offset:1px}
 .pdvov{position:fixed;inset:0;background:rgba(15,30,20,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:80}
-.pdvmd{background:#fff;border-radius:14px;width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:18px;display:grid;gap:12px;color:var(--g);border-top:6px solid var(--o)}
+.pdvmd{background:#fff;border-radius:14px;width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:18px;display:grid;gap:12px;color:var(--g);border-top:6px solid var(--acc)}
 .pdvmd h2{margin:0;font-size:22px}.pdvmd input,.pdvmd select,.pdvmd textarea{font:inherit;font-size:18px;min-height:44px;border:2px solid var(--l);border-radius:8px;padding:6px 10px;width:100%;box-sizing:border-box;color:var(--g)}
 .pdvmd input:focus,.pdvmd select:focus{border-color:var(--g);outline:none}
 .pdvmd .bt{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .pdvmd button{font:inherit;min-height:44px;border-radius:8px;padding:0 16px;border:1px solid var(--l);background:#fff;color:var(--g);font-weight:600}
-.pdvmd button.ok{background:var(--o);border-color:var(--o);font-weight:800}.pdvmd button.dk{background:var(--g);color:#fff;border-color:var(--g)}
+.pdvmd button.ok{background:var(--acc);border-color:var(--acc);color:var(--accfg);font-weight:800}.pdvmd button.dk{background:var(--bar);color:var(--barfg);border-color:var(--bar)}
 .pdvlist{display:grid;gap:4px;max-height:50vh;overflow:auto}.pdvlist button{text-align:left;display:flex;justify-content:space-between;gap:10px;min-height:44px;font-weight:500}
 .pdvlist button[aria-selected=true]{background:#FBEFD9;border-color:var(--o)}
 .pdverr{color:#B3261E;font-weight:700;min-height:20px}
@@ -70,7 +72,7 @@ const PDV_SPARK='<svg aria-hidden="true" viewBox="0 0 40 40" width="20" height="
 
 /* ---------------------------------------------------------------- tela principal */
 async function renderPdv(){pdvCss();document.body.classList.add('pdvmode');const app=$('#app');
-  if(!SRV.me){app.innerHTML=`<div class="pdv"><div class="pdvh"><div class="b"><span class="ic">${PDV_SPARK}</span><span class="wm">tino</span><span class="s">Caixa de balcão</span></div></div>
+  if(!SRV.me){app.innerHTML=`<div class="pdv"><div class="pdvh"><div class="b">${pdvBrandHead()}<span class="s">Caixa de balcão</span></div></div>
     <div class="pdvlogin"><div class="pdvco"><img src="${brandLogo()}" alt=""><b>${esc((typeof SRV_BNAME!=='undefined'&&SRV_BNAME)||S.store.name||'')}</b></div><form class="pdvmd" id="pdvl" style="width:100%"><h2>Entrar no caixa</h2><div><label for="pdvlu">Usuário</label><input id="pdvlu" autocomplete="username" autocapitalize="off" required></div>
     <div><label for="pdvlp">Senha</label><input id="pdvlp" type="password" autocomplete="current-password" required></div><div class="pdverr" id="pdvle" role="alert"></div><div class="bt"><button class="ok" type="submit">Entrar</button></div></form><div class="pdvslog">Quem tem Tino, <b>vende melhor.</b></div></div></div>`;
     $('#pdvl').onsubmit=e=>{e.preventDefault();srvLogin('operador_caixa',$('#pdvlu').value.trim(),$('#pdvlp').value,$('#pdvle'),$('#pdvl button[type=submit]'))};setTimeout(()=>{const i=$('#pdvlu');if(i)i.focus()},50);return}
@@ -85,7 +87,7 @@ async function renderPdv(){pdvCss();document.body.classList.add('pdvmode');const
   if(!PDV.st.caixa){pdvOpenCaixa();return}
   if(!PDV.saleId)PDV.saleId=pdvNewId();
   app.innerHTML=`<div class="pdv" id="pdvroot">
-    <div class="pdvh"><div class="b"><span class="ic">${PDV_SPARK}</span><span class="wm">tino</span><span class="s">Caixa nº ${PDV.st.caixa.numero} · ${esc(PDV.st.me.nome)}</span></div>
+    <div class="pdvh"><div class="b">${pdvBrandHead()}<span class="s">Caixa nº ${PDV.st.caixa.numero} · ${esc(PDV.st.me.nome)}</span></div>
       <div class="b"><span class="net ${PDV.online?'':'off'}" id="pdvnet">${PDV.online?'Conectado':'Sem internet'}</span><span class="s" id="pdvfila"></span>${role==='admin'?`<a class="s" href="${TBASE}/#admin" style="color:#E8A33D">Voltar ao painel</a>`:''}</div></div>
     <div class="pdvm"><section class="pdvl" aria-label="Itens da venda">
       <div class="pdvin"><label for="pdvc">Código</label>${PDV.qty?`<span class="qt">${String(PDV.qty).replace('.',',')} ×</span>`:''}<input id="pdvc" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Leia o código (4*código = 4 un.)"></div>
@@ -300,7 +302,7 @@ async function pdvSendQueue(){if(PDV.sending||!SRV.me)return;let F=pdvLoad('fila
     F.shift();pdvSave('fila',F)}}finally{PDV.sending=false;pdvFila()}}
 
 /* ---------------------------------------------------------------- caixa: abrir, sangria, suprimento, fechar */
-function pdvOpenCaixa(){const app=$('#app');app.innerHTML=`<div class="pdv" id="pdvroot"><div class="pdvh"><div class="b"><span class="ic">${PDV_SPARK}</span><span class="wm">tino</span><span class="s">${esc(PDV.st.me.nome)}</span></div></div>
+function pdvOpenCaixa(){const app=$('#app');app.innerHTML=`<div class="pdv" id="pdvroot"><div class="pdvh"><div class="b">${pdvBrandHead()}<span class="s">${esc(PDV.st.me.nome)}</span></div></div>
   <div class="pdvlogin"><form class="pdvmd" id="pdvab" style="width:100%"><h2>Abrir o caixa</h2><label for="pdvaf">Fundo de troco (dinheiro na gaveta)</label><input id="pdvaf" inputmode="decimal" placeholder="0,00" required>
   <div class="pdverr" id="pdverr" role="alert"></div><div class="bt"><button class="ok" type="submit">Abrir caixa</button></div></form></div><div id="pdvmodal"></div></div>`;
   setTimeout(()=>{const i=$('#pdvaf');if(i)i.focus()},30);
@@ -335,7 +337,7 @@ function pdvAction(k){if(PDV.busy)return;if(k==='F10'&&PDV.modal==='pay'&&!$('#p
 async function pdvAdmin(c){c.innerHTML='<div class="sectionhead"><h2>Caixa (PDV)</h2></div><div class="empty">Carregando…</div>';let R;
   try{R=await api('/api/pdv/resumo')}catch(e){c.innerHTML='<div class="empty">'+esc(e.message)+'</div>';return}
   const cfg=S.pdv||{},F=R.porForma||{},nm={dinheiro:'Dinheiro',pix:'PIX',debito:'Débito',credito:'Crédito',fiado:'Fiado'};
-  c.innerHTML=`<div class="sectionhead row" style="justify-content:space-between"><h2>Caixa (PDV)</h2><a class="btn" href="${TBASE}/pdv">Abrir o caixa (tela cheia)</a></div>
+  c.innerHTML=`<div class="sectionhead row" style="justify-content:space-between"><h2>Caixa (PDV)</h2><span class="row" style="gap:6px"><button class="btn ghost" id="pdvLookBtn">Aparência do caixa</button><a class="btn" href="${TBASE}/pdv">Abrir o caixa (tela cheia)</a></span></div>
    ${R.diferencas.length||R.revisar.length||(R.falhas||[]).length?`<div class="panel" style="border:2px solid #E8A33D;display:grid;gap:8px;margin-bottom:12px"><h3 style="margin:0">Avisos do balcão</h3>
      ${R.diferencas.map(d=>`<div class="row" style="justify-content:space-between"><span>Caixa nº ${d.numero} (${esc(d.operador)}) fechou com diferença: ${Object.entries(d.porForma||{}).map(([k,v])=>`${{dinheiro:'dinheiro',pix:'PIX',debito:'débito',credito:'crédito'}[k]||k} <b>${brl(v)}</b>`).join(' · ')||'<b>'+brl(d.diferenca)+'</b>'}</span><span class="row" style="gap:6px"><input id="pj${d.id}" placeholder="Justificativa" style="min-width:200px"><button class="btn ghost" data-pj="${d.id}">Justificar</button></span></div>`).join('')}
      ${R.revisar.map(v=>`<div class="row" style="justify-content:space-between"><span>Venda nº ${v.numero} (${brl(v.total)}) a revisar: ${esc(v.motivo||'')}</span><button class="btn ghost" data-rv="${v.id}">Conferido</button></div>`).join('')}
@@ -357,6 +359,7 @@ async function pdvAdmin(c){c.innerHTML='<div class="sectionhead"><h2>Caixa (PDV)
      <div class="field"><label for="pcpn">Nome no PIX</label><input id="pcpn" maxlength="25" value="${esc(cfg.pixName||'')}"></div><div class="field"><label for="pcpc">Cidade no PIX</label><input id="pcpc" maxlength="15" value="${esc(cfg.pixCity||'')}"></div></div>
      <div class="small muted">NFC-e (nota do consumidor) fica para a fase 2: módulo "NFC-e no caixa" na Central.</div><button class="btn" type="submit" style="justify-self:start">Salvar configuração</button></form>`;
   const re=()=>pdvAdmin(c);
+  {const lb=$('#pdvLookBtn');if(lb)lb.onclick=()=>{pdvCss();pdvLookEditor(c,()=>pdvAdmin(c));window.scrollTo(0,0)}}
   c.querySelectorAll('[data-pj]').forEach(b=>b.onclick=async()=>{try{await api('/api/pdv/justificar',{id:b.dataset.pj,texto:$('#pj'+b.dataset.pj).value});toast('Justificado');re()}catch(e){toast(e.message)}});
   c.querySelectorAll('[data-cv]').forEach(b=>b.onclick=async()=>{const m=prompt('Motivo do cancelamento (o estoque volta e o fiado em aberto é apagado):');if(m==null)return;try{await api('/api/pdv/cancelar',{id:b.dataset.cv,motivo:m});toast('Venda cancelada');re()}catch(e){toast(e.message)}});
   c.querySelectorAll('[data-pl]').forEach(b=>b.onclick=async()=>{if(!confirm('Lançar como venda pelo valor cobrado no balcão? O estoque baixa e o dinheiro entra no caixa da venda.'))return;b.disabled=true;try{let r;try{r=await api('/api/pdv/falha/lancar',{id:b.dataset.pl})}catch(e){if(!(e.data&&e.data.confirmarFiado)||!confirm(e.message))throw e;r=await api('/api/pdv/falha/lancar',{id:b.dataset.pl,confirmarFiado:true})}toast('Lançada como venda nº '+r.numero);re()}catch(e){toast(e.message);b.disabled=false}});
@@ -400,7 +403,7 @@ const PDV_SNAP=()=>'pdv:'+(TSLUG||'@')+':snap';
    Estas listas são as mesmas de lib/policy.js (P_SECRET, STORE_PUBLIC e a projeção de clientes do
    operador_caixa); tests/unit confere que continuam iguais. */
 const PDV_P_SECRET=['lastIn','cost','refCost','refGone','tablePrices','stock','minStock','idealStock','minMg','trib','commission'];
-const PDV_STORE_PUBLIC=['name','from','to','min','pickup','conds','billGate','pickupDisc','pickupOner','pickV','onerV','autoRec','semEstoque'];
+const PDV_STORE_PUBLIC=['name','from','to','min','pickup','conds','billGate','pickupDisc','pickupOner','pickV','onerV','autoRec','semEstoque','pdvLook'];
 const PDV_CLI_KEYS=['id','name','doc','ieOk','creditLimit'];
 function pdvSnapCut(){const pk=(o,ks)=>{const x={};ks.forEach(k=>{if(o&&o[k]!==undefined)x[k]=o[k]});return x};
   const products=(S.products||[]).map(p=>{const x=Object.assign({},p);PDV_P_SECRET.forEach(k=>delete x[k]);return x});
@@ -418,3 +421,70 @@ function pdvOfflineBoot(){if(!PDV_PATH)return false;let x=null;try{x=JSON.parse(
   SRV.me=x.me;TENANT=x.T||TENANT;S=Object.assign(emptyState(),x.S);srvFix();if(TENANT)srvBrand();PDV.st=x.st;PDV.online=false;PDV.offBoot=true;ui.view='pdv';render();
   toast('Sem internet: caixa aberto com o catálogo guardado. As vendas serão enviadas quando a conexão voltar.');
   window.addEventListener('online',()=>{setTimeout(async()=>{await pdvSendQueue();if(!pdvLoad('fila',[]).length)location.reload()},1500)});return true}
+
+/* ===================== Aparência do caixa (personalizável por empresa) =====================
+   Guardada em S.store.pdvLook (o operador recebe junto com os dados da loja). Toda cor de texto é
+   conferida contra o fundo: se o contraste ficar baixo, o caixa troca sozinho para preto ou branco. */
+const PDV_FONTS={padrao:'',sora:'"Sora",system-ui,sans-serif',arial:'Arial,Helvetica,sans-serif',verdana:'Verdana,Geneva,sans-serif',tahoma:'Tahoma,Verdana,sans-serif'};
+const PDV_LOOKS={
+  tino:{nome:'Tino (verde e dourado)',bar:'#1F3D2B',acc:'#E8A33D',bg:'#F6F1E7',ink:'#1F3D2B'},
+  contraste:{nome:'Alto contraste (preto e amarelo)',bar:'#000000',acc:'#FFD400',bg:'#FFFFFF',ink:'#000000'},
+  azul:{nome:'Azul e branco',bar:'#0B3D91',acc:'#FFB703',bg:'#F2F5FA',ink:'#0B1F3A'},
+  grafite:{nome:'Grafite e laranja',bar:'#22262E',acc:'#FF7A1A',bg:'#F3F4F6',ink:'#15181D'}};
+const pdvHex=v=>/^#[0-9a-f]{6}$/i.test(String(v||''))?String(v):null;
+function pdvLum(h){const c=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255).map(v=>v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4));return .2126*c[0]+.7152*c[1]+.0722*c[2]}
+function pdvContrast(a,b){const x=pdvLum(a),y=pdvLum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)}
+function pdvBest(bgc,want,min){want=pdvHex(want);if(want&&pdvContrast(want,bgc)>=(min||4.5))return want;return pdvContrast('#FFFFFF',bgc)>=pdvContrast('#111111',bgc)?'#FFFFFF':'#111111'}
+function pdvShade(h,k){const n=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));const f=pdvLum(h)<.18?1+k:1-k;return '#'+n.map(v=>Math.max(0,Math.min(255,Math.round(v*f+(f>1?k*40:0)))).toString(16).padStart(2,'0')).join('')}
+function pdvLook(){const L=(S.store&&S.store.pdvLook)||{},base=PDV_LOOKS[L.preset]||PDV_LOOKS.tino;
+  let bar=pdvHex(L.bar)||base.bar;if(L.preset==='empresa'){const c=(TENANT&&TENANT.brand&&TENANT.brand.color)||getComputedStyle(document.documentElement).getPropertyValue('--brand').trim();if(pdvHex(c))bar=c}
+  const acc=pdvHex(L.acc)||base.acc,bg=pdvHex(L.bg)||base.bg,ink0=pdvHex(L.ink)||base.ink;
+  return {bar,barfg:pdvBest(bar,L.barfg||'#FFFFFF'),bar2:pdvShade(bar,.18),acc,accfg:pdvBest(acc,bar),acconbar:pdvBest(bar,acc,3),bg,ink:pdvBest('#FFFFFF',pdvBest(bg,ink0)===ink0?ink0:'#111111'),
+    font:PDV_FONTS[L.font]||'',fs:{normal:1,grande:1.15,maior:1.3}[L.size]||1,logo:!!L.logo}}
+function pdvLookVars(K){K=K||pdvLook();return `--bar:${K.bar};--barfg:${K.barfg};--bar2:${K.bar2};--acc:${K.acc};--accfg:${K.accfg};--acconbar:${K.acconbar};--bg:${K.bg};--g:${K.ink};--fs:${K.fs};${K.font?'--pdvfont:'+K.font+';':''}`}
+function pdvApplyLook(){let st=document.getElementById('pdvlook');if(!st){st=document.createElement('style');st.id='pdvlook';document.head.appendChild(st)}
+  const K=pdvLook();st.textContent='.pdv{'+pdvLookVars(K)+'}';
+  if(/Sora/.test(K.font)&&!document.getElementById('tinofont')){const l=document.createElement('link');l.id='tinofont';l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family=Sora:wght@500;700;800&display=swap';document.head.appendChild(l)}}
+function pdvBrandHead(){pdvApplyLook();const K=pdvLook();
+  if(K.logo){const nm=(typeof SRV_BNAME!=='undefined'&&SRV_BNAME)||S.store.name||'';return `<img class="lg" src="${brandLogo()}" alt=""><span class="co">${esc(nm)}</span>`}
+  return `<span class="ic">${PDV_SPARK.replace('fill="#1F3D2B"','fill="currentColor"')}</span><span class="wm">tino</span>`}
+
+/* tela de personalizar (painel do administrador › Caixa (PDV) › Aparência do caixa) */
+function pdvLookEditor(c,back){const L0=(S.store&&S.store.pdvLook)||{};const L=ui.pdvLookDraft=ui.pdvLookDraft||Object.assign({preset:'tino',font:'padrao',size:'normal',logo:false},JSON.parse(JSON.stringify(L0)));
+  const keep=S.store.pdvLook;S.store.pdvLook=L;const K=pdvLook();S.store.pdvLook=keep;
+  const base=PDV_LOOKS[L.preset]||PDV_LOOKS.tino,cv=(k,d)=>pdvHex(L[k])||d;
+  const okc=(a,b,min)=>pdvContrast(a,b)>=(min||4.5);
+  c.innerHTML=`<div class="sectionhead row" style="justify-content:space-between"><h2>Aparência do caixa</h2><button class="btn ghost" id="plBack">Voltar</button></div>
+   <div class="grid2" style="align-items:start;gap:16px">
+    <section class="panel" style="display:grid;gap:12px">
+      <div class="field"><span class="lbl">Modelo pronto</span><div class="row" style="gap:6px;flex-wrap:wrap">${Object.entries(PDV_LOOKS).map(([k,v])=>`<button type="button" class="btn ${L.preset===k?'':'ghost'}" data-plp="${k}">${esc(v.nome)}</button>`).join('')}<button type="button" class="btn ${L.preset==='empresa'?'':'ghost'}" data-plp="empresa">Cor da empresa</button></div></div>
+      <div class="grid2">
+        <div class="field"><label for="plbar">Barra de cima, teclas e total</label><input type="color" id="plbar" value="${cv('bar',base.bar)}" ${L.preset==='empresa'?'disabled':''}></div>
+        <div class="field"><label for="placc">Destaque (valor total, botão Entrar, teclas F)</label><input type="color" id="placc" value="${cv('acc',base.acc)}"></div>
+        <div class="field"><label for="plbg">Fundo da tela</label><input type="color" id="plbg" value="${cv('bg',base.bg)}"></div>
+        <div class="field"><label for="plink">Cor do texto</label><input type="color" id="plink" value="${cv('ink',base.ink)}"></div>
+        <div class="field"><label for="plfont">Fonte</label><select id="plfont">${[['padrao','Padrão do sistema'],['sora','Sora (Tino)'],['arial','Arial'],['verdana','Verdana (bem legível)'],['tahoma','Tahoma']].map(([k,v])=>`<option value="${k}" ${L.font===k?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="field"><label for="plsize">Tamanho da letra</label><select id="plsize">${[['normal','Normal'],['grande','Grande'],['maior','Maior']].map(([k,v])=>`<option value="${k}" ${L.size===k?'selected':''}>${v}</option>`).join('')}</select></div>
+      </div>
+      <label class="switch"><input type="checkbox" id="pllogo" ${L.logo?'checked':''}> Mostrar a logomarca e o nome da empresa no topo do caixa (no lugar do Tino)</label>
+      <div class="small ${okc(K.bar,K.barfg)&&okc(K.bar,K.acconbar,3)?'muted':''}">${[['texto da barra',okc(K.bar,K.barfg)],['destaque sobre a barra',okc(K.bar,K.acconbar,3)],['texto da tela',okc('#FFFFFF',K.ink)]].map(([n,o])=>`${o?'✓':'⚠'} ${n}`).join(' · ')}<br>O caixa confere o contraste sozinho: se uma cor ficar difícil de ler, o texto vira preto ou branco automaticamente.</div>
+      <div class="err" id="plerr"></div>
+      <div class="row" style="gap:8px"><button class="btn" id="plSave">Salvar aparência</button><button class="btn ghost" id="plReset">Voltar ao padrão Tino</button></div>
+    </section>
+    <section class="panel" style="padding:0;overflow:hidden"><div class="pdv" style="min-height:0;${pdvLookVars(K)}">
+      <div class="pdvh"><div class="b">${K.logo?`<img class="lg" src="${brandLogo()}" alt=""><span class="co">${esc((typeof SRV_BNAME!=='undefined'&&SRV_BNAME)||S.store.name||'')}</span>`:`<span class="ic">${PDV_SPARK.replace('fill="#1F3D2B"','fill="currentColor"')}</span><span class="wm">tino</span>`}<span class="s">Caixa nº 1 · Prévia</span></div></div>
+      <div class="pdvm" style="grid-template-columns:1fr"><div class="pdvin"><label>Código</label><input value="7891234567890" readonly></div>
+        <div class="pdvbox"><div class="pdvrow"><span>Arroz 5kg</span><b>R$ 25,00</b></div><div class="pdvmut">1 × R$ 25,00</div></div>
+        <div class="pdvtot"><span class="lb">Total a pagar</span><span class="v">R$ 25,00</span></div></div>
+      <div class="pdvf"><button type="button"><b>F2</b>Buscar</button><button type="button"><b>F4</b>Cliente</button><button type="button"><b>F10</b>Pagamento</button></div>
+    </div></section>
+   </div>`;
+  const rer=()=>{const y=window.scrollY;pdvLookEditor(c,back);window.scrollTo(0,y)};
+  c.querySelectorAll('[data-plp]').forEach(b=>b.onclick=()=>{L.preset=b.dataset.plp;delete L.bar;delete L.acc;delete L.bg;delete L.ink;rer()});
+  [['plbar','bar'],['placc','acc'],['plbg','bg'],['plink','ink']].forEach(([id,k])=>{const i=$('#'+id);i.oninput=i.onchange=()=>{L[k]=i.value;if(L.preset!=='empresa'&&k==='bar')L.preset=L.preset||'tino';rer()}});
+  $('#plfont').onchange=e=>{L.font=e.target.value;rer()};$('#plsize').onchange=e=>{L.size=e.target.value;rer()};$('#pllogo').onchange=e=>{L.logo=e.target.checked;rer()};
+  $('#plBack').onclick=()=>{ui.pdvLookDraft=null;back()};
+  $('#plReset').onclick=()=>{ui.pdvLookDraft={preset:'tino',font:'padrao',size:'normal',logo:false};rer()};
+  $('#plSave').onclick=()=>{const v={preset:L.preset,font:PDV_FONTS[L.font]!==undefined?L.font:'padrao',size:['normal','grande','maior'].includes(L.size)?L.size:'normal',logo:!!L.logo};
+    ['bar','acc','bg','ink'].forEach(k=>{if(pdvHex(L[k]))v[k]=L[k]});S.store.pdvLook=v;ui.pdvLookDraft=null;save();toast('Aparência do caixa salva. Os caixas abertos mudam ao recarregar a tela.');back()};
+}
