@@ -150,6 +150,16 @@
     });
     return out;
   }
+  /* a cara da roça: ícone escolhido, ou o da cultura escrita, e a cor que vem com o ícone */
+  const semAcento = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  function visual(x) {
+    const C = (S && S.culturas) || [];
+    let c = x && x.icone ? C.find(k => k.icone === x.icone) : null;
+    if (!c && x && x.cultura) { const n = semAcento(x.cultura); c = C.find(k => semAcento(k.nome) === n) || C.find(k => n.includes(semAcento(k.nome))); }
+    c = c || C.find(k => k.nome === 'Outra') || { icone: '🌿', cor: '#2C5139' };
+    return { icone: c.icone, cor: /^#[0-9a-f]{6}$/i.test(c.cor) ? c.cor : '#2C5139' };
+  }
+  const tile = (x, big) => { const v = visual(x); return `<span class="ctile${big ? ' big' : ''}" style="background:${v.cor}22;border-color:${v.cor}66" aria-hidden="true">${v.icone}</span>`; };
   const splitBar = r => {
     const ps = vendaPartes(r), keys = Object.keys(ps).sort((a, b) => (a === 'dono' ? -1 : b === 'dono' ? 1 : 0));
     return `<div class="split" role="img" aria-label="${esc(keys.map(k => nomeParte(k) + ' ' + pctTxt(ps[k])).join(', '))}">${keys.map(k => `<div style="flex:${ps[k]}">${esc(nomeParte(k))} ${pctTxt(ps[k])}</div>`).join('')}</div>`;
@@ -201,7 +211,7 @@
       ${R.parteMeeiros ? `<p class="small muted">Do vendido, ${money(R.parteMeeiros)} é a parte dos meeiros. Gastos pagos pelos meeiros: ${money(r2(R.desp - R.despDono))}.</p>` : ''}
       ${pend.length ? `<section class="card"><h2>Acertos com meeiros</h2><div class="list">${pend.map(p => `<button type="button" class="it" data-acerto="${esc(p.roca.id)}/${esc(p.pid)}"><span class="ic">🤝</span><span class="tx"><b>${esc(nomeParte(p.pid))}</b><span>${esc(p.roca.nome)} · ${p.n} lançamento(s) em aberto</span></span><span class="vl ${p.saldo >= 0 ? 'pos' : 'neg'}">${money(Math.abs(p.saldo))}<small>${p.saldo >= 0 ? esc(DONO()) + ' paga' : esc(nomeParte(p.pid)) + ' deve'}</small></span></button>`).join('')}</div></section>` : ''}
       <section class="card"><div class="between"><h2>Roças</h2><button class="btn sm" type="button" id="nr">+ Nova roça</button></div>
-        ${S.rocas.filter(r => r.ativa).map(r => { const x = resumo(L.filter(l => l.rocaId === r.id)); return `<button type="button" class="roca" data-roca="${esc(r.id)}"><div class="t"><div><b>${esc(r.nome)}</b><p class="small muted">${esc([r.cultura, r.local, modoTxt(r.modo)].filter(Boolean).join(' · '))}</p></div><span class="${x.resultado >= 0 ? 'pos' : 'neg'}" style="font-weight:800">${money(x.resultado)}</span></div>
+        ${S.rocas.filter(r => r.ativa).map(r => { const x = resumo(L.filter(l => l.rocaId === r.id)); return `<button type="button" class="roca" data-roca="${esc(r.id)}" style="border-left:5px solid ${visual(r).cor}"><div class="t"><div class="row" style="flex-wrap:nowrap;min-width:0">${tile(r)}<div style="min-width:0"><b>${esc(r.nome)}</b><p class="small muted">${esc([r.cultura, r.local, modoTxt(r.modo)].filter(Boolean).join(' · '))}</p></div></div><span class="${x.resultado >= 0 ? 'pos' : 'neg'}" style="font-weight:800">${money(x.resultado)}</span></div>
           ${meeirosDe(r).length ? splitBar(r) : ''}<p class="small muted">Vendido ${money(x.vendas)} · Gastos ${money(x.despDono)}${x.desp !== x.despDono ? ' (total ' + money(x.desp) + ')' : ''}</p></button>`; }).join('')}
       </section>
       ${gerais.desp ? `<section class="card"><div class="between"><h2>Gastos gerais da fazenda</h2><b class="neg">${money(gerais.desp)}</b></div><p class="small muted">Veículos, energia e o que não é de uma roça só. Já estão descontados em "Sobrou para ${esc(DONO())}".</p></section>` : ''}
@@ -217,7 +227,7 @@
   /* ---------- Roças ---------- */
   function vRocas() {
     const at = S.rocas.filter(r => r.ativa), ina = S.rocas.filter(r => !r.ativa);
-    const card = r => `<button type="button" class="roca" data-roca="${esc(r.id)}"><div class="t"><div><b>${esc(r.nome)}</b><p class="small muted">${esc([r.cultura, r.local, r.area].filter(Boolean).join(' · '))}</p></div><span class="small muted">${esc(modoTxt(r.modo))}</span></div>${meeirosDe(r).length ? splitBar(r) : ''}</button>`;
+    const card = r => `<button type="button" class="roca" data-roca="${esc(r.id)}" style="border-left:5px solid ${visual(r).cor}"><div class="t"><div class="row" style="flex-wrap:nowrap;min-width:0">${tile(r)}<div style="min-width:0"><b>${esc(r.nome)}</b><p class="small muted">${esc([r.cultura, r.local, r.area].filter(Boolean).join(' · '))}</p></div></div><span class="small muted">${esc(modoTxt(r.modo))}</span></div>${meeirosDe(r).length ? splitBar(r) : ''}</button>`;
     $('#main').innerHTML = `<div class="between"><h1>Roças</h1><button class="btn gold" type="button" id="nr">+ Nova roça</button></div>
       ${at.length ? at.map(card).join('') : '<div class="card empty"><div class="big">🌳</div><p class="muted">Nenhuma roça ainda.</p></div>'}
       ${ina.length ? `<h2 style="margin-top:8px">Encerradas</h2>${ina.map(card).join('')}` : ''}`;
@@ -262,7 +272,7 @@
         <button class="btn full" type="button" id="enc">${r.ativa ? 'Encerrar a roça (sai da tela inicial)' : 'Reabrir a roça'}</button>`;
     }
     $('#main').innerHTML = `<div class="row noprint"><button class="btn sm" type="button" id="bk">← Roças</button></div>
-      <div><h1>${esc(r.nome)}</h1><p class="muted small">${esc([r.cultura, r.local, r.area, modoTxt(r.modo)].filter(Boolean).join(' · '))}${r.ativa ? '' : ' · encerrada'}</p></div>
+      <div class="row" style="flex-wrap:nowrap;align-items:center">${tile(r, true)}<div style="min-width:0"><h1>${esc(r.nome)}</h1><p class="muted small">${esc([r.cultura, r.local, r.area, modoTxt(r.modo)].filter(Boolean).join(' · '))}${r.ativa ? '' : ' · encerrada'}</p></div></div>
       ${meeiros.length ? splitBar(r) : ''}
       <div class="tabs noprint" role="tablist">${tabs.map(([k, n]) => `<button type="button" role="tab" data-rt="${k}" aria-selected="${rocaTab === k}">${n}</button>`).join('')}</div>
       ${body}
@@ -538,9 +548,9 @@
 
   /* ---------- nova roça / editar (passo a passo) ---------- */
   function wizard(r0) {
-    const W = r0 ? { id: r0.id, nome: r0.nome, cultura: r0.cultura || '', local: r0.local || '', area: r0.area || '', inicio: r0.inicio || '', modo: r0.modo, parceria: Object.assign({}, r0.parceria), regras: JSON.parse(JSON.stringify(r0.regras || {})), obs: r0.obs || '', ativa: r0.ativa, novos: [], func: S.pessoas.filter(p => p.tipo === 'funcionario' && p.rocaId === r0.id).map(p => p.id), novosF: [], step: 0 }
-      : { id: newId('r'), nome: '', cultura: '', local: '', area: '', inicio: hoje(), modo: M('r_meeiros') ? '' : 'funcionarios', parceria: {}, regras: {}, obs: '', ativa: true, novos: [], func: [], novosF: [], step: 0 };
-    const CULT = ['Banana', 'Café', 'Milho', 'Feijão', 'Mamão', 'Tomate', 'Pimenta', 'Cacau', 'Coco', 'Eucalipto', 'Gado'];
+    const W = r0 ? { id: r0.id, nome: r0.nome, icone: r0.icone || '', cultura: r0.cultura || '', local: r0.local || '', area: r0.area || '', inicio: r0.inicio || '', modo: r0.modo, parceria: Object.assign({}, r0.parceria), regras: JSON.parse(JSON.stringify(r0.regras || {})), obs: r0.obs || '', ativa: r0.ativa, novos: [], func: S.pessoas.filter(p => p.tipo === 'funcionario' && p.rocaId === r0.id).map(p => p.id), novosF: [], step: 0 }
+      : { id: newId('r'), nome: '', icone: '', cultura: '', local: '', area: '', inicio: hoje(), modo: M('r_meeiros') ? '' : 'funcionarios', parceria: {}, regras: {}, obs: '', ativa: true, novos: [], func: [], novosF: [], step: 0 };
+    const CULT = (S.culturas || []).filter(c => c.nome !== 'Outra');
     const temMeeiro = () => W.modo === 'meeiro' || W.modo === 'misto';
     const temFunc = () => (W.modo === 'funcionarios' || W.modo === 'misto') && M('r_funcionarios');
     const steps = () => ['dados', 'modo'].concat(temMeeiro() ? ['meeiros', 'regras'] : []).concat(temFunc() ? ['equipe'] : []).concat(['revisar']);
@@ -552,7 +562,9 @@
       const st = steps(), k = st[W.step];
       let h = `<div class="steps" aria-label="Passo ${W.step + 1} de ${st.length}">${st.map((_, i) => `<i class="${i <= W.step ? 'on' : ''}"></i>`).join('')}</div>`;
       if (k === 'dados') h += `<div class="field"><label for="wn">Nome da roça</label><input type="text" id="wn" maxlength="60" value="${esc(W.nome)}" placeholder="Ex.: Banana do Córrego"></div>
-        <div class="field"><span class="lbl">O que vai plantar / criar?</span><div class="chips">${CULT.map(c => `<button type="button" class="chip" data-cu="${c}" aria-pressed="${W.cultura === c}">${c}</button>`).join('')}</div><input type="text" id="wc" maxlength="40" value="${esc(W.cultura)}" placeholder="Ou escreva aqui"></div>
+        <div class="field"><span class="lbl">O que vai plantar / criar?</span><div class="chips">${CULT.map(c => `<button type="button" class="chip" data-cu="${esc(c.nome)}" aria-pressed="${W.cultura === c.nome}">${c.icone} ${esc(c.nome)}</button>`).join('')}</div><input type="text" id="wc" maxlength="40" value="${esc(W.cultura)}" placeholder="Ou escreva aqui"></div>
+        <div class="field"><span class="lbl">Cara da roça</span><div class="row" style="flex-wrap:nowrap">${tile(W, true)}<span class="small muted">${W.icone ? 'Ícone escolhido por você.' : 'O ícone vem da cultura. Toque em outro, se quiser.'}</span></div>
+          <div class="icgrid" role="group" aria-label="Escolher ícone">${(S.culturas || []).map(c => `<button type="button" data-ic="${esc(c.icone)}" aria-pressed="${visual(W).icone === c.icone}" aria-label="${esc(c.nome)}" style="border-color:${c.cor}55">${c.icone}</button>`).join('')}</div></div>
         <div class="field"><label for="wl">Onde fica</label><input type="text" id="wl" maxlength="80" value="${esc(W.local)}" placeholder="Ex.: Sítio São José, Minas Gerais"></div>
         <div class="grid2"><div class="field"><label for="wa">Tamanho (opcional)</label><input type="text" id="wa" maxlength="40" value="${esc(W.area)}" placeholder="Ex.: 5 hectares, 3 mil pés"></div><div class="field"><label for="wi">Começou em</label><input type="date" id="wi" value="${esc(W.inicio)}"></div></div>`;
       if (k === 'modo') h += `<p>Quem toca esta roça?</p><div class="modo">
@@ -586,7 +598,7 @@
       }
       if (k === 'revisar') {
         const ms = Object.keys(W.parceria);
-        h += `<section class="card"><h2>${esc(W.nome)}</h2><p class="small muted">${esc([W.cultura, W.local, W.area].filter(Boolean).join(' · '))}</p><p>${esc(modoTxt(W.modo))}</p>
+        h += `<section class="card"><div class="row" style="flex-wrap:nowrap">${tile(W, true)}<h2>${esc(W.nome)}</h2></div><p class="small muted">${esc([W.cultura, W.local, W.area].filter(Boolean).join(' · '))}</p><p>${esc(modoTxt(W.modo))}</p>
           ${ms.length ? `<div class="split">${Object.entries(vpW()).sort((a) => (a[0] === 'dono' ? -1 : 1)).map(([kk, v]) => `<div style="flex:${v}">${esc(nomeK(kk))} ${pctTxt(v)}</div>`).join('')}</div>` : ''}
           ${temFunc() ? `<p class="small">Funcionários: ${esc(W.func.map(id => (pessoa(id) || {}).nome).concat(W.novosF.map(f => f.nome)).filter(Boolean).join(', ') || 'nenhum por enquanto')}</p>` : ''}</section>
           <div class="field"><label for="wo">Observação (opcional)</label><input type="text" id="wo" maxlength="300" value="${esc(W.obs)}"></div>`;
@@ -608,7 +620,8 @@
     function bind(pn) {
       const redraw = () => { const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
       const err = m => { $('#we').textContent = m; };
-      pn.querySelectorAll('[data-cu]').forEach(b => b.addEventListener('click', () => { keep(); W.cultura = W.cultura === b.dataset.cu ? '' : b.dataset.cu; redraw(); }));
+      pn.querySelectorAll('[data-cu]').forEach(b => b.addEventListener('click', () => { keep(); W.cultura = W.cultura === b.dataset.cu ? '' : b.dataset.cu; const c = (S.culturas || []).find(x => x.nome === W.cultura); W.icone = c ? c.icone : ''; redraw(); }));
+      pn.querySelectorAll('[data-ic]').forEach(b => b.addEventListener('click', () => { keep(); W.icone = b.dataset.ic; redraw(); }));
       pn.querySelectorAll('[data-mo]').forEach(b => b.addEventListener('click', () => { keep(); W.modo = b.dataset.mo; if (W.modo === 'funcionarios') { W.parceria = {}; W.regras = {}; } redraw(); }));
       pn.querySelectorAll('[data-me]').forEach(b => b.addEventListener('click', () => { keep(); const k = b.dataset.me; if (W.parceria[k] != null) delete W.parceria[k]; else W.parceria[k] = Math.max(1, Math.min(50, r2(100 - soma()))); redraw(); }));
       pn.querySelectorAll('[data-sl]').forEach(s => { s.addEventListener('input', () => { W.parceria[s.dataset.sl] = Number(s.value); const n = pn.querySelector('[data-pn="' + s.dataset.sl + '"]'); if (n) n.value = s.value; }); s.addEventListener('change', () => { keep(); redraw(); }); });
@@ -638,7 +651,7 @@
         try {
           for (const n of W.novos) if (W.parceria[n.id] != null) await api('/api/rural/pessoa', { id: n.id, tipo: 'meeiro', nome: n.nome, telefone: n.telefone });
           const regras = {}; if (temMeeiro()) Object.entries(W.regras).forEach(([c, p]) => { const o = {}; Object.entries(p).forEach(([kk, v]) => { if (Number(v) > 0 && (kk === 'dono' || W.parceria[kk] != null)) o[kk] = Number(v); }); if (Object.keys(o).length) regras[c] = o; });
-          await api('/api/rural/roca', { id: W.id, nome: W.nome, cultura: W.cultura, local: W.local, area: W.area, inicio: W.inicio || null, modo: W.modo, parceria: temMeeiro() ? W.parceria : {}, regras, obs: W.obs, ativa: W.ativa });
+          await api('/api/rural/roca', { id: W.id, nome: W.nome, icone: W.icone || null, cultura: W.cultura, local: W.local, area: W.area, inicio: W.inicio || null, modo: W.modo, parceria: temMeeiro() ? W.parceria : {}, regras, obs: W.obs, ativa: W.ativa });
           if (temFunc()) {
             for (const f of W.novosF) await api('/api/rural/pessoa', { id: f.id, tipo: 'funcionario', nome: f.nome, salario: f.salario, rocaId: W.id });
             for (const p of S.pessoas.filter(x => x.tipo === 'funcionario')) {

@@ -443,3 +443,5 @@ create table if not exists loja_seq (
   tenant_id text primary key references tenants(id),
   last_no bigint not null
 );
+-- roça com a cara da cultura: ícone escolhido (o app tira a cor do ícone)
+alter table rural_rocas add column if not exists icone text;
