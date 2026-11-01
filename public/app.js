@@ -135,8 +135,23 @@ async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
     srvAlert(e.message||'Não foi possível salvar.');try{await loadState()}catch(_){}srvPersist([]);srvSoftRender(true)}
   finally{SRV.busy=false;srvBadge(false);srvNetBar();if(SRV.again){SRV.again=false;srvSync()}}}
 /* aviso que fica na tela até a pessoa fechar (erros de gravação não podem passar despercebidos) */
-function srvAlert(msg){let b=document.getElementById('srvalert');if(!b){b=document.createElement('div');b.id='srvalert';b.className='srvalert';b.setAttribute('role','alert');document.body.appendChild(b)}
-  b.innerHTML='<b>Não foi gravado:</b> '+esc(msg)+' <button type="button" class="btn ghost dlb">Entendi</button>';b.hidden=false;b.querySelector('button').onclick=()=>{b.hidden=true}}
+function srvAlert(msg){pageAlert('Não foi gravado:',msg)}
+/* mesmo aviso fixo, com título próprio; linhas da lista viram tópicos */
+function pageAlert(title,msg,list){let b=document.getElementById('srvalert');if(!b){b=document.createElement('div');b.id='srvalert';b.className='srvalert';b.setAttribute('role','alert');document.body.appendChild(b)}
+  const L=(list||[]).filter(Boolean),more=L.length>8?'<li>… e mais '+(L.length-8)+'</li>':'';
+  b.innerHTML='<div style="flex:1;min-width:200px"><b>'+esc(title)+'</b> '+esc(msg||'')+(L.length?'<ul style="margin:6px 0 0;padding-left:18px">'+L.slice(0,8).map(x=>'<li>'+esc(x)+'</li>').join('')+more+'</ul>':'')+'</div><button type="button" class="btn ghost dlb">Entendi</button>';
+  b.hidden=false;b.querySelector('button').onclick=()=>{b.hidden=true}}
+/* confirmação dentro da página: o confirm() do navegador é bloqueado em alguns navegadores embutidos
+   (ex.: o navegador do app Claude responde "não" sozinho e o botão parece não fazer nada) */
+function ask(msg,okLabel){return new Promise(res=>{let ov=document.getElementById('askov');if(ov)ov.remove();
+  ov=document.createElement('div');ov.id='askov';ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');
+  ov.innerHTML='<div class="pdbox askbox"><p style="margin:0 0 14px;line-height:1.5">'+esc(msg).replace(/\n/g,'<br>')+'</p><div class="row" style="gap:8px;justify-content:flex-end;flex-wrap:wrap"><button type="button" class="btn ghost" data-ask="0">Voltar</button><button type="button" class="btn" data-ask="1">'+esc(okLabel||'Confirmar')+'</button></div></div>';
+  document.body.appendChild(ov);
+  const onKey=e=>{if(e.key==='Escape')done(false)};
+  const done=v=>{ov.remove();document.removeEventListener('keydown',onKey);res(v)};
+  document.addEventListener('keydown',onKey);ov.onclick=e=>{if(e.target===ov)done(false)};
+  ov.querySelectorAll('[data-ask]').forEach(b=>b.onclick=()=>done(b.dataset.ask==='1'));
+  ov.querySelector('[data-ask="1"]').focus()})}
 function srvBadge(on){let b=document.getElementById('srvbadge');if(!b){b=document.createElement('div');b.id='srvbadge';b.className='srvbadge';b.textContent='Salvando…';document.body.appendChild(b)}b.hidden=!on}
 /* atualiza a tela atual sem perder o que a pessoa está digitando */
 function srvDirty(){return [...document.querySelectorAll('#app input,#app textarea,#app select')].some(i=>!i.closest('.pwbox')&&(i.type==='file'?i.files&&i.files.length:i.type==='checkbox'||i.type==='radio'?i.checked!==i.defaultChecked&&!i.closest('.orst,.romck,[data-fsel],.switch'):i.tagName==='SELECT'?false:i.value!==i.defaultValue))}
@@ -459,11 +474,11 @@ function recEdit(el,r){r=liveDoc('receipts',r);const R=ui.rcv;R.q=R.q||'';
   el.querySelectorAll('[data-rv]').forEach(i=>{i.oninput=()=>{const it=r.items.find(x=>x.k===i.dataset.rv),v=pnum(i.value);if(it&&v!==''){it.valor=v;rcLater();$('#rctot').textContent=brl(tot())}};i.onchange=()=>{const it=r.items.find(x=>x.k===i.dataset.rv),v=pnum(i.value);if(!it)return;if(i.value.trim()&&v===''){toast('Valor inválido. Use números, ex.: 45,90');i.value=rcMoney(it.valor);return}it.valor=v===''?'':v;i.value=rcMoney(it.valor);save();$('#rctot').textContent=brl(tot())};
     i.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();i.blur();const n=$('#rcin');if(n)n.focus()}}});
   el.querySelectorAll('[data-rx]').forEach(b=>b.onclick=()=>{r.items=r.items.filter(x=>x.k!==b.dataset.rx);save();rer()});
-  $('#rcDel').onclick=()=>{if(!confirm('Cancelar a nota '+r.nf+'? Ela some da lista de conferência.'))return;r.status='cancelada';save();R.id=null;toast('Nota cancelada');recScreen(el)};
-  $('#rcOk').onclick=()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
+  $('#rcDel').onclick=async()=>{if(!await ask('Cancelar a nota '+r.nf+'? Ela some da lista de conferência.','Cancelar nota'))return;r.status='cancelada';save();R.id=null;toast('Nota cancelada');recScreen(el)};
+  $('#rcOk').onclick=async()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
     const semValor=r.items.filter(i=>!(Number(i.valor)>0)),n=r.items.reduce((a,i)=>a+(Number(i.q)||0),0);
-    if(semValor.length&&!confirm(semValor.length+' produto(s) sem valor da nota ('+semValor.map(i=>i.name).slice(0,3).join(', ')+'). Conferir mesmo assim? A loja completa na precificação.'))return;
-    if(!confirm('Confirmar a conferência da NF '+r.nf+'?\n'+r.items.length+' produto(s), '+rcQty(n)+' embalagem(ns), total '+brl(tot())+'.\nO estoque soma agora.'))return;
+    if(semValor.length&&!await ask(semValor.length+' produto(s) sem valor da nota ('+semValor.map(i=>i.name).slice(0,3).join(', ')+'). Conferir mesmo assim? A loja completa na precificação.','Conferir mesmo assim'))return;
+    if(!await ask('Confirmar a conferência da NF '+r.nf+'?\n'+r.items.length+' produto(s), '+rcQty(n)+' embalagem(ns), total '+brl(tot())+'.\nO estoque soma agora.','Confirmar conferência'))return;
     r.items.forEach(i=>{if(!(Number(i.valor)>=0)||i.valor==='')i.valor=0});
     r.status='conferida';save();R.id=null;toast('NF '+r.nf+' conferida: estoque atualizado. Foi para a precificação.');if(ui.admin&&ui.tab==='recmerc')renderAdmin();else recScreen(el);window.scrollTo(0,0)};
 }
@@ -536,11 +551,11 @@ function precEdit(el,r){r=liveDoc('receipts',r);const P=ui.prc;P.lk=P.lk||{};
     i.pid=p.id;i.name=p.name;i.unit=p.unit||'';delete i.newProd;if(Number(p.perPack)>1&&!(Number(i.perPack)>1))i.perPack=Number(p.perPack);if(i.price===''||i.price==null)i.price=Number(p.price)||'';i.trib=!!p.trib;delete P.lk[k];save();rer()});
   $('#pcBack').onclick=()=>{P.id=null;precScreen(el)};
   $('#pcSave').onclick=()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();save();toast('Precificação salva. A nota continua aguardando aprovação.');P.id=null;precScreen(el)};
-  $('#pcOk').onclick=()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
+  $('#pcOk').onclick=async()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
     const bad=r.items.map(i=>!i.pid&&!i.newProd?i.name+': ligue a um produto ou marque "criar produto novo"':!(Number(i.price)>0)?i.name+': falta o preço de venda':i.ieOn&&!(Number(i.iePrice)>0&&Number(i.iePrice)<Number(i.price))?i.name+': o preço com IE precisa ser menor que o preço normal':'').filter(Boolean);
-    if(bad.length){toast(bad[0]+(bad.length>1?' (e mais '+(bad.length-1)+')':''));return}
+    if(bad.length){pageAlert('A NF '+r.nf+' ainda não pode ser aprovada.','Corrija e tente de novo:',bad);return}
     const neg=r.items.filter(i=>{const m=rcMargins(Number(i.valor),Number(i.price),i.trib,false);return m&&m.mg<0});
-    if(!confirm('Aprovar a NF '+r.nf+' e atualizar custo e preço de '+r.items.length+' produto(s)?'+(neg.length?'\nAtenção: '+neg.length+' com margem negativa ('+neg.map(i=>i.name).slice(0,3).join(', ')+').':'')))return;
+    if(!await ask('Aprovar a NF '+r.nf+' e atualizar custo e preço de '+r.items.length+' produto(s)?'+(neg.length?'\nAtenção: '+neg.length+' com margem negativa ('+neg.map(i=>i.name).slice(0,3).join(', ')+').':''),'Aprovar'))return;
     r.status='aprovada';save();P.id=null;toast('NF '+r.nf+' aprovada: preços e custos atualizados.');precScreen(el);window.scrollTo(0,0)};
 }
 /* faturamento: aba "Precificar notas" dentro da tela dela */
@@ -579,10 +594,10 @@ function fatAcertoView(app,F){const L=S.orders.filter(pendSettle).sort((a,b)=>St
       :'<div class="empty">Nenhuma entrega aguardando acerto.</div>'}`;
   app.querySelectorAll('[data-ft]').forEach(b=>b.onclick=()=>{F.tab=b.dataset.ft;F.sel={};renderFat()});
   const done=o=>{o.delivered.settled=true;o.delivered.settledAt=new Date().toISOString();o.delivered.settledBy=ui.biller||ui.adminName||''};
-  app.querySelectorAll('[data-acok]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.acok);if(!o||!pendSettle(o))return;
-    if(!confirm((o.delivered.how==='pix'?'Confirma que o PIX de ':'Confirma que recebeu em dinheiro ')+brl(Number(o.delivered.collect)||o.total)+' do pedido nº '+o.no+'?'))return;done(o);save();toast('Pedido nº '+o.no+' concluído');renderFat()});
-  app.querySelectorAll('[data-acall]').forEach(b=>b.onclick=()=>{const os=(byDrv[b.dataset.acall]||[]).filter(o=>o.delivered.how==='dinheiro');const tot=os.reduce((a,o)=>a+(Number(o.delivered.collect)||0),0);
-    if(!confirm('Confirma que recebeu '+brl(tot)+' em dinheiro de '+(drvName(b.dataset.acall)||'motorista')+' ('+os.length+' pedidos)?'))return;os.forEach(done);save();toast('Acerto registrado');renderFat()});
+  app.querySelectorAll('[data-acok]').forEach(b=>b.onclick=async()=>{const o=S.orders.find(x=>x.id===b.dataset.acok);if(!o||!pendSettle(o))return;
+    if(!await ask((o.delivered.how==='pix'?'Confirma que o PIX de ':'Confirma que recebeu em dinheiro ')+brl(Number(o.delivered.collect)||o.total)+' do pedido nº '+o.no+'?','Confirmar'))return;done(o);save();toast('Pedido nº '+o.no+' concluído');renderFat()});
+  app.querySelectorAll('[data-acall]').forEach(b=>b.onclick=async()=>{const os=(byDrv[b.dataset.acall]||[]).filter(o=>o.delivered.how==='dinheiro');const tot=os.reduce((a,o)=>a+(Number(o.delivered.collect)||0),0);
+    if(!await ask('Confirma que recebeu '+brl(tot)+' em dinheiro de '+(drvName(b.dataset.acall)||'motorista')+' ('+os.length+' pedidos)?','Confirmar'))return;os.forEach(done);save();toast('Acerto registrado');renderFat()});
 }
 
 /* ================= IMPORTAÇÃO EM MASSA (StarIA) E ALTERAÇÃO EM MASSA =================
@@ -685,7 +700,7 @@ function impWaitView(el,im){const P=ui.prc;
       <div class="pbar"><span style="width:35%" class="pulse"></span></div>
       <div><button class="btn ghost dlb" id="imDel">Cancelar esta importação</button></div></div>`;
   $('#imBack').onclick=()=>{P.imp=null;precScreen(el)};
-  $('#imDel').onclick=()=>{if(!confirm('Cancelar esta importação?'))return;im.status='cancelada';save();P.imp=null;precScreen(el)};
+  $('#imDel').onclick=async()=>{if(!await ask('Cancelar esta importação?','Cancelar importação'))return;im.status='cancelada';save();P.imp=null;precScreen(el)};
   impWatch()}
 function impEdit(el,im){im=liveDoc('imports',im);if(im.status==='consultando'){impFillAll();if(im.status==='consultando')return impWaitView(el,im)}
   const P=ui.prc;if(P.selFor!==im.id){P.sel={};ui.bs={}}const SEL=P.sel=P.sel||{};P.selFor=im.id;
@@ -758,27 +773,34 @@ function impEdit(el,im){im=liveDoc('imports',im);if(im.status==='consultando'){i
       if(o.mi!==undefined&&i.trib){const c=imCost(i);if(c>0)i.iePrice=imPriceFor(c,o.mi,true,true)}
       if(o.ref!==undefined){const c=imCost(i);i.refCost=o.ref===null||!(c>0)?'':imR2(c*(1+o.ref/100))}});
     save();toast('Alterado em '+ks.length+' produto'+(ks.length===1?'':'s')+(semCusto?' ('+semCusto+' sem custo ficaram sem preço)':''));rer()};
-  $('#bsrm').onclick=()=>{const ks=LL().filter(i=>SEL[i.k]);if(!ks.length)return;if(!confirm('Tirar '+ks.length+' produto(s) desta importação? Eles não serão cadastrados.'))return;
+  $('#bsrm').onclick=async()=>{const ks=LL().filter(i=>SEL[i.k]);if(!ks.length)return;if(!await ask('Tirar '+ks.length+' produto(s) desta importação? Eles não serão cadastrados.','Tirar da importação'))return;
     im.items=im.items.filter(i=>!ks.includes(i));ks.forEach(i=>delete SEL[i.k]);if(!impLeft(im).length)im.status=(im.items||[]).length?'aprovada':'cancelada';save();
     if(im.status!=='pendente'){P.imp=null;precScreen(el);return}rer()};
   $('#imBack').onclick=()=>{save();P.imp=null;precScreen(el);window.scrollTo(0,0)};
   $('#imSave').onclick=()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();save();toast('Importação salva. Ela continua pendente em Precificação de notas.');P.imp=null;precScreen(el);window.scrollTo(0,0)};
-  $('#imDel').onclick=()=>{if(!confirm('Cancelar a importação inteira? Os '+LL().length+' produtos pendentes não serão cadastrados.'))return;im.status='cancelada';save();P.imp=null;precScreen(el)};
-  $('#imOk').onclick=()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
-    const R=LL().filter(ready);if(!R.length){toast('Nenhum produto com preço ainda.');return}
+  $('#imDel').onclick=async()=>{if(!await ask('Cancelar a importação inteira? Os '+LL().length+' produtos pendentes não serão cadastrados.','Cancelar importação'))return;im.status='cancelada';save();P.imp=null;precScreen(el)};
+  /* por que cada produto ainda não pode ser aprovado */
+  const why=i=>!String(i.name||'').trim()?'Cód. '+(i.code||i.ean||'?')+': falta o nome do produto'
+    :!(Number(i.price)>0)?i.name+': falta o preço sem IE'
+    :i.trib&&Number(i.iePrice)>0&&Number(i.iePrice)>=Number(i.price)?i.name+': o preço com IE precisa ser menor que o sem IE':'';
+  $('#imOk').onclick=async()=>{document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
+    const R=LL().filter(ready),out=LL().filter(i=>!ready(i)).map(why).filter(Boolean);
+    if(!R.length){pageAlert('Nenhum produto pronto para aprovar.','Corrija e tente de novo:',out);return}
     const bad=LL().filter(i=>i.trib&&Number(i.iePrice)>0&&Number(i.price)>0&&Number(i.iePrice)>=Number(i.price));
     const ng=R.filter(i=>neg(i,false)||(i.trib&&Number(i.iePrice)>0&&neg(i,true)));
     const nNew=R.filter(i=>!(i.pid&&(S.products||[]).some(p=>p.id===i.pid))&&!imMatch(i.code,i.ean)).length;
-    if(!confirm('Aprovar '+R.length+' produto(s)? '+nNew+' novo(s) e '+(R.length-nNew)+' atualizado(s).'+(LL().length>R.length?'\n'+(LL().length-R.length)+' sem preço continuam pendentes aqui.':'')+(bad.length?'\n'+bad.length+' com preço com IE maior que o sem IE ficam de fora.':'')+(ng.length?'\nAtenção: '+ng.length+' com margem negativa ('+ng.map(i=>i.name).slice(0,3).join(', ')+').':'')))return;
-    R.forEach(i=>{const cost=imCost(i),pk=Number(i.perPack)>1?Number(i.perPack):'';const ie=i.trib&&Number(i.iePrice)>0?Number(i.iePrice):'';
+    if(!await ask('Aprovar '+R.length+' produto(s)? '+nNew+' novo(s) e '+(R.length-nNew)+' atualizado(s).'+(LL().length>R.length?'\n'+(LL().length-R.length)+' sem preço continuam pendentes aqui.':'')+(bad.length?'\n'+bad.length+' com preço com IE maior que o sem IE ficam de fora.':'')+(ng.length?'\nAtenção: '+ng.length+' com margem negativa ('+ng.map(i=>i.name).slice(0,3).join(', ')+').':''),'Aprovar'))return;
+    try{R.forEach(i=>{const cost=imCost(i),pk=Number(i.perPack)>1?Number(i.perPack):'';const ie=i.trib&&Number(i.iePrice)>0?Number(i.iePrice):'';
       let p=i.pid&&S.products.find(x=>x.id===i.pid);if(!p)p=imMatch(i.code,i.ean);
       const d={name:String(i.name).trim(),cat:String(i.cat||'').trim()||'Outros',sub:String(i.sub||'').trim(),fam:String(i.fam||'').trim(),var:i.fam?String(i.var||imVarOf(i.name,i.fam)):'',unit:String(i.unit||'').trim()||'Unidade',perPack:pk,price:imR2(i.price),trib:!!i.trib,active:i.active!==false};
       if(Number(i.refCost)>cost)d.refCost=imR2(i.refCost);
       if(p){Object.assign(p,d);if(i.code)p.code=i.code;if(i.ean)p.ean=i.ean;if(cost>0)p.cost=cost;if(d.fam)p.famSync=false;if(i.trib)p.iePrice=ie}
       else{p={id:uid(),code:i.code||'',ean:i.ean||'',...d,famSync:false,cost:cost>0?cost:'',iePrice:ie,tablePrices:{},commission:'',stock:'',minStock:'',idealStock:'',showUnit:true,photo:ph(d.name,(d.name.length*37)%360),rules:emptyRules()};S.products.unshift(p)}
-      i.pid=p.id;i.done=true;i.doneAt=new Date().toISOString()});
+      i.pid=p.id;i.done=true;i.doneAt=new Date().toISOString()})}
+    catch(e){console.error(e);pageAlert('Não foi possível aprovar:',(e&&e.message)||String(e),['Nada foi gravado. Tire um print deste aviso e mande para o suporte.']);try{await loadState()}catch(_){}P.imp=null;precScreen(el);return}
     if(!impLeft(im).length){im.status='aprovada';im.aprovadaAt=new Date().toISOString();im.aprovadaBy=ui.adminName||''}
     save();toast(R.length+' produto(s) aprovado(s)'+(im.status==='aprovada'?': importação concluída.':'. Os outros continuam pendentes.'));
+    if(out.length)pageAlert(out.length+' produto(s) ficaram pendentes.','O que falta:',out);
     if(im.status==='aprovada'){P.imp=null;precScreen(el);window.scrollTo(0,0)}else rer()};
 }
 /* cartões das importações na lista de Precificação de notas */
@@ -794,9 +816,9 @@ function prodBulkBind(list,rer){const M=ui.pbulk;if(!M)return;bsBind();const c=$
   const upSel=()=>{const a=$('#bsn');if(a)a.textContent=n();const b=$('#bsgo');if(b)b.disabled=!n();const all=$('#pbAll');if(all)all.checked=list.length&&list.every(p=>M.sel[p.id])};
   c.querySelectorAll('[data-psel]').forEach(b=>b.onchange=()=>{M.sel[b.dataset.psel]=b.checked;upSel()});
   $('#pbAll').onchange=e=>{list.forEach(p=>{M.sel[p.id]=e.target.checked});c.querySelectorAll('[data-psel]').forEach(b=>b.checked=e.target.checked);upSel()};
-  $('#bsgo').onclick=()=>{const o=bsRead();if(typeof o==='string'){toast(o);return}const ps=S.products.filter(p=>M.sel[p.id]);if(!ps.length){toast('Marque os produtos primeiro.');return}
+  $('#bsgo').onclick=async()=>{const o=bsRead();if(typeof o==='string'){toast(o);return}const ps=S.products.filter(p=>M.sel[p.id]);if(!ps.length){toast('Marque os produtos primeiro.');return}
     const what=[o.cat!==undefined&&'categoria "'+o.cat+'"',o.sub!==undefined&&(o.sub?'subcategoria "'+o.sub+'"':'sem subcategoria'),o.fam!==undefined&&(o.fam?'família "'+o.fam+'"':'sem família'),o.unit!==undefined&&'unidade "'+o.unit+'"',o.pk!==undefined&&o.pk+' un. na embalagem',o.trib!==undefined&&(o.trib?'tributado':'não tributado'),o.active!==undefined&&(o.active?'aparece para clientes':'escondido dos clientes'),o.ref!==undefined&&(o.ref===null?'sem custo de referência':'custo de referência = custo + '+String(o.ref).replace('.',',')+'%')].filter(Boolean);
-    if(!confirm('Alterar '+ps.length+' produto(s): '+what.join(', ')+'?'+(o.pk!==undefined?'\nPreço e custo não mudam.':'')))return;
+    if(!await ask('Alterar '+ps.length+' produto(s): '+what.join(', ')+'?'+(o.pk!==undefined?'\nPreço e custo não mudam.':''),'Alterar'))return;
     let semCusto=0;ps.forEach(p=>{bsApplyStruct(p,o);if(o.fam!==undefined)p.famSync=false;
       if(o.ref!==undefined){if(o.ref===null){p.refCost='';delete p.refGone}else if(Number(p.cost)>0)p.refCost=Math.round(Number(p.cost)*(1+o.ref/100)*100)/100;else semCusto++}});
     if(semCusto)toast(semCusto+' sem preço de custo ficaram sem referência');save();toast('Alterado em '+ps.length+' produto'+(ps.length===1?'':'s'));rer()}}

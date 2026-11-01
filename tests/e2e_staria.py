@@ -7,6 +7,14 @@ import json, os, sys, time, urllib.request, http.cookiejar
 from playwright.sync_api import sync_playwright
 BASE = os.environ.get('BASE', 'http://localhost:3077'); ADMIN = os.environ['ADMIN_PASSWORD']; OUT = os.environ.get('OUT', '/tmp')
 fails = []
+def confirma(pg, vezes=3):
+    # confirma a janela de confirmação da página (substituiu o confirm() do navegador)
+    for _ in range(vezes):
+        b = pg.locator('#askov [data-ask="1"]')
+        try: b.wait_for(timeout=1500)
+        except Exception: return
+        b.click(); pg.wait_for_timeout(150)
+
 def chk(c, m): print(('  OK    ' if c else '  FALHA ') + m); (None if c else fails.append(m))
 jar = http.cookiejar.CookieJar(); op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
 def post(path, body): return json.loads(op.open(urllib.request.Request(BASE + path, data=json.dumps(body).encode(), headers={'Content-Type': 'application/json', 'X-App': '1'})).read())
@@ -80,7 +88,7 @@ with sync_playwright() as pw:
         pg.locator('.rcalert [data-ima]').first.click(); pg.wait_for_timeout(800)
         chk(pg.locator(f'[data-ip="{k3}"]').input_value().replace('.', ',') == '8,99', 'preço digitado continua lá ao voltar')
         pg.screenshot(path=f'{OUT}/import_pc.png', full_page=True)
-        pg.click('#imOk'); pg.wait_for_timeout(2000)
+        pg.click('#imOk'); confirma(pg, 1); pg.wait_for_timeout(2000)
         S = state()['S']; P = {p.get('code'): p for p in S['products']}
         w = P.get('99002')
         chk(w and w['cat'] == 'Suplementos' and w['sub'] == 'Proteínas' and w['fam'] == 'WHEY TESTE 900G' and w['var'] == 'MORANGO' and w['trib'] is True and w['price'] > 0 and w['iePrice'] > 0 and w['iePrice'] < w['price'] and abs(w['cost'] - 101.1) < 0.01,
@@ -92,7 +100,7 @@ with sync_playwright() as pw:
         pg.evaluate("()=>document.getElementById('pbP').click()"); pg.wait_for_timeout(400)
         pg.fill('#aq', 'whey teste'); pg.wait_for_timeout(400)
         dmsg = []; pg.on('dialog', lambda d: dmsg.append(d.message))
-        pg.check('#pbAll'); pg.fill('#bssub', 'Whey'); pg.select_option('#bsact', '0'); pg.fill('#bsref', '20'); pg.click('#bsgo'); pg.wait_for_timeout(1500)
+        pg.check('#pbAll'); pg.fill('#bssub', 'Whey'); pg.select_option('#bsact', '0'); pg.fill('#bsref', '20'); pg.click('#bsgo'); dmsg.append(pg.locator('#askov p').inner_text() if pg.locator('#askov').count() else ''); confirma(pg, 1); pg.wait_for_timeout(1500)
         print('   diálogo:', dmsg, '| aviso:', pg.locator('#toast').inner_text() if pg.locator('#toast').count() else '')
         for _ in range(20):
             P = {p.get('code'): p for p in state()['S']['products']}

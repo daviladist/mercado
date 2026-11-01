@@ -8,6 +8,14 @@ CR = json.load(open(os.environ['CREDS']))['final']; ADMIN = os.environ['ADMIN_PA
 PHOTO = os.environ.get('PHOTO', '/tmp/claude-0/-home-claude/d08596d7-f894-59a2-8e8c-7090e0502b8d/scratchpad/canhoto.jpg')
 STUB = """window.jspdf={jsPDF:function(){const d={internal:{pageSize:{getWidth:()=>297,getHeight:()=>210}},lastAutoTable:{finalY:50}};const P=new Proxy(d,{get:(t,k)=>k in t?t[k]:k==='getNumberOfPages'?()=>1:k==='output'?()=>new ArrayBuffer(8):()=>P});return P}};"""
 errs = []; log = []
+def confirma(pg, vezes=3):
+    # confirma a janela de confirmação da página (substituiu o confirm() do navegador)
+    for _ in range(vezes):
+        b = pg.locator('#askov [data-ask="1"]')
+        try: b.wait_for(timeout=1500)
+        except Exception: return
+        b.click(); pg.wait_for_timeout(150)
+
 def say(*a): print(*a); log.append(' '.join(str(x) for x in a))
 def local_only(route): return route.continue_() if route.request.url.startswith(BASE) else route.abort()
 def toast(pg): return (pg.locator('.toast,#toast').all_inner_texts() or [''])[-1]
@@ -161,7 +169,7 @@ with sync_playwright() as pw:
     # ---------- faturamento confirma o PIX (acerto)
     ft.on('dialog', lambda d: d.accept()); ft.reload(); ft.wait_for_timeout(1800); ft.click('[data-ft="acerto"]'); ft.wait_for_timeout(500)
     say('acerto pendente:', ft.locator('#app .acrow').all_inner_texts())
-    for _ in range(ft.locator('[data-acok]').count()): ft.locator('[data-acok]').first.click(); wait_sync(ft, 800)
+    for _ in range(ft.locator('[data-acok]').count()): ft.locator('[data-acok]').first.click(); confirma(ft, 1); wait_sync(ft, 800)
     say('acerto depois:', ft.locator('#app').inner_text()[:200].replace('\n', ' / '))
     # ---------- nada guardado nos aparelhos
     for nm, pg in [('cliente', cli), ('vendedor', ven), ('conferente', cf), ('faturamento', ft), ('entregador', ent), ('admin', adm)]:

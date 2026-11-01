@@ -6,6 +6,14 @@ import json, os, sys, urllib.request, http.cookiejar
 from playwright.sync_api import sync_playwright
 BASE = os.environ.get('BASE', 'http://localhost:3077'); CR = json.load(open(os.environ['CREDS']))['final']; ADMIN = os.environ['ADMIN_PASSWORD']; OUT = os.environ.get('OUT', '/tmp')
 fails = []; ok = 0
+def confirma(pg, vezes=3):
+    # confirma a janela de confirmação da página (substituiu o confirm() do navegador)
+    for _ in range(vezes):
+        b = pg.locator('#askov [data-ask="1"]')
+        try: b.wait_for(timeout=1500)
+        except Exception: return
+        b.click(); pg.wait_for_timeout(150)
+
 def chk(c, m):
     global ok
     print(('  OK    ' if c else '  FALHA ') + m)
@@ -58,7 +66,7 @@ with sync_playwright() as pw:
     cf.locator(f'[data-rcp="{P2["id"]}"]').click(); cf.wait_for_timeout(300)
     q = cf.locator('[data-rq]').nth(1); q.fill('2'); q.press('Enter'); v = cf.locator('[data-rv]').nth(1); v.fill('10'); v.press('Enter'); wait_sync(cf)
     cf.screenshot(path=f'{OUT}/notas_conf.png', full_page=True)
-    cf.click('#rcOk'); wait_sync(cf)
+    cf.click('#rcOk'); confirma(cf); wait_sync(cf)
     S1 = server(); R = [r for r in S1.get('receipts', []) if r['nf'] == '9001']
     chk(R and R[0]['status'] == 'conferida' and len(R[0]['items']) == 2 and abs(R[0]['totalNota'] - (5 * 40.5 + 20)) < 0.01, f"nota conferida com 2 itens e total certo ({R and (R[0]['status'], R[0]['totalNota'])})")
     p1 = [p for p in S1['products'] if p['id'] == P1['id']][0]; p2 = [p for p in S1['products'] if p['id'] == P2['id']][0]
@@ -84,7 +92,7 @@ with sync_playwright() as pw:
     p2v = ft.locator(f'[data-pp="{k2}"]');
     if not p2v.input_value(): p2v.fill('15'); p2v.press('Tab'); wait_sync(ft)
     ft.screenshot(path=f'{OUT}/notas_prec.png', full_page=True)
-    ft.click('#pcOk'); wait_sync(ft)
+    ft.click('#pcOk'); confirma(ft); wait_sync(ft)
     S2 = server(); R = [r for r in S2['receipts'] if r['nf'] == '9001'][0]; p1 = [p for p in S2['products'] if p['id'] == P1['id']][0]
     chk(R['status'] == 'aprovada' and R.get('aprovadaBy'), f"nota aprovada ({R['status']})")
     chk(p1['price'] == 55.9 and p1['iePrice'] == 52.5 and p1['cost'] == 40.5 and p1['trib'] is True, f"produto atualizado: preço {p1['price']}, IE {p1['iePrice']}, custo {p1['cost']}, tributado {p1['trib']}")

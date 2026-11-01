@@ -113,8 +113,23 @@ async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
     srvAlert(e.message||'Não foi possível salvar.');try{await loadState()}catch(_){}srvPersist([]);srvSoftRender(true)}
   finally{SRV.busy=false;srvBadge(false);srvNetBar();if(SRV.again){SRV.again=false;srvSync()}}}
 /* aviso que fica na tela até a pessoa fechar (erros de gravação não podem passar despercebidos) */
-function srvAlert(msg){let b=document.getElementById('srvalert');if(!b){b=document.createElement('div');b.id='srvalert';b.className='srvalert';b.setAttribute('role','alert');document.body.appendChild(b)}
-  b.innerHTML='<b>Não foi gravado:</b> '+esc(msg)+' <button type="button" class="btn ghost dlb">Entendi</button>';b.hidden=false;b.querySelector('button').onclick=()=>{b.hidden=true}}
+function srvAlert(msg){pageAlert('Não foi gravado:',msg)}
+/* mesmo aviso fixo, com título próprio; linhas da lista viram tópicos */
+function pageAlert(title,msg,list){let b=document.getElementById('srvalert');if(!b){b=document.createElement('div');b.id='srvalert';b.className='srvalert';b.setAttribute('role','alert');document.body.appendChild(b)}
+  const L=(list||[]).filter(Boolean),more=L.length>8?'<li>… e mais '+(L.length-8)+'</li>':'';
+  b.innerHTML='<div style="flex:1;min-width:200px"><b>'+esc(title)+'</b> '+esc(msg||'')+(L.length?'<ul style="margin:6px 0 0;padding-left:18px">'+L.slice(0,8).map(x=>'<li>'+esc(x)+'</li>').join('')+more+'</ul>':'')+'</div><button type="button" class="btn ghost dlb">Entendi</button>';
+  b.hidden=false;b.querySelector('button').onclick=()=>{b.hidden=true}}
+/* confirmação dentro da página: o confirm() do navegador é bloqueado em alguns navegadores embutidos
+   (ex.: o navegador do app Claude responde "não" sozinho e o botão parece não fazer nada) */
+function ask(msg,okLabel){return new Promise(res=>{let ov=document.getElementById('askov');if(ov)ov.remove();
+  ov=document.createElement('div');ov.id='askov';ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');
+  ov.innerHTML='<div class="pdbox askbox"><p style="margin:0 0 14px;line-height:1.5">'+esc(msg).replace(/\n/g,'<br>')+'</p><div class="row" style="gap:8px;justify-content:flex-end;flex-wrap:wrap"><button type="button" class="btn ghost" data-ask="0">Voltar</button><button type="button" class="btn" data-ask="1">'+esc(okLabel||'Confirmar')+'</button></div></div>';
+  document.body.appendChild(ov);
+  const onKey=e=>{if(e.key==='Escape')done(false)};
+  const done=v=>{ov.remove();document.removeEventListener('keydown',onKey);res(v)};
+  document.addEventListener('keydown',onKey);ov.onclick=e=>{if(e.target===ov)done(false)};
+  ov.querySelectorAll('[data-ask]').forEach(b=>b.onclick=()=>done(b.dataset.ask==='1'));
+  ov.querySelector('[data-ask="1"]').focus()})}
 function srvBadge(on){let b=document.getElementById('srvbadge');if(!b){b=document.createElement('div');b.id='srvbadge';b.className='srvbadge';b.textContent='Salvando…';document.body.appendChild(b)}b.hidden=!on}
 /* atualiza a tela atual sem perder o que a pessoa está digitando */
 function srvDirty(){return [...document.querySelectorAll('#app input,#app textarea,#app select')].some(i=>!i.closest('.pwbox')&&(i.type==='file'?i.files&&i.files.length:i.type==='checkbox'||i.type==='radio'?i.checked!==i.defaultChecked&&!i.closest('.orst,.romck,[data-fsel],.switch'):i.tagName==='SELECT'?false:i.value!==i.defaultValue))}
