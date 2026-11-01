@@ -1597,6 +1597,8 @@ function admFreteRep(){
 
 
 /* foto provisória: etiqueta colorida com as iniciais do produto */
+/* cliente tem acesso ao app? (cadastro antigo com usuário conta como sim; novo começa desmarcado) */
+function cliApp(c){return c&&c.appAccess!==undefined?!!c.appAccess:!!(c&&c.id&&c.login)}
 function ph(name,hue){
   const ini=name.split(' ').filter(w=>w.length>2).slice(0,2).map(w=>w[0]).join('').toUpperCase();
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"><rect width="300" height="300" fill="hsl(${hue} 45% 86%)"/><circle cx="150" cy="140" r="78" fill="hsl(${hue} 50% 72%)"/><text x="150" y="162" text-anchor="middle" font-family="Arial" font-weight="700" font-size="64" fill="hsl(${hue} 55% 25%)">${ini}</text><text x="150" y="262" text-anchor="middle" font-family="Arial" font-size="18" fill="hsl(${hue} 40% 35%)">foto de exemplo</text></svg>`;
@@ -6339,9 +6341,9 @@ function admClients(){
       </div>
       <label class="switch iesw"><input type="checkbox" id="cie" ${e.ieOk?'checked':''}> <span><b>Contribuinte de ICMS com inscrição estadual ativa</b><br><span class="small muted">Comprando com nota fiscal, recebe o "Preço com IE" dos produtos. Marque depois de conferir a IE no Sintegra.</span></span></label>
       <label class="switch"><input type="checkbox" id="cneg" ${e.canNeg?'checked':''}> <span><b>Pode negociar preço no app</b><br><span class="small muted">Libera o botão "Negociar preço" no carrinho deste cliente (vale quando a negociação está em "Só os clientes marcados").</span></span></label>
-      ${modOn('app_cliente')?'':'<div class="small muted">Esta empresa não usa o app do cliente: não é preciso usuário nem senha. Os pedidos dele entram pelo vendedor ou pela loja.</div>'}
-      <div class="grid2" ${modOn('app_cliente')?'':'hidden'}>
-        <div class="field"><label for="cl">Usuário de acesso</label><input type="text" id="cl" value="${esc(e.login)}" autocapitalize="none" placeholder="Ex.: mercearia.sj" ${modOn('app_cliente')?'required':''}></div>
+      ${modOn('app_cliente')?`<label class="switch"><input type="checkbox" id="capp" ${cliApp(e)?'checked':''}> <span><b>Acesso ao app do cliente</b><br><span class="small muted">Marque para o cliente entrar no app e fazer pedidos sozinho (aí é preciso usuário e senha). Desmarcado, ele compra pelo vendedor ou pela loja.</span></span></label>`:'<div class="small muted">Esta empresa não usa o app do cliente: não é preciso usuário nem senha. Os pedidos dele entram pelo vendedor ou pela loja.</div>'}
+      <div class="grid2" id="cappbox" ${modOn('app_cliente')&&cliApp(e)?'':'style="display:none"'}>
+        <div class="field"><label for="cl">Usuário de acesso</label><input type="text" id="cl" value="${esc(e.login)}" autocapitalize="none" placeholder="Ex.: mercearia.sj"></div>
         <div class="field"><label for="cp">Senha</label><input type="password" id="cp" value="" autocomplete="new-password" placeholder="${e.id&&e.hasPass?'Em branco = manter a senha atual':'Senha base (mín. 8): a pessoa troca no 1º acesso'}"></div>
       </div>
       <div class="grid2">
@@ -6383,8 +6385,13 @@ function admClients(){
     $('#ccancel').onclick=()=>{ui.edit=null;ui.confirmDel=null;renderAdmin()};
     const d=$('#cdel');if(d)d.onclick=()=>{ui.confirmDel=e.id;admClients()};
     const dk=$('#cdelok');if(dk)dk.onclick=()=>{S.customers=S.customers.filter(x=>x.id!==e.id);save();ui.edit=null;ui.confirmDel=null;toast('Cliente removido');renderAdmin()};
+    {const ca=$('#capp');if(ca)ca.onchange=()=>{const bx=$('#cappbox');if(bx)bx.style.display=ca.checked?'':'none';if(ca.checked){const l=$('#cl');if(l&&!l.value.trim()){const d=($('#cdoc').value||'').replace(/\D/g,'');if(d)l.value=d}if(l)l.focus()}}}
     $('#cf').onsubmit=ev=>{ev.preventDefault();
+      const appOn=modOn('app_cliente')&&!!($('#capp')&&$('#capp').checked);
+      if(!appOn){$('#cl').value='';const pw=$('#cp');if(pw)pw.value=''}
       const login=$('#cl').value.trim().toLowerCase();
+      if(appOn&&!login){$('#cerr').textContent='Acesso ao app marcado: crie o usuário de acesso do cliente.';$('#cl').focus();return}
+      if(appOn&&!(e.id&&(e.hasPass||e.pass))&&!$('#cp').value){$('#cerr').textContent='Acesso ao app marcado: crie a senha do cliente (ele troca no primeiro acesso).';$('#cp').focus();return}
       if(login&&loginTaken(login,e.id)){$('#cerr').textContent='Esse usuário já está em uso (por cliente ou equipe). Escolha outro.';return}
       const doc=$('#cdoc').value.replace(/\D/g,'');
       if(doc&&!validDoc(doc)){$('#cerr').textContent=(doc.length===11?'CPF':doc.length===14?'CNPJ':'CNPJ/CPF')+' inválido. Confira os números.';return}
@@ -6401,6 +6408,7 @@ function admClients(){
       const address=[fd.rua,fd.num].filter(Boolean).join(', ')+(fd.comp?' - '+fd.comp:'');
       if($('#cp').value&&$('#cp').value.length<8){$('#cerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}
       const cu={...e,id:e.id||uid(),name,login,pass:$('#cp').value,phone:val('ct'),address,pays,doc,bairro:fd.bairro,city,sellerId:$('#csel').value,table:'',creditLimit:pnum($('#clim').value),fiscal:nfClean(fd),stCode:e.stCode||''};
+      cu.appAccess=appOn;if(!appOn){cu.login='';delete cu.pass}
       cu.ieOk=$('#cie').checked;cu.canNeg=!!($('#cneg')&&$('#cneg').checked);
       if(cu.ieOk){const ie=String(fd.ie||'').toUpperCase();if(!ie||ie==='ISENTO'){$('#cerr').textContent='Para marcar como contribuinte, preencha a inscrição estadual.';return}}
       if(cu.creditLimit!==''&&!(cu.creditLimit>0)){$('#cerr').textContent='Limite de crédito inválido. Deixe em branco ou digite um valor, ex.: 5.000,00.';return}

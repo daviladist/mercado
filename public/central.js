@@ -91,13 +91,15 @@
   }
   /* todos os endereços da empresa, conforme os módulos ligados */
   function accessLinks(t, base) {
-    const m = t.modules || {}, L = [['Painel do administrador', base + '/#admin', 'Dono e gerentes']];
-    L.push(['Vendedores', base + '/#vendedor', 'Lançar pedidos dos clientes']);
-    if (m.app_cliente) L.push(['App dos clientes', base + '/cliente', 'Clientes fazem pedido sozinhos']);
-    if (m.pdv) L.push(['Caixa (PDV)', base + '/pdv', 'Operador de caixa, no computador do balcão']);
-    if (m.conferencia) L.push(['Conferente', base + '/#conferente', 'Separação e conferência']);
-    if (m.faturamento) L.push(['Faturamento', base + '/#faturamento', 'Notas e pedidos para faturar']);
-    if (m.entregas) L.push(['Motoristas', base + '/#entregador', 'Entregas e canhotos']);
+    // "?v=": muda quando a marca muda, e o WhatsApp busca a prévia nova (ele guarda a antiga por dias)
+    const v = t.primary ? '' : '?v=' + (new Date(t.updatedAt || 0).getTime() % 1e8).toString(36);
+    const m = t.modules || {}, L = [['Painel do administrador', base + '/' + v + '#admin', 'Dono e gerentes']];
+    L.push(['Vendedores', base + '/' + v + '#vendedor', 'Lançar pedidos dos clientes']);
+    if (m.app_cliente) L.push(['App dos clientes', base + '/cliente' + v, 'Clientes fazem pedido sozinhos']);
+    if (m.pdv) L.push(['Caixa (PDV)', base + '/pdv' + v, 'Operador de caixa, no computador do balcão']);
+    if (m.conferencia) L.push(['Conferente', base + '/' + v + '#conferente', 'Separação e conferência']);
+    if (m.faturamento) L.push(['Faturamento', base + '/' + v + '#faturamento', 'Notas e pedidos para faturar']);
+    if (m.entregas) L.push(['Motoristas', base + '/' + v + '#entregador', 'Entregas e canhotos']);
     return L;
   }
   /* endereço e acesso do administrador da empresa */

@@ -106,5 +106,18 @@ s, r = pedido_vend(); check(s == 200 and not r.get('rejected'), 'o vendedor cont
 cen.req('/api/central/tenant', {'id': dav['id'], 'modules': {'app_cliente': True, 'ofertas': True}})
 s, b = C().req('/api/brand'); check(b.get('clientes') is True, 'religado: app do cliente volta')
 
+print('== acesso ao app por cliente')
+PW9 = pw()
+s, r = A.req('/api/sync', {'changes': [{'c': 'customers', 'id': 'cx', 'op': 'put', 'doc': {'id': 'cx', 'name': 'Sem App', 'doc': '45.997.418/0001-53', 'appAccess': False, 'login': 'sem.app', 'pass': PW9}}]})
+check(s == 200 and not r.get('rejected'), 'cliente cadastrado SEM acesso ao app (só os dados)')
+for lg in ('sem.app', '45997418000153'):
+    s, _ = C().req('/api/login', {'role': 'cliente', 'login': lg, 'password': PW9}); check(s in (401, 403), 'sem acesso: não entra com "%s" (%s)' % (lg, s))
+s, st = A.req('/api/state'); cx = next(c for c in st['S']['customers'] if c['id'] == 'cx'); V2 = st['V']['customers']['cx']
+s, r = A.req('/api/sync', {'changes': [{'c': 'customers', 'id': 'cx', 'op': 'put', 'ver': V2, 'doc': dict(cx, appAccess=True, login='com.app', pass_=None, **{'pass': PW9})}]})
+s, me = C().req('/api/login', {'role': 'cliente', 'login': 'com.app', 'password': PW9}); check(s == 200, 'marcou acesso ao app com usuário e senha: entra (%s)' % s)
+s, st = A.req('/api/state'); cx = next(c for c in st['S']['customers'] if c['id'] == 'cx'); V2 = st['V']['customers']['cx']
+A.req('/api/sync', {'changes': [{'c': 'customers', 'id': 'cx', 'op': 'put', 'ver': V2, 'doc': dict(cx, appAccess=False, login='')}]})
+s, _ = C().req('/api/login', {'role': 'cliente', 'login': 'com.app', 'password': PW9}); check(s in (401, 403), 'desmarcou o acesso: não entra mais (%s)' % s)
+
 print(f'\n{ok} OK, {len(fails)} falha(s)')
 if fails: print('\n'.join(' - ' + f for f in fails)); sys.exit(1)
