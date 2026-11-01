@@ -59,6 +59,10 @@
       <div><h1>${esc(t.name || 'Nova empresa')}</h1><p class="muted small" style="margin:4px 0 0">${on} de ${D.modules.length} módulos ligados · essenciais sempre ativos</p></div>
       <div class="field" style="min-width:180px"><label for="fst">Situação</label><select id="fst">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${t.status === k ? 'selected' : ''} ${t.primary && k !== 'ativa' ? 'disabled' : ''}>${v}</option>`).join('')}</select></div>
     </section>
+    <section class="card" style="display:grid;gap:10px" aria-labelledby="hwho">
+      <div><h2 id="hwho">Quem usa o sistema</h2><p class="muted small" style="margin:4px 0 0">Sem app do cliente, a vitrine e tudo o que é do cliente ficam desligados: os pedidos entram pelos vendedores e pela loja.</p></div>
+      <div class="presets"><button type="button" data-who="0" aria-pressed="${!t.modules.app_cliente}">Só a equipe (cliente compra pelo vendedor)</button><button type="button" data-who="1" aria-pressed="${!!t.modules.app_cliente}">Equipe e clientes (app do cliente)</button></div>
+    </section>
     ${t.id ? accessCard(t) : '<div class="note">Salve a empresa para gerar o endereço e o acesso do administrador dela.</div>'}
     <section class="card" style="display:grid;gap:16px" aria-labelledby="hid">
       <h2 id="hid">Identidade da marca</h2>
@@ -79,21 +83,30 @@
       <div class="presets">${D.segments.map(s => `<button type="button" data-seg="${esc(s.id)}" aria-pressed="${seg === s.id}">${esc(s.name)}</button>`).join('')}${seg ? '' : '<button type="button" aria-pressed="true" disabled>Personalizado</button>'}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn dark" id="segNew">+ Criar segmento</button><button type="button" class="btn" id="segList">Editar segmentos</button></div>
     </section>
-    ${groups.map(g => `<section class="card grp"><h2>${esc(g)}${g === 'Essenciais' ? '<small>Não podem ser desligados</small>' : ''}</h2>
-      ${D.modules.filter(m => m.group === g).map(m => `<div class="mod"><div class="t"><div class="n">${esc(m.name)}${!m.essential && !m.enforced ? '<span class="tag">efeito na próxima etapa</span>' : m.enforced === 'tela' ? '<span class="tag">só esconde a tela</span>' : ''}</div><div class="d">${esc(m.desc)}</div></div>
-        ${m.essential ? '<span class="lock">Sempre ativo</span>' : `<button type="button" class="sw-t" role="switch" data-m="${esc(m.code)}" aria-checked="${!!t.modules[m.code]}" aria-label="${esc(m.name)}"><span></span></button>`}</div>`).join('')}</section>`).join('')}
+    ${groups.filter(g => g !== 'Acesso').map(g => `<section class="card grp"><h2>${esc(g)}${g === 'Essenciais' ? '<small>Não podem ser desligados</small>' : ''}</h2>
+      ${D.modules.filter(m => m.group === g).map(m => { const blk = m.requires && !t.modules[m.requires]; return `<div class="mod"><div class="t"><div class="n">${esc(m.name)}${blk ? '<span class="tag">precisa do app do cliente</span>' : !m.essential && !m.enforced ? '<span class="tag">efeito na próxima etapa</span>' : m.enforced === 'tela' ? '<span class="tag">só esconde a tela</span>' : ''}</div><div class="d">${esc(m.desc)}</div></div>
+        ${m.essential ? '<span class="lock">Sempre ativo</span>' : `<button type="button" class="sw-t" role="switch" data-m="${esc(m.code)}" aria-checked="${!blk && !!t.modules[m.code]}" aria-label="${esc(m.name)}" ${blk ? 'disabled style="opacity:.45;cursor:not-allowed"' : ''}><span></span></button>`}</div>` }).join('')}</section>`).join('')}
     <div class="bar${dirty ? ' dirty' : ''}"><span>${dirty ? 'Há mudanças sem salvar.' : 'Tudo salvo.'}</span><div style="display:flex;gap:8px"><button class="btn ghost-light" type="button" id="undo" ${dirty ? '' : 'disabled'}>Desfazer</button><button class="btn primary" type="button" id="save" ${dirty ? '' : 'disabled'}>Salvar configuração</button></div></div>`;
     bind();
+  }
+  /* todos os endereços da empresa, conforme os módulos ligados */
+  function accessLinks(t, base) {
+    const m = t.modules || {}, L = [['Painel do administrador', base + '/#admin', 'Dono e gerentes']];
+    L.push(['Vendedores', base + '/#vendedor', 'Lançar pedidos dos clientes']);
+    if (m.app_cliente) L.push(['App dos clientes', base + '/cliente', 'Clientes fazem pedido sozinhos']);
+    if (m.pdv) L.push(['Caixa (PDV)', base + '/pdv', 'Operador de caixa, no computador do balcão']);
+    if (m.conferencia) L.push(['Conferente', base + '/#conferente', 'Separação e conferência']);
+    if (m.faturamento) L.push(['Faturamento', base + '/#faturamento', 'Notas e pedidos para faturar']);
+    if (m.entregas) L.push(['Motoristas', base + '/#entregador', 'Entregas e canhotos']);
+    return L;
   }
   /* endereço e acesso do administrador da empresa */
   function accessCard(t) {
     const base = location.origin + (t.primary ? '' : '/t/' + t.id), st = t.stats || {};
     return `<section class="card" style="display:grid;gap:12px" aria-labelledby="hac">
       <h2 id="hac">Acesso da empresa</h2>
-      <div class="grid">
-        <div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Endereço da equipe</span><code class="link">${esc(base + '/#admin')}</code></div>
-        <div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Endereço dos clientes</span><code class="link">${esc(base + '/cliente')}</code></div>
-      </div>
+      <div class="links">${accessLinks(t, base).map(([lb, url, note]) => `<div class="lk"><div class="lk-t"><b>${esc(lb)}</b>${note ? `<span class="small muted">${esc(note)}</span>` : ''}</div><code class="link">${esc(url)}</code><div class="lk-b"><button type="button" class="btn" data-copy="${esc(url)}">Copiar</button><a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Abrir</a></div></div>`).join('')}</div>
+      ${t.modules.app_cliente ? '' : '<p class="small muted" style="margin:0">Sem app do cliente: os clientes compram pelo vendedor (não há endereço de cliente).</p>'}
       <p class="small muted" style="margin:0">${st.products || 0} produtos · ${st.orders || 0} pedidos · ${st.users || 0} usuários${t.adminLogin ? ' · administrador: ' + esc(t.adminLogin) : ''}</p>
       ${t.primary ? '<p class="small muted" style="margin:0">A empresa principal cuida dos próprios acessos pelo painel dela.</p>' : `
       <div class="logo-row">
@@ -127,12 +140,14 @@
     E.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => { draft.color = b.dataset.c; touch(); }));
     $('#fcolor').addEventListener('change', e => { draft.color = e.target.value.toUpperCase(); touch(); });
     E.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { draft.segment = b.dataset.seg; draft.modules = presetMods(b.dataset.seg); touch(); }));
-    E.querySelectorAll('[data-m]').forEach(b => b.addEventListener('click', () => { draft.modules[b.dataset.m] = !draft.modules[b.dataset.m]; touch(); }));
+    E.querySelectorAll('[data-m]').forEach(b => b.addEventListener('click', () => { if (b.disabled) return; draft.modules[b.dataset.m] = !draft.modules[b.dataset.m]; touch(); }));
+    E.querySelectorAll('[data-who]').forEach(b => b.addEventListener('click', () => { const on = b.dataset.who === '1'; draft.modules.app_cliente = on; if (!on) D.modules.forEach(m => { if (m.requires === 'app_cliente') draft.modules[m.code] = false; }); touch(); }));
     const rm = $('#frmlogo'); if (rm) rm.addEventListener('click', () => { draft.logo = null; touch(); });
     $('#flogo').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) readLogo(f); });
     $('#undo').addEventListener('click', () => pick(sel));
     $('#save').addEventListener('click', save);
     const ag = $('#agen'); if (ag) ag.addEventListener('click', genAdmin);
+    E.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Endereço copiado'); } catch (e) { toast('Não consegui copiar: selecione o endereço e copie.'); } }));
     $('#segNew').addEventListener('click', () => { segUI = { edit: { id: null, name: '', modules: segMods(draft.modules) }, fromCo: true }; renderSegs(); });
     $('#segList').addEventListener('click', () => { segUI = { edit: null }; renderSegs(); });
   }
@@ -177,7 +192,7 @@
     $('#sgFromCo').addEventListener('click', () => { keepName(); ed.modules = segMods(draft.modules); renderSegs(); });
     $('#sgAll').addEventListener('click', () => { keepName(); Object.keys(ed.modules).forEach(k => { ed.modules[k] = true; }); renderSegs(); });
     $('#sgNone').addEventListener('click', () => { keepName(); Object.keys(ed.modules).forEach(k => { ed.modules[k] = false; }); renderSegs(); });
-    E.querySelectorAll('[data-sgm]').forEach(b => b.addEventListener('click', () => { keepName(); ed.modules[b.dataset.sgm] = !ed.modules[b.dataset.sgm]; const y = window.scrollY; renderSegs(); window.scrollTo(0, y); }));
+    E.querySelectorAll('[data-sgm]').forEach(b => b.addEventListener('click', () => { keepName(); ed.modules[b.dataset.sgm] = !ed.modules[b.dataset.sgm]; if (!ed.modules.app_cliente) D.modules.forEach(m => { if (m.requires === 'app_cliente') ed.modules[m.code] = false; }); const y = window.scrollY; renderSegs(); window.scrollTo(0, y); }));
     $('#sgSave').addEventListener('click', async () => {
       keepName(); const nm = ed.name.trim();
       if (nm.length < 2) { toast('Dê um nome ao modelo (ex.: Varejo).'); $('#sgName').focus(); return; }

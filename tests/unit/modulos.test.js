@@ -20,7 +20,8 @@ test('empresa nova começa desligada no que não veio no pacote', () => {
 test('toda coleção e papel protegidos apontam para módulo que existe e não é essencial', () => {
   Object.values(M.COLL_MODULE).concat(Object.values(M.ROLE_MODULE)).forEach(c => { assert.ok(M.BY_CODE[c]); assert.ok(!M.BY_CODE[c].essential); });
   ['orders', 'products', 'customers'].forEach(c => assert.strictEqual(M.COLL_MODULE[c], undefined));
-  ['admin', 'cliente', 'vendedor'].forEach(r => assert.strictEqual(M.ROLE_MODULE[r], undefined));
+  ['admin', 'vendedor'].forEach(r => assert.strictEqual(M.ROLE_MODULE[r], undefined));
+  assert.strictEqual(M.ROLE_MODULE.cliente, 'app_cliente');
 });
 test('códigos únicos', () => { assert.strictEqual(new Set(M.MODULES.map(m => m.code)).size, M.MODULES.length); });
 test('módulo que diz "servidor" tem efeito no servidor (dados, configuração ou login)', () => {
@@ -44,4 +45,10 @@ test('frete de terceiro: começa desligado na empresa principal e fora do pacote
   assert.strictEqual(M.presetFor('atacado').frete3, false);
   assert.strictEqual(M.COLL_MODULE.carriers, 'frete3');
   assert.strictEqual(M.COLL_MODULE.carrierPays, 'frete3');
+});
+test('sem app do cliente, a vitrine semanal desliga junto', () => {
+  const r = M.resolve({ default_on: true, modules: { app_cliente: false, ofertas: true } });
+  assert.strictEqual(r.app_cliente, false); assert.strictEqual(r.ofertas, false);
+  assert.strictEqual(M.resolve({ default_on: true, modules: {} }).app_cliente, true);
+  assert.strictEqual(M.presetFor('atacado').app_cliente, true);
 });

@@ -25,20 +25,22 @@ async function api(path,body){
   let j={};try{j=await r.json()}catch(e){}
   if(!r.ok){const e=new Error(j.error||('Erro '+r.status));e.status=r.status;e.data=j;throw e}
   return j}
-function emptyState(){return {store:{name:'ATACADO DAVILA',pickupDisc:0,pickV:1,onerV:2,pickupOner:false},payments:[],cashPays:[],payDays:{},products:[],customers:[],orders:[],receivables:[],payables:[],sellers:[],checkers:[],billers:[],vehicles:[],cities:[],categories:[],combos:[],counts:[],commPayouts:[],trips:[],romaneios:[],admins:[],suppliers:[],receipts:[],stariaJobs:[],imports:[],cashiers:[],carriers:[],carrierPays:[],seq:1001,catTreeV1:true}}
+const SRV_PRE=(()=>{try{const m=document.querySelector('meta[name="tino-brand"]');return m?JSON.parse(m.content):null}catch(e){return null}})();
+function emptyState(){return {store:{name:SRV_PRE?String(SRV_PRE.name||'').toUpperCase():'ATACADO DAVILA',pickupDisc:0,pickV:1,onerV:2,pickupOner:false},payments:[],cashPays:[],payDays:{},products:[],customers:[],orders:[],receivables:[],payables:[],sellers:[],checkers:[],billers:[],vehicles:[],cities:[],categories:[],combos:[],counts:[],commPayouts:[],trips:[],romaneios:[],admins:[],suppliers:[],receipts:[],stariaJobs:[],imports:[],cashiers:[],carriers:[],carrierPays:[],seq:1001,catTreeV1:true}}
 function srvFix(){const E=emptyState();Object.keys(E).forEach(k=>{if(S[k]==null)S[k]=E[k]});S.store=Object.assign({},E.store,S.store||{});
   (S.products||[]).forEach(p=>{if(p.perPack===undefined)p.perPack=parsePack(p.unit);if(p.code==null)p.code='';if(p.ean==null)p.ean='';p.rules=Object.assign(emptyRules(),p.rules||{})})}
 function srvSnap(){SRV.base={meta:{}};SRV.ord={};
   SRV_COLLS.forEach(c=>{SRV.base[c]={};(S[c]||[]).forEach(d=>{if(d&&d.id)SRV.base[c][d.id]=JSON.stringify(d)});SRV.ord[c]=(S[c]||[]).map(d=>d&&d.id)});
   Object.keys(S).forEach(k=>{if(!SRV_COLLS.includes(k)&&k!=='seq')SRV.base.meta[k]=JSON.stringify(S[k])})}
 /* Tino: módulos e marca da empresa, definidos na Central do sistema */
-let TENANT=null;
+let TENANT=SRV_PRE?{id:SRV_PRE.id,primary:false,brand:{name:SRV_PRE.name,color:SRV_PRE.color,logo:null},modules:null}:null;
 /* antes do login: nome, cor e logo da empresa do endereço (empresa que não é a principal não mostra a marca da principal) */
-async function srvLoadBrand(){try{const b=await api('/api/brand');if(b&&!b.primary){TENANT={id:b.id,primary:false,brand:{name:b.name,color:b.color,logo:b.logo},modules:null};{const m=document.querySelector('link[rel=manifest]');if(m)m.href='/api/manifest?t='+encodeURIComponent(TSLUG)+(CLIENT_ONLY?'&k=cliente':'');const ic=document.querySelector('link[rel=apple-touch-icon]');if(ic)ic.href='/icons/tino-180.png';const at=document.querySelector('meta[name=apple-mobile-web-app-title]');if(at)at.content=String(b.name||'Tino').slice(0,30)}S.store.name=String(b.name||'').toUpperCase();document.title=b.name||document.title;srvBrand()}}catch(e){if(e.status===404){document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>';throw e}}}
+let SRV_NOCLI=false,SRV_BNAME='';
+async function srvLoadBrand(){try{const b=await api('/api/brand');SRV_NOCLI=!!(b&&b.clientes===false);SRV_BNAME=String(b&&b.name||'');if(b&&!b.primary){TENANT={id:b.id,primary:false,brand:{name:b.name,color:b.color,logo:b.logo},modules:null};{const m=document.querySelector('link[rel=manifest]');if(m)m.href='/api/manifest?t='+encodeURIComponent(TSLUG)+(CLIENT_ONLY?'&k=cliente':'');const ic=document.querySelector('link[rel=apple-touch-icon]');if(ic)ic.href='/icons/tino-180.png';const at=document.querySelector('meta[name=apple-mobile-web-app-title]');if(at)at.content=String(b.name||'Tino').slice(0,30)}S.store.name=String(b.name||'').toUpperCase();document.title=b.name||document.title;srvBrand()}}catch(e){if(e.status===404){document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>';throw e}}}
 function srvBrand(){const c=TENANT&&TENANT.brand&&TENANT.brand.color;if(!c||!/^#[0-9A-Fa-f]{6}$/.test(c))return;
   const n=parseInt(c.slice(1),16),dk=[16,8,0].map(k=>Math.round(((n>>k)&255)*.78).toString(16).padStart(2,'0')).join(''),R=document.documentElement.style;
   R.setProperty('--brand',c);R.setProperty('--brand-dark','#'+dk);if(TENANT&&TENANT.primary===false){R.setProperty('--accent',c);R.setProperty('--stripe','#'+dk);R.setProperty('--accent-soft',c+'1F')}const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',c)}
-async function loadState(){const r=await api('/api/state');SRV.me=r.me;S=r.S;SRV.V=r.V||{meta:{}};TENANT=r.T||null;srvBrand();srvFix();srvSnap();
+async function loadState(){const r=await api('/api/state');SRV.me=r.me;S=r.S;SRV.V=r.V||{meta:{}};TENANT=r.T||null;srvBrand();try{if(typeof pdfLogo==='function')pdfLogo()}catch(e){}srvFix();srvSnap();
   if(ui.client)ui.client=S.customers.find(c=>c.id===ui.client.id)||null;
   if(SRV.me&&SRV.me.role==='cliente')ui.client=S.customers.find(c=>c.id===SRV.me.refId)||ui.client}
 function srvInPlace(t,s){Object.keys(t).forEach(k=>{if(!(k in s))delete t[k]});return Object.assign(t,s)}
@@ -147,7 +149,7 @@ function srvAfterLogin(){const me=SRV.me;SRV.lastPass='';ui.view=ROLE_VIEW[me.ro
 async function srvLogout(){if(srvDiff().ch.length&&!confirm('Há alterações que ainda não foram enviadas ao servidor. Sair mesmo assim? Elas serão perdidas.'))return;
   try{localStorage.removeItem(srvPendKey());localStorage.removeItem(srvDraftKey());if(typeof pdvSnapDrop==='function')pdvSnapDrop()}catch(e){}try{await api('/api/logout',{})}catch(e){}try{history.replaceState(null,'',location.pathname)}catch(e){}location.reload()}
 /* primeira entrada com senha provisória: a pessoa cria a senha dela */
-function srvResetScreen(){ui.view=ROLE_VIEW[SRV.me.role]||'cliente';const app=$('#app');try{renderTop()}catch(e){}$('#topbar').innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name||'ATACADO DAVILA')}</span><small>Crie sua senha</small></span></div>`;
+function srvResetScreen(){ui.view=ROLE_VIEW[SRV.me.role]||'cliente';const app=$('#app');try{renderTop()}catch(e){}$('#topbar').innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name||'')}</span><small>Crie sua senha</small></span></div>`;
   app.innerHTML=`<div class="loginhero"><img src="${brandLogo()}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="rsf"><h2>Crie a sua senha</h2>
     <div class="small muted">Olá, ${esc(SRV.me.name||SRV.me.login)}. A senha que você usou é provisória. Crie uma senha só sua${SRV.me.role==='admin'?' (mínimo 10 caracteres)':' (mínimo 8 caracteres)'}, com letras e números.</div>
     ${SRV.lastPass?'':'<div class="field"><label for="rso">Senha atual</label><input type="password" id="rso" autocomplete="current-password" required></div>'}
@@ -179,7 +181,7 @@ function srvLock(R2,cli,L){if(!R2.items.length||!cli)return null;const k=srvLock
   return null}
 function srvItemLevel(p,L,cli){const c=SRV_LK[srvLockKey(cli,L)];return c&&c.levels?c.levels[p.id]||null:null}
 /* backup completo vem do servidor (com fotos e sem senhas); restaurar também passa pelo servidor */
-async function srvBackup(){try{const j=await api('/api/backup');const ok=await offerFile('backup-atacado-davila-'+stamp()+'.json',JSON.stringify(j));if(ok){S.store.lastBackup=today();save();render()}}catch(e){toast(e.message)}}
+async function srvBackup(){try{const j=await api('/api/backup');const ok=await offerFile('backup-'+((TENANT&&TENANT.id)||'atacado-davila')+'-'+stamp()+'.json',JSON.stringify(j));if(ok){S.store.lastBackup=today();save();render()}}catch(e){toast(e.message)}}
 async function srvRestore(d){try{const r=await api('/api/restore',{data:d});toast('Backup restaurado: '+r.stats.docs+' registros.');await loadState();render()}catch(e){toast(e.message)}}
 /* senhas provisórias para quem ainda não tem senha (mostradas uma única vez) */
 async function srvTempPasswords(box){try{const r=await api('/api/temp-passwords',{});if(!r.list.length){box.innerHTML='<div class="small muted">Todo mundo com acesso já tem senha.</div>';return}
@@ -241,7 +243,7 @@ function srvStandalone(){return (window.matchMedia&&matchMedia('(display-mode: s
 function srvIsIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)}
 /* aparece só nas telas de entrada, para não atrapalhar o uso */
 function srvInstallBox(){document.querySelectorAll('.instbox').forEach(x=>x.remove());if(srvStandalone()||SRV.me)return;
-  const f=document.querySelector('form.login');if(!f)return;const name=CLIENT_ONLY?"D'Ávila Pedidos":"D'Ávila Equipe";let html='';
+  const f=document.querySelector('form.login');if(!f)return;const bn=TENANT&&TENANT.brand&&TENANT.brand.name?String(TENANT.brand.name):'',name=bn?(CLIENT_ONLY?bn:bn+' Equipe'):(CLIENT_ONLY?"D'Ávila Pedidos":"D'Ávila Equipe");let html='';
   if(SRV_INSTALL)html=`<button type="button" class="btn ghost block" id="instBtn">📲 Instalar o app ${esc(name)} no celular</button>`;
   else if(srvIsIOS())html=`<div class="small muted">📲 Para ter o app na tela do iPhone: no Safari, toque em <b>Compartilhar</b> (o quadrado com a seta) e depois em <b>Adicionar à Tela de Início</b>.</div>`;
   else if(/android/i.test(navigator.userAgent))html=`<div class="small muted">📲 Para ter o app na tela do celular: no Chrome, toque nos <b>três pontinhos</b> e em <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</div>`;
@@ -296,3 +298,70 @@ document.addEventListener('change',e=>{const i=e.target;if(!i||!i.matches||!i.ma
   set();window.addEventListener('resize',later);window.addEventListener('orientationchange',()=>setTimeout(set,300));
   try{const h=document.querySelector('header.top');if(h&&window.ResizeObserver)new ResizeObserver(later).observe(h)}catch(e){}
   try{new MutationObserver(()=>{band();later()}).observe(document.body,{childList:true,subtree:true})}catch(e){}})();
+
+/* ===================== Telas de entrada com a marca da empresa + assinatura Tino =====================
+   Vale para todas as telas de login (cliente, administrador, vendedor, conferente, faturamento, motorista,
+   primeiro acesso). A empresa aparece em destaque (logo, nome, cor); embaixo, a assinatura do Tino. */
+const TINO_SPARK='<svg aria-hidden="true" viewBox="0 0 40 40" width="22" height="22"><path d="M20 0 C22 13 27 18 40 20 C27 22 22 27 20 40 C18 27 13 22 0 20 C13 18 18 13 20 0 Z" fill="currentColor"/></svg>';
+function tinoFontOnce(){if(document.getElementById('tinofont'))return;const l=document.createElement('link');l.id='tinofont';l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family=Sora:wght@500;700;800&display=swap';document.head.appendChild(l)}
+function tinoLoginCss(){if(document.getElementById('tlogincss'))return;const st=document.createElement('style');st.id='tlogincss';st.textContent=`
+body.tlogin{background:linear-gradient(160deg,var(--brand) 0%,var(--brand-dark,var(--brand)) 100%) top/100% clamp(300px,42vh,380px) no-repeat,var(--bg);min-height:100vh}
+body.tlogin::before{content:'';position:fixed;left:0;right:0;top:0;height:clamp(300px,42vh,380px);pointer-events:none;background:radial-gradient(600px 240px at 85% 0%,rgba(255,255,255,.14),transparent 70%),radial-gradient(500px 220px at 5% 100%,rgba(0,0,0,.12),transparent 70%);z-index:0}
+body.tlogin main{position:relative;z-index:1}
+body.tlogin header.top{display:none}
+body.tlogin #app{padding-top:clamp(18px,6vh,64px);padding-bottom:28px}
+body.tlogin .loginhero{max-width:420px;margin:0 auto;background:transparent;border:0;padding:6px 16px 22px;gap:10px;box-shadow:none}
+body.tlogin .loginhero img{width:170px;max-width:56%;height:auto;max-height:120px;object-fit:contain;filter:drop-shadow(0 6px 14px rgba(0,0,0,.28))}
+body.tlogin .loginhero .lhname{font-size:clamp(22px,4.2vw,28px);font-weight:800;letter-spacing:-.01em;line-height:1.1;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.18)}
+body.tlogin .loginhero>div:not(.lhname){font-weight:500;font-size:14px;color:rgba(255,255,255,.9)}
+body.tlogin .loginhero+.login,body.tlogin .loginhero+.panel,body.tlogin .loginhero+section{max-width:420px;margin:0 auto;border-radius:18px;box-shadow:0 18px 48px rgba(16,24,32,.16),0 2px 6px rgba(16,24,32,.06);border:1px solid color-mix(in srgb,var(--line,#ddd) 70%,transparent);padding:22px}
+body.tlogin .login h2{font-size:20px;margin:0 0 2px}
+body.tlogin .login .hint:empty{display:none}
+body.tlogin .login .btn[type=submit]{min-height:48px;font-size:16px}
+.tsig{max-width:420px;margin:22px auto 0;display:grid;justify-items:center;gap:6px;text-align:center;font-family:"Sora",system-ui,sans-serif;color:var(--muted,#667)}
+.tsig .tsig-line{display:flex;align-items:center;gap:8px}
+.tsig .tsig-ic{width:34px;height:34px;border-radius:10px;background:#1F3D2B;color:#E8A33D;display:grid;place-items:center;box-shadow:0 4px 12px rgba(31,61,43,.25)}
+.tsig .tsig-wm{font-weight:800;font-size:22px;letter-spacing:-.03em;color:#1F3D2B}
+.tsig .tsig-sl{font-size:13px;font-weight:500}.tsig .tsig-sl b{color:#C9861F;font-weight:700}
+.tsig .tsig-by{font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.75}
+@media (prefers-color-scheme:dark){.tsig .tsig-wm{color:#F6F1E7}.tsig .tsig-sl b{color:#E8A33D}}
+html[data-theme=dark] .tsig .tsig-wm{color:#F6F1E7}html[data-theme=dark] .tsig .tsig-sl b{color:#E8A33D}
+html[data-theme=light] .tsig .tsig-wm{color:#1F3D2B}
+`;document.head.appendChild(st)}
+function tinoCoName(){const n=SRV_BNAME||(TENANT&&TENANT.brand&&TENANT.brand.name)||'';return n||String(S&&S.store&&S.store.name||'')}
+function tinoLoginDecor(){
+  const app=document.getElementById('app');if(!app)return;
+  const hero=app.querySelector('.loginhero'),on=!!hero&&!document.body.classList.contains('pdvmode');
+  document.body.classList.toggle('tlogin',on);if(!on)return;
+  tinoFontOnce();tinoLoginCss();
+  if(!hero.querySelector('.lhname')){const nm=tinoCoName();if(nm){const d=document.createElement('div');d.className='lhname';d.textContent=nm;const img=hero.querySelector('img');if(img)img.after(d);else hero.prepend(d)}
+    const sub=[...hero.children].find(x=>x.tagName==='DIV'&&!x.classList.contains('lhname'));
+    if(sub&&TENANT&&!TENANT.primary&&/atacado com preço de distribuidor/i.test(sub.textContent))sub.textContent='Faça seu pedido online'}
+  if(!app.querySelector('.tsig')){const s=document.createElement('div');s.className='tsig';
+    s.innerHTML='<div class="tsig-line"><span class="tsig-ic">'+TINO_SPARK+'</span><span class="tsig-wm">tino</span></div><div class="tsig-sl">Quem tem Tino, <b>vende melhor.</b></div><div class="tsig-by">Sistema de pedidos e gestão Tino</div>';
+    app.appendChild(s)}
+}
+(()=>{const run=()=>{try{tinoLoginDecor()}catch(e){}};const a=document.getElementById('app');if(a)new MutationObserver(run).observe(a,{childList:true});run()})();
+
+/* ===================== Foto do produto por cima da tela (lançar pedido) =====================
+   Ícone pequeno ao lado do nome; abre a foto sem sair da página; fecha no X, fora da foto ou com Esc. */
+const LNPH_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="4"/></svg>';
+function lnHasPhoto(p){const f=String(p&&p.photo||'');return !!f&&!f.startsWith('data:image/svg+xml')}
+function lnPhotoBtn(p){return lnHasPhoto(p)?` <button type="button" class="lnph" data-lnph="${esc(p.id)}" title="Ver foto" aria-label="Ver foto de ${esc(p.name)}">${LNPH_ICON}</button>`:''}
+function lnPhotoClose(){const o=document.getElementById('lnphov');if(o)o.remove();document.removeEventListener('keydown',lnPhotoKey,true)}
+function lnPhotoKey(e){if(e.key==='Escape'){e.preventDefault();e.stopPropagation();lnPhotoClose()}}
+function lnPhotoOpen(p){lnPhotoClose();if(!document.getElementById('lnphcss')){const st=document.createElement('style');st.id='lnphcss';st.textContent=`
+.lnph{display:inline-grid;place-items:center;width:26px;height:26px;margin-left:4px;vertical-align:middle;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:0;cursor:pointer}
+.lnph:hover,.lnph:focus-visible{color:var(--accent);border-color:var(--accent)}
+#lnphov{position:fixed;inset:0;z-index:300;background:rgba(10,14,20,.72);display:grid;place-items:center;padding:16px}
+#lnphov .box{position:relative;background:var(--surface);border-radius:16px;padding:14px 14px 12px;max-width:min(560px,96vw);max-height:92vh;display:grid;gap:8px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+#lnphov img{max-width:100%;max-height:calc(92vh - 80px);min-width:min(240px,80vw);min-height:180px;object-fit:contain;border-radius:10px;background:#fff;display:block;margin:0 auto}
+#lnphov .x{position:absolute;top:-12px;right:-12px;width:40px;height:40px;border-radius:50%;border:0;background:#fff;color:#111;font-size:22px;font-weight:700;line-height:1;box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer}
+#lnphov .cap{font-weight:700;text-align:center;padding-right:18px}`;document.head.appendChild(st)}
+  const o=document.createElement('div');o.id='lnphov';o.setAttribute('role','dialog');o.setAttribute('aria-modal','true');o.setAttribute('aria-label','Foto de '+p.name);
+  o.innerHTML=`<div class="box"><button type="button" class="x" aria-label="Fechar">×</button><img src="${esc(p.photo)}" alt="${esc(p.name)}"><div class="cap">${esc(p.name)}</div></div>`;
+  o.addEventListener('click',e=>{if(e.target===o||e.target.closest('.x'))lnPhotoClose()});
+  document.body.appendChild(o);document.addEventListener('keydown',lnPhotoKey,true);o.querySelector('.x').focus()}
+document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-lnph]');if(!b)return;e.preventDefault();e.stopPropagation();
+  const p=(S.products||[]).find(x=>x.id===b.dataset.lnph)||(typeof resolveCart==='function'?resolveCart(b.dataset.lnph):null);if(p&&lnHasPhoto(p))lnPhotoOpen(p)},true);
+(()=>{if(!document.getElementById('lnphcss0')){const st=document.createElement('style');st.id='lnphcss0';st.textContent='.lnph{display:inline-grid;place-items:center;width:26px;height:26px;margin-left:4px;vertical-align:middle;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:0;cursor:pointer}.lnph:hover,.lnph:focus-visible{color:var(--accent);border-color:var(--accent)}';document.head.appendChild(st)}})();

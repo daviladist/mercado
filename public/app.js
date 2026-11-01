@@ -10,9 +10,16 @@ const logoImg=()=>`<img class="logo" src="${brandLogo()}" alt="${esc(S.store.nam
 const pdfFx=v=>typeof v==='string'?v.replace(/[\u2014\u2013\u2212]/g,'-').replace(/[\u2018\u2019]/g,"'").replace(/[\u201c\u201d]/g,'"').replace(/\u00a0/g,' '):v;
 /* cria o PDF e troca no próprio documento os caracteres que a fonte padrão do PDF não tem */
 function pdfFail(e,k){console.error(e);const lib=k==='planilha'?typeof XLSX!=='undefined':!!(window.jspdf&&window.jspdf.jsPDF);toast(lib?'Não consegui montar '+(k==='planilha'?'a planilha':'o PDF')+': '+((e&&e.message)||e)+'. Me mande esta mensagem.':'O gerador de '+(k==='planilha'?'planilhas':'PDF')+' não carregou. Recarregue a página e tente de novo.')}
+/* logo do PDF: a da empresa (ou o Tino, se ela não tiver); a da D'Ávila só na empresa principal */
+let PDF_LOGO=null,PDF_LOGO_SRC='';
+function pdfLogo(){const nonPrim=typeof TENANT!=='undefined'&&TENANT&&TENANT.primary===false;const tl=typeof TENANT!=='undefined'&&TENANT&&TENANT.brand&&TENANT.brand.logo;
+  if(!nonPrim&&!tl)return {src:LOGO,r:LOGO_RATIO};
+  const want=tl||'/icons/tino-192.png';if(PDF_LOGO&&PDF_LOGO_SRC===want)return PDF_LOGO;
+  if(PDF_LOGO_SRC!==want){PDF_LOGO_SRC=want;PDF_LOGO=null;const im=new Image();im.onload=()=>{try{const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);if(PDF_LOGO_SRC===want)PDF_LOGO={src:c.toDataURL('image/png'),r:im.naturalWidth/im.naturalHeight}}catch(e){}};im.src=want}
+  return PDF_LOGO}
 function mkPdf(J,o){const d=new J(o),t=d.text,rc=d.rect,ap=d.addPage;let hh=0,lw=0;
   /* faixa do topo (retângulo cheio a partir do canto): coloca a logo e empurra o texto da esquerda */
-  if(typeof rc==='function')d.rect=function(x,y,w,h,st){const r=rc.apply(d,arguments);if(x===0&&y===0&&st==='F'&&h<=30&&w>=150){const lh=Math.min(h-2.4,19),lwd=lh*LOGO_RATIO;try{d.addImage(LOGO,'PNG',4,(h-lh)/2,lwd,lh)}catch(e){}hh=h;lw=lwd+2}return r};
+  if(typeof rc==='function')d.rect=function(x,y,w,h,st){const r=rc.apply(d,arguments);if(x===0&&y===0&&st==='F'&&h<=30&&w>=150){const lh=Math.min(h-2.4,19);let lwd=lh*LOGO_RATIO;const PL=pdfLogo();if(PL){lwd=lh*PL.r;try{d.addImage(PL.src,'PNG',4,(h-lh)/2,lwd,lh)}catch(e){lwd=0}}else lwd=0;hh=h;lw=lwd+2}return r};
   if(typeof ap==='function')d.addPage=function(){hh=0;return ap.apply(d,arguments)};
   if(typeof t==='function')d.text=function(x,px,py,op,...r){if(hh&&py<hh&&px<=12&&!(op&&(op.align==='right'||op.align==='center')))px+=lw;return t.call(d,Array.isArray(x)?x.map(pdfFx):pdfFx(x),px,py,op,...r)};
   return d}
@@ -47,20 +54,22 @@ async function api(path,body){
   let j={};try{j=await r.json()}catch(e){}
   if(!r.ok){const e=new Error(j.error||('Erro '+r.status));e.status=r.status;e.data=j;throw e}
   return j}
-function emptyState(){return {store:{name:'ATACADO DAVILA',pickupDisc:0,pickV:1,onerV:2,pickupOner:false},payments:[],cashPays:[],payDays:{},products:[],customers:[],orders:[],receivables:[],payables:[],sellers:[],checkers:[],billers:[],vehicles:[],cities:[],categories:[],combos:[],counts:[],commPayouts:[],trips:[],romaneios:[],admins:[],suppliers:[],receipts:[],stariaJobs:[],imports:[],cashiers:[],carriers:[],carrierPays:[],seq:1001,catTreeV1:true}}
+const SRV_PRE=(()=>{try{const m=document.querySelector('meta[name="tino-brand"]');return m?JSON.parse(m.content):null}catch(e){return null}})();
+function emptyState(){return {store:{name:SRV_PRE?String(SRV_PRE.name||'').toUpperCase():'ATACADO DAVILA',pickupDisc:0,pickV:1,onerV:2,pickupOner:false},payments:[],cashPays:[],payDays:{},products:[],customers:[],orders:[],receivables:[],payables:[],sellers:[],checkers:[],billers:[],vehicles:[],cities:[],categories:[],combos:[],counts:[],commPayouts:[],trips:[],romaneios:[],admins:[],suppliers:[],receipts:[],stariaJobs:[],imports:[],cashiers:[],carriers:[],carrierPays:[],seq:1001,catTreeV1:true}}
 function srvFix(){const E=emptyState();Object.keys(E).forEach(k=>{if(S[k]==null)S[k]=E[k]});S.store=Object.assign({},E.store,S.store||{});
   (S.products||[]).forEach(p=>{if(p.perPack===undefined)p.perPack=parsePack(p.unit);if(p.code==null)p.code='';if(p.ean==null)p.ean='';p.rules=Object.assign(emptyRules(),p.rules||{})})}
 function srvSnap(){SRV.base={meta:{}};SRV.ord={};
   SRV_COLLS.forEach(c=>{SRV.base[c]={};(S[c]||[]).forEach(d=>{if(d&&d.id)SRV.base[c][d.id]=JSON.stringify(d)});SRV.ord[c]=(S[c]||[]).map(d=>d&&d.id)});
   Object.keys(S).forEach(k=>{if(!SRV_COLLS.includes(k)&&k!=='seq')SRV.base.meta[k]=JSON.stringify(S[k])})}
 /* Tino: módulos e marca da empresa, definidos na Central do sistema */
-let TENANT=null;
+let TENANT=SRV_PRE?{id:SRV_PRE.id,primary:false,brand:{name:SRV_PRE.name,color:SRV_PRE.color,logo:null},modules:null}:null;
 /* antes do login: nome, cor e logo da empresa do endereço (empresa que não é a principal não mostra a marca da principal) */
-async function srvLoadBrand(){try{const b=await api('/api/brand');if(b&&!b.primary){TENANT={id:b.id,primary:false,brand:{name:b.name,color:b.color,logo:b.logo},modules:null};{const m=document.querySelector('link[rel=manifest]');if(m)m.href='/api/manifest?t='+encodeURIComponent(TSLUG)+(CLIENT_ONLY?'&k=cliente':'');const ic=document.querySelector('link[rel=apple-touch-icon]');if(ic)ic.href='/icons/tino-180.png';const at=document.querySelector('meta[name=apple-mobile-web-app-title]');if(at)at.content=String(b.name||'Tino').slice(0,30)}S.store.name=String(b.name||'').toUpperCase();document.title=b.name||document.title;srvBrand()}}catch(e){if(e.status===404){document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>';throw e}}}
+let SRV_NOCLI=false,SRV_BNAME='';
+async function srvLoadBrand(){try{const b=await api('/api/brand');SRV_NOCLI=!!(b&&b.clientes===false);SRV_BNAME=String(b&&b.name||'');if(b&&!b.primary){TENANT={id:b.id,primary:false,brand:{name:b.name,color:b.color,logo:b.logo},modules:null};{const m=document.querySelector('link[rel=manifest]');if(m)m.href='/api/manifest?t='+encodeURIComponent(TSLUG)+(CLIENT_ONLY?'&k=cliente':'');const ic=document.querySelector('link[rel=apple-touch-icon]');if(ic)ic.href='/icons/tino-180.png';const at=document.querySelector('meta[name=apple-mobile-web-app-title]');if(at)at.content=String(b.name||'Tino').slice(0,30)}S.store.name=String(b.name||'').toUpperCase();document.title=b.name||document.title;srvBrand()}}catch(e){if(e.status===404){document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>';throw e}}}
 function srvBrand(){const c=TENANT&&TENANT.brand&&TENANT.brand.color;if(!c||!/^#[0-9A-Fa-f]{6}$/.test(c))return;
   const n=parseInt(c.slice(1),16),dk=[16,8,0].map(k=>Math.round(((n>>k)&255)*.78).toString(16).padStart(2,'0')).join(''),R=document.documentElement.style;
   R.setProperty('--brand',c);R.setProperty('--brand-dark','#'+dk);if(TENANT&&TENANT.primary===false){R.setProperty('--accent',c);R.setProperty('--stripe','#'+dk);R.setProperty('--accent-soft',c+'1F')}const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',c)}
-async function loadState(){const r=await api('/api/state');SRV.me=r.me;S=r.S;SRV.V=r.V||{meta:{}};TENANT=r.T||null;srvBrand();srvFix();srvSnap();
+async function loadState(){const r=await api('/api/state');SRV.me=r.me;S=r.S;SRV.V=r.V||{meta:{}};TENANT=r.T||null;srvBrand();try{if(typeof pdfLogo==='function')pdfLogo()}catch(e){}srvFix();srvSnap();
   if(ui.client)ui.client=S.customers.find(c=>c.id===ui.client.id)||null;
   if(SRV.me&&SRV.me.role==='cliente')ui.client=S.customers.find(c=>c.id===SRV.me.refId)||ui.client}
 function srvInPlace(t,s){Object.keys(t).forEach(k=>{if(!(k in s))delete t[k]});return Object.assign(t,s)}
@@ -169,7 +178,7 @@ function srvAfterLogin(){const me=SRV.me;SRV.lastPass='';ui.view=ROLE_VIEW[me.ro
 async function srvLogout(){if(srvDiff().ch.length&&!confirm('Há alterações que ainda não foram enviadas ao servidor. Sair mesmo assim? Elas serão perdidas.'))return;
   try{localStorage.removeItem(srvPendKey());localStorage.removeItem(srvDraftKey());if(typeof pdvSnapDrop==='function')pdvSnapDrop()}catch(e){}try{await api('/api/logout',{})}catch(e){}try{history.replaceState(null,'',location.pathname)}catch(e){}location.reload()}
 /* primeira entrada com senha provisória: a pessoa cria a senha dela */
-function srvResetScreen(){ui.view=ROLE_VIEW[SRV.me.role]||'cliente';const app=$('#app');try{renderTop()}catch(e){}$('#topbar').innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name||'ATACADO DAVILA')}</span><small>Crie sua senha</small></span></div>`;
+function srvResetScreen(){ui.view=ROLE_VIEW[SRV.me.role]||'cliente';const app=$('#app');try{renderTop()}catch(e){}$('#topbar').innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name||'')}</span><small>Crie sua senha</small></span></div>`;
   app.innerHTML=`<div class="loginhero"><img src="${brandLogo()}" alt=""><div>Primeiro acesso</div></div><form class="login panel" id="rsf"><h2>Crie a sua senha</h2>
     <div class="small muted">Olá, ${esc(SRV.me.name||SRV.me.login)}. A senha que você usou é provisória. Crie uma senha só sua${SRV.me.role==='admin'?' (mínimo 10 caracteres)':' (mínimo 8 caracteres)'}, com letras e números.</div>
     ${SRV.lastPass?'':'<div class="field"><label for="rso">Senha atual</label><input type="password" id="rso" autocomplete="current-password" required></div>'}
@@ -201,7 +210,7 @@ function srvLock(R2,cli,L){if(!R2.items.length||!cli)return null;const k=srvLock
   return null}
 function srvItemLevel(p,L,cli){const c=SRV_LK[srvLockKey(cli,L)];return c&&c.levels?c.levels[p.id]||null:null}
 /* backup completo vem do servidor (com fotos e sem senhas); restaurar também passa pelo servidor */
-async function srvBackup(){try{const j=await api('/api/backup');const ok=await offerFile('backup-atacado-davila-'+stamp()+'.json',JSON.stringify(j));if(ok){S.store.lastBackup=today();save();render()}}catch(e){toast(e.message)}}
+async function srvBackup(){try{const j=await api('/api/backup');const ok=await offerFile('backup-'+((TENANT&&TENANT.id)||'atacado-davila')+'-'+stamp()+'.json',JSON.stringify(j));if(ok){S.store.lastBackup=today();save();render()}}catch(e){toast(e.message)}}
 async function srvRestore(d){try{const r=await api('/api/restore',{data:d});toast('Backup restaurado: '+r.stats.docs+' registros.');await loadState();render()}catch(e){toast(e.message)}}
 /* senhas provisórias para quem ainda não tem senha (mostradas uma única vez) */
 async function srvTempPasswords(box){try{const r=await api('/api/temp-passwords',{});if(!r.list.length){box.innerHTML='<div class="small muted">Todo mundo com acesso já tem senha.</div>';return}
@@ -263,7 +272,7 @@ function srvStandalone(){return (window.matchMedia&&matchMedia('(display-mode: s
 function srvIsIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)}
 /* aparece só nas telas de entrada, para não atrapalhar o uso */
 function srvInstallBox(){document.querySelectorAll('.instbox').forEach(x=>x.remove());if(srvStandalone()||SRV.me)return;
-  const f=document.querySelector('form.login');if(!f)return;const name=CLIENT_ONLY?"D'Ávila Pedidos":"D'Ávila Equipe";let html='';
+  const f=document.querySelector('form.login');if(!f)return;const bn=TENANT&&TENANT.brand&&TENANT.brand.name?String(TENANT.brand.name):'',name=bn?(CLIENT_ONLY?bn:bn+' Equipe'):(CLIENT_ONLY?"D'Ávila Pedidos":"D'Ávila Equipe");let html='';
   if(SRV_INSTALL)html=`<button type="button" class="btn ghost block" id="instBtn">📲 Instalar o app ${esc(name)} no celular</button>`;
   else if(srvIsIOS())html=`<div class="small muted">📲 Para ter o app na tela do iPhone: no Safari, toque em <b>Compartilhar</b> (o quadrado com a seta) e depois em <b>Adicionar à Tela de Início</b>.</div>`;
   else if(/android/i.test(navigator.userAgent))html=`<div class="small muted">📲 Para ter o app na tela do celular: no Chrome, toque nos <b>três pontinhos</b> e em <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</div>`;
@@ -318,6 +327,73 @@ document.addEventListener('change',e=>{const i=e.target;if(!i||!i.matches||!i.ma
   set();window.addEventListener('resize',later);window.addEventListener('orientationchange',()=>setTimeout(set,300));
   try{const h=document.querySelector('header.top');if(h&&window.ResizeObserver)new ResizeObserver(later).observe(h)}catch(e){}
   try{new MutationObserver(()=>{band();later()}).observe(document.body,{childList:true,subtree:true})}catch(e){}})();
+
+/* ===================== Telas de entrada com a marca da empresa + assinatura Tino =====================
+   Vale para todas as telas de login (cliente, administrador, vendedor, conferente, faturamento, motorista,
+   primeiro acesso). A empresa aparece em destaque (logo, nome, cor); embaixo, a assinatura do Tino. */
+const TINO_SPARK='<svg aria-hidden="true" viewBox="0 0 40 40" width="22" height="22"><path d="M20 0 C22 13 27 18 40 20 C27 22 22 27 20 40 C18 27 13 22 0 20 C13 18 18 13 20 0 Z" fill="currentColor"/></svg>';
+function tinoFontOnce(){if(document.getElementById('tinofont'))return;const l=document.createElement('link');l.id='tinofont';l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family=Sora:wght@500;700;800&display=swap';document.head.appendChild(l)}
+function tinoLoginCss(){if(document.getElementById('tlogincss'))return;const st=document.createElement('style');st.id='tlogincss';st.textContent=`
+body.tlogin{background:linear-gradient(160deg,var(--brand) 0%,var(--brand-dark,var(--brand)) 100%) top/100% clamp(300px,42vh,380px) no-repeat,var(--bg);min-height:100vh}
+body.tlogin::before{content:'';position:fixed;left:0;right:0;top:0;height:clamp(300px,42vh,380px);pointer-events:none;background:radial-gradient(600px 240px at 85% 0%,rgba(255,255,255,.14),transparent 70%),radial-gradient(500px 220px at 5% 100%,rgba(0,0,0,.12),transparent 70%);z-index:0}
+body.tlogin main{position:relative;z-index:1}
+body.tlogin header.top{display:none}
+body.tlogin #app{padding-top:clamp(18px,6vh,64px);padding-bottom:28px}
+body.tlogin .loginhero{max-width:420px;margin:0 auto;background:transparent;border:0;padding:6px 16px 22px;gap:10px;box-shadow:none}
+body.tlogin .loginhero img{width:170px;max-width:56%;height:auto;max-height:120px;object-fit:contain;filter:drop-shadow(0 6px 14px rgba(0,0,0,.28))}
+body.tlogin .loginhero .lhname{font-size:clamp(22px,4.2vw,28px);font-weight:800;letter-spacing:-.01em;line-height:1.1;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.18)}
+body.tlogin .loginhero>div:not(.lhname){font-weight:500;font-size:14px;color:rgba(255,255,255,.9)}
+body.tlogin .loginhero+.login,body.tlogin .loginhero+.panel,body.tlogin .loginhero+section{max-width:420px;margin:0 auto;border-radius:18px;box-shadow:0 18px 48px rgba(16,24,32,.16),0 2px 6px rgba(16,24,32,.06);border:1px solid color-mix(in srgb,var(--line,#ddd) 70%,transparent);padding:22px}
+body.tlogin .login h2{font-size:20px;margin:0 0 2px}
+body.tlogin .login .hint:empty{display:none}
+body.tlogin .login .btn[type=submit]{min-height:48px;font-size:16px}
+.tsig{max-width:420px;margin:22px auto 0;display:grid;justify-items:center;gap:6px;text-align:center;font-family:"Sora",system-ui,sans-serif;color:var(--muted,#667)}
+.tsig .tsig-line{display:flex;align-items:center;gap:8px}
+.tsig .tsig-ic{width:34px;height:34px;border-radius:10px;background:#1F3D2B;color:#E8A33D;display:grid;place-items:center;box-shadow:0 4px 12px rgba(31,61,43,.25)}
+.tsig .tsig-wm{font-weight:800;font-size:22px;letter-spacing:-.03em;color:#1F3D2B}
+.tsig .tsig-sl{font-size:13px;font-weight:500}.tsig .tsig-sl b{color:#C9861F;font-weight:700}
+.tsig .tsig-by{font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.75}
+@media (prefers-color-scheme:dark){.tsig .tsig-wm{color:#F6F1E7}.tsig .tsig-sl b{color:#E8A33D}}
+html[data-theme=dark] .tsig .tsig-wm{color:#F6F1E7}html[data-theme=dark] .tsig .tsig-sl b{color:#E8A33D}
+html[data-theme=light] .tsig .tsig-wm{color:#1F3D2B}
+`;document.head.appendChild(st)}
+function tinoCoName(){const n=SRV_BNAME||(TENANT&&TENANT.brand&&TENANT.brand.name)||'';return n||String(S&&S.store&&S.store.name||'')}
+function tinoLoginDecor(){
+  const app=document.getElementById('app');if(!app)return;
+  const hero=app.querySelector('.loginhero'),on=!!hero&&!document.body.classList.contains('pdvmode');
+  document.body.classList.toggle('tlogin',on);if(!on)return;
+  tinoFontOnce();tinoLoginCss();
+  if(!hero.querySelector('.lhname')){const nm=tinoCoName();if(nm){const d=document.createElement('div');d.className='lhname';d.textContent=nm;const img=hero.querySelector('img');if(img)img.after(d);else hero.prepend(d)}
+    const sub=[...hero.children].find(x=>x.tagName==='DIV'&&!x.classList.contains('lhname'));
+    if(sub&&TENANT&&!TENANT.primary&&/atacado com preço de distribuidor/i.test(sub.textContent))sub.textContent='Faça seu pedido online'}
+  if(!app.querySelector('.tsig')){const s=document.createElement('div');s.className='tsig';
+    s.innerHTML='<div class="tsig-line"><span class="tsig-ic">'+TINO_SPARK+'</span><span class="tsig-wm">tino</span></div><div class="tsig-sl">Quem tem Tino, <b>vende melhor.</b></div><div class="tsig-by">Sistema de pedidos e gestão Tino</div>';
+    app.appendChild(s)}
+}
+(()=>{const run=()=>{try{tinoLoginDecor()}catch(e){}};const a=document.getElementById('app');if(a)new MutationObserver(run).observe(a,{childList:true});run()})();
+
+/* ===================== Foto do produto por cima da tela (lançar pedido) =====================
+   Ícone pequeno ao lado do nome; abre a foto sem sair da página; fecha no X, fora da foto ou com Esc. */
+const LNPH_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="4"/></svg>';
+function lnHasPhoto(p){const f=String(p&&p.photo||'');return !!f&&!f.startsWith('data:image/svg+xml')}
+function lnPhotoBtn(p){return lnHasPhoto(p)?` <button type="button" class="lnph" data-lnph="${esc(p.id)}" title="Ver foto" aria-label="Ver foto de ${esc(p.name)}">${LNPH_ICON}</button>`:''}
+function lnPhotoClose(){const o=document.getElementById('lnphov');if(o)o.remove();document.removeEventListener('keydown',lnPhotoKey,true)}
+function lnPhotoKey(e){if(e.key==='Escape'){e.preventDefault();e.stopPropagation();lnPhotoClose()}}
+function lnPhotoOpen(p){lnPhotoClose();if(!document.getElementById('lnphcss')){const st=document.createElement('style');st.id='lnphcss';st.textContent=`
+.lnph{display:inline-grid;place-items:center;width:26px;height:26px;margin-left:4px;vertical-align:middle;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:0;cursor:pointer}
+.lnph:hover,.lnph:focus-visible{color:var(--accent);border-color:var(--accent)}
+#lnphov{position:fixed;inset:0;z-index:300;background:rgba(10,14,20,.72);display:grid;place-items:center;padding:16px}
+#lnphov .box{position:relative;background:var(--surface);border-radius:16px;padding:14px 14px 12px;max-width:min(560px,96vw);max-height:92vh;display:grid;gap:8px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+#lnphov img{max-width:100%;max-height:calc(92vh - 80px);min-width:min(240px,80vw);min-height:180px;object-fit:contain;border-radius:10px;background:#fff;display:block;margin:0 auto}
+#lnphov .x{position:absolute;top:-12px;right:-12px;width:40px;height:40px;border-radius:50%;border:0;background:#fff;color:#111;font-size:22px;font-weight:700;line-height:1;box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer}
+#lnphov .cap{font-weight:700;text-align:center;padding-right:18px}`;document.head.appendChild(st)}
+  const o=document.createElement('div');o.id='lnphov';o.setAttribute('role','dialog');o.setAttribute('aria-modal','true');o.setAttribute('aria-label','Foto de '+p.name);
+  o.innerHTML=`<div class="box"><button type="button" class="x" aria-label="Fechar">×</button><img src="${esc(p.photo)}" alt="${esc(p.name)}"><div class="cap">${esc(p.name)}</div></div>`;
+  o.addEventListener('click',e=>{if(e.target===o||e.target.closest('.x'))lnPhotoClose()});
+  document.body.appendChild(o);document.addEventListener('keydown',lnPhotoKey,true);o.querySelector('.x').focus()}
+document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-lnph]');if(!b)return;e.preventDefault();e.stopPropagation();
+  const p=(S.products||[]).find(x=>x.id===b.dataset.lnph)||(typeof resolveCart==='function'?resolveCart(b.dataset.lnph):null);if(p&&lnHasPhoto(p))lnPhotoOpen(p)},true);
+(()=>{if(!document.getElementById('lnphcss0')){const st=document.createElement('style');st.id='lnphcss0';st.textContent='.lnph{display:inline-grid;place-items:center;width:26px;height:26px;margin-left:4px;vertical-align:middle;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:0;cursor:pointer}.lnph:hover,.lnph:focus-visible{color:var(--accent);border-color:var(--accent)}';document.head.appendChild(st)}})();
 
 /* ================= ENTRADA DE MERCADORIA, FORNECEDORES E PRECIFICAÇÃO DE NOTAS =================
  * Conferente (ou loja) lança a nota: fornecedor, número, produtos (bipando ou digitando), quantidade e valor.
@@ -826,44 +902,46 @@ function pdvBeep(ok){try{const A=window.AudioContext||window.webkitAudioContext;
 function pdvCss(){if(document.getElementById('pdvcss'))return;const st=document.createElement('style');st.id='pdvcss';st.textContent=`
 body.pdvmode header.top,body.pdvmode .demo,body.pdvmode #srvbar{display:none!important}
 body.pdvmode{background:#F6F1E7}body.pdvmode main{padding:0}body.pdvmode main>.wrap{max-width:none;padding:0}
-.pdv{--g:#1F3D2B;--g2:#2C5139;--o:#E8A33D;--c:#F6F1E7;--l:#E6DCC8;--m:#5E6A5F;font-family:var(--body);color:var(--g);display:grid;grid-template-rows:auto 1fr auto;min-height:100vh;background:var(--c)}
-.pdvh{background:var(--g);color:#fff;border-bottom:4px solid var(--o);display:flex;gap:14px;align-items:center;justify-content:space-between;padding:8px 16px;flex-wrap:wrap}
-.pdvh .b{display:flex;align-items:center;gap:10px}.pdvh .ic{width:36px;height:36px;border-radius:10px;background:var(--o);display:grid;place-items:center}
-.pdvh .wm{font-weight:800;font-size:22px;letter-spacing:-1px;color:var(--c)}.pdvh .s{font-size:13px;color:#E9E1D0}
+.pdv{--g:#1F3D2B;--g2:#2C5139;--o:#E8A33D;--c:#F6F1E7;--l:#E6DCC8;--m:#5E6A5F;--bar:#1F3D2B;--barfg:#FFFFFF;--bar2:#2C5139;--acc:#E8A33D;--accfg:#1F3D2B;--acconbar:#E8A33D;--bg:#F6F1E7;--fs:1;font-family:var(--pdvfont,var(--body));color:var(--g);display:grid;grid-template-rows:auto 1fr auto;min-height:100vh;background:var(--bg)}
+.pdvh,.pdvm,.pdvf,.pdvlogin,.pdvmd{zoom:var(--fs)}
+body.pdvmode .pdvmd{font-family:var(--pdvfont,var(--body))}
+.pdvh{background:var(--bar);color:var(--barfg);border-bottom:4px solid var(--acc);display:flex;gap:14px;align-items:center;justify-content:space-between;padding:8px 16px;flex-wrap:wrap}
+.pdvh .b{display:flex;align-items:center;gap:10px}.pdvh .ic{width:36px;height:36px;border-radius:10px;background:var(--acc);color:var(--accfg);display:grid;place-items:center}.pdvh .lg{height:40px;max-width:160px;object-fit:contain}.pdvh .co{font-weight:800;font-size:18px;color:var(--barfg)}
+.pdvh .wm{font-weight:800;font-size:22px;letter-spacing:-1px;color:var(--barfg)}.pdvh .s{font-size:13px;color:var(--barfg);opacity:.88}
 .pdvh .net{font-size:13px;font-weight:700;border-radius:999px;padding:4px 10px;background:#E3EFE6;color:#1F5A33}.pdvh .net.off{background:#F8E1DF;color:#8C1D18}
 .pdvm{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:14px;padding:14px;min-height:0}
 @media (max-width:820px){.pdvm{grid-template-columns:1fr}}
 .pdvl{display:flex;flex-direction:column;gap:10px;min-width:0}
 .pdvin{display:flex;gap:10px;align-items:center;background:#fff;border:3px solid var(--g);border-radius:12px;padding:8px 12px}
 .pdvin label{font-weight:700;font-size:14px;white-space:nowrap}.pdvin input{flex:1;min-width:0;border:0;font-size:26px;font-weight:700;letter-spacing:1px;outline:none;background:transparent;color:var(--g);min-height:44px}
-.pdvin .qt{background:var(--o);color:var(--g);font-weight:800;border-radius:8px;padding:4px 10px;font-size:18px}
+.pdvin .qt{background:var(--acc);color:var(--accfg);font-weight:800;border-radius:8px;padding:4px 10px;font-size:18px}
 .pdvt{background:#fff;border:1px solid var(--l);border-radius:12px;overflow:auto;flex:1;min-height:240px;max-height:calc(100vh - 260px)}
 .pdvt table{width:100%;border-collapse:collapse;font-size:16px}.pdvt th{position:sticky;top:0;background:#EFE7D6;text-align:left;padding:8px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#3B4A3F}
 .pdvt td{padding:8px;border-top:1px solid #EFE7D6}.pdvt td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pdvt tr.cx td{text-decoration:line-through;color:#9A8F7A}.pdvt tr.last td{background:#FBEFD9}
 .pdvr{display:flex;flex-direction:column;gap:10px}
 .pdvbox{background:#fff;border:1px solid var(--l);border-radius:12px;padding:12px 14px}
-.pdvtot{background:var(--g);color:#fff;border-radius:12px;padding:16px;display:grid;gap:4px}
-.pdvtot .lb{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#E9E1D0}.pdvtot .v{font-size:clamp(40px,6vw,64px);font-weight:800;line-height:1;color:var(--o);font-variant-numeric:tabular-nums}
+.pdvtot{background:var(--bar);color:var(--barfg);border-radius:12px;padding:16px;display:grid;gap:4px}
+.pdvtot .lb{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--barfg);opacity:.88}.pdvtot .v{font-size:clamp(40px,6vw,64px);font-weight:800;line-height:1;color:var(--acconbar);font-variant-numeric:tabular-nums}
 .pdvrow{display:flex;justify-content:space-between;gap:10px;font-size:15px}.pdvrow b{font-variant-numeric:tabular-nums}
 .pdvlast{font-size:18px;font-weight:700}.pdvmut{color:var(--m);font-size:13px}
-.pdvf{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;background:var(--g2);border-top:1px solid var(--g)}
-.pdvf button{background:var(--g);color:#fff;border:1px solid #5E7F6A;border-radius:8px;padding:6px 10px;font-size:13px;min-height:44px;font-family:inherit}
-.pdvf button b{color:var(--o);margin-right:4px}
+.pdvf{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;background:var(--bar2);border-top:1px solid var(--bar)}
+.pdvf button{background:var(--bar);color:var(--barfg);border:1px solid color-mix(in srgb,var(--barfg) 35%,var(--bar));border-radius:8px;padding:6px 10px;font-size:13px;min-height:44px;font-family:inherit}
+.pdvf button b{color:var(--acconbar);margin-right:4px}.pdvf button:hover,.pdvf button:focus-visible{outline:3px solid var(--acc);outline-offset:1px}
 .pdvov{position:fixed;inset:0;background:rgba(15,30,20,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:80}
-.pdvmd{background:#fff;border-radius:14px;width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:18px;display:grid;gap:12px;color:var(--g);border-top:6px solid var(--o)}
+.pdvmd{background:#fff;border-radius:14px;width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:18px;display:grid;gap:12px;color:var(--g);border-top:6px solid var(--acc)}
 .pdvmd h2{margin:0;font-size:22px}.pdvmd input,.pdvmd select,.pdvmd textarea{font:inherit;font-size:18px;min-height:44px;border:2px solid var(--l);border-radius:8px;padding:6px 10px;width:100%;box-sizing:border-box;color:var(--g)}
 .pdvmd input:focus,.pdvmd select:focus{border-color:var(--g);outline:none}
 .pdvmd .bt{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .pdvmd button{font:inherit;min-height:44px;border-radius:8px;padding:0 16px;border:1px solid var(--l);background:#fff;color:var(--g);font-weight:600}
-.pdvmd button.ok{background:var(--o);border-color:var(--o);font-weight:800}.pdvmd button.dk{background:var(--g);color:#fff;border-color:var(--g)}
+.pdvmd button.ok{background:var(--acc);border-color:var(--acc);color:var(--accfg);font-weight:800}.pdvmd button.dk{background:var(--bar);color:var(--barfg);border-color:var(--bar)}
 .pdvlist{display:grid;gap:4px;max-height:50vh;overflow:auto}.pdvlist button{text-align:left;display:flex;justify-content:space-between;gap:10px;min-height:44px;font-weight:500}
 .pdvlist button[aria-selected=true]{background:#FBEFD9;border-color:var(--o)}
 .pdverr{color:#B3261E;font-weight:700;min-height:20px}
 .pdvqr{display:grid;justify-items:center;gap:6px}.pdvqr img{width:220px;height:220px;image-rendering:pixelated}.pdvqr code{font-size:11px;word-break:break-all;background:#F6F1E7;padding:6px;border-radius:6px;max-width:100%}
 .pdvpays{display:grid;gap:4px}.pdvpays div{display:flex;justify-content:space-between;background:#F6F1E7;border-radius:6px;padding:6px 10px}
 .pdvbig{font-size:34px;font-weight:800;font-variant-numeric:tabular-nums}
-.pdvlogin{max-width:420px;margin:40px auto;padding:0 16px}
+.pdvlogin{max-width:420px;margin:32px auto;padding:0 16px;display:grid;gap:14px}.pdvco{margin-bottom:4px}.pdvco{display:grid;justify-items:center;gap:8px;text-align:center}.pdvco img{width:120px;height:auto;max-height:90px;object-fit:contain;background:var(--brand,#1F3D2B);border-radius:16px;padding:12px 16px;box-shadow:0 6px 18px rgba(31,61,43,.18)}.pdvco b{font-size:22px;color:var(--g)}.pdvslog{text-align:center;color:var(--m);font-size:13px}.pdvslog b{color:#C9861F}
 #pdvprint{display:none}
 @media (max-height:700px),(max-width:1100px){.pdvf button{padding:4px 8px;font-size:12px;min-height:38px}.pdvin input{font-size:20px}.pdvtot .v{font-size:40px}.pdvt{max-height:calc(100vh - 230px)}.pdvm{padding:10px;gap:10px}}
 @media print{body *{visibility:hidden!important}#pdvprint,#pdvprint *{visibility:visible!important}#pdvprint{display:block!important;position:absolute;left:0;top:0;width:72mm;font:12px/1.35 monospace;color:#000}
@@ -873,9 +951,9 @@ const PDV_SPARK='<svg aria-hidden="true" viewBox="0 0 40 40" width="20" height="
 
 /* ---------------------------------------------------------------- tela principal */
 async function renderPdv(){pdvCss();document.body.classList.add('pdvmode');const app=$('#app');
-  if(!SRV.me){app.innerHTML=`<div class="pdv"><div class="pdvh"><div class="b"><span class="ic">${PDV_SPARK}</span><span class="wm">tino</span><span class="s">Caixa de balcão</span></div></div>
-    <div class="pdvlogin"><form class="pdvmd" id="pdvl" style="width:100%"><h2>Entrar no caixa</h2><div><label for="pdvlu">Usuário</label><input id="pdvlu" autocomplete="username" autocapitalize="off" required></div>
-    <div><label for="pdvlp">Senha</label><input id="pdvlp" type="password" autocomplete="current-password" required></div><div class="pdverr" id="pdvle" role="alert"></div><div class="bt"><button class="ok" type="submit">Entrar</button></div></form></div></div>`;
+  if(!SRV.me){app.innerHTML=`<div class="pdv"><div class="pdvh"><div class="b">${pdvBrandHead()}<span class="s">Caixa de balcão</span></div></div>
+    <div class="pdvlogin"><div class="pdvco"><img src="${brandLogo()}" alt=""><b>${esc((typeof SRV_BNAME!=='undefined'&&SRV_BNAME)||S.store.name||'')}</b></div><form class="pdvmd" id="pdvl" style="width:100%"><h2>Entrar no caixa</h2><div><label for="pdvlu">Usuário</label><input id="pdvlu" autocomplete="username" autocapitalize="off" required></div>
+    <div><label for="pdvlp">Senha</label><input id="pdvlp" type="password" autocomplete="current-password" required></div><div class="pdverr" id="pdvle" role="alert"></div><div class="bt"><button class="ok" type="submit">Entrar</button></div></form><div class="pdvslog">Quem tem Tino, <b>vende melhor.</b></div></div></div>`;
     $('#pdvl').onsubmit=e=>{e.preventDefault();srvLogin('operador_caixa',$('#pdvlu').value.trim(),$('#pdvlp').value,$('#pdvle'),$('#pdvl button[type=submit]'))};setTimeout(()=>{const i=$('#pdvlu');if(i)i.focus()},50);return}
   const role=SRV.me.role;
   if(role!=='operador_caixa'&&role!=='admin'){app.innerHTML='<div class="empty">Este acesso não usa o caixa.</div>';return}
@@ -888,7 +966,7 @@ async function renderPdv(){pdvCss();document.body.classList.add('pdvmode');const
   if(!PDV.st.caixa){pdvOpenCaixa();return}
   if(!PDV.saleId)PDV.saleId=pdvNewId();
   app.innerHTML=`<div class="pdv" id="pdvroot">
-    <div class="pdvh"><div class="b"><span class="ic">${PDV_SPARK}</span><span class="wm">tino</span><span class="s">Caixa nº ${PDV.st.caixa.numero} · ${esc(PDV.st.me.nome)}</span></div>
+    <div class="pdvh"><div class="b">${pdvBrandHead()}<span class="s">Caixa nº ${PDV.st.caixa.numero} · ${esc(PDV.st.me.nome)}</span></div>
       <div class="b"><span class="net ${PDV.online?'':'off'}" id="pdvnet">${PDV.online?'Conectado':'Sem internet'}</span><span class="s" id="pdvfila"></span>${role==='admin'?`<a class="s" href="${TBASE}/#admin" style="color:#E8A33D">Voltar ao painel</a>`:''}</div></div>
     <div class="pdvm"><section class="pdvl" aria-label="Itens da venda">
       <div class="pdvin"><label for="pdvc">Código</label>${PDV.qty?`<span class="qt">${String(PDV.qty).replace('.',',')} ×</span>`:''}<input id="pdvc" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Leia o código (4*código = 4 un.)"></div>
@@ -1103,7 +1181,7 @@ async function pdvSendQueue(){if(PDV.sending||!SRV.me)return;let F=pdvLoad('fila
     F.shift();pdvSave('fila',F)}}finally{PDV.sending=false;pdvFila()}}
 
 /* ---------------------------------------------------------------- caixa: abrir, sangria, suprimento, fechar */
-function pdvOpenCaixa(){const app=$('#app');app.innerHTML=`<div class="pdv" id="pdvroot"><div class="pdvh"><div class="b"><span class="ic">${PDV_SPARK}</span><span class="wm">tino</span><span class="s">${esc(PDV.st.me.nome)}</span></div></div>
+function pdvOpenCaixa(){const app=$('#app');app.innerHTML=`<div class="pdv" id="pdvroot"><div class="pdvh"><div class="b">${pdvBrandHead()}<span class="s">${esc(PDV.st.me.nome)}</span></div></div>
   <div class="pdvlogin"><form class="pdvmd" id="pdvab" style="width:100%"><h2>Abrir o caixa</h2><label for="pdvaf">Fundo de troco (dinheiro na gaveta)</label><input id="pdvaf" inputmode="decimal" placeholder="0,00" required>
   <div class="pdverr" id="pdverr" role="alert"></div><div class="bt"><button class="ok" type="submit">Abrir caixa</button></div></form></div><div id="pdvmodal"></div></div>`;
   setTimeout(()=>{const i=$('#pdvaf');if(i)i.focus()},30);
@@ -1138,7 +1216,7 @@ function pdvAction(k){if(PDV.busy)return;if(k==='F10'&&PDV.modal==='pay'&&!$('#p
 async function pdvAdmin(c){c.innerHTML='<div class="sectionhead"><h2>Caixa (PDV)</h2></div><div class="empty">Carregando…</div>';let R;
   try{R=await api('/api/pdv/resumo')}catch(e){c.innerHTML='<div class="empty">'+esc(e.message)+'</div>';return}
   const cfg=S.pdv||{},F=R.porForma||{},nm={dinheiro:'Dinheiro',pix:'PIX',debito:'Débito',credito:'Crédito',fiado:'Fiado'};
-  c.innerHTML=`<div class="sectionhead row" style="justify-content:space-between"><h2>Caixa (PDV)</h2><a class="btn" href="${TBASE}/pdv">Abrir o caixa (tela cheia)</a></div>
+  c.innerHTML=`<div class="sectionhead row" style="justify-content:space-between"><h2>Caixa (PDV)</h2><span class="row" style="gap:6px"><button class="btn ghost" id="pdvLookBtn">Aparência do caixa</button><a class="btn" href="${TBASE}/pdv">Abrir o caixa (tela cheia)</a></span></div>
    ${R.diferencas.length||R.revisar.length||(R.falhas||[]).length?`<div class="panel" style="border:2px solid #E8A33D;display:grid;gap:8px;margin-bottom:12px"><h3 style="margin:0">Avisos do balcão</h3>
      ${R.diferencas.map(d=>`<div class="row" style="justify-content:space-between"><span>Caixa nº ${d.numero} (${esc(d.operador)}) fechou com diferença: ${Object.entries(d.porForma||{}).map(([k,v])=>`${{dinheiro:'dinheiro',pix:'PIX',debito:'débito',credito:'crédito'}[k]||k} <b>${brl(v)}</b>`).join(' · ')||'<b>'+brl(d.diferenca)+'</b>'}</span><span class="row" style="gap:6px"><input id="pj${d.id}" placeholder="Justificativa" style="min-width:200px"><button class="btn ghost" data-pj="${d.id}">Justificar</button></span></div>`).join('')}
      ${R.revisar.map(v=>`<div class="row" style="justify-content:space-between"><span>Venda nº ${v.numero} (${brl(v.total)}) a revisar: ${esc(v.motivo||'')}</span><button class="btn ghost" data-rv="${v.id}">Conferido</button></div>`).join('')}
@@ -1160,6 +1238,7 @@ async function pdvAdmin(c){c.innerHTML='<div class="sectionhead"><h2>Caixa (PDV)
      <div class="field"><label for="pcpn">Nome no PIX</label><input id="pcpn" maxlength="25" value="${esc(cfg.pixName||'')}"></div><div class="field"><label for="pcpc">Cidade no PIX</label><input id="pcpc" maxlength="15" value="${esc(cfg.pixCity||'')}"></div></div>
      <div class="small muted">NFC-e (nota do consumidor) fica para a fase 2: módulo "NFC-e no caixa" na Central.</div><button class="btn" type="submit" style="justify-self:start">Salvar configuração</button></form>`;
   const re=()=>pdvAdmin(c);
+  {const lb=$('#pdvLookBtn');if(lb)lb.onclick=()=>{pdvCss();pdvLookEditor(c,()=>pdvAdmin(c));window.scrollTo(0,0)}}
   c.querySelectorAll('[data-pj]').forEach(b=>b.onclick=async()=>{try{await api('/api/pdv/justificar',{id:b.dataset.pj,texto:$('#pj'+b.dataset.pj).value});toast('Justificado');re()}catch(e){toast(e.message)}});
   c.querySelectorAll('[data-cv]').forEach(b=>b.onclick=async()=>{const m=prompt('Motivo do cancelamento (o estoque volta e o fiado em aberto é apagado):');if(m==null)return;try{await api('/api/pdv/cancelar',{id:b.dataset.cv,motivo:m});toast('Venda cancelada');re()}catch(e){toast(e.message)}});
   c.querySelectorAll('[data-pl]').forEach(b=>b.onclick=async()=>{if(!confirm('Lançar como venda pelo valor cobrado no balcão? O estoque baixa e o dinheiro entra no caixa da venda.'))return;b.disabled=true;try{let r;try{r=await api('/api/pdv/falha/lancar',{id:b.dataset.pl})}catch(e){if(!(e.data&&e.data.confirmarFiado)||!confirm(e.message))throw e;r=await api('/api/pdv/falha/lancar',{id:b.dataset.pl,confirmarFiado:true})}toast('Lançada como venda nº '+r.numero);re()}catch(e){toast(e.message);b.disabled=false}});
@@ -1203,7 +1282,7 @@ const PDV_SNAP=()=>'pdv:'+(TSLUG||'@')+':snap';
    Estas listas são as mesmas de lib/policy.js (P_SECRET, STORE_PUBLIC e a projeção de clientes do
    operador_caixa); tests/unit confere que continuam iguais. */
 const PDV_P_SECRET=['lastIn','cost','refCost','refGone','tablePrices','stock','minStock','idealStock','minMg','trib','commission'];
-const PDV_STORE_PUBLIC=['name','from','to','min','pickup','conds','billGate','pickupDisc','pickupOner','pickV','onerV','autoRec','semEstoque'];
+const PDV_STORE_PUBLIC=['name','from','to','min','pickup','conds','billGate','pickupDisc','pickupOner','pickV','onerV','autoRec','semEstoque','pdvLook'];
 const PDV_CLI_KEYS=['id','name','doc','ieOk','creditLimit'];
 function pdvSnapCut(){const pk=(o,ks)=>{const x={};ks.forEach(k=>{if(o&&o[k]!==undefined)x[k]=o[k]});return x};
   const products=(S.products||[]).map(p=>{const x=Object.assign({},p);PDV_P_SECRET.forEach(k=>delete x[k]);return x});
@@ -1221,6 +1300,73 @@ function pdvOfflineBoot(){if(!PDV_PATH)return false;let x=null;try{x=JSON.parse(
   SRV.me=x.me;TENANT=x.T||TENANT;S=Object.assign(emptyState(),x.S);srvFix();if(TENANT)srvBrand();PDV.st=x.st;PDV.online=false;PDV.offBoot=true;ui.view='pdv';render();
   toast('Sem internet: caixa aberto com o catálogo guardado. As vendas serão enviadas quando a conexão voltar.');
   window.addEventListener('online',()=>{setTimeout(async()=>{await pdvSendQueue();if(!pdvLoad('fila',[]).length)location.reload()},1500)});return true}
+
+/* ===================== Aparência do caixa (personalizável por empresa) =====================
+   Guardada em S.store.pdvLook (o operador recebe junto com os dados da loja). Toda cor de texto é
+   conferida contra o fundo: se o contraste ficar baixo, o caixa troca sozinho para preto ou branco. */
+const PDV_FONTS={padrao:'',sora:'"Sora",system-ui,sans-serif',arial:'Arial,Helvetica,sans-serif',verdana:'Verdana,Geneva,sans-serif',tahoma:'Tahoma,Verdana,sans-serif'};
+const PDV_LOOKS={
+  tino:{nome:'Tino (verde e dourado)',bar:'#1F3D2B',acc:'#E8A33D',bg:'#F6F1E7',ink:'#1F3D2B'},
+  contraste:{nome:'Alto contraste (preto e amarelo)',bar:'#000000',acc:'#FFD400',bg:'#FFFFFF',ink:'#000000'},
+  azul:{nome:'Azul e branco',bar:'#0B3D91',acc:'#FFB703',bg:'#F2F5FA',ink:'#0B1F3A'},
+  grafite:{nome:'Grafite e laranja',bar:'#22262E',acc:'#FF7A1A',bg:'#F3F4F6',ink:'#15181D'}};
+const pdvHex=v=>/^#[0-9a-f]{6}$/i.test(String(v||''))?String(v):null;
+function pdvLum(h){const c=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255).map(v=>v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4));return .2126*c[0]+.7152*c[1]+.0722*c[2]}
+function pdvContrast(a,b){const x=pdvLum(a),y=pdvLum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)}
+function pdvBest(bgc,want,min){want=pdvHex(want);if(want&&pdvContrast(want,bgc)>=(min||4.5))return want;return pdvContrast('#FFFFFF',bgc)>=pdvContrast('#111111',bgc)?'#FFFFFF':'#111111'}
+function pdvShade(h,k){const n=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));const f=pdvLum(h)<.18?1+k:1-k;return '#'+n.map(v=>Math.max(0,Math.min(255,Math.round(v*f+(f>1?k*40:0)))).toString(16).padStart(2,'0')).join('')}
+function pdvLook(){const L=(S.store&&S.store.pdvLook)||{},base=PDV_LOOKS[L.preset]||PDV_LOOKS.tino;
+  let bar=pdvHex(L.bar)||base.bar;if(L.preset==='empresa'){const c=(TENANT&&TENANT.brand&&TENANT.brand.color)||getComputedStyle(document.documentElement).getPropertyValue('--brand').trim();if(pdvHex(c))bar=c}
+  const acc=pdvHex(L.acc)||base.acc,bg=pdvHex(L.bg)||base.bg,ink0=pdvHex(L.ink)||base.ink;
+  return {bar,barfg:pdvBest(bar,L.barfg||'#FFFFFF'),bar2:pdvShade(bar,.18),acc,accfg:pdvBest(acc,bar),acconbar:pdvBest(bar,acc,3),bg,ink:pdvBest('#FFFFFF',pdvBest(bg,ink0)===ink0?ink0:'#111111'),
+    font:PDV_FONTS[L.font]||'',fs:{normal:1,grande:1.15,maior:1.3}[L.size]||1,logo:!!L.logo}}
+function pdvLookVars(K){K=K||pdvLook();return `--bar:${K.bar};--barfg:${K.barfg};--bar2:${K.bar2};--acc:${K.acc};--accfg:${K.accfg};--acconbar:${K.acconbar};--bg:${K.bg};--g:${K.ink};--fs:${K.fs};${K.font?'--pdvfont:'+K.font+';':''}`}
+function pdvApplyLook(){let st=document.getElementById('pdvlook');if(!st){st=document.createElement('style');st.id='pdvlook';document.head.appendChild(st)}
+  const K=pdvLook();st.textContent='.pdv{'+pdvLookVars(K)+'}';
+  if(/Sora/.test(K.font)&&!document.getElementById('tinofont')){const l=document.createElement('link');l.id='tinofont';l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family=Sora:wght@500;700;800&display=swap';document.head.appendChild(l)}}
+function pdvBrandHead(){pdvApplyLook();const K=pdvLook();
+  if(K.logo){const nm=(typeof SRV_BNAME!=='undefined'&&SRV_BNAME)||S.store.name||'';return `<img class="lg" src="${brandLogo()}" alt=""><span class="co">${esc(nm)}</span>`}
+  return `<span class="ic">${PDV_SPARK.replace('fill="#1F3D2B"','fill="currentColor"')}</span><span class="wm">tino</span>`}
+
+/* tela de personalizar (painel do administrador › Caixa (PDV) › Aparência do caixa) */
+function pdvLookEditor(c,back){const L0=(S.store&&S.store.pdvLook)||{};const L=ui.pdvLookDraft=ui.pdvLookDraft||Object.assign({preset:'tino',font:'padrao',size:'normal',logo:false},JSON.parse(JSON.stringify(L0)));
+  const keep=S.store.pdvLook;S.store.pdvLook=L;const K=pdvLook();S.store.pdvLook=keep;
+  const base=PDV_LOOKS[L.preset]||PDV_LOOKS.tino,cv=(k,d)=>pdvHex(L[k])||d;
+  const okc=(a,b,min)=>pdvContrast(a,b)>=(min||4.5);
+  c.innerHTML=`<div class="sectionhead row" style="justify-content:space-between"><h2>Aparência do caixa</h2><button class="btn ghost" id="plBack">Voltar</button></div>
+   <div class="grid2" style="align-items:start;gap:16px">
+    <section class="panel" style="display:grid;gap:12px">
+      <div class="field"><span class="lbl">Modelo pronto</span><div class="row" style="gap:6px;flex-wrap:wrap">${Object.entries(PDV_LOOKS).map(([k,v])=>`<button type="button" class="btn ${L.preset===k?'':'ghost'}" data-plp="${k}">${esc(v.nome)}</button>`).join('')}<button type="button" class="btn ${L.preset==='empresa'?'':'ghost'}" data-plp="empresa">Cor da empresa</button></div></div>
+      <div class="grid2">
+        <div class="field"><label for="plbar">Barra de cima, teclas e total</label><input type="color" id="plbar" value="${cv('bar',base.bar)}" ${L.preset==='empresa'?'disabled':''}></div>
+        <div class="field"><label for="placc">Destaque (valor total, botão Entrar, teclas F)</label><input type="color" id="placc" value="${cv('acc',base.acc)}"></div>
+        <div class="field"><label for="plbg">Fundo da tela</label><input type="color" id="plbg" value="${cv('bg',base.bg)}"></div>
+        <div class="field"><label for="plink">Cor do texto</label><input type="color" id="plink" value="${cv('ink',base.ink)}"></div>
+        <div class="field"><label for="plfont">Fonte</label><select id="plfont">${[['padrao','Padrão do sistema'],['sora','Sora (Tino)'],['arial','Arial'],['verdana','Verdana (bem legível)'],['tahoma','Tahoma']].map(([k,v])=>`<option value="${k}" ${L.font===k?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="field"><label for="plsize">Tamanho da letra</label><select id="plsize">${[['normal','Normal'],['grande','Grande'],['maior','Maior']].map(([k,v])=>`<option value="${k}" ${L.size===k?'selected':''}>${v}</option>`).join('')}</select></div>
+      </div>
+      <label class="switch"><input type="checkbox" id="pllogo" ${L.logo?'checked':''}> Mostrar a logomarca e o nome da empresa no topo do caixa (no lugar do Tino)</label>
+      <div class="small ${okc(K.bar,K.barfg)&&okc(K.bar,K.acconbar,3)?'muted':''}">${[['texto da barra',okc(K.bar,K.barfg)],['destaque sobre a barra',okc(K.bar,K.acconbar,3)],['texto da tela',okc('#FFFFFF',K.ink)]].map(([n,o])=>`${o?'✓':'⚠'} ${n}`).join(' · ')}<br>O caixa confere o contraste sozinho: se uma cor ficar difícil de ler, o texto vira preto ou branco automaticamente.</div>
+      <div class="err" id="plerr"></div>
+      <div class="row" style="gap:8px"><button class="btn" id="plSave">Salvar aparência</button><button class="btn ghost" id="plReset">Voltar ao padrão Tino</button></div>
+    </section>
+    <section class="panel" style="padding:0;overflow:hidden"><div class="pdv" style="min-height:0;${pdvLookVars(K)}">
+      <div class="pdvh"><div class="b">${K.logo?`<img class="lg" src="${brandLogo()}" alt=""><span class="co">${esc((typeof SRV_BNAME!=='undefined'&&SRV_BNAME)||S.store.name||'')}</span>`:`<span class="ic">${PDV_SPARK.replace('fill="#1F3D2B"','fill="currentColor"')}</span><span class="wm">tino</span>`}<span class="s">Caixa nº 1 · Prévia</span></div></div>
+      <div class="pdvm" style="grid-template-columns:1fr"><div class="pdvin"><label>Código</label><input value="7891234567890" readonly></div>
+        <div class="pdvbox"><div class="pdvrow"><span>Arroz 5kg</span><b>R$ 25,00</b></div><div class="pdvmut">1 × R$ 25,00</div></div>
+        <div class="pdvtot"><span class="lb">Total a pagar</span><span class="v">R$ 25,00</span></div></div>
+      <div class="pdvf"><button type="button"><b>F2</b>Buscar</button><button type="button"><b>F4</b>Cliente</button><button type="button"><b>F10</b>Pagamento</button></div>
+    </div></section>
+   </div>`;
+  const rer=()=>{const y=window.scrollY;pdvLookEditor(c,back);window.scrollTo(0,y)};
+  c.querySelectorAll('[data-plp]').forEach(b=>b.onclick=()=>{L.preset=b.dataset.plp;delete L.bar;delete L.acc;delete L.bg;delete L.ink;rer()});
+  [['plbar','bar'],['placc','acc'],['plbg','bg'],['plink','ink']].forEach(([id,k])=>{const i=$('#'+id);i.oninput=i.onchange=()=>{L[k]=i.value;if(L.preset!=='empresa'&&k==='bar')L.preset=L.preset||'tino';rer()}});
+  $('#plfont').onchange=e=>{L.font=e.target.value;rer()};$('#plsize').onchange=e=>{L.size=e.target.value;rer()};$('#pllogo').onchange=e=>{L.logo=e.target.checked;rer()};
+  $('#plBack').onclick=()=>{ui.pdvLookDraft=null;back()};
+  $('#plReset').onclick=()=>{ui.pdvLookDraft={preset:'tino',font:'padrao',size:'normal',logo:false};rer()};
+  $('#plSave').onclick=()=>{const v={preset:L.preset,font:PDV_FONTS[L.font]!==undefined?L.font:'padrao',size:['normal','grande','maior'].includes(L.size)?L.size:'normal',logo:!!L.logo};
+    ['bar','acc','bg','ink'].forEach(k=>{if(pdvHex(L[k]))v[k]=L[k]});S.store.pdvLook=v;ui.pdvLookDraft=null;save();toast('Aparência do caixa salva. Os caixas abertos mudam ao recarregar a tela.');back()};
+}
 
 /* ===================== Frete de terceiro (módulo "frete3") =====================
    Transportadora cadastrada com um % combinado sobre o valor da nota (total do pedido).
@@ -2046,7 +2192,10 @@ function clientOrderCard(o){
 }
 function renderClient(){
   const app=$('#app');
-  if(!ui.client){app.innerHTML=loginForm(false);bindLogin(false);return}
+  if(!ui.client&&typeof SRV_NOCLI!=='undefined'&&SRV_NOCLI&&typeof CLIENT_ONLY!=='undefined'&&CLIENT_ONLY){app.innerHTML=`<div class="loginhero"><img src="${brandLogo()}" alt="${esc(S.store.name)}"></div><section class="panel" style="max-width:520px;margin:16px auto;text-align:center;display:grid;gap:8px"><h2 style="margin:0">Pedidos pelo seu vendedor</h2><div>A ${esc(S.store.name)} atende os clientes pelos vendedores. Fale com o seu vendedor para fazer o pedido.</div></section>`;return}
+  if(!ui.client){app.innerHTML=loginForm(false);bindLogin(false);
+    if(typeof SRV_NOCLI!=='undefined'&&SRV_NOCLI){const h=app.querySelector('#lf h2');if(h)h.textContent='Acesso da equipe';const l=app.querySelector('label[for=lu]');if(l)l.textContent='Usuário';const hd=app.querySelector('.loginhero div');if(hd)hd.textContent='Sistema da equipe'}
+    return}
   if(ui.cliPage==='ok'){const o=ui.lastOrder;
     app.innerHTML=`<div class="success"><div class="check"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m5 12 5 5 9-10"/></svg></div>
       ${(st=>st==='rej'?`<h2>Pedido não enviado</h2><p class="neg" style="max-width:40ch;margin:0"><b>${esc(SRV.rej[o.id]||'A loja não aceitou o pedido.')}</b></p>`:st==='off'?`<h2>Pedido ainda não enviado</h2><p style="max-width:40ch;margin:0"><b>Sem internet agora.</b> O app envia sozinho quando a conexão voltar. Não feche o app até aparecer o número do pedido.</p>`:st==='wait'?`<h2>Enviando pedido…</h2><p class="muted" style="max-width:40ch;margin:0">Aguarde a confirmação.</p>`:`<h2>Pedido nº ${o.no} enviado</h2>`)(srvOrderState(o.id))}${o.appr==='pendente'?'<p style="max-width:40ch;margin:0"><b>Sua proposta de preço foi para a loja.</b> Assim que ela responder, você vê em Meus pedidos.</p>':''}<p class="muted" style="max-width:40ch;margin:0">Total de ${brl(o.total)} · ${o.mode==='entrega'?'para entrega':'para retirada na loja'}. Você acompanha a situação em "Meus pedidos".</p>
@@ -3104,7 +3253,7 @@ function admLancar0(){
         ${lsubs.length?`<div class="chips subchips" role="group" aria-label="Subcategorias" style="margin:0"><button class="chip" data-lsub="" aria-pressed="${!L.sub}">Tudo em ${esc(L.cat)}</button>${lsubs.map(sn=>`<button class="chip" data-lsub="${esc(sn)}" aria-pressed="${L.sub===sn}">${esc(sn)}</button>`).join('')}</div>`:''}
         <div class="small muted">Use o + e o − (ou digite) a quantidade. O preço já vem com as condições do cadastro; se você negociou outro valor com o cliente, troque no preço.</div>
         <div class="tablewrap"><table class="btable ltable"><thead><tr><th>Produto</th><th class="r">Preço</th><th class="r">Qtd</th><th class="r">Total</th></tr></thead><tbody>
-          ${prods.map(p=>{const qn=L.cart[p.id]||0,it=R2.items.find(i=>i.p.id===p.id),i0=R0.items.find(i=>i.p.id===p.id),def=i0?i0.price:baseOf(p),ov=L.over[p.id]>0,pr=ov?Number(L.over[p.id]):(it?it.price:def),un=!p.isCombo&&packOf(p)?packOf(p):1;return `<tr class="${qn?'sel':''}"><td>${SV&&!p.isCombo?lnDot(lnItemLevel(p,pr,R2.sub>0?R2.total/R2.sub:1,L,cli,tpOf(p))):''}<b>${esc(p.name)}</b><div class="codes">${p.code?'Cód. '+esc(p.code)+' · ':''}${esc(p.unit||'')}${it&&it.label?' · <span style="color:var(--ok);font-weight:700">'+esc(it.label)+'</span>':''}${ieOn()&&ieF(p)<1?' · <span style="color:var(--accent);font-weight:700">Preço com IE</span>':''}${SV&&pCommOwn(p)!==''?` <span class="commchip">comissão ${String(pCommOwn(p)).replace('.',',')}%</span>`:''}</div></td>
+          ${prods.map(p=>{const qn=L.cart[p.id]||0,it=R2.items.find(i=>i.p.id===p.id),i0=R0.items.find(i=>i.p.id===p.id),def=i0?i0.price:baseOf(p),ov=L.over[p.id]>0,pr=ov?Number(L.over[p.id]):(it?it.price:def),un=!p.isCombo&&packOf(p)?packOf(p):1;return `<tr class="${qn?'sel':''}"><td>${SV&&!p.isCombo?lnDot(lnItemLevel(p,pr,R2.sub>0?R2.total/R2.sub:1,L,cli,tpOf(p))):''}<b>${esc(p.name)}</b>${lnPhotoBtn(p)}<div class="codes">${p.code?'Cód. '+esc(p.code)+' · ':''}${esc(p.unit||'')}${it&&it.label?' · <span style="color:var(--ok);font-weight:700">'+esc(it.label)+'</span>':''}${ieOn()&&ieF(p)<1?' · <span style="color:var(--accent);font-weight:700">Preço com IE</span>':''}${SV&&pCommOwn(p)!==''?` <span class="commchip">comissão ${String(pCommOwn(p)).replace('.',',')}%</span>`:''}</div></td>
             <td class="r num">${un>1?`<div class="lnpair"><label><span>R$ ${isKg(p)?'kg':'unidade'}</span><input type="text" inputmode="decimal" class="lnpr ${ov?'ovr':''}" data-lp="${p.id}" data-un="${un}" data-def="${def}" value="${money(Math.round(pr/un*100)/100)}" aria-label="Preço da unidade de ${esc(p.name)}"></label><label><span>R$ ${esc(packWord(p))}<span class="lnc"> c/ ${un}</span></span><input type="text" inputmode="decimal" class="lnpr ${ov?'ovr':''}" data-lpk="${p.id}" data-un="${un}" data-def="${def}" value="${money(pr)}" aria-label="Preço da embalagem de ${esc(p.name)}"></label></div>`:`<input type="text" inputmode="decimal" class="lnpr ${ov?'ovr':''}" data-lp="${p.id}" data-un="1" data-def="${def}" value="${money(pr)}" aria-label="Preço de ${esc(p.name)}">`}${SV&&un>1?`<div class="small muted svonly">${esc(packWord(p))} ${brl(pr)}</div>`:''}<div class="upx lnmg" data-lmg="${p.id}" data-cost="${!p.isCombo&&p.cost>0?p.cost:(p.isCombo&&p.cost>0?p.cost:'')}" data-cr="${esc(String(lnCommRate(p,L.sel)))}" data-trib="${p.trib?1:''}" data-ie="${L.nf&&ieClient(cli)?1:''}">${lnMgText(p.cost,pr,lnCommRate(p,L.sel),p.trib,L.nf&&ieClient(cli))}</div>${ov?`<div class="upx">padrão ${brl(def/un)}${un>1?'/'+uw(p):''} · <button type="button" class="link" data-lpr="${p.id}" style="font-size:11px;padding:0">voltar</button></div>`:''}</td><td class="r">${un>1?`<div class="lnpair"><label><span>${esc(packWord(p,true))}</span><div class="lnstep"><button type="button" data-lqd="${p.id}" aria-label="Menos uma de ${esc(p.name)}" ${qn?'':'disabled'}>−</button><input type="number" inputmode="numeric" min="0" class="lnqty" data-lq="${p.id}" value="${qn||''}" placeholder="0" aria-label="Quantidade em embalagens de ${esc(p.name)}"><button type="button" data-lqi="${p.id}" aria-label="Mais uma de ${esc(p.name)}">+</button></div></label><label><span>${isKg(p)?'kg':'unidades'}</span><input type="number" inputmode="decimal" min="0" step="${un}" class="lnqty" data-lqu="${p.id}" data-un="${un}" value="${qn?qn*un:''}" placeholder="0" aria-label="Quantidade em unidades de ${esc(p.name)}"></label></div>`:`<div class="lnstep"><button type="button" data-lqd="${p.id}" aria-label="Menos uma de ${esc(p.name)}" ${qn?'':'disabled'}>−</button><input type="number" inputmode="numeric" min="0" class="lnqty" data-lq="${p.id}" value="${qn||''}" placeholder="0" aria-label="Quantidade de ${esc(p.name)}"><button type="button" data-lqi="${p.id}" aria-label="Mais uma de ${esc(p.name)}">+</button></div>`}</td><td class="r num">${qn?(un>1?'<span class="small muted lnun">'+(qn*un).toLocaleString('pt-BR')+(isKg(p)?' kg':' un.')+' · </span>':'')+brl(pr*qn):''}</td></tr>`}).join('')||'<tr><td colspan="4" class="muted">Nenhum produto encontrado.</td></tr>'}
         </tbody></table></div>
       </section>
@@ -5661,7 +5810,7 @@ function bulkView(){
   c.innerHTML=`<div class="sectionhead"><h2>CADASTRO EM MASSA</h2><button class="btn ghost" id="bback">Voltar aos produtos</button></div>
   <div class="panel staria" style="margin-bottom:12px"><div class="row" style="justify-content:space-between;gap:10px"><div><b>Pelo StarIA, só com os códigos internos</b><div class="small muted">Cole a lista de códigos, o app busca tudo de uma vez e você aprova um por um.</div></div><button class="btn" id="bst">Importar do StarIA</button></div></div>
   <div class="panel" style="display:grid;gap:12px">
-    <ol class="steps"><li>Preencha a planilha modelo <b>Modelo_Cadastro_em_Massa_ATACADO_DAVILA.xlsx</b> (aba PRODUTOS).</li><li>Escolha o arquivo abaixo. Nada é gravado antes de você conferir.</li><li>Confira o resumo e toque em <b>Importar</b>.</li></ol>
+    <ol class="steps"><li>Preencha a planilha modelo <b>Modelo_Cadastro_em_Massa.xlsx</b> (aba PRODUTOS).</li><li>Escolha o arquivo abaixo. Nada é gravado antes de você conferir.</li><li>Confira o resumo e toque em <b>Importar</b>.</li></ol>
     <div class="dropzone" id="bdrop"><b>Arraste a planilha aqui</b> ou escolha o arquivo<input type="file" id="bfile" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"></div>
     <div class="err" id="berr"></div>
   </div>
@@ -6129,8 +6278,9 @@ function admClients(){
       </div>
       <label class="switch iesw"><input type="checkbox" id="cie" ${e.ieOk?'checked':''}> <span><b>Contribuinte de ICMS com inscrição estadual ativa</b><br><span class="small muted">Comprando com nota fiscal, recebe o "Preço com IE" dos produtos. Marque depois de conferir a IE no Sintegra.</span></span></label>
       <label class="switch"><input type="checkbox" id="cneg" ${e.canNeg?'checked':''}> <span><b>Pode negociar preço no app</b><br><span class="small muted">Libera o botão "Negociar preço" no carrinho deste cliente (vale quando a negociação está em "Só os clientes marcados").</span></span></label>
-      <div class="grid2">
-        <div class="field"><label for="cl">Usuário de acesso</label><input type="text" id="cl" value="${esc(e.login)}" autocapitalize="none" placeholder="Ex.: mercearia.sj" required></div>
+      ${modOn('app_cliente')?'':'<div class="small muted">Esta empresa não usa o app do cliente: não é preciso usuário nem senha. Os pedidos dele entram pelo vendedor ou pela loja.</div>'}
+      <div class="grid2" ${modOn('app_cliente')?'':'hidden'}>
+        <div class="field"><label for="cl">Usuário de acesso</label><input type="text" id="cl" value="${esc(e.login)}" autocapitalize="none" placeholder="Ex.: mercearia.sj" ${modOn('app_cliente')?'required':''}></div>
         <div class="field"><label for="cp">Senha</label><input type="password" id="cp" value="" autocomplete="new-password" placeholder="${e.id&&e.hasPass?'Em branco = manter a senha atual':'Senha base (mín. 8): a pessoa troca no 1º acesso'}"></div>
       </div>
       <div class="grid2">
