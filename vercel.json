@@ -10,7 +10,7 @@
     "api/index.js": {
       "memory": 1024,
       "maxDuration": 30,
-      "includeFiles": "lib/**"
+      "includeFiles": "{lib/**,public/index.html,public/cliente.html}"
     }
   },
   "rewrites": [
@@ -20,7 +20,7 @@
     },
     {
       "source": "/t/:empresa/pdv",
-      "destination": "/"
+      "destination": "/api/index"
     },
     {
       "source": "/pdv",
@@ -28,19 +28,19 @@
     },
     {
       "source": "/t/:empresa/cliente",
-      "destination": "/cliente"
+      "destination": "/api/index"
     },
     {
       "source": "/t/:empresa/cliente/",
-      "destination": "/cliente"
+      "destination": "/api/index"
     },
     {
       "source": "/t/:empresa",
-      "destination": "/"
+      "destination": "/api/index"
     },
     {
       "source": "/t/:empresa/",
-      "destination": "/"
+      "destination": "/api/index"
     }
   ],
   "headers": [

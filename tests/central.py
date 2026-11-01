@@ -116,6 +116,18 @@ s, st = c.req('/api/central/state'); t2 = next(t for t in st['tenants'] if t['id
 s, r = c.req('/api/central/tenant', {'id': tv['id'], 'name': 'Loja Varejo Teste'}); check(s == 200, 'e continua podendo ser salva normalmente')
 s, r = Client().req('/api/central/segment', {'name': 'Invasor', 'modules': {}}); check(s in (401, 403), 'sem entrar na Central, não cria modelo (%s)' % s)
 
+print('== marca de cada empresa (sem nada da principal)')
+import urllib.request as _u
+def _get(path):
+    try:
+        with _u.urlopen(BASE + path) as x: return x.status, x.read().decode()
+    except _u.HTTPError as e: return e.code, e.read().decode()
+s, h = _get('/t/' + tv['id'] + '/'); head = h.split('</head>')[0]
+check(s == 200 and '<title>Loja Varejo Teste Equipe</title>' in head and 'Ávila' not in head and 'tino-180.png' in head, 'página da equipe de outra empresa: nome dela e ícone do Tino, nada da principal')
+s, h = _get('/t/' + tv['id'] + '/cliente'); check(s == 200 and '<title>Loja Varejo Teste</title>' in h, 'página de clientes com o nome da empresa')
+s, h = _get('/api/manifest?t=' + tv['id']); m = json.loads(h); check(m['name'] == 'Loja Varejo Teste Equipe' and all('tino' in i['src'] for i in m['icons']), 'ícone do app instalado: Tino quando a empresa não tem logo')
+s, h = _get('/t/empresa-que-nao-existe/'); check(s == 404, 'empresa inexistente não abre a principal')
+
 print('== sair')
 s, _ = c.req('/api/central/logout', {}); s2, _ = c.req('/api/central/state'); check(s == 200 and s2 == 401, 'sair encerra a sessão da Central')
 
