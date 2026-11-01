@@ -179,6 +179,7 @@ Para a loja que quer vender pelo celular (loja de roupa, supermercado, bazar…)
 - **Regras no servidor (`lib/loja.js`):** o total é recalculado (preço, faixa, taxa) e, se mudou desde que o cliente viu, o pedido é recusado com o total novo; estoque conferido e baixado na mesma transação, com os produtos travados; o mesmo pedido enviado duas vezes grava uma vez; até 30 pedidos por aparelho/IP e 400 pela loja a cada 15 min; a vitrine mostra só disponível/esgotado (não a quantidade); loja em preparo, suspensa ou fechada não recebe pedido; no banco fica só o SHA-256 da chave do link.
 - **Tabelas:** `loja_config`, `loja_produtos`, `loja_fotos`, `loja_pedidos`, `loja_seq` (todas com `tenant_id`).
 - **Testes:** `tests/loja.py` (roda no `tests/ci_banco.sh` e no GitHub).
+- **Voltar versão:** **não use "Instant Rollback"** na Vercel: a versão antiga não conhece a loja online e abriria o app de pedidos no endereço dela. Para desfazer, publique uma correção para frente.
 - **Para depois:** pagamento online (PIX automático/cartão), cupom de desconto, aviso automático por WhatsApp.
 
 ## Desenvolver e testar no computador

@@ -51,6 +51,9 @@ s, html, h = C(None).req('/t/' + TID + '/loja', raw=True); check(s == 200 and b'
 s, html, h = C(None).req('/t/' + TID + '/cliente', raw=True); check(s == 302 and h.get('Location') == '/t/' + TID + '/loja', '/cliente leva para a vitrine')
 s, mf = C(None).req('/api/manifest?t=' + TID + '&k=cliente'); check(mf.get('start_url') == '/t/' + TID + '/loja', 'vitrine instalada no celular abre a loja')
 s, _ = C(TID).req('/api/loja/vitrine'); check(s == 403, 'loja em preparo: vitrine ainda não abre')
+s, r = cen.req('/api/central/tenant', {'name': 'Sítio Teste', 'ramo': 'rural'}); TR = r['tenant']['id']
+s, html, h = C(None).req('/t/' + TR + '/loja', raw=True); check(s == 302 and h.get('Location') == '/t/' + TR + '/', '/loja de empresa rural volta para o app dela')
+s, html, h = C(None).req('/t/davila/loja', raw=True); check(s == 302, '/loja da empresa principal (atacado) não abre vitrine')
 
 print('== painel da loja')
 A = C(TID)
@@ -109,12 +112,20 @@ s, r = V.req('/api/loja/pedido', dict(base, id=oid(), chave=chave(), itens=[{'pr
 s, r = V.req('/api/loja/pedido', dict(base, id=oid(), chave=chave(), itens=[{'produtoId': BLU, 'qtd': 1.5}], entrega='retirada', totalVisto=74.85)); check(s == 400, 'quantidade quebrada é recusada')
 s, r = V.req('/api/loja/pedido', dict(base, id=oid(), chave=chave(), itens=[{'produtoId': VES, 'qtd': 1}], entrega='retirada', totalVisto=129.9)); check(s == 400, 'produto com tamanhos pedido sem escolher o tamanho é recusado')
 
+# dois clientes ao mesmo tempo pela última peça: só um leva
+ULT = xid(); A.req('/api/loja/admin/produto', {'id': ULT, 'nome': 'Peça única', 'preco': 30, 'estoque': 1})
+import threading
+res = []
+def corre():
+    res.append(C(TID).req('/api/loja/pedido', dict(base, id=oid(), chave=chave(), itens=[{'produtoId': ULT, 'qtd': 1}], entrega='retirada', totalVisto=30))[0])
+th = [threading.Thread(target=corre) for _ in range(4)]; [t.start() for t in th]; [t.join() for t in th]
+check(sorted(res) == [200, 409, 409, 409], 'quatro clientes ao mesmo tempo pela última peça: só um leva (%s)' % sorted(res))
 print('== acompanhar e painel')
 s, r = C(TID).req('/api/loja/acompanhar?c=' + K1); p1 = r.get('pedido', {})
 check(s == 200 and p1.get('numero') == 1 and p1.get('status') == 'novo' and 'clienteTel' not in p1, 'cliente acompanha o pedido pelo link (sem dados extras)')
 s, _ = C(TID).req('/api/loja/acompanhar?c=' + chave()); check(s == 404, 'chave errada não acha pedido')
 s, _ = C(TX).req('/api/loja/acompanhar?c=' + K1); check(s == 404, 'link de um pedido não abre em outra loja')
-s, st = A.req('/api/loja/admin/state'); ped = st['pedidos'][0]; PID = ped['id']
+s, st = A.req('/api/loja/admin/state'); ped = next(p for p in st['pedidos'] if p['numero'] == 1); PID = ped['id']
 check(ped['clienteTel'] == '27988881111' and ped['total'] == CERTO and ped['itens'][0]['precoUnit'] == 109.9, 'painel recebe o pedido com telefone e preços')
 s, _ = A.req('/api/loja/admin/pedido/status', {'id': PID, 'status': 'entregue'}); check(s == 409, 'não pula etapas (novo → entregue)')
 s, _ = A.req('/api/loja/admin/pedido/status', {'id': PID, 'status': 'confirmado'}); check(s == 200, 'confirma o pedido')
@@ -149,7 +160,7 @@ s, _ = V.req('/api/loja/pedido', dict(base, id=oid(), chave=chave(), totalVisto=
 cen.req('/api/central/tenant', {'id': TID, 'status': 'suspensa'})
 s, _ = V.req('/api/loja/vitrine'); check(s == 403, 'loja suspensa: vitrine fechada')
 cen.req('/api/central/tenant', {'id': TID, 'status': 'ativa'})
-s, st = cen.req('/api/central/state'); tm = next(t for t in st['tenants'] if t['id'] == TID); check(tm['stats']['lojaProdutos'] == 3 and tm['stats']['lojaPedidos'] == 1, 'Central mostra produtos e pedidos da loja')
+s, st = cen.req('/api/central/state'); tm = next(t for t in st['tenants'] if t['id'] == TID); check(tm['stats']['lojaProdutos'] == 4 and tm['stats']['lojaPedidos'] == 2, 'Central mostra produtos e pedidos da loja (%s)' % tm['stats'])
 
 print('== limite de pedidos por aparelho (por último)')
 codes = [V.req('/api/loja/pedido', dict(base, id=oid(), chave=chave(), itens=[{'produtoId': BLU, 'qtd': 1}], entrega='retirada', totalVisto=49.9))[0] for _ in range(30)]
