@@ -20,6 +20,8 @@
   const dataHora = s => { try { const d = new Date(s); return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
   const slug = (/^\/t\/([a-z0-9-]{1,40})/.exec(location.pathname) || [])[1] || '';
   let brand = {}; try { brand = JSON.parse((document.querySelector('meta[name="tino-brand"]') || {}).content || '{}'); } catch (e) { brand = {}; }
+  /* telefone legível: (27) 98888-1111 */
+  const fone = t => { const d = String(t || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, ''); return d.length === 11 ? `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}` : d.length === 10 ? `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}` : d; };
   const ST = { novo: 'Novo', confirmado: 'Confirmado', pronto: 'Pronto', entregue: 'Entregue', cancelado: 'Cancelado' };
   const ACOES = { novo: [['confirmado', 'Confirmar pedido']], confirmado: [['pronto', 'Marcar como pronto']], pronto: [['entregue', 'Marcar como entregue']] };
 
@@ -165,7 +167,7 @@
     const acoes = ACOES[p.status] || [];
     openSheet('Pedido nº ' + p.numero, `
       <div class="between"><span class="st ${esc(p.status)}">${esc(ST[p.status])}</span><span class="small muted">${dataHora(p.criadoEm)}</span></div>
-      <section class="card"><b>${esc(p.clienteNome)}</b><p class="small">📞 ${esc(p.clienteTel)}</p>
+      <section class="card"><b>${esc(p.clienteNome)}</b><p class="small">📞 ${esc(fone(p.clienteTel))}</p>
         <p class="small">${p.entrega === 'entrega' ? '🛵 Entrega: ' + esc(p.endereco || '') : '🏪 Retirada na loja'}</p>
         <p class="small">💳 ${esc(S.pagamentosNomes[p.pagamento] || p.pagamento)}</p>${p.obs ? `<p class="small">📝 ${esc(p.obs)}</p>` : ''}
         <a class="btn full" href="https://wa.me/${esc(zap(p.clienteTel))}?text=${encodeURIComponent(msgCliente(p, p.status))}" target="_blank" rel="noopener">💬 Falar com ${esc(p.clienteNome.split(' ')[0])} no WhatsApp</a></section>
@@ -341,7 +343,7 @@
         <p class="small muted">Fechada, a vitrine continua aparecendo, mas não deixa enviar pedido.</p></section>
       <section class="card"><h2>Link da loja</h2><div class="link-box"><code>${esc(lojaUrl())}</code><button class="btn sm" type="button" id="cp">Copiar</button><a class="btn sm" href="${esc(lojaUrl())}" target="_blank" rel="noopener">Ver loja</a></div></section>
       <section class="card"><h2>Contato</h2>
-        <div class="field"><label for="cw">WhatsApp da loja (com DDD)</label><input type="tel" id="cw" maxlength="20" value="${esc(C.whatsapp)}" placeholder="27 99999-0000"></div>
+        <div class="field"><label for="cw">WhatsApp da loja (com DDD)</label><input type="tel" id="cw" maxlength="20" value="${esc(fone(C.whatsapp))}" placeholder="27 99999-0000"></div>
         <div class="field"><label for="ce">Endereço da loja</label><input type="text" id="ce" maxlength="200" value="${esc(C.endereco)}"></div>
         <div class="field"><label for="ch">Horário</label><input type="text" id="ch" maxlength="120" value="${esc(C.horario)}" placeholder="Seg a sáb, 9h às 18h"></div>
         <div class="field"><label for="cb">Mensagem de boas-vindas na vitrine</label><input type="text" id="cb" maxlength="300" value="${esc(C.boasVindas)}" placeholder="Novidades toda semana!"></div></section>
