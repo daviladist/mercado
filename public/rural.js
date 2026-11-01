@@ -366,6 +366,7 @@
     const F = Object.assign({ tipo: 'despesa', data: hoje(), valor: '', rocaId: null }, JSON.parse(JSON.stringify(src || {})));
     if (edit) { F.valor = numIn(F.valor); F.qtd = numIn(F.qtd); F.preco = numIn(F.preco); F.dias = numIn(F.dias); }
     const travado = edit && Object.keys(F.acertos || {}).length > 0;
+    const origRoca = edit ? F.rocaId : null, origPartes = edit ? JSON.parse(JSON.stringify(F.partes || {})) : null;
     const ativas = S.rocas.filter(r => r.ativa || r.id === F.rocaId);
     if (!F.rocaId && F.tipo !== 'despesa' && ativas.length === 1) F.rocaId = ativas[0].id;
     if (edit && F.tipo === 'despesa') F.geral = !F.rocaId;
@@ -404,7 +405,8 @@
         ${edit && !travado ? '<button class="btn dan full" type="button" id="fx">Excluir este lançamento</button>' : ''}`;
       openSheet(title.charAt(0).toUpperCase() + title.slice(1), html, bind);
     }
-    function vendaNote(r, v) { return Object.entries(vendaPartes(r)).map(([k, p]) => esc(nomeParte(k)) + ' (' + pctTxt(p) + '): <b>' + money((v || 0) * p / 100) + '</b>').join(' · '); }
+    /* venda corrigida na mesma roça: mostra a divisão gravada (do dia da venda), não a parceria de hoje */
+    function vendaNote(r, v) { const ps = edit && F.rocaId === origRoca && Object.keys(origPartes).length ? origPartes : vendaPartes(r); return Object.entries(ps).map(([k, p]) => esc(nomeParte(k)) + ' (' + pctTxt(p) + '): <b>' + money((v || 0) * p / 100) + '</b>').join(' · '); }
     /* atualiza totais e prévias sem redesenhar (o campo que a pessoa tocou continua com o foco) */
     function upd() {
       keep();
@@ -423,7 +425,9 @@
     }
     function bind(pn) {
       const redraw = () => { const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
-      pn.querySelectorAll('[data-r]').forEach(b => b.addEventListener('click', () => { keep(); F.rocaId = b.dataset.r || null; F.geral = !F.rocaId; if (F.tipo === 'despesa') regra(); if (F.tipo === 'adiantamento') { const ms = meeirosDe(roca(F.rocaId)); F.pessoaId = ms.length === 1 ? ms[0] : null; } redraw(); }));
+      pn.querySelectorAll('[data-r]').forEach(b => b.addEventListener('click', () => {
+        if (edit && F.tipo === 'venda' && origRoca && (b.dataset.r || null) !== F.rocaId && !confirm('Mudar a roça desta venda refaz a divisão com a parceria de hoje da outra roça (a divisão do dia da venda se perde). Continuar?')) return;
+        keep(); F.rocaId = b.dataset.r || null; F.geral = !F.rocaId; if (F.tipo === 'despesa') regra(); if (F.tipo === 'adiantamento') { const ms = meeirosDe(roca(F.rocaId)); F.pessoaId = ms.length === 1 ? ms[0] : null; } redraw(); }));
       pn.querySelectorAll('[data-cat]').forEach(b => b.addEventListener('click', () => { keep(); F.categoria = b.dataset.cat; regra(); redraw(); }));
       pn.querySelectorAll('[data-pe]').forEach(b => b.addEventListener('click', () => { keep(); F.pessoaId = b.dataset.pe; redraw(); }));
       pn.querySelectorAll('[data-un]').forEach(b => b.addEventListener('click', () => { keep(); F.unidade = F.unidade === b.dataset.un ? null : b.dataset.un; redraw(); }));

@@ -99,6 +99,7 @@ s, r = R.req('/api/rural/roca', {'id': BAN, 'nome': 'Banana Minas', 'modo': 'mee
 s, r = R.req('/api/rural/roca', {'id': BAN, 'nome': 'Banana Minas', 'modo': 'meeiro', 'parceria': {LUCAS: 40}, 'regras': {'adubo': {'dono': 60, JOSE: 40}}}); check(s == 400, 'regra com pessoa de fora da roça recusada')
 s, r = R.req('/api/rural/roca', {'id': BAN, 'nome': 'Banana Minas', 'cultura': 'Banana', 'local': 'Minas Gerais', 'modo': 'meeiro', 'parceria': {LUCAS: 40}, 'regras': {'adubo': {'dono': 60, LUCAS: 40}, 'matamato': {LUCAS: 100}}})
 check(s == 200, 'cria a roça de banana: Pisaia 60% · Lucas 40%, adubo dividido, mata-mato por conta do Lucas')
+s, _ = R.req('/api/rural/roca', {'id': rid(), 'nome': 'Minúscula', 'modo': 'meeiro', 'parceria': {LUCAS: 0.001}}); check(s == 400, 'meeiro com porcentagem que arredonda para zero é recusado')
 CAFE = rid(); s, _ = R.req('/api/rural/roca', {'id': CAFE, 'nome': 'Café', 'modo': 'funcionarios', 'parceria': {LUCAS: 50}}); check(s == 200, 'cria roça só com funcionários')
 s, st = R.req('/api/rural/state'); cafe = next(x for x in st['rocas'] if x['id'] == CAFE); check(cafe['parceria'] == {}, 'roça "só funcionários" não guarda meeiro')
 R.req('/api/rural/pessoa', {'id': ZE, 'tipo': 'funcionario', 'nome': 'Zé', 'salario': 2000, 'rocaId': CAFE})
