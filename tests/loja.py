@@ -179,9 +179,10 @@ s, _ = V.req('/api/loja/vitrine'); check(s == 403, 'loja suspensa: vitrine fecha
 cen.req('/api/central/tenant', {'id': TID, 'status': 'ativa'})
 s, st = cen.req('/api/central/state'); tm = next(t for t in st['tenants'] if t['id'] == TID); check(tm['stats']['lojaProdutos'] == 6 and tm['stats']['lojaPedidos'] == 4, 'Central mostra produtos e pedidos da loja (%s)' % tm['stats'])
 
+s, img, h = C(None).req('/api/loja/foto/%E0%A4%A?t=' + TID, raw=True, headers={}); check(s == 404, 'endereço de foto malformado dá 404 (não erro do servidor)')
 print('== limite de pedidos por aparelho (por último)')
 codes = [V.req('/api/loja/pedido', dict(base, id=oid(), chave=chave(), itens=[{'produtoId': BLU, 'qtd': 1}], entrega='retirada', totalVisto=49.9))[0] for _ in range(30)]
-check(429 in codes, 'muitos pedidos seguidos do mesmo aparelho são barrados (%s)' % codes[-3:])
+check(429 in codes and codes.count(200) <= 5, 'muitos pedidos seguidos do mesmo aparelho/telefone são barrados, e ninguém segura estoque com mais de 5 pedidos esperando (%s)' % codes)
 
 print(f'\n{ok} OK, {len(fails)} falha(s)')
 if fails: print('\n'.join(' - ' + f for f in fails)); sys.exit(1)
