@@ -11,6 +11,7 @@
   const toNum = v => {
     let s = String(v == null ? '' : v).trim().replace(/^R\$\s*/i, '').replace(/\s/g, '');
     if (!s) return null;
+    if (!/^-?[\d.,]+$/.test(s)) return NaN;
     if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
     else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
     const n = Number(s); return isFinite(n) ? n : NaN;
@@ -307,8 +308,8 @@
   function openSheet(title, html, onReady) {
     if (!$('#sheet').innerHTML) history.pushState({ v: view, a: arg, sheet: 1 }, '', location.hash);
     $('#sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="pn"><div class="tt"><h2>${esc(title)}</h2><button type="button" class="x" id="shx" aria-label="Fechar">×</button></div>${html}</div></div>`;
-    $('#shx').addEventListener('click', closeSheet);
-    $('#sheet .sheet').addEventListener('click', e => { if (e.target.classList.contains('sheet')) closeSheet(); });
+    $('#shx').addEventListener('click', fecharPeloUsuario);
+    $('#sheet .sheet').addEventListener('click', e => { if (e.target.classList.contains('sheet')) fecharPeloUsuario(); });
     if (onReady) onReady($('#sheet .pn'));
   }
   function closeSheet() {
@@ -316,7 +317,12 @@
     $('#sheet').innerHTML = '';
     if (history.state && history.state.sheet) history.replaceState({ v: view, a: arg }, '', location.hash);
   }
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#sheet').innerHTML) closeSheet(); });
+  /* fechar no "×", fora da folha ou no Esc: volta um passo no histórico (o "Voltar" seguinte já troca de tela) */
+  function fecharPeloUsuario() {
+    if (history.state && history.state.sheet) history.back(); // o popstate fecha a folha
+    else closeSheet();
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#sheet').innerHTML) fecharPeloUsuario(); });
 
   function lancarMenu(rocaId) {
     const rid = typeof rocaId === 'string' ? rocaId : null;
