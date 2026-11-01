@@ -60,6 +60,8 @@ check(s == 200 and 'rural.js' in html and '<title>Pisaia</title>' in html and '/
 s, html, h = C(None).req('/t/' + TID + '/cliente', raw=True); check(s == 302 and h.get('Location') == '/t/' + TID + '/', '/cliente de empresa rural volta para o app do produtor')
 s, html, h = C(None).req('/t/' + TID + '/pdv', raw=True); check(s == 302, '/pdv de empresa rural volta para o app do produtor')
 s, html, h = C(None).req('/t/davila/', raw=True); check(s == 302, 'principal continua no endereço de sempre')
+s, mf = C(None).req('/api/manifest?t=' + TID); check(s == 200 and mf.get('name') == 'Pisaia' and mf.get('start_url') == '/t/' + TID + '/', 'app instalado no celular abre o app do produtor, com o nome da empresa')
+s, r = cen.req('/api/central/tenant', {'name': 'Atacadinho', 'ramo': ''}); check(s == 200 and r['tenant']['ramo'] == 'atacado', 'empresa nova sem tipo continua sendo de atacado')
 
 R = C(TID)
 s, _ = R.req('/api/rural/state'); check(s == 401, 'sem login não lê nada')
@@ -112,6 +114,9 @@ s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'venda', 'ro
 s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'venda', 'data': '2026-10-11', 'valor': 50}); check(s == 400, 'venda sem roça recusada')
 s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'venda', 'rocaId': BAN, 'data': '2026-10-11', 'valor': -5}); check(s == 400, 'valor negativo recusado')
 s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'venda', 'rocaId': BAN, 'data': '2026-02-30', 'valor': 5}); check(s == 400, 'data inválida recusada')
+VT = lid(); s, _ = R.req('/api/rural/lanc', {'id': VT, 'novo': True, 'tipo': 'despesa', 'categoria': 'frete', 'rocaId': BAN, 'data': '2026-10-11', 'valor': '1.500', 'partes': {'dono': 100}})
+s2, st = R.req('/api/rural/state'); vt = next((l for l in st['lanc'] if l['id'] == VT), {}); check(s == 200 and vt.get('valor') == 1500, 'valor escrito "1.500" é mil e quinhentos (não R$ 1,50)')
+R.req('/api/rural/lanc/excluir', {'id': VT})
 D1 = lid(); s, _ = R.req('/api/rural/lanc', {'id': D1, 'novo': True, 'tipo': 'despesa', 'categoria': 'adubo', 'rocaId': BAN, 'data': '2026-10-05', 'valor': 1000}); check(s == 200, 'despesa de adubo sem divisão: usa a regra da roça')
 D2 = lid(); s, _ = R.req('/api/rural/lanc', {'id': D2, 'novo': True, 'tipo': 'despesa', 'categoria': 'matamato', 'rocaId': BAN, 'data': '2026-10-06', 'valor': 300}); check(s == 200, 'mata-mato por conta do Lucas')
 D3 = lid(); s, _ = R.req('/api/rural/lanc', {'id': D3, 'novo': True, 'tipo': 'despesa', 'categoria': 'energia', 'rocaId': BAN, 'data': '2026-10-07', 'valor': 200, 'partes': {'dono': 50, LUCAS: 50}}); check(s == 200, 'energia com divisão escolhida na hora (50/50)')

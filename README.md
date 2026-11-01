@@ -162,6 +162,7 @@ Um segundo tipo de empresa no mesmo sistema e no mesmo banco, para quem toca ro�
 - **Regras no servidor (`lib/rural.js`):** só o administrador da empresa; a divisão da venda vem da parceria da roça no dia (o aparelho não escolhe, e mudar a porcentagem depois não muda vendas antigas); divisão de despesa só com gente da roça e somando 100%; acerto recusado se algo mudou desde a prévia; lançamento acertado não muda nem sai; rotas do atacado não existem para a empresa rural e as do produtor não existem para o atacado.
 - **Tabelas:** `rural_pessoas`, `rural_rocas`, `rural_veiculos`, `rural_lanc`, `rural_acertos`, `rural_seq` (todas com `tenant_id`); coluna `tenants.ramo`.
 - **Testes:** `tests/rural.py` (roda no `tests/ci_banco.sh` e no GitHub).
+- **Voltar versão:** como no resto do Tino, **não use "Instant Rollback"** na Vercel: a versão antiga não conhece o app do produtor e abriria o app de pedidos no endereço da empresa rural. Para desfazer, publique uma correção para frente.
 - **Para depois:** acesso do meeiro só para ver a parte dele; o app não guarda lançamentos sem internet (avisa e pede para tentar de novo).
 
 ## Desenvolver e testar no computador

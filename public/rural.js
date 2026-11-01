@@ -7,7 +7,14 @@
   const money = v => BRL.format(Math.round((Number(v) || 0) * 100) / 100);
   const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
   const pctTxt = v => (Math.round((Number(v) || 0) * 100) / 100).toLocaleString('pt-BR') + '%';
-  const toNum = v => { const s = String(v == null ? '' : v).trim(); if (!s) return null; const n = Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s); return isFinite(n) ? n : NaN; };
+  /* número do jeito brasileiro: "1.500" = mil e quinhentos, "1.500,50", "25,5"; "1.5" (sem milhar) continua 1,5 */
+  const toNum = v => {
+    let s = String(v == null ? '' : v).trim().replace(/^R\$\s*/i, '').replace(/\s/g, '');
+    if (!s) return null;
+    if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+    else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+    const n = Number(s); return isFinite(n) ? n : NaN;
+  };
   const numIn = v => v == null || v === '' ? '' : String(v).replace('.', ',');
   const hex = n => { const a = new Uint8Array(n); crypto.getRandomValues(a); return [...a].map(x => x.toString(16).padStart(2, '0')).join(''); };
   const newId = k => k + hex(k === 'l' ? 8 : 6);
@@ -17,6 +24,7 @@
   const slug = (/^\/t\/([a-z0-9-]{1,40})/.exec(location.pathname) || [])[1] || '';
   let brand = {}; try { brand = JSON.parse((document.querySelector('meta[name="tino-brand"]') || {}).content || '{}'); } catch (e) { brand = {}; }
 
+  let retomar = null;
   let S = null, view = 'inicio', arg = null, per = 'ano', rocaTab = 'resumo', pesTab = 'meeiro', relRoca = '';
 
   /* ---------- servidor ---------- */
@@ -144,7 +152,19 @@
   function bindPer() { document.querySelectorAll('[data-per]').forEach(b => b.addEventListener('click', () => { per = b.dataset.per; render(); })); }
 
   /* ---------- navegação ---------- */
-  function go(v, a) { view = v; arg = a == null ? null : a; history.replaceState(null, '', '#' + v + (arg ? '/' + arg : '')); window.scrollTo(0, 0); render(); }
+  /* cada tela entra no histórico: o "Voltar" do celular volta de tela (e fecha a folha aberta antes) em vez de sair do app */
+  function go(v, a, replace) {
+    view = v; arg = a == null ? null : a;
+    const st = { v: view, a: arg }, url = '#' + v + (arg ? '/' + arg : '');
+    if (replace) history.replaceState(st, '', url); else history.pushState(st, '', url);
+    window.scrollTo(0, 0); render();
+  }
+  window.addEventListener('popstate', e => {
+    if (!S) return;
+    if ($('#sheet').innerHTML) { $('#sheet').innerHTML = ''; return; }
+    const st = e.state && e.state.v ? e.state : (() => { const h = location.hash.slice(1).split('/'); return { v: h[0] || 'inicio', a: h.slice(1).join('/') || null }; })();
+    view = st.v; arg = st.a || null; window.scrollTo(0, 0); render();
+  });
   $('#bn').querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => { if (b.dataset.go === 'lancar') return lancarMenu(); go(b.dataset.go); }));
   function render() {
     if (!S) return;
@@ -279,12 +299,17 @@
 
   /* ---------- folha (formulários) ---------- */
   function openSheet(title, html, onReady) {
+    if (!$('#sheet').innerHTML) history.pushState({ v: view, a: arg, sheet: 1 }, '', location.hash);
     $('#sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="pn"><div class="tt"><h2>${esc(title)}</h2><button type="button" class="x" id="shx" aria-label="Fechar">×</button></div>${html}</div></div>`;
     $('#shx').addEventListener('click', closeSheet);
     $('#sheet .sheet').addEventListener('click', e => { if (e.target.classList.contains('sheet')) closeSheet(); });
     if (onReady) onReady($('#sheet .pn'));
   }
-  function closeSheet() { $('#sheet').innerHTML = ''; }
+  function closeSheet() {
+    if (!$('#sheet').innerHTML) return;
+    $('#sheet').innerHTML = '';
+    if (history.state && history.state.sheet) history.replaceState({ v: view, a: arg }, '', location.hash);
+  }
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#sheet').innerHTML) closeSheet(); });
 
   function lancarMenu(rocaId) {
@@ -292,7 +317,8 @@
     const r = rid ? roca(rid) : null;
     const temMeeiro = rid ? meeirosDe(r).length > 0 : S.rocas.some(x => x.ativa && meeirosDe(x).length);
     if (!S.rocas.length && !M('r_gerais')) { toast('Cadastre uma roça primeiro.'); return wizard(); }
-    const op = [['despesa', '💸', 'Despesa', 'adubo, veneno, energia…'], ['venda', '💰', 'Venda', 'o que foi vendido']]
+    const temRoca = S.rocas.some(x => x.ativa);
+    const op = [['despesa', '💸', 'Despesa', 'adubo, veneno, energia…']].concat(temRoca ? [['venda', '💰', 'Venda', 'o que foi vendido']] : [])
       .concat(M('r_meeiros') && temMeeiro ? [['adiantamento', '🤝', 'Adiantamento', 'ao meeiro']] : [])
       .concat(M('r_diaristas') ? [['diarista', '🧑‍🌾', 'Diarista', 'serviço pontual']] : [])
       .concat(M('r_funcionarios') && S.pessoas.some(p => p.tipo === 'funcionario' && p.ativo) ? [['salarios', '👷', 'Salários', 'pagar o mês']] : []);
@@ -330,7 +356,8 @@
     const travado = edit && Object.keys(F.acertos || {}).length > 0;
     const ativas = S.rocas.filter(r => r.ativa || r.id === F.rocaId);
     if (!F.rocaId && F.tipo !== 'despesa' && ativas.length === 1) F.rocaId = ativas[0].id;
-    if (!F.rocaId && F.tipo === 'despesa' && !M('r_gerais') && ativas.length === 1) F.rocaId = ativas[0].id;
+    if (edit && F.tipo === 'despesa') F.geral = !F.rocaId;
+    if (!edit && !F.rocaId && F.tipo === 'despesa') { if (ativas.length === 1) F.rocaId = ativas[0].id; else if (!ativas.length) F.geral = true; }
     if (F.tipo === 'adiantamento' && !F.rocaId) { const cm = ativas.filter(x => meeirosDe(x).length); if (cm.length === 1) F.rocaId = cm[0].id; }
     if (F.tipo === 'adiantamento' && F.rocaId && !F.pessoaId) { const ms = meeirosDe(roca(F.rocaId)); if (ms.length === 1) F.pessoaId = ms[0]; }
     const regra = () => { const r = F.rocaId && roca(F.rocaId); F.partes = r && meeirosDe(r).length && F.categoria ? JSON.parse(JSON.stringify(r.regras[F.categoria] || { dono: 100 })) : { dono: 100 }; F.qpOutra = false; };
@@ -340,13 +367,13 @@
     function draw() {
       const r = F.rocaId ? roca(F.rocaId) : null;
       const rocasOk = F.tipo === 'adiantamento' ? ativas.filter(x => meeirosDe(x).length) : ativas;
-      const geralOk = F.tipo === 'despesa' && (M('r_gerais') || M('r_veiculos') && F.veiculoId);
+      const geralOk = F.tipo === 'despesa' && (M('r_gerais') || F.categoria === 'salario' || M('r_veiculos') && F.veiculoId);
       const vtotal = F.tipo === 'venda' && toNum(F.qtd) > 0 && toNum(F.preco) > 0 ? r2(toNum(F.qtd) * toNum(F.preco)) : diar && toNum(F.dias) > 0 && toNum(F.preco) > 0 ? r2(toNum(F.dias) * toNum(F.preco)) : null;
       if (vtotal != null) F.valor = numIn(vtotal);
       const html = `${travado ? '<p class="warn">Este lançamento já entrou num acerto. Para mudar, desfaça o acerto na aba Meeiros da roça.</p>' : ''}
         <div class="field"><span class="lbl">${F.tipo === 'venda' ? 'De qual roça?' : F.tipo === 'adiantamento' ? 'Roça do meeiro' : 'Onde foi o gasto?'}</span><div class="chips">
           ${rocasOk.map(x => `<button type="button" class="chip" data-r="${esc(x.id)}" aria-pressed="${F.rocaId === x.id}">${esc(x.nome)}</button>`).join('')}
-          ${geralOk ? `<button type="button" class="chip" data-r="" aria-pressed="${!F.rocaId}">Geral da fazenda</button>` : ''}</div></div>
+          ${geralOk ? `<button type="button" class="chip" data-r="" aria-pressed="${!F.rocaId && !!F.geral}">Geral da fazenda</button>` : ''}</div></div>
         ${F.tipo === 'despesa' && !diar ? `<div class="field"><span class="lbl">Tipo de despesa</span><div class="cats">${S.cats.filter(c => c.id !== 'diarista' && (c.id !== 'salario' || M('r_funcionarios'))).map(c => `<button type="button" data-cat="${c.id}" aria-pressed="${F.categoria === c.id}"><i>${c.icone}</i>${esc(c.nome)}</button>`).join('')}</div></div>` : ''}
         ${F.tipo === 'adiantamento' && r ? `<div class="field"><span class="lbl">Para qual meeiro?</span><div class="chips">${meeirosDe(r).map(k => `<button type="button" class="chip" data-pe="${esc(k)}" aria-pressed="${F.pessoaId === k}">${esc(nomeParte(k))}</button>`).join('')}</div></div>` : ''}
         ${diar ? `<div class="field"><label for="fpn">Nome do diarista</label><input type="text" id="fpn" maxlength="80" value="${esc(F.pessoaNome || '')}" placeholder="Ex.: João"></div>
@@ -372,7 +399,7 @@
       const fv = $('#fv'); if (!fv) return;
       const a = toNum(F.tipo === 'venda' ? F.qtd : F.dias), b = toNum(F.preco);
       if ((F.tipo === 'venda' || F.categoria === 'diarista') && a > 0 && b > 0) { F.valor = numIn(r2(a * b)); fv.value = F.valor; fv.readOnly = true; }
-      else if (fv.readOnly) { fv.readOnly = false; }
+      else if (fv.readOnly) { fv.readOnly = false; fv.value = ''; F.valor = ''; }
       const v = toNum(F.valor), vn = $('#vnote'), r = F.rocaId && roca(F.rocaId);
       if (vn && r) { vn.hidden = !(v > 0); vn.innerHTML = vendaNote(r, v); }
       const q = $('#qpv'); if (q && v > 0) q.innerHTML = Object.keys(F.partes || {}).filter(k => F.partes[k] > 0).map(k => esc(nomeParte(k)) + ': ' + money(v * F.partes[k] / 100)).join(' · ');
@@ -383,8 +410,8 @@
       document.querySelectorAll('[data-pp]').forEach(i => { F.partes = F.partes || {}; F.partes[i.dataset.pp] = toNum(i.value) || 0; });
     }
     function bind(pn) {
-      const redraw = () => { keep(); const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
-      pn.querySelectorAll('[data-r]').forEach(b => b.addEventListener('click', () => { keep(); F.rocaId = b.dataset.r || null; if (F.tipo === 'despesa') regra(); if (F.tipo === 'adiantamento') { const ms = meeirosDe(roca(F.rocaId)); F.pessoaId = ms.length === 1 ? ms[0] : null; } redraw(); }));
+      const redraw = () => { const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
+      pn.querySelectorAll('[data-r]').forEach(b => b.addEventListener('click', () => { keep(); F.rocaId = b.dataset.r || null; F.geral = !F.rocaId; if (F.tipo === 'despesa') regra(); if (F.tipo === 'adiantamento') { const ms = meeirosDe(roca(F.rocaId)); F.pessoaId = ms.length === 1 ? ms[0] : null; } redraw(); }));
       pn.querySelectorAll('[data-cat]').forEach(b => b.addEventListener('click', () => { keep(); F.categoria = b.dataset.cat; regra(); redraw(); }));
       pn.querySelectorAll('[data-pe]').forEach(b => b.addEventListener('click', () => { keep(); F.pessoaId = b.dataset.pe; redraw(); }));
       pn.querySelectorAll('[data-un]').forEach(b => b.addEventListener('click', () => { keep(); F.unidade = F.unidade === b.dataset.un ? null : b.dataset.un; redraw(); }));
@@ -406,6 +433,7 @@
       const err = m => { $('#fe').textContent = m; };
       const valor = toNum(F.valor);
       if (F.tipo !== 'despesa' && !F.rocaId) return err('Escolha a roça.');
+      if (F.tipo === 'despesa' && !F.rocaId && !F.geral) return err('Escolha onde foi o gasto: a roça ou "Geral da fazenda".');
       if (F.tipo === 'despesa' && !F.categoria) return err('Escolha o tipo da despesa.');
       if (F.tipo === 'adiantamento' && !F.pessoaId) return err('Escolha o meeiro.');
       if (!(valor > 0)) return err('Informe o valor.');
@@ -421,8 +449,8 @@
       const b = { id: F.id || newId('l'), novo: !edit, tipo: F.tipo, rocaId: F.rocaId || null, data: F.data, valor, categoria: F.categoria || null, descricao: F.descricao || '', qtd: toNum(F.qtd), unidade: F.unidade || null, preco: toNum(F.preco), comprador: F.comprador || '', pessoaId: F.pessoaId || null, pessoaNome: F.pessoaNome || '', dias: toNum(F.dias), veiculoId: F.veiculoId || null, partes };
       F.id = b.id; // tocar duas vezes não lança duas vezes
       const bt = $('#fs'); bt.disabled = true;
-      try { await api('/api/rural/lanc', b); await reload(); closeSheet(); toast(edit ? 'Correção salva' : 'Lançado ✓'); render(); }
-      catch (e) { bt.disabled = false; if (e.status === 401 || e.login) return fail(e); err(e.message); }
+      try { await api('/api/rural/lanc', b); await reload(); closeSheet(); toast((edit ? 'Correção salva: ' : 'Lançado ✓ ') + money(valor)); render(); }
+      catch (e) { bt.disabled = false; if (e.status === 401 || e.login) { const keepF = Object.assign({}, F, { valor: numIn(valor) }); retomar = () => formLanc(keepF); return fail(e); } err(e.message); }
     }
     draw();
   }
@@ -430,9 +458,11 @@
   function formSalarios(rocaId) {
     const fs = S.pessoas.filter(p => p.tipo === 'funcionario' && p.ativo && (!rocaId || p.rocaId === rocaId));
     const d = new Date(), ref = MESES[d.getMonth()] + '/' + d.getFullYear();
-    const sel = Object.fromEntries(fs.map(p => [p.id, { on: true, valor: numIn(p.salario || ''), id: newId('l') }]));
+    const mes = hoje().slice(0, 7);
+    const pago = p => S.lanc.some(l => l.tipo === 'despesa' && l.categoria === 'salario' && l.pessoaId === p.id && String(l.data).slice(0, 7) === mes);
+    const sel = Object.fromEntries(fs.map(p => [p.id, { on: !pago(p), valor: numIn(p.salario || ''), id: newId('l') }]));
     openSheet('Pagar salários', `<p class="small muted">Cada salário vira uma despesa na roça do funcionário (ou geral, se ele não for de uma roça só).</p>
-      <div class="list">${fs.map(p => `<div class="it"><input type="checkbox" data-on="${esc(p.id)}" checked aria-label="Pagar ${esc(p.nome)}" style="width:26px;height:26px;accent-color:var(--brand)"><span class="tx"><b>${esc(p.nome)}</b><span>${esc(p.rocaId ? (roca(p.rocaId) || {}).nome || '' : 'Geral')}</span></span><input inputmode="decimal" data-val="${esc(p.id)}" value="${esc(sel[p.id].valor)}" style="max-width:130px;text-align:right;font-weight:700" aria-label="Salário de ${esc(p.nome)}"></div>`).join('')}</div>
+      <div class="list">${fs.map(p => `<div class="it"><input type="checkbox" data-on="${esc(p.id)}" ${sel[p.id].on ? 'checked' : ''} aria-label="Pagar ${esc(p.nome)}" style="width:26px;height:26px;accent-color:var(--brand)"><span class="tx"><b>${esc(p.nome)}</b><span>${esc(p.rocaId ? (roca(p.rocaId) || {}).nome || '' : 'Geral')}</span>${pago(p) ? '<span class="neg" style="display:block;font-weight:700">Já recebeu salário este mês</span>' : ''}</span><input inputmode="decimal" data-val="${esc(p.id)}" value="${esc(sel[p.id].valor)}" style="max-width:130px;text-align:right;font-weight:700" aria-label="Salário de ${esc(p.nome)}"></div>`).join('')}</div>
       <div class="grid2"><div class="field"><label for="sd">Data do pagamento</label><input type="date" id="sd" value="${hoje()}" max="${hoje()}"></div><div class="field"><label for="sr">Referência</label><input type="text" id="sr" maxlength="40" value="${esc(ref)}"></div></div>
       <p class="neg small" id="se" role="alert" style="font-weight:600;min-height:16px"></p>
       <button class="btn pri full" type="button" id="ss">Lançar salários</button>`, pn => {
@@ -560,14 +590,14 @@
       document.querySelectorAll('[data-rp]').forEach(i => { const [c, kk] = i.dataset.rp.split('|'); W.regras[c] = W.regras[c] || {}; W.regras[c][kk] = toNum(i.value) || 0; });
     }
     function bind(pn) {
-      const redraw = () => { keep(); const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
+      const redraw = () => { const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
       const err = m => { $('#we').textContent = m; };
       pn.querySelectorAll('[data-cu]').forEach(b => b.addEventListener('click', () => { keep(); W.cultura = W.cultura === b.dataset.cu ? '' : b.dataset.cu; redraw(); }));
-      pn.querySelectorAll('[data-mo]').forEach(b => b.addEventListener('click', () => { W.modo = b.dataset.mo; if (W.modo === 'funcionarios') { W.parceria = {}; W.regras = {}; } redraw(); }));
+      pn.querySelectorAll('[data-mo]').forEach(b => b.addEventListener('click', () => { keep(); W.modo = b.dataset.mo; if (W.modo === 'funcionarios') { W.parceria = {}; W.regras = {}; } redraw(); }));
       pn.querySelectorAll('[data-me]').forEach(b => b.addEventListener('click', () => { keep(); const k = b.dataset.me; if (W.parceria[k] != null) delete W.parceria[k]; else W.parceria[k] = Math.max(1, Math.min(50, r2(100 - soma()))); redraw(); }));
-      pn.querySelectorAll('[data-sl]').forEach(s => { s.addEventListener('input', () => { W.parceria[s.dataset.sl] = Number(s.value); const n = pn.querySelector('[data-pn="' + s.dataset.sl + '"]'); if (n) n.value = s.value; }); s.addEventListener('change', redraw); });
+      pn.querySelectorAll('[data-sl]').forEach(s => { s.addEventListener('input', () => { W.parceria[s.dataset.sl] = Number(s.value); const n = pn.querySelector('[data-pn="' + s.dataset.sl + '"]'); if (n) n.value = s.value; }); s.addEventListener('change', () => { keep(); redraw(); }); });
       pn.querySelectorAll('[data-pn]').forEach(i => i.addEventListener('input', () => { const n = toNum(i.value); if (n > 0) { W.parceria[i.dataset.pn] = Math.min(100, n); const sl = pn.querySelector('[data-sl="' + i.dataset.pn + '"]'); if (sl) sl.value = W.parceria[i.dataset.pn]; } }));
-      pn.querySelectorAll('[data-pn]').forEach(i => i.addEventListener('blur', () => setTimeout(() => { if (!pn.contains(document.activeElement) || !document.activeElement.matches('input')) redraw(); }, 150)));
+      pn.querySelectorAll('[data-pn]').forEach(i => i.addEventListener('blur', () => setTimeout(() => { if (document.body.contains(i) && (!pn.contains(document.activeElement) || !document.activeElement.matches('input'))) { keep(); redraw(); } }, 150)));
       const wma = $('#wma'); if (wma) wma.addEventListener('click', () => { keep(); const n = $('#wmn').value.trim(); if (n.length < 2) return err('Escreva o nome do meeiro.'); const id = newId('p'); W.novos.push({ id, nome: n, telefone: $('#wmt').value.trim() }); W.parceria[id] = Math.max(1, Math.min(50, r2(100 - soma()))); redraw(); });
       pn.querySelectorAll('[data-rg]').forEach(b => b.addEventListener('click', () => {
         keep(); const [c, m] = b.dataset.rg.split('|'); delete W['outra_' + c];
@@ -575,8 +605,8 @@
         redraw();
       }));
       pn.querySelectorAll('[data-rp]').forEach(i => i.addEventListener('input', keep));
-      const wtd = $('#wtd'); if (wtd) wtd.addEventListener('click', () => { S.cats.forEach(c => { W.regras[c.id] = { dono: 100 }; delete W['outra_' + c.id]; }); redraw(); });
-      const wtm = $('#wtm'); if (wtm) wtm.addEventListener('click', () => { S.cats.forEach(c => { W.regras[c.id] = vpW(); delete W['outra_' + c.id]; }); redraw(); });
+      const wtd = $('#wtd'); if (wtd) wtd.addEventListener('click', () => { keep(); S.cats.forEach(c => { W.regras[c.id] = { dono: 100 }; delete W['outra_' + c.id]; }); redraw(); });
+      const wtm = $('#wtm'); if (wtm) wtm.addEventListener('click', () => { keep(); S.cats.forEach(c => { W.regras[c.id] = vpW(); delete W['outra_' + c.id]; }); redraw(); });
       pn.querySelectorAll('[data-fu]').forEach(b => b.addEventListener('click', () => { keep(); const k = b.dataset.fu; W.func = W.func.includes(k) ? W.func.filter(x => x !== k) : W.func.concat(k); redraw(); }));
       const wfa = $('#wfa'); if (wfa) wfa.addEventListener('click', () => { keep(); const n = $('#wfn').value.trim(); if (n.length < 2) return err('Escreva o nome do funcionário.'); W.novosF.push({ id: newId('p'), nome: n, salario: toNum($('#wfs').value) || null }); redraw(); });
       const wb = $('#wb'); if (wb) wb.addEventListener('click', () => { keep(); W.step--; draw(); });
@@ -715,8 +745,8 @@
     $('#bn').hidden = false; $('#sair').hidden = false;
     const h = location.hash.slice(1).split('/');
     const vs = ['inicio', 'rocas', 'roca', 'pessoas', 'relatorio', 'acerto'];
-    view = vs.includes(h[0]) ? h[0] : 'inicio'; arg = h.slice(1).join('/') || null;
-    render();
+    go(vs.includes(h[0]) ? h[0] : 'inicio', h.slice(1).join('/') || null, true);
+    if (retomar) { const f = retomar; retomar = null; f(); toast('O que você estava lançando continua aqui. Confira e toque em Lançar.'); }
   }
   if (brand.name) $('#coName').textContent = brand.name;
   if (brand.color && /^#[0-9a-f]{6}$/i.test(brand.color)) document.documentElement.style.setProperty('--brand', brand.color);

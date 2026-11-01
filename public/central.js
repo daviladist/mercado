@@ -164,7 +164,7 @@
       ${t.primary ? '<p class="small muted" style="margin:0">A empresa principal cuida dos próprios acessos pelo painel dela.</p>' : `
       <div class="logo-row">
         <div class="field" style="flex:1 1 200px"><label for="alog">${ramoOf(t) === 'rural' ? 'Usuário do produtor' : 'Usuário do administrador'}</label><input type="text" id="alog" value="${esc(t.adminLogin || 'admin')}" maxlength="40" autocapitalize="off" spellcheck="false"></div>
-        <button class="btn dark" type="button" id="agen" style="align-self:end">${t.adminLogin ? 'Gerar nova senha' : 'Criar acesso do administrador'}</button>
+        <button class="btn dark" type="button" id="agen" style="align-self:end">${t.adminLogin ? 'Gerar nova senha' : ramoOf(t) === 'rural' ? 'Criar acesso do produtor' : 'Criar acesso do administrador'}</button>
       </div>
       <div id="aout" aria-live="polite"></div>`}
     </section>`;
