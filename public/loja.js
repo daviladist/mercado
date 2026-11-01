@@ -108,6 +108,7 @@
     const p = prod(id); if (!p) return;
     const off = !p.disponivel || (p.variacoes.length && !p.variacoes.some(v => v.disponivel));
     let vid = p.variacoes.length === 1 && p.variacoes[0].disponivel ? p.variacoes[0].id : null, qtd = 1;
+    const totHtml = u => `<b style="font-size:20px">${money(r2(u * qtd))}</b>${u < p.preco ? `<br><span class="small pos">${money(u)} cada (preço por quantidade)</span>` : ''}`;
     function draw() {
       const jaNoCarrinho = qtdProduto(p.id);
       const u = unit(p, jaNoCarrinho + qtd);
@@ -120,7 +121,7 @@
         ${p.variacoes.length ? `<div class="field"><span class="lbl">${esc(p.grupoVar || 'Opção')}</span><div class="chips">${p.variacoes.map(v => `<button type="button" class="chip" data-v="${esc(v.id)}" aria-pressed="${vid === v.id}" ${v.disponivel ? '' : 'disabled style="opacity:.4;text-decoration:line-through"'}>${esc(v.nome)}</button>`).join('')}</div></div>` : ''}
         ${off ? '<p class="warn">Esgotado no momento.</p>' : `
         <div class="between"><div class="qty"><button type="button" id="qm" aria-label="Menos">−</button><input inputmode="numeric" id="qv" value="${qtd}" aria-label="Quantidade"><button type="button" id="qp" aria-label="Mais">+</button></div>
-          <div style="text-align:right"><b style="font-size:20px">${money(r2(u * qtd))}</b>${u < p.preco ? `<br><span class="small pos">${money(u)} cada (preço por quantidade)</span>` : ''}</div></div>
+          <div style="text-align:right" id="ptot">${totHtml(u)}</div></div>
         ${prox ? `<p class="small pos">Leve ${prox.min - jaNoCarrinho} ou mais e pague ${money(prox.preco)} cada.</p>` : ''}
         ${jaNoCarrinho ? `<p class="small muted">Você já tem ${jaNoCarrinho} deste produto no carrinho.</p>` : ''}
         <p class="neg small" id="pe" role="alert" style="font-weight:600;min-height:16px"></p>
@@ -129,7 +130,8 @@
         const qv = $('#qv'); if (!qv) return;
         $('#qm').addEventListener('click', () => { qtd = Math.max(1, qtd - 1); redraw(pn); });
         $('#qp').addEventListener('click', () => { qtd = Math.min(999, qtd + 1); redraw(pn); });
-        qv.addEventListener('change', () => { const n = parseInt(qv.value, 10); qtd = n >= 1 && n <= 999 ? n : 1; redraw(pn); });
+        qv.addEventListener('input', () => { const n = parseInt(qv.value, 10); if (n >= 1 && n <= 999) { qtd = n; const t = $('#ptot'); if (t) t.innerHTML = totHtml(unit(p, qtdProduto(p.id) + qtd)); } });
+        qv.addEventListener('blur', () => { const n = parseInt(qv.value, 10); if (!(n >= 1 && n <= 999)) { qtd = 1; qv.value = '1'; const t = $('#ptot'); if (t) t.innerHTML = totHtml(unit(p, qtdProduto(p.id) + qtd)); } });
         $('#add').addEventListener('click', () => {
           if (p.variacoes.length && !vid) { $('#pe').textContent = 'Escolha ' + (p.grupoVar || 'a opção').toLowerCase() + '.'; return; }
           const l = cart.find(i => i.produtoId === p.id && (i.variacaoId || null) === vid);
@@ -181,7 +183,7 @@
     }
     function keep() { const g = id => { const e = document.getElementById(id); return e ? e.value : undefined; }; [['fn', 'nome'], ['ft', 'telefone'], ['fe', 'endereco'], ['fo', 'obs']].forEach(([id, k]) => { const v = g(id); if (v !== undefined) F[k] = v; }); }
     function bind(pn) {
-      const redraw = () => { keep(); const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
+      const redraw = () => { const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
       pn.querySelectorAll('[data-e]').forEach(b => b.addEventListener('click', () => { keep(); F.entrega = b.dataset.e; redraw(); }));
       pn.querySelectorAll('[data-g]').forEach(b => b.addEventListener('click', () => { keep(); F.pagamento = b.dataset.g; redraw(); }));
       $('#env').addEventListener('click', enviar);
@@ -208,7 +210,7 @@
         closeSheet(); sucesso(r.numero, env.chave, total, F, resumo);
       } catch (e) {
         enviando = false; bt.disabled = false; bt.textContent = 'Enviar pedido';
-        if (e.status === 409) { await carregar(true); limparCart(); err(e.message); return; }
+        if (e.status === 409) { const msg = e.message; await carregar(true); limparCart(); if (!cart.length) { closeSheet(); toast(msg, true); return; } draw(); $('#fer').textContent = msg; return; }
         if (e.status === 0) { err('A internet falhou e o pedido pode não ter chegado. Toque em "Enviar pedido" de novo sem mudar o carrinho: se já tiver chegado, ele não vai em dobro.'); return; }
         err(e.message);
       }

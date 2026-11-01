@@ -102,7 +102,9 @@
     $('#bn').querySelectorAll('[data-go]').forEach(b => b.setAttribute('aria-current', String(b.dataset.go === view)));
     ({ inicio: vInicio, pedidos: vPedidos, produtos: vProdutos, loja: vLoja }[view] || vInicio)();
   }
+  let folhaAtual = null; // qual formulário está na folha (a foto que termina de subir não redesenha outra folha)
   function openSheet(title, html, onReady) {
+    folhaAtual = null;
     if (!$('#sheet').innerHTML) history.pushState({ v: view, sheet: 1 }, '', location.hash);
     $('#sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="pn"><div class="tt"><h2>${esc(title)}</h2><button type="button" class="x" id="shx" aria-label="Fechar">×</button></div>${html}</div></div>`;
     $('#shx').addEventListener('click', fecharPeloUsuario);
@@ -235,6 +237,7 @@
     const vistoVar = new Map(edit ? p0.variacoes.map(v => [v.id, v.estoque == null ? null : v.estoque]) : []);
     if (edit) { F.preco = numIn(F.preco); F.precoDe = numIn(F.precoDe); F.estoque = F.estoque == null ? '' : String(F.estoque); F.variacoes = F.variacoes.map(v => Object.assign({}, v, { estoque: v.estoque == null ? '' : String(v.estoque) })); F.faixas = F.faixas.map(f => ({ min: String(f.min), preco: numIn(f.preco) })); }
     const cats = [...new Set(S.produtos.map(p => p.categoria).filter(Boolean))].sort();
+    const eu = {};
     let enviando = 0;
     function draw() {
       const comVar = M('l_variacoes') && F.variacoes.length > 0;
@@ -265,7 +268,10 @@
         <button class="btn pri full" type="button" id="ps" ${enviando ? 'disabled' : ''}>${edit ? 'Salvar produto' : 'Publicar na vitrine'}</button>
         ${edit ? '<button class="btn dan full" type="button" id="px">Excluir produto</button>' : ''}`;
       openSheet(edit ? 'Editar produto' : 'Novo produto', html, bind);
+      folhaAtual = eu;
     }
+    const aberto = () => folhaAtual === eu && !!$('#sheet').innerHTML;
+    function redesenhar() { if (!aberto()) return; keep(); const pn = $('#sheet .pn'), y = pn ? pn.scrollTop : 0; draw(); const n = $('#sheet .pn'); if (n) n.scrollTop = y; }
     function keep() {
       const g = id => { const e = document.getElementById(id); return e ? e.value : undefined; };
       [['pn', 'nome'], ['pp', 'preco'], ['pd', 'precoDe'], ['pc', 'categoria'], ['pdz', 'descricao'], ['pg', 'grupoVar'], ['pe', 'estoque']].forEach(([id, k]) => { const v = g(id); if (v !== undefined) F[k] = v; });
@@ -276,14 +282,14 @@
       document.querySelectorAll('#sheet [data-fp]').forEach(i => { F.faixas[+i.dataset.fp].preco = i.value; });
     }
     function bind(pn) {
-      const redraw = () => { keep(); const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
+      const redraw = () => { const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
       const ff = $('#ff'); if (ff) ff.addEventListener('change', async () => {
         const files = [...ff.files].slice(0, 6 - F.fotos.length); if (!files.length) return;
-        keep(); enviando = files.length; draw();
+        enviando = files.length; redesenhar();
         for (const f of files) {
-          try { const data = await reduzir(f); const r = await api('/api/loja/admin/foto', { data }); F.fotos.push({ id: r.id, url: r.url }); }
-          catch (e) { if (e.status === 401) { retomar = () => formProduto(F); return fail(e); } toast(e.message, true); }
-          enviando--; if ($('#sheet').innerHTML) draw();
+          try { const data = await reduzir(f); const r = await api('/api/loja/admin/foto', { data }); if (F.fotos.length < 6) F.fotos.push({ id: r.id, url: r.url }); }
+          catch (e) { if (e.status === 401) { enviando = 0; if (aberto()) keep(); retomar = () => formProduto(F); return fail(e); } toast(e.message, true); }
+          enviando--; redesenhar();
         }
       });
       pn.querySelectorAll('[data-rmf]').forEach(b => b.addEventListener('click', () => { keep(); F.fotos.splice(+b.dataset.rmf, 1); redraw(); }));
@@ -375,7 +381,8 @@
       const b = { aberta: C.aberta, whatsapp: v('cw'), endereco: v('ce'), horario: v('ch'), boasVindas: v('cb'), pagamentos: C.pagamentos, pixChave: v('cx'), retirada: $('#cr') ? $('#cr').checked : true, entrega: $('#cen') ? $('#cen').checked : false, taxaEntrega: taxa || 0, entregaObs: v('co'), pedidoMinimo: min || 0 };
       if (M('l_entrega') && !b.retirada && !b.entrega) return err('Marque retirada, entrega ou as duas.');
       const bt = $('#cs'); bt.disabled = true;
-      try { await api('/api/loja/admin/config', b); await reload(); toast('Loja salva'); render(); } catch (e) { bt.disabled = false; fail(e); err(e.message); }
+      try { await api('/api/loja/admin/config', b); await reload(); toast('Loja salva'); render(); }
+      catch (e) { bt.disabled = false; if (e.status === 401 || e.login) { retomar = () => { toast('A sessão tinha terminado: confira e salve de novo.', true); }; return fail(e); } err(e.message); }
     });
   }
 
