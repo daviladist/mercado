@@ -132,7 +132,7 @@ function admFretes(){
         <div class="row" style="gap:8px"><button class="btn" type="submit">Salvar pagamento</button><button class="btn ghost" type="button" id="f3px">Cancelar</button></div></form>`:''}
       <div class="field"><span class="lbl">Fretes por período (data do pedido)</span>
         <div class="row" style="gap:8px;flex-wrap:wrap;align-items:end"><label class="small">De <input type="date" id="f3from" value="${F.from}"></label><label class="small">Até <input type="date" id="f3to" value="${F.to}"></label>
-          <button type="button" class="btn ghost" id="f3xls" ${per.length||pays.length?'':'disabled'}>Baixar Excel</button></div>
+          <button type="button" class="btn ghost" id="f3pdf" ${per.length||pays.length?'':'disabled'}>Baixar PDF</button><button type="button" class="btn ghost" id="f3xls" ${per.length||pays.length?'':'disabled'}>Baixar Excel</button></div>
         ${bad?'<div class="err">A data inicial é depois da final.</div>':''}</div>
       ${per.length?`<div class="tablewrap"><table class="btable"><thead><tr><th>Data</th><th>Pedido</th><th>Cliente</th><th class="num">Valor da nota</th><th class="num">%</th><th class="num">Frete</th></tr></thead><tbody>
         ${per.map(o=>`<tr><td class="num">${dBR(f3Day(o))}</td><td class="num">nº ${o.no}</td><td>${esc(o.customer||'')}</td><td class="num">${brl(o.total)}</td><td class="num">${f3Pct(o.frete3.pct)}</td><td class="num"><b>${brl(f3Val(o))}</b></td></tr>`).join('')}
@@ -157,6 +157,12 @@ function admFretes(){
       if(amount===''||isNaN(amount)||!(amount>0)){$('#f3pe').textContent='Informe o valor pago (ex.: 5.000,00).';return}
       S.carrierPays=S.carrierPays||[];S.carrierPays.push({id:uid(),carrierId:cr.id,carrierName:cr.name,date,amount:f3R(amount),note,by:ui.adminName||'Loja',at:new Date().toISOString()});
       F.pay=null;save();toast('Pagamento de '+brl(amount)+' registrado. Saldo agora: '+brl(f3Summary(cr.id).saldo));rer()}}
+  $('#f3pdf').onclick=()=>finPdf({file:'frete-'+String(cr.name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'-'+F.from+'-a-'+F.to,
+    title:'Frete de terceiro · '+cr.name+' · '+f3Pct(cr.pct),sub:'Período '+dBR(F.from)+' a '+dBR(F.to),
+    tiles:[['Frete no período ('+per.length+')',brl(perTot)],['Frete gerado (total)',brl(Sm.gerado)],['Já pago',brl(Sm.pago)],['Saldo a pagar',brl(Sm.saldo),Sm.saldo>0.004]],
+    sections:[{title:'Fretes do período',head:['Data','Pedido','Cliente','Valor da nota','%','Frete'],right:[3,4,5],body:per.map(o=>[dBR(f3Day(o)),'nº '+o.no,o.customer||'',brl(o.total),f3Pct(o.frete3.pct),brl(f3Val(o))]),foot:per.length?['Total','','',brl(perBase),'',brl(perTot)]:null,empty:'Nenhum pedido com frete desta transportadora no período.'},
+      {title:'Pagamentos feitos (todos)',head:['Data','Valor','Observação'],right:[1],body:pays.map(p=>[dBR(p.date),brl(p.amount),p.note||'']),foot:pays.length?['Total',brl(Sm.pago),'']:null,empty:'Nenhum pagamento lançado.'}],
+    note:'Saldo a pagar = todo o frete gerado desde o início menos todos os pagamentos.'});
   $('#f3xls').onclick=()=>{if(typeof XLSX==='undefined'){toast('Não consegui carregar o Excel. Verifique a internet.');return}
     const head=[[S.store.name],['Frete de terceiro · '+cr.name+' · '+f3Pct(cr.pct)],['Período',F.from.split('-').reverse().join('/')+' a '+F.to.split('-').reverse().join('/')],[],['Data','Pedido nº','Cliente','Valor da nota (R$)','%','Frete (R$)']];
     const rows=per.map(o=>[f3Day(o).split('-').reverse().join('/'),o.no,o.customer||'',Number(o.total)||0,Number(o.frete3.pct),f3Val(o)]);
@@ -186,7 +192,7 @@ function admFreteRep(){
         <div class="field"><label for="f3rf">De</label><input type="date" id="f3rf" value="${F.from}"></div>
         <div class="field"><label for="f3rt">Até</label><input type="date" id="f3rt" value="${F.to}"></div>
         <div class="field"><label for="f3rs">Pedidos</label><select id="f3rs">${[['todos','Todos (menos cancelados)'],['concluidos','Só concluídos'],['abertos','Só em aberto']].map(([k,v])=>`<option value="${k}" ${F.st===k?'selected':''}>${v}</option>`).join('')}</select></div>
-        <button type="button" class="btn ghost" id="f3rx" ${ords.length||pays.length?'':'disabled'}>Baixar Excel</button>
+        <button type="button" class="btn ghost" id="f3rp" ${ords.length||pays.length?'':'disabled'}>Baixar PDF</button><button type="button" class="btn ghost" id="f3rx" ${ords.length||pays.length?'':'disabled'}>Baixar Excel</button>
       </div>
       ${bad?'<div class="err">A data inicial é depois da final.</div>':'<div class="small muted">O período vale para a data do pedido (frete gerado) e para a data do pagamento (frete pago). O saldo a pagar é o total de hoje, desde o início.</div>'}
     </section>
@@ -213,6 +219,16 @@ function admFreteRep(){
   $('#f3rc').onchange=e=>{F.cid=e.target.value;rer()};$('#f3rs').onchange=e=>{F.st=e.target.value;rer()};
   $('#f3rf').onchange=e=>{F.from=e.target.value||F.from;rer()};$('#f3rt').onchange=e=>{F.to=e.target.value||F.to;rer()};
   c.querySelectorAll('[data-f3rsel]').forEach(b=>b.onclick=()=>{F.cid=b.dataset.f3rsel;rer()});
+  $('#f3rp').onclick=()=>{const all=F.cid==='todos',stL={todos:'Todos os pedidos (menos cancelados)',concluidos:'Só concluídos',abertos:'Só em aberto'}[F.st];
+    finPdf({file:'relatorio-frete-'+(all?'todas':String(nmCr(F.cid)).toLowerCase().replace(/[^a-z0-9]+/g,'-'))+'-'+F.from+'-a-'+F.to,landscape:true,
+      title:'Relatório de frete de terceiro · '+(all?'Todas as transportadoras':nmCr(F.cid)),sub:dBR(F.from)+' a '+dBR(F.to)+' · '+stL,
+      tiles:[['Frete gerado no período ('+ords.length+')',brl(gerado)],['Pago no período ('+pays.length+')',brl(pago)],['Saldo a pagar hoje',brl(saldo),saldo>0.004],['Frete sobre as notas',(notas>0?String(Math.round(gerado/notas*1000)/10).replace('.',','):'0')+'%']],
+      sections:(all&&byCr.length?[{title:'Por transportadora',head:['Transportadora','%','Pedidos','Valor das notas','Frete gerado','Pago no período','Saldo a pagar hoje'],right:[1,2,3,4,5,6],
+          body:byCr.map(r=>[r.x.name,f3Pct(r.x.pct),String(r.n),brl(r.notas),brl(r.gerado),brl(r.pago),brl(r.saldo)]),foot:['Total','',String(ords.length),brl(notas),brl(gerado),brl(pago),brl(saldo)]}]:[]).concat([
+        {title:'Pedidos com frete no período',head:['Data','Transportadora','Pedido','Cliente','Situação','Valor da nota','%','Frete'],right:[5,6,7],
+          body:ords.map(o=>[dBR(f3Day(o)),o.frete3.name||nmCr(o.frete3.carrierId),'nº '+o.no,o.customer||'',typeof stLabel==='function'?stLabel(o):o.status,brl(o.total),f3Pct(o.frete3.pct),brl(f3Val(o))]),foot:ords.length?['Total','','','','',brl(notas),'',brl(gerado)]:null,empty:'Nenhum pedido com frete de terceiro nesse filtro.'},
+        {title:'Pagamentos feitos no período',head:['Data','Transportadora','Valor','Observação'],right:[2],body:pays.map(p=>[dBR(p.date),p.carrierName||nmCr(p.carrierId),brl(p.amount),p.note||'']),foot:pays.length?['Total','',brl(pago),'']:null,empty:'Nenhum pagamento nesse período.'}]),
+      note:'Período vale para a data do pedido (frete gerado) e a data do pagamento. O saldo a pagar é o total de hoje, desde o início.'})};
   $('#f3rx').onclick=()=>{if(typeof XLSX==='undefined'){toast('Não consegui carregar o Excel. Verifique a internet.');return}
     const d=x=>String(x).slice(0,10).split('-').reverse().join('/');
     const head=[[S.store.name],['Relatório de frete de terceiro · '+(F.cid==='todos'?'Todas as transportadoras':nmCr(F.cid))],['Período',d(F.from)+' a '+d(F.to)],[],

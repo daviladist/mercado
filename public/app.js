@@ -23,6 +23,34 @@ function mkPdf(J,o){const d=new J(o),t=d.text,rc=d.rect,ap=d.addPage;let hh=0,lw
   if(typeof ap==='function')d.addPage=function(){hh=0;return ap.apply(d,arguments)};
   if(typeof t==='function')d.text=function(x,px,py,op,...r){if(hh&&py<hh&&px<=12&&!(op&&(op.align==='right'||op.align==='center')))px+=lw;return t.call(d,Array.isArray(x)?x.map(pdfFx):pdfFx(x),px,py,op,...r)};
   return d}
+/* cor da empresa (--accent) para a faixa do PDF; sem cor válida, o vermelho de sempre */
+function pdfAccRGB(){try{const v=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),m=/^#([0-9a-f]{6})$/i.exec(v);if(m){const n=parseInt(m[1],16);return [n>>16&255,n>>8&255,n&255]}}catch(e){}return [225,31,44]}
+/* PDF de relatório do financeiro: faixa com logo, quadros de totais e tabelas.
+   o={file,title,sub,tiles:[[rótulo,valor,negativo?]],sections:[{title,head,body,foot,right:[colunas à direita],red:(linha,coluna)=>bool,empty}],note,landscape} */
+function finPdf(o){try{
+  const J=window.jspdf.jsPDF,doc=mkPdf(J,{unit:'mm',format:'a4',orientation:o.landscape?'landscape':'portrait'}),W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(),A=pdfAccRGB();
+  const gen='Gerado em '+new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const head=()=>{doc.setFillColor(A[0],A[1],A[2]);doc.rect(0,0,W,22,'F');doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(String(S.store&&S.store.name||''),10,11.5);
+    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(o.title,10,18);doc.setFontSize(9);if(o.sub)doc.text(o.sub,W-10,11.5,{align:'right'});doc.text(gen,W-10,18,{align:'right'})};
+  head();let y=28;
+  if(o.tiles&&o.tiles.length){const n=o.tiles.length,g=4,w=(W-20-g*(n-1))/n;
+    o.tiles.forEach(([l,v,neg],i)=>{const x=10+i*(w+g);doc.setFillColor(245,247,250);doc.setDrawColor(220,226,232);doc.roundedRect(x,y,w,16,2,2,'FD');
+      doc.setTextColor(93,107,100);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text(String(l),x+3,y+5.5);
+      if(neg)doc.setTextColor(180,30,40);else doc.setTextColor(20,30,25);doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(String(v),x+3,y+12.5)});y+=22}
+  (o.sections||[]).forEach(s=>{
+    if(y>H-34){doc.addPage();head();y=28}
+    if(s.title){doc.setTextColor(40,50,45);doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text(s.title,10,y+4);y+=7}
+    if(!s.body.length){doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(93,107,100);doc.text(s.empty||'Nada nesse filtro.',10,y+4);y+=11;return}
+    const R={};(s.right||[]).forEach(i=>R[i]=1);
+    doc.autoTable({startY:y,margin:{top:28,left:10,right:10,bottom:14},head:[s.head],body:s.body,foot:s.foot?[s.foot]:undefined,showFoot:'lastPage',showHead:'everyPage',
+      theme:'plain',styles:{fontSize:8.5,cellPadding:1.8,valign:'middle',lineColor:[213,221,216],lineWidth:{bottom:.2}},
+      headStyles:{fillColor:[234,239,244],textColor:[60,72,66],fontStyle:'bold'},footStyles:{fillColor:[234,239,244],textColor:[20,30,25],fontStyle:'bold'},
+      didParseCell:d=>{if(R[d.column.index])d.cell.styles.halign='right';if(d.section!=='body')return;if(d.row.index%2===1)d.cell.styles.fillColor=[248,250,252];if(s.red&&s.red(d.row.index,d.column.index))d.cell.styles.textColor=[180,30,40]},
+      willDrawPage:d=>{if(d.pageNumber>1)head()}});
+    y=doc.lastAutoTable.finalY+8});
+  const n=doc.getNumberOfPages();for(let p=1;p<=n;p++){doc.setPage(p);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(93,107,100);if(o.note)doc.text(doc.splitTextToSize(o.note,W-50)[0],10,H-6);doc.text('Página '+p+' de '+n,W-10,H-6,{align:'right'})}
+  offerFile(o.file+'.pdf',doc.output('arraybuffer'));
+}catch(e){pdfFail(e)}}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const brl=v=>(Number(v)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -1502,7 +1530,7 @@ function admFretes(){
         <div class="row" style="gap:8px"><button class="btn" type="submit">Salvar pagamento</button><button class="btn ghost" type="button" id="f3px">Cancelar</button></div></form>`:''}
       <div class="field"><span class="lbl">Fretes por período (data do pedido)</span>
         <div class="row" style="gap:8px;flex-wrap:wrap;align-items:end"><label class="small">De <input type="date" id="f3from" value="${F.from}"></label><label class="small">Até <input type="date" id="f3to" value="${F.to}"></label>
-          <button type="button" class="btn ghost" id="f3xls" ${per.length||pays.length?'':'disabled'}>Baixar Excel</button></div>
+          <button type="button" class="btn ghost" id="f3pdf" ${per.length||pays.length?'':'disabled'}>Baixar PDF</button><button type="button" class="btn ghost" id="f3xls" ${per.length||pays.length?'':'disabled'}>Baixar Excel</button></div>
         ${bad?'<div class="err">A data inicial é depois da final.</div>':''}</div>
       ${per.length?`<div class="tablewrap"><table class="btable"><thead><tr><th>Data</th><th>Pedido</th><th>Cliente</th><th class="num">Valor da nota</th><th class="num">%</th><th class="num">Frete</th></tr></thead><tbody>
         ${per.map(o=>`<tr><td class="num">${dBR(f3Day(o))}</td><td class="num">nº ${o.no}</td><td>${esc(o.customer||'')}</td><td class="num">${brl(o.total)}</td><td class="num">${f3Pct(o.frete3.pct)}</td><td class="num"><b>${brl(f3Val(o))}</b></td></tr>`).join('')}
@@ -1527,6 +1555,12 @@ function admFretes(){
       if(amount===''||isNaN(amount)||!(amount>0)){$('#f3pe').textContent='Informe o valor pago (ex.: 5.000,00).';return}
       S.carrierPays=S.carrierPays||[];S.carrierPays.push({id:uid(),carrierId:cr.id,carrierName:cr.name,date,amount:f3R(amount),note,by:ui.adminName||'Loja',at:new Date().toISOString()});
       F.pay=null;save();toast('Pagamento de '+brl(amount)+' registrado. Saldo agora: '+brl(f3Summary(cr.id).saldo));rer()}}
+  $('#f3pdf').onclick=()=>finPdf({file:'frete-'+String(cr.name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'-'+F.from+'-a-'+F.to,
+    title:'Frete de terceiro · '+cr.name+' · '+f3Pct(cr.pct),sub:'Período '+dBR(F.from)+' a '+dBR(F.to),
+    tiles:[['Frete no período ('+per.length+')',brl(perTot)],['Frete gerado (total)',brl(Sm.gerado)],['Já pago',brl(Sm.pago)],['Saldo a pagar',brl(Sm.saldo),Sm.saldo>0.004]],
+    sections:[{title:'Fretes do período',head:['Data','Pedido','Cliente','Valor da nota','%','Frete'],right:[3,4,5],body:per.map(o=>[dBR(f3Day(o)),'nº '+o.no,o.customer||'',brl(o.total),f3Pct(o.frete3.pct),brl(f3Val(o))]),foot:per.length?['Total','','',brl(perBase),'',brl(perTot)]:null,empty:'Nenhum pedido com frete desta transportadora no período.'},
+      {title:'Pagamentos feitos (todos)',head:['Data','Valor','Observação'],right:[1],body:pays.map(p=>[dBR(p.date),brl(p.amount),p.note||'']),foot:pays.length?['Total',brl(Sm.pago),'']:null,empty:'Nenhum pagamento lançado.'}],
+    note:'Saldo a pagar = todo o frete gerado desde o início menos todos os pagamentos.'});
   $('#f3xls').onclick=()=>{if(typeof XLSX==='undefined'){toast('Não consegui carregar o Excel. Verifique a internet.');return}
     const head=[[S.store.name],['Frete de terceiro · '+cr.name+' · '+f3Pct(cr.pct)],['Período',F.from.split('-').reverse().join('/')+' a '+F.to.split('-').reverse().join('/')],[],['Data','Pedido nº','Cliente','Valor da nota (R$)','%','Frete (R$)']];
     const rows=per.map(o=>[f3Day(o).split('-').reverse().join('/'),o.no,o.customer||'',Number(o.total)||0,Number(o.frete3.pct),f3Val(o)]);
@@ -1556,7 +1590,7 @@ function admFreteRep(){
         <div class="field"><label for="f3rf">De</label><input type="date" id="f3rf" value="${F.from}"></div>
         <div class="field"><label for="f3rt">Até</label><input type="date" id="f3rt" value="${F.to}"></div>
         <div class="field"><label for="f3rs">Pedidos</label><select id="f3rs">${[['todos','Todos (menos cancelados)'],['concluidos','Só concluídos'],['abertos','Só em aberto']].map(([k,v])=>`<option value="${k}" ${F.st===k?'selected':''}>${v}</option>`).join('')}</select></div>
-        <button type="button" class="btn ghost" id="f3rx" ${ords.length||pays.length?'':'disabled'}>Baixar Excel</button>
+        <button type="button" class="btn ghost" id="f3rp" ${ords.length||pays.length?'':'disabled'}>Baixar PDF</button><button type="button" class="btn ghost" id="f3rx" ${ords.length||pays.length?'':'disabled'}>Baixar Excel</button>
       </div>
       ${bad?'<div class="err">A data inicial é depois da final.</div>':'<div class="small muted">O período vale para a data do pedido (frete gerado) e para a data do pagamento (frete pago). O saldo a pagar é o total de hoje, desde o início.</div>'}
     </section>
@@ -1583,6 +1617,16 @@ function admFreteRep(){
   $('#f3rc').onchange=e=>{F.cid=e.target.value;rer()};$('#f3rs').onchange=e=>{F.st=e.target.value;rer()};
   $('#f3rf').onchange=e=>{F.from=e.target.value||F.from;rer()};$('#f3rt').onchange=e=>{F.to=e.target.value||F.to;rer()};
   c.querySelectorAll('[data-f3rsel]').forEach(b=>b.onclick=()=>{F.cid=b.dataset.f3rsel;rer()});
+  $('#f3rp').onclick=()=>{const all=F.cid==='todos',stL={todos:'Todos os pedidos (menos cancelados)',concluidos:'Só concluídos',abertos:'Só em aberto'}[F.st];
+    finPdf({file:'relatorio-frete-'+(all?'todas':String(nmCr(F.cid)).toLowerCase().replace(/[^a-z0-9]+/g,'-'))+'-'+F.from+'-a-'+F.to,landscape:true,
+      title:'Relatório de frete de terceiro · '+(all?'Todas as transportadoras':nmCr(F.cid)),sub:dBR(F.from)+' a '+dBR(F.to)+' · '+stL,
+      tiles:[['Frete gerado no período ('+ords.length+')',brl(gerado)],['Pago no período ('+pays.length+')',brl(pago)],['Saldo a pagar hoje',brl(saldo),saldo>0.004],['Frete sobre as notas',(notas>0?String(Math.round(gerado/notas*1000)/10).replace('.',','):'0')+'%']],
+      sections:(all&&byCr.length?[{title:'Por transportadora',head:['Transportadora','%','Pedidos','Valor das notas','Frete gerado','Pago no período','Saldo a pagar hoje'],right:[1,2,3,4,5,6],
+          body:byCr.map(r=>[r.x.name,f3Pct(r.x.pct),String(r.n),brl(r.notas),brl(r.gerado),brl(r.pago),brl(r.saldo)]),foot:['Total','',String(ords.length),brl(notas),brl(gerado),brl(pago),brl(saldo)]}]:[]).concat([
+        {title:'Pedidos com frete no período',head:['Data','Transportadora','Pedido','Cliente','Situação','Valor da nota','%','Frete'],right:[5,6,7],
+          body:ords.map(o=>[dBR(f3Day(o)),o.frete3.name||nmCr(o.frete3.carrierId),'nº '+o.no,o.customer||'',typeof stLabel==='function'?stLabel(o):o.status,brl(o.total),f3Pct(o.frete3.pct),brl(f3Val(o))]),foot:ords.length?['Total','','','','',brl(notas),'',brl(gerado)]:null,empty:'Nenhum pedido com frete de terceiro nesse filtro.'},
+        {title:'Pagamentos feitos no período',head:['Data','Transportadora','Valor','Observação'],right:[2],body:pays.map(p=>[dBR(p.date),p.carrierName||nmCr(p.carrierId),brl(p.amount),p.note||'']),foot:pays.length?['Total','',brl(pago),'']:null,empty:'Nenhum pagamento nesse período.'}]),
+      note:'Período vale para a data do pedido (frete gerado) e a data do pagamento. O saldo a pagar é o total de hoje, desde o início.'})};
   $('#f3rx').onclick=()=>{if(typeof XLSX==='undefined'){toast('Não consegui carregar o Excel. Verifique a internet.');return}
     const d=x=>String(x).slice(0,10).split('-').reverse().join('/');
     const head=[[S.store.name],['Relatório de frete de terceiro · '+(F.cid==='todos'?'Todas as transportadoras':nmCr(F.cid))],['Período',d(F.from)+' a '+d(F.to)],[],
@@ -3477,7 +3521,7 @@ function payOptions(c,total){const ap=allowedPays(c),ci=creditInfo(c,total);retu
 /* ---------- contas a receber automático ao concluir ---------- */
 function autoReceivables(o,prev){if(typeof SRV!=='undefined')return '';
   if(o.status==='concluido'&&!o.recLaunched){
-    if(S.store.autoRec===false||isCash(o.pay))return '';
+    if((S.store||{}).autoRec===false||isCash(o.pay))return '';
     let k=daysFromPay(o.pay);if(k.startsWith('outro:'))k=k.slice(6);
     const days=parseDays(k);
     if(!k||!days.length)return 'Não identifiquei o prazo de "'+o.pay+'". Lance no contas a receber pelo botão do pedido.';
@@ -5949,7 +5993,7 @@ const PAY_CATS=['Fornecedor','Frete e combustível','Salários','Aluguel','Impos
 function admPagar(){const c=$('#tabc');S.payables=S.payables||[];const F=ui.payF||(ui.payF={st:'aberto'}),E=ui.payNew;
   const L=S.payables.filter(p=>F.st==='todos'||payStatus(p)===F.st).sort((a,b)=>F.st==='pago'?String(b.paidAt).localeCompare(String(a.paidAt)):String(a.due).localeCompare(String(b.due)));
   const sum=st=>S.payables.filter(p=>payStatus(p)===st).reduce((s,p)=>s+p.amount,0),wk=addDays(today(),6),semana=S.payables.filter(p=>!p.paidAt&&p.due<=wk).reduce((s,p)=>s+p.amount,0);
-  c.innerHTML=`${finSeg()}<div class="sectionhead"><h2>Contas a pagar</h2><button class="btn" id="pnew">+ Nova conta</button></div>
+  c.innerHTML=`${finSeg()}<div class="sectionhead"><h2>Contas a pagar</h2><div class="row" style="gap:6px">${L.length?'<button class="btn ghost" id="ppdf">Baixar PDF</button>':''}<button class="btn" id="pnew">+ Nova conta</button></div></div>
     ${E?`<form class="panel" id="pform" style="display:grid;gap:10px;max-width:640px;margin-bottom:12px">
       <div class="grid2"><div class="field"><label for="pfd">Descrição</label><input type="text" id="pfd" value="${esc(E.desc||'')}" placeholder="Ex.: Ambev · NF 12345" required></div>
         <div class="field"><label for="pfc">Tipo</label><select id="pfc">${PAY_CATS.map(x=>`<option ${E.cat===x?'selected':''}>${x}</option>`).join('')}</select></div></div>
@@ -5965,6 +6009,12 @@ function admPagar(){const c=$('#tabc');S.payables=S.payables||[];const F=ui.payF
     <div class="small muted" style="margin-top:10px">Lance as contas da semana (fornecedores, frete, salários). Assim o "Caixa da semana" mostra o que entra e o que sai.</div>`;
   bindFinSeg(c);const rer=()=>{const y=window.scrollY;admPagar();window.scrollTo(0,y)};
   $('#pnew').onclick=()=>{ui.payNew={cat:'Fornecedor',due:today()};rer()};
+  {const b=$('#ppdf');if(b)b.onclick=()=>{const tot=L.reduce((s,p)=>s+p.amount,0),stL={aberto:'Em aberto',vencido:'Vencidas',pago:'Pagas',todos:'Todas'}[F.st];
+    finPdf({file:'contas-a-pagar-'+({aberto:'em-aberto',vencido:'vencidas',pago:'pagas',todos:'todas'})[F.st]+'-'+stamp(),title:'Contas a pagar',sub:stL,
+      tiles:[['Vencido',brl(sum('vencido')),sum('vencido')>0],['Próximos 7 dias',brl(semana)],['Em aberto',brl(sum('aberto')+sum('vencido'))],['Total da lista ('+L.length+')',brl(tot)]],
+      sections:[{head:['Descrição','Tipo','Parcela','Vencimento','Situação','Valor'],right:[5],
+        body:L.map(p=>{const st=payStatus(p);return [p.desc,p.cat||'',p.parcel||'',dBR(p.due),st==='pago'?'Pago em '+dBR(String(p.paidAt).slice(0,10)):st==='vencido'?'Vencida':'Em aberto',brl(p.amount)]}),
+        red:(i,j)=>j===4&&payStatus(L[i])==='vencido',foot:['Total','','','','',brl(tot)]}]})}}
   {const x=$('#pfx');if(x)x.onclick=()=>{ui.payNew=null;rer()}}
   {const f=$('#pform');if(f)f.onsubmit=e=>{e.preventDefault();const d=$('#pfd').value.trim(),v=pnum($('#pfv').value),du=$('#pfdu').value,n=Math.max(1,parseInt($('#pfn').value)||1),iv=Math.max(1,parseInt($('#pfi').value)||30);
     if(!d||!(v>0)||!du){$('#pfe').textContent='Preencha descrição, valor e vencimento.';return}
@@ -5982,12 +6032,21 @@ function admCaixa(){const c=$('#tabc'),t=today(),W=ui.cxW||0,start=addDays(t,W*7
   const days=Array.from({length:7},(_,k)=>addDays(start,k)).map(d=>({d,r:rec.filter(x=>x.due===d).reduce((s,x)=>s+x.amount,0),p:pay.filter(x=>x.due===d).reduce((s,x)=>s+x.amount,0)}));
   const R=days.reduce((s,x)=>s+x.r,0),P=days.reduce((s,x)=>s+x.p,0);let acc=0;
   const wd=d=>['dom','seg','ter','qua','qui','sex','sáb'][new Date(d+'T12:00:00').getDay()];
-  c.innerHTML=`${finSeg()}<div class="sectionhead"><h2>Caixa da semana</h2><div class="row" style="gap:6px"><button class="btn ghost dlb" data-cxw="-1" aria-label="Semana anterior">←</button><span class="small"><b>${dBR(start)} a ${dBR(end)}</b></span><button class="btn ghost dlb" data-cxw="1" aria-label="Próxima semana">→</button></div></div>
+  c.innerHTML=`${finSeg()}<div class="sectionhead"><h2>Caixa da semana</h2><div class="row" style="gap:6px"><button class="btn ghost dlb" data-cxw="-1" aria-label="Semana anterior">←</button><span class="small"><b>${dBR(start)} a ${dBR(end)}</b></span><button class="btn ghost dlb" data-cxw="1" aria-label="Próxima semana">→</button><button class="btn ghost dlb" id="cxpdf">Baixar PDF</button></div></div>
     <div class="tiles"><div class="tile"><span class="lbl">Entra (a receber)</span><b class="num mgok">${brl(R)}</b></div><div class="tile"><span class="lbl">Sai (a pagar)</span><b class="num neg">${brl(P)}</b></div><div class="tile"><span class="lbl">Saldo da semana</span><b class="num ${R-P<0?'neg':'mgok'}">${brl(R-P)}</b></div></div>
     ${W===0&&(atrR||atrP)?`<div class="notice" style="margin:10px 0">Atrasados: <b>${brl(atrR)}</b> para receber de clientes · <b>${brl(atrP)}</b> de contas vencidas para pagar.</div>`:''}
     <div class="tablewrap"><table class="btable cxtable"><thead><tr><th>Dia</th><th class="r">Entra</th><th class="r">Sai</th><th class="r">Saldo do dia</th><th class="r">Acumulado</th></tr></thead><tbody>${days.map(x=>{acc+=x.r-x.p;return `<tr class="${x.d===t?'cxhoje':''}"><td>${wd(x.d)} ${dBR(x.d).slice(0,5)}</td><td class="r num">${x.r?brl(x.r):'—'}</td><td class="r num">${x.p?brl(x.p):'—'}</td><td class="r num ${x.r-x.p<0?'neg':''}">${x.r||x.p?brl(x.r-x.p):'—'}</td><td class="r num ${acc<0?'neg':''}"><b>${brl(acc)}</b></td></tr>`}).join('')}</tbody></table></div>
     <div class="small muted" style="margin-top:10px">"Entra" é o que os clientes devem pagar em cada dia (contas a receber em aberto). "Sai" é o que você lançou em Contas a pagar. Não conta o dinheiro que já está no caixa nem as vendas à vista do dia.</div>`;
   bindFinSeg(c);c.querySelectorAll('[data-cxw]').forEach(b=>b.onclick=()=>{ui.cxW=(ui.cxW||0)+Number(b.dataset.cxw);admCaixa()});
+  $('#cxpdf').onclick=()=>{let ac=0;const inW=x=>x.due>=start&&x.due<=end,byD=(a,b)=>String(a.due).localeCompare(String(b.due));
+    const eR=rec.filter(inW).sort(byD),eP=pay.filter(inW).sort(byD);
+    finPdf({file:'caixa-da-semana-'+start+'-a-'+end,title:'Caixa da semana',sub:dBR(start)+' a '+dBR(end),
+      tiles:[['Entra (a receber)',brl(R)],['Sai (a pagar)',brl(P)],['Saldo da semana',brl(R-P),R-P<0]].concat(W===0&&(atrR||atrP)?[['Atrasados: receber / pagar',brl(atrR)+' / '+brl(atrP)]]:[]),
+      sections:[{title:'Dia a dia',head:['Dia','Entra','Sai','Saldo do dia','Acumulado'],right:[1,2,3,4],
+          body:days.map(x=>{ac+=x.r-x.p;return [wd(x.d)+' '+dBR(x.d),x.r?brl(x.r):'—',x.p?brl(x.p):'—',x.r||x.p?brl(x.r-x.p):'—',brl(ac)]}),foot:['Semana',brl(R),brl(P),brl(R-P),'']},
+        {title:'O que entra (contas a receber)',head:['Vencimento','Cliente','Pedido','Parcela','Valor'],right:[4],body:eR.map(r=>[dBR(r.due),r.customer,r.orderNo?'nº '+r.orderNo:'',r.parcel||'',brl(r.amount)]),foot:eR.length?['Total','','','',brl(R)]:null,empty:'Nada a receber nessa semana.'},
+        {title:'O que sai (contas a pagar)',head:['Vencimento','Descrição','Tipo','Parcela','Valor'],right:[4],body:eP.map(p=>[dBR(p.due),p.desc,p.cat||'',p.parcel||'',brl(p.amount)]),foot:eP.length?['Total','','','',brl(P)]:null,empty:'Nada a pagar nessa semana.'}],
+      note:'Entra = contas a receber em aberto com vencimento no dia. Sai = contas a pagar lançadas. Não inclui o dinheiro em caixa nem vendas à vista.'})};
 }
 
 function admReceber(){
@@ -6000,7 +6059,7 @@ function admReceber(){
     .sort((a,b)=>F.st==='pago'?b.paidAt.localeCompare(a.paidAt):a.due.localeCompare(b.due));
   const nVenc=all.filter(r=>recStatus(r)==='vencido').length;
   const tot=list.reduce((s,r)=>s+r.amount,0);
-  c.innerHTML=`${finSeg()}<div class="sectionhead"><h2>Contas a receber</h2><div class="row" style="gap:6px">${list.length?'<button class="btn ghost" id="rxl">Baixar Excel</button>':''}<button class="btn" id="rnew">+ Novo lançamento</button></div></div>
+  c.innerHTML=`${finSeg()}<div class="sectionhead"><h2>Contas a receber</h2><div class="row" style="gap:6px">${list.length?'<button class="btn ghost" id="rpdf">Baixar PDF</button><button class="btn ghost" id="rxl">Baixar Excel</button>':''}<button class="btn" id="rnew">+ Novo lançamento</button></div></div>
     ${ui.recNew?recForm():''}
     <div class="tiles">
       <button class="tile" data-rst="aberto" aria-pressed="${F.st==='aberto'}"><span class="lbl">Em aberto</span><b class="num">${brl(sum('aberto'))}</b><span class="small muted">ainda no prazo</span></button>
@@ -6035,6 +6094,13 @@ function admReceber(){
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Contas a receber');
     offerFile('contas-a-receber-'+({aberto:'em-aberto',vencido:'vencidos',pago:'pagos',todos:'todos'})[F.st]+'-'+stamp()+'.xlsx',XLSX.write(wb,{type:'array',bookType:'xlsx'}));
   }catch(e){pdfFail(e,'planilha')}};
+  const rp=$('#rpdf');if(rp)rp.onclick=()=>{const cn=F.cid&&(S.customers.find(x=>x.id===F.cid)||{}).name,stL={aberto:'Em aberto',vencido:'Vencidos',pago:'Pagos',todos:'Todos'}[F.st];
+    finPdf({file:'contas-a-receber-'+({aberto:'em-aberto',vencido:'vencidos',pago:'pagos',todos:'todos'})[F.st]+'-'+stamp(),title:'Contas a receber',
+      sub:[stL,cn,F.q.trim()?'busca: '+F.q.trim():''].filter(Boolean).join(' · '),
+      tiles:[['Em aberto (no prazo)',brl(sum('aberto'))],['Vencido',brl(sum('vencido')),sum('vencido')>0],['Recebido',brl(sum('pago'))],['Total da lista ('+list.length+')',brl(tot)]],
+      sections:[{head:['Cliente','Pedido','Parcela','Descrição','Vencimento','Situação','Valor'],right:[6],
+        body:list.map(r=>{const st=recStatus(r);return [r.customer,r.orderNo?'nº '+r.orderNo:'',r.parcel||'',r.desc||'',dBR(r.due),st==='pago'?'Pago em '+dBR(r.paidAt):st==='vencido'?'Vencido há '+daysBetween(r.due,today())+'d':'Em aberto',brl(r.amount)]}),
+        red:(i,j)=>j===5&&recStatus(list[i])==='vencido',foot:['Total','','','','','',brl(tot)]}]})};
   if(!ui.recNew)return;
   const f=ui.recNew,read=()=>{f.cid=$('#rcli').value;f.value=$('#rval').value;f.prazo=$('#rprazo').value;f.base=$('#rbase').value||today();f.orderNo=$('#rorder').value.trim();f.desc=$('#rdesc').value.trim();const cu=$('#rcustom');if(cu)f.custom=cu.value};
   const redraw=focusId=>{read();const el=document.activeElement,id=focusId||(el&&el.id),pos=el&&el.selectionStart;admReceber();const n=id&&document.getElementById(id);if(n){n.focus();try{if(pos!=null)n.setSelectionRange(pos,pos)}catch(e){}}};
