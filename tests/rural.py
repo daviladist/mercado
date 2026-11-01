@@ -1,0 +1,177 @@
+"""Testes do app do Produtor rural (Tino, outro segmento) pela API, num banco de TESTE.
+Uso: BASE=http://localhost:3077 CENTRAL_PASSWORD=... ADMIN_LOGIN=... ADMIN_PASSWORD=... python3 tests/rural.py
+(ADMIN_* = administrador da empresa principal, criado antes pelo /api/setup)
+Sai com código 1 se algo falhar.
+"""
+import json, os, secrets, sys, urllib.request, http.cookiejar
+BASE = os.environ.get('BASE', 'http://localhost:3077')
+CPW = os.environ['CENTRAL_PASSWORD']; AL = os.environ['ADMIN_LOGIN']; APW = os.environ['ADMIN_PASSWORD']
+ok = 0; fails = []
+def check(cond, msg):
+    global ok
+    if cond: ok += 1; print('  OK  ', msg)
+    else: fails.append(msg); print('  FALHA', msg)
+class C:
+    def __init__(self, tenant):
+        self.t = tenant; self.jar = http.cookiejar.CookieJar(); self.op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar), NoRedirect())
+    def req(self, path, body=None, tenant=None, headers=None, raw=False):
+        h = {'X-App': '1'}
+        if body is not None: h['Content-Type'] = 'application/json'
+        t = tenant if tenant is not None else self.t
+        if t is not None: h['X-Tenant'] = t
+        if headers is not None: h = headers
+        r = urllib.request.Request(BASE + path, data=json.dumps(body).encode() if body is not None else None, headers=h, method='POST' if body is not None else 'GET')
+        try:
+            with self.op.open(r) as resp:
+                d = resp.read(); return (resp.status, d.decode('utf8', 'replace'), dict(resp.headers)) if raw else (resp.status, json.loads(d or b'{}'))
+        except urllib.error.HTTPError as e:
+            d = e.read(); return (e.code, d.decode('utf8', 'replace'), dict(e.headers)) if raw else (e.code, json.loads(d or b'{}') if d[:1] in (b'{', b'[') else {})
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k): return None
+def pw(): return 'Tt' + secrets.token_urlsafe(10).replace('-', 'x').replace('_', 'y') + '7a'
+hx = lambda n: secrets.token_hex(n)
+pid = lambda: 'p' + hx(6)
+rid = lambda: 'r' + hx(6)
+lid = lambda: 'l' + hx(8)
+vid = lambda: 'v' + hx(6)
+
+print('== Central: aba "Outros segmentos" (produtor rural)')
+cen = C(None); s, _ = cen.req('/api/central/login', {'login': 'super_admin', 'password': CPW}); check(s == 200, 'super_admin entra')
+s, st = cen.req('/api/central/state')
+check(s == 200 and any(r['id'] == 'rural' for r in st.get('ramos', [])) and len(st.get('ruralModules', [])) >= 5, 'Central conhece o ramo "Produtor rural" e as funções dele')
+dav = next(t for t in st['tenants'] if t['id'] == 'davila'); check(dav['ramo'] == 'atacado', 'empresa principal continua em "Atacado e varejo"')
+check(all(not k.startswith('r_') for k in dav['modules']), 'módulos do produtor não aparecem no atacado')
+s, r = cen.req('/api/central/tenant', {'name': 'Pisaia', 'ramo': 'rural', 'modules': {'pagar': True}}); check(s == 400, 'módulo do atacado é recusado numa empresa rural')
+s, r = cen.req('/api/central/tenant', {'name': 'Pisaia', 'ramo': 'pecuaria'}); check(s == 400, 'ramo desconhecido é recusado')
+s, r = cen.req('/api/central/tenant', {'name': 'Pisaia', 'ramo': 'rural', 'color': '#2C5139'}); T = r.get('tenant', {})
+TID = T.get('id')
+check(s == 200 and T.get('ramo') == 'rural' and T.get('status') == 'em_preparo' and all(T['modules'].values()), 'cria "Pisaia" no ramo rural, em preparo, com todas as funções ligadas')
+s, r = cen.req('/api/central/tenant', {'name': 'Fazenda X', 'ramo': 'rural'}); TX = r['tenant']['id']; check(s == 200, 'cria uma segunda empresa rural (para testar a separação)')
+s, r = cen.req('/api/central/tenant', {'id': TID, 'ramo': 'atacado', 'modules': {'r_veiculos': False}})
+check(s == 200 and r['tenant']['ramo'] == 'rural' and r['tenant']['modules']['r_veiculos'] is False, 'ramo não muda depois de criado; função desligada só a pedida')
+cen.req('/api/central/tenant', {'id': TID, 'modules': {'r_veiculos': True}})
+s, r = cen.req('/api/central/tenant', {'id': TID, 'modules': {'pdv': True}}); check(s == 400, 'não liga PDV numa empresa rural')
+s, r = cen.req('/api/central/tenant-admin', {'id': TID, 'login': 'pai'}); P0 = r.get('password'); check(s == 200 and P0, 'Central cria o acesso do produtor (senha provisória)')
+s, r = cen.req('/api/central/tenant-admin', {'id': TX, 'login': 'pai'}); X0 = r.get('password')
+
+print('== página e acesso')
+s, html, h = C(None).req('/t/' + TID + '/', raw=True)
+check(s == 200 and 'rural.js' in html and '<title>Pisaia</title>' in html and '/app.js' not in html, 'endereço da empresa abre o app do produtor (não o de pedidos)')
+s, html, h = C(None).req('/t/' + TID + '/cliente', raw=True); check(s == 302 and h.get('Location') == '/t/' + TID + '/', '/cliente de empresa rural volta para o app do produtor')
+s, html, h = C(None).req('/t/' + TID + '/pdv', raw=True); check(s == 302, '/pdv de empresa rural volta para o app do produtor')
+s, html, h = C(None).req('/t/davila/', raw=True); check(s == 302, 'principal continua no endereço de sempre')
+
+R = C(TID)
+s, _ = R.req('/api/rural/state'); check(s == 401, 'sem login não lê nada')
+s, me = R.req('/api/login', {'role': 'admin', 'login': 'pai', 'password': P0}); check(s == 200 and me.get('mustReset'), 'produtor entra com a provisória e precisa trocar')
+s, _ = R.req('/api/rural/state'); check(s == 403, 'antes de trocar a senha, nada abre')
+NP = pw(); s, _ = R.req('/api/password', {'current': P0, 'next': NP}); check(s == 200, 'produtor cria a própria senha')
+s, st = R.req('/api/rural/state'); check(s == 200 and st['empresa']['nome'] == 'Pisaia' and st['modulos']['r_meeiros'] and len(st['cats']) >= 10, 'estado do produtor carrega com o nome da empresa (dono das divisões)')
+s, _ = R.req('/api/state'); check(s == 404, 'rotas do atacado não existem para a empresa rural')
+s, _ = R.req('/api/sync', {'changes': []}); check(s == 404, 'gravação do atacado recusada na empresa rural')
+s, _ = R.req('/api/pdv/state'); check(s == 404, 'PDV não existe na empresa rural')
+s, _ = R.req('/api/rural/state', headers={'X-Tenant': TID}); check(s == 200, 'GET com a sessão funciona')
+s, _ = R.req('/api/rural/roca', {'id': rid(), 'nome': 'X'}, headers={'Content-Type': 'application/json', 'X-Tenant': TID}); check(s == 403, 'gravação sem o cabeçalho do app é recusada (CSRF)')
+s, _ = R.req('/api/rural/state', tenant='@'); check(s == 401, 'sessão do produtor não vale no endereço da principal')
+s, _ = R.req('/api/rural/state', tenant=TX); check(s == 401, 'sessão do produtor não vale em outra empresa rural')
+A = C('@'); s, _ = A.req('/api/login', {'role': 'admin', 'login': AL, 'password': APW}); check(s == 200, 'administrador da principal entra')
+s, _ = A.req('/api/rural/state'); check(s == 404, 'empresa de atacado não tem as rotas do produtor')
+
+print('== cadastros')
+LUCAS, JOSE, ZE = pid(), pid(), pid()
+s, r = R.req('/api/rural/pessoa', {'id': LUCAS, 'tipo': 'meeiro', 'nome': 'Lucas <script>alert(1)</script>', 'telefone': '27 99999-0000'}); check(s == 200, 'cadastra meeiro')
+s, st = R.req('/api/rural/state'); lu = next(p for p in st['pessoas'] if p['id'] == LUCAS); check('<' not in lu['nome'] and '>' not in lu['nome'], 'nome sem marcação HTML')
+R.req('/api/rural/pessoa', {'id': LUCAS, 'tipo': 'meeiro', 'nome': 'Lucas'})
+s, _ = R.req('/api/rural/pessoa', {'id': JOSE, 'tipo': 'meeiro', 'nome': 'José'}); check(s == 200, 'cadastra outro meeiro')
+s, _ = R.req('/api/rural/pessoa', {'id': ZE, 'tipo': 'funcionario', 'nome': 'Zé', 'salario': 2000}); check(s == 200, 'cadastra funcionário com salário')
+s, _ = R.req('/api/rural/pessoa', {'id': ZE, 'tipo': 'meeiro', 'nome': 'Zé'}); check(s == 400, 'não troca o tipo da pessoa')
+s, _ = R.req('/api/rural/pessoa', {'id': 'dono', 'tipo': 'meeiro', 'nome': 'Falso'}); check(s == 400, 'cadastro com id "dono" é recusado (não se passa pelo dono)')
+s, _ = R.req('/api/rural/pessoa', {'id': pid(), 'tipo': 'admin', 'nome': 'X'}); check(s == 400, 'tipo de pessoa inválido recusado')
+TRATOR = vid(); s, _ = R.req('/api/rural/veiculo', {'id': TRATOR, 'nome': 'Trator', 'tipo': 'Trator'}); check(s == 200, 'cadastra trator')
+
+print('== roça com meeiro (60/40) e regras de quem paga')
+BAN = rid()
+s, r = R.req('/api/rural/roca', {'id': BAN, 'nome': 'Banana Minas', 'cultura': 'Banana', 'modo': 'meeiro', 'parceria': {LUCAS: 40, JOSE: 70}}); check(s == 400, 'meeiros acima de 100% recusados')
+s, r = R.req('/api/rural/roca', {'id': BAN, 'nome': 'Banana Minas', 'modo': 'meeiro', 'parceria': {ZE: 40}}); check(s == 404, 'funcionário não entra como meeiro')
+s, r = R.req('/api/rural/roca', {'id': BAN, 'nome': 'Banana Minas', 'modo': 'meeiro', 'parceria': {LUCAS: 40}, 'regras': {'adubo': {'dono': 60, LUCAS: 40}, 'matamato': {LUCAS: 100}, 'energia': {'dono': 50, LUCAS: 30}}}); check(s == 400, 'regra que não soma 100% recusada')
+s, r = R.req('/api/rural/roca', {'id': BAN, 'nome': 'Banana Minas', 'modo': 'meeiro', 'parceria': {LUCAS: 40}, 'regras': {'adubo': {'dono': 60, JOSE: 40}}}); check(s == 400, 'regra com pessoa de fora da roça recusada')
+s, r = R.req('/api/rural/roca', {'id': BAN, 'nome': 'Banana Minas', 'cultura': 'Banana', 'local': 'Minas Gerais', 'modo': 'meeiro', 'parceria': {LUCAS: 40}, 'regras': {'adubo': {'dono': 60, LUCAS: 40}, 'matamato': {LUCAS: 100}}})
+check(s == 200, 'cria a roça de banana: Pisaia 60% · Lucas 40%, adubo dividido, mata-mato por conta do Lucas')
+CAFE = rid(); s, _ = R.req('/api/rural/roca', {'id': CAFE, 'nome': 'Café', 'modo': 'funcionarios', 'parceria': {LUCAS: 50}}); check(s == 200, 'cria roça só com funcionários')
+s, st = R.req('/api/rural/state'); cafe = next(x for x in st['rocas'] if x['id'] == CAFE); check(cafe['parceria'] == {}, 'roça "só funcionários" não guarda meeiro')
+R.req('/api/rural/pessoa', {'id': ZE, 'tipo': 'funcionario', 'nome': 'Zé', 'salario': 2000, 'rocaId': CAFE})
+
+print('== lançamentos')
+V1 = lid()
+s, r = R.req('/api/rural/lanc', {'id': V1, 'novo': True, 'tipo': 'venda', 'rocaId': BAN, 'data': '2026-10-10', 'qtd': 400, 'unidade': 'caixa', 'preco': 25, 'valor': 10000, 'partes': {'dono': 100}})
+check(s == 200, 'lança venda de R$ 10.000')
+s, r = R.req('/api/rural/lanc', {'id': V1, 'novo': True, 'tipo': 'venda', 'rocaId': BAN, 'data': '2026-10-10', 'valor': 10000}); check(s == 200 and r.get('repetido'), 'o mesmo lançamento enviado duas vezes grava uma vez')
+s, st = R.req('/api/rural/state'); v = next(l for l in st['lanc'] if l['id'] == V1)
+check(v['partes'] == {LUCAS: 40, 'dono': 60}, 'divisão da venda vem da parceria da roça (o aparelho não escolhe)')
+s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'venda', 'rocaId': BAN, 'data': '2026-10-11', 'qtd': 10, 'preco': 10, 'valor': 500}); check(s == 400, 'total que não bate com quantidade × preço é recusado')
+s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'venda', 'data': '2026-10-11', 'valor': 50}); check(s == 400, 'venda sem roça recusada')
+s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'venda', 'rocaId': BAN, 'data': '2026-10-11', 'valor': -5}); check(s == 400, 'valor negativo recusado')
+s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'venda', 'rocaId': BAN, 'data': '2026-02-30', 'valor': 5}); check(s == 400, 'data inválida recusada')
+D1 = lid(); s, _ = R.req('/api/rural/lanc', {'id': D1, 'novo': True, 'tipo': 'despesa', 'categoria': 'adubo', 'rocaId': BAN, 'data': '2026-10-05', 'valor': 1000}); check(s == 200, 'despesa de adubo sem divisão: usa a regra da roça')
+D2 = lid(); s, _ = R.req('/api/rural/lanc', {'id': D2, 'novo': True, 'tipo': 'despesa', 'categoria': 'matamato', 'rocaId': BAN, 'data': '2026-10-06', 'valor': 300}); check(s == 200, 'mata-mato por conta do Lucas')
+D3 = lid(); s, _ = R.req('/api/rural/lanc', {'id': D3, 'novo': True, 'tipo': 'despesa', 'categoria': 'energia', 'rocaId': BAN, 'data': '2026-10-07', 'valor': 200, 'partes': {'dono': 50, LUCAS: 50}}); check(s == 200, 'energia com divisão escolhida na hora (50/50)')
+s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'despesa', 'categoria': 'energia', 'rocaId': BAN, 'data': '2026-10-07', 'valor': 200, 'partes': {'dono': 50, JOSE: 50}}); check(s == 400, 'divisão com pessoa de fora da roça recusada')
+s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'despesa', 'categoria': 'energia', 'rocaId': BAN, 'data': '2026-10-07', 'valor': 200, 'partes': {'dono': 50, LUCAS: 10}}); check(s == 400, 'divisão que não soma 100% recusada')
+s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'despesa', 'categoria': 'feitiço', 'rocaId': BAN, 'data': '2026-10-07', 'valor': 20}); check(s == 400, 'tipo de despesa desconhecido recusado')
+s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'despesa', 'categoria': 'outros', 'rocaId': BAN, 'data': '2026-10-07', 'valor': 20}); check(s == 400, '"Outros" sem descrição recusado')
+DC = lid(); s, _ = R.req('/api/rural/lanc', {'id': DC, 'novo': True, 'tipo': 'despesa', 'categoria': 'adubo', 'rocaId': CAFE, 'data': '2026-10-07', 'valor': 500, 'partes': {'dono': 50, LUCAS: 50}})
+s, st = R.req('/api/rural/state'); dc = next(l for l in st['lanc'] if l['id'] == DC); check(dc['partes'] == {'dono': 100}, 'roça sem meeiro: despesa é toda do dono (divisão enviada ignorada)')
+A1 = lid(); s, _ = R.req('/api/rural/lanc', {'id': A1, 'novo': True, 'tipo': 'adiantamento', 'rocaId': BAN, 'pessoaId': LUCAS, 'data': '2026-10-08', 'valor': 700}); check(s == 200, 'adiantamento de R$ 700 ao Lucas')
+s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'adiantamento', 'rocaId': BAN, 'pessoaId': JOSE, 'data': '2026-10-08', 'valor': 70}); check(s == 400, 'adiantamento a quem não é meeiro da roça recusado')
+DI = lid(); s, _ = R.req('/api/rural/lanc', {'id': DI, 'novo': True, 'tipo': 'despesa', 'categoria': 'diarista', 'rocaId': BAN, 'pessoaNome': 'João', 'dias': 3, 'preco': 120, 'valor': 360, 'descricao': 'roçada'}); check(s == 400, 'diarista sem data recusado')
+s, _ = R.req('/api/rural/lanc', {'id': DI, 'novo': True, 'tipo': 'despesa', 'categoria': 'diarista', 'rocaId': BAN, 'data': '2026-10-09', 'pessoaNome': 'João', 'dias': 3, 'preco': 120, 'valor': 360, 'descricao': 'roçada'}); check(s == 200, 'diarista: 3 dias × R$ 120')
+s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'despesa', 'categoria': 'diarista', 'rocaId': BAN, 'data': '2026-10-09', 'pessoaNome': 'João', 'dias': 3, 'preco': 120, 'valor': 999}); check(s == 400, 'diarista com total que não bate recusado')
+G1 = lid(); s, _ = R.req('/api/rural/lanc', {'id': G1, 'novo': True, 'tipo': 'despesa', 'categoria': 'combustivel', 'veiculoId': TRATOR, 'data': '2026-10-09', 'valor': 450}); check(s == 200, 'combustível do trator como gasto geral')
+s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'despesa', 'categoria': 'combustivel', 'veiculoId': vid(), 'data': '2026-10-09', 'valor': 45}); check(s == 404, 'veículo que não existe recusado')
+s, r = R.req('/api/rural/salarios', {'lista': [{'id': lid(), 'pessoaId': ZE, 'valor': 2000}], 'data': '2026-10-30', 'referencia': 'out/2026'}); check(s == 200 and r.get('n') == 1, 'paga o salário do mês (vira despesa na roça do funcionário)')
+s, r = R.req('/api/rural/salarios', {'lista': [{'id': lid(), 'pessoaId': LUCAS, 'valor': 2000}], 'data': '2026-10-30'}); check(s == 404, 'salário só para funcionário')
+
+print('== acerto com o meeiro (calculado no servidor)')
+s, P = R.req('/api/rural/acerto/previa?roca=' + BAN + '&pessoa=' + LUCAS)
+t = P.get('totais', {})
+# parte: 10.000 × 40% = 4.000; despesas: adubo 1.000×40% = 400 + mata-mato 300 + energia 200×50% = 100 → 800; adiantamento 700; saldo 2.500
+check(s == 200 and t == {'vendas': 10000, 'parte': 4000, 'despesas': 800, 'adiantamentos': 700, 'saldo': 2500}, 'prévia: parte 4.000 − despesas 800 − adiantamento 700 = Pisaia paga 2.500 (%s)' % t)
+check(not any(i['id'] == DI for i in P['itens']), 'diarista pago só pela Pisaia (regra padrão) não entra no acerto do Lucas')
+s, r = R.req('/api/rural/acerto', {'rocaId': BAN, 'pessoaId': LUCAS, 'assinatura': 'errada'}); check(s == 409, 'acerto com prévia desatualizada é recusado')
+V2 = lid(); R.req('/api/rural/lanc', {'id': V2, 'novo': True, 'tipo': 'venda', 'rocaId': BAN, 'data': '2026-10-20', 'valor': 1000})
+s, r = R.req('/api/rural/acerto', {'rocaId': BAN, 'pessoaId': LUCAS, 'assinatura': P['assinatura']}); check(s == 409, 'lançamento novo depois da prévia: acerto recusado para conferir de novo')
+s, P = R.req('/api/rural/acerto/previa?roca=' + BAN + '&pessoa=' + LUCAS); check(P['totais']['saldo'] == 2900, 'prévia nova inclui a venda nova (saldo 2.900)')
+s, r = R.req('/api/rural/acerto', {'rocaId': BAN, 'pessoaId': LUCAS, 'assinatura': P['assinatura'], 'obs': 'pago em dinheiro'}); AC = r.get('id')
+check(s == 200 and r.get('numero') == 1 and r['totais']['saldo'] == 2900, 'acerto nº 1 feito')
+s, P2 = R.req('/api/rural/acerto/previa?roca=' + BAN + '&pessoa=' + LUCAS); check(P2['itens'] == [] and P2['totais']['saldo'] == 0, 'depois do acerto, nada fica em aberto (não conta duas vezes)')
+s, r = R.req('/api/rural/acerto', {'rocaId': BAN, 'pessoaId': LUCAS, 'assinatura': P2['assinatura']}); check(s == 400, 'acerto vazio recusado')
+s, _ = R.req('/api/rural/lanc', {'id': V1, 'tipo': 'venda', 'rocaId': BAN, 'data': '2026-10-10', 'valor': 1}); check(s == 409, 'lançamento acertado não pode ser alterado')
+s, _ = R.req('/api/rural/lanc/excluir', {'id': V1}); check(s == 409, 'lançamento acertado não pode ser excluído')
+s, _ = R.req('/api/rural/lanc/excluir', {'id': DI}); check(s == 200, 'lançamento fora de acerto pode ser excluído')
+s, _ = R.req('/api/rural/acerto/desfazer', {'id': AC}); check(s == 200, 'desfaz o acerto')
+s, P3 = R.req('/api/rural/acerto/previa?roca=' + BAN + '&pessoa=' + LUCAS); check(P3['totais']['saldo'] == 2900, 'desfeito: os lançamentos voltam a ficar em aberto')
+s, st = R.req('/api/rural/state'); a = next(x for x in st['acertos'] if x['id'] == AC); check(a['desfeitoEm'] is not None, 'acerto desfeito continua no histórico')
+# mudar a parceria não muda vendas antigas
+R.req('/api/rural/roca', {'id': BAN, 'nome': 'Banana Minas', 'modo': 'meeiro', 'parceria': {LUCAS: 50}})
+s, st = R.req('/api/rural/state'); v = next(l for l in st['lanc'] if l['id'] == V1); check(v['partes'][LUCAS] == 40, 'mudar a porcentagem da roça não muda vendas já lançadas')
+
+print('== separação e funções desligadas')
+X = C(TX); X.req('/api/login', {'role': 'admin', 'login': 'pai', 'password': X0}); XP = pw(); X.req('/api/password', {'current': X0, 'next': XP})
+s, sx = X.req('/api/rural/state'); check(s == 200 and not sx['rocas'] and not sx['lanc'] and not sx['pessoas'], 'outra empresa rural não vê nada da Pisaia')
+s, _ = X.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'venda', 'rocaId': BAN, 'data': '2026-10-10', 'valor': 10}); check(s == 404, 'outra empresa não lança na roça da Pisaia')
+s, _ = X.req('/api/rural/lanc/excluir', {'id': V2}); s2, st = R.req('/api/rural/state'); check(any(l['id'] == V2 for l in st['lanc']), 'outra empresa não exclui lançamento da Pisaia')
+s, _ = X.req('/api/rural/acerto/desfazer', {'id': AC}); check(s == 404, 'outra empresa não mexe em acerto da Pisaia')
+s, _ = X.req('/api/rural/pessoa', {'id': LUCAS, 'tipo': 'meeiro', 'nome': 'Sequestro'}); s2, st = R.req('/api/rural/state'); check(next(p for p in st['pessoas'] if p['id'] == LUCAS)['nome'] == 'Lucas', 'mesmo id em outra empresa não altera o cadastro da Pisaia')
+cen.req('/api/central/tenant', {'id': TID, 'modules': {'r_meeiros': False, 'r_diaristas': False}})
+s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'adiantamento', 'rocaId': BAN, 'pessoaId': LUCAS, 'data': '2026-10-08', 'valor': 7}); check(s == 403, 'meeiros desligados na Central: adiantamento recusado')
+s, _ = R.req('/api/rural/acerto/previa?roca=' + BAN + '&pessoa=' + LUCAS); check(s == 403, 'meeiros desligados: acerto recusado')
+s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'despesa', 'categoria': 'diarista', 'rocaId': BAN, 'data': '2026-10-09', 'pessoaNome': 'João', 'valor': 10}); check(s == 403, 'diaristas desligados: recusado')
+cen.req('/api/central/tenant', {'id': TID, 'modules': {'r_meeiros': True, 'r_diaristas': True}})
+cen.req('/api/central/tenant', {'id': TID, 'status': 'suspensa'})
+s, _ = R.req('/api/rural/state'); check(s == 403, 'empresa suspensa: produtor não entra')
+cen.req('/api/central/tenant', {'id': TID, 'status': 'ativa'})
+s, _ = R.req('/api/rural/state'); check(s == 200, 'reativada: volta a funcionar')
+s, st = cen.req('/api/central/state'); tp = next(t for t in st['tenants'] if t['id'] == TID); check(tp['stats']['rocas'] == 2 and tp['stats']['lancamentos'] >= 8, 'Central mostra roças e lançamentos da empresa rural')
+
+print(f'\n{ok} OK, {len(fails)} falha(s)')
+if fails: print('\n'.join(' - ' + f for f in fails)); sys.exit(1)

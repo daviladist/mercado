@@ -150,6 +150,20 @@ Para quem paga uma transportadora por entrega, com um % combinado sobre o valor 
 - **Relatório e pagamentos:** FINANCEIRO › Frete de terceiro: frete gerado, já pago e saldo a pagar por transportadora; lista por período com Excel; "Registrar pagamento" (data, valor, observação) abate do saldo.
 - **Segurança:** só o administrador vê. O servidor esconde frete, transportadoras e pagamentos dos outros papéis, guarda o % e o nome vindos do cadastro e preserva o frete quando o vendedor mexe no pedido. Testes: `tests/frete.py`.
 
+## Outros segmentos: Produtor rural (ramo "rural")
+Um segundo tipo de empresa no mesmo sistema e no mesmo banco, para quem toca roça. Na Central, as empresas ficam em duas abas: **Atacado e varejo** (o app de pedidos, como sempre) e **Outros segmentos** (por enquanto, **Produtor rural**). O tipo se escolhe ao criar e não muda depois.
+- **Endereço:** `https://SEU-SITE/t/<empresa>/` abre o **app do produtor** (`public/rural.html` + `public/rural.js`), feito para celular. `/cliente` e `/pdv` voltam para ele. O acesso é o do administrador criado na Central (senha provisória, troca no primeiro acesso).
+- **O dono das divisões é a empresa:** o nome cadastrado na Central (ex.: "Pisaia") aparece no lugar de "dono": *Pisaia 60% · Lucas 40%*.
+- **Cada roça é um projeto:** nome, cultura, local, tamanho; quem toca (só funcionários, meeiro, ou meeiro e funcionários); meeiros com a porcentagem de cada um **sobre o valor vendido (bruto)**; e a regra de **quem paga cada tipo de despesa** (o dono, um meeiro, dividido igual à meação ou outra divisão em %). A regra já vem marcada no lançamento e pode ser trocada naquela compra.
+- **Lançamentos:** venda (quantidade × preço), despesa por tipo (adubo, defensivo, mata-mato, salário, diarista, combustível, energia…), adiantamento ao meeiro, diarista (quem, o que fez, dias × valor do dia, sem vínculo) e "pagar salários do mês". Fora de uma roça = gasto geral da fazenda (veículos e máquinas, energia, etc.).
+- **Acerto com o meeiro:** quando quiser (não há período fixo). Parte dele nas vendas − despesas dele − adiantamentos = saldo (o dono paga ou o meeiro deve). Calculado no servidor; os lançamentos ficam marcados e não entram de novo; dá para desfazer (com histórico).
+- **Painel e relatório:** vendido, gastos do dono, quanto sobrou (ganhou ou perdeu), por roça, por mês, por tipo de despesa (com o maior gasto destacado), por meeiro e por veículo; imprimir/PDF.
+- **Funções que a Central liga e desliga:** meeiros, funcionários fixos, diaristas, veículos e máquinas, gastos gerais. Desligada, o servidor recusa a gravação.
+- **Regras no servidor (`lib/rural.js`):** só o administrador da empresa; a divisão da venda vem da parceria da roça no dia (o aparelho não escolhe, e mudar a porcentagem depois não muda vendas antigas); divisão de despesa só com gente da roça e somando 100%; acerto recusado se algo mudou desde a prévia; lançamento acertado não muda nem sai; rotas do atacado não existem para a empresa rural e as do produtor não existem para o atacado.
+- **Tabelas:** `rural_pessoas`, `rural_rocas`, `rural_veiculos`, `rural_lanc`, `rural_acertos`, `rural_seq` (todas com `tenant_id`); coluna `tenants.ramo`.
+- **Testes:** `tests/rural.py` (roda no `tests/ci_banco.sh` e no GitHub).
+- **Para depois:** acesso do meeiro só para ver a parte dele; o app não guarda lançamentos sem internet (avisa e pede para tentar de novo).
+
 ## Desenvolver e testar no computador
 
 ```

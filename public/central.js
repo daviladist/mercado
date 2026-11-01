@@ -5,7 +5,10 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const SWATCHES = [['#1F3D2B', 'Verde Tino'], ['#E11F2C', 'Vermelho'], ['#0A66B2', 'Azul'], ['#B4410F', 'Laranja'], ['#6D28D9', 'Roxo']];
   const STATUS = { ativa: 'Ativa', em_preparo: 'Em preparo', suspensa: 'Suspensa' };
-  let D = null, sel = null, draft = null, dirty = false, pendingDraft = null, segUI = null;
+  let D = null, sel = null, draft = null, dirty = false, pendingDraft = null, segUI = null, aba = 'atacado';
+  const ramoOf = t => (t && t.ramo === 'rural' ? 'rural' : 'atacado');
+  const modsOf = t => ramoOf(t) === 'rural' ? D.ruralModules : D.modules;
+  const naAba = () => D.tenants.filter(t => (aba === 'atacado') === (ramoOf(t) === 'atacado'));
 
   async function api(path, body) {
     const opt = body === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-App': '1' }, body: JSON.stringify(body) };
@@ -31,27 +34,43 @@
     catch (e) { if (e.status === 401) return showLogin(); toast(e.message); return; }
     $('#loginView').hidden = true; $('#appView').hidden = false; $('#who').hidden = false; $('#whoName').textContent = D.me.login;
     if (pendingDraft) { const p = pendingDraft; pendingDraft = null; sel = p.sel; pick(sel); draft = p.draft; dirty = true; renderList(); renderEditor(); return; }
-    if (!keep || !D.tenants.some(t => t.id === sel)) sel = (D.tenants[0] || {}).id || null;
+    const cur = D.tenants.find(t => t.id === sel);
+    if (keep && cur) aba = ramoOf(cur) === 'atacado' ? 'atacado' : 'outros';
+    if (!keep || !cur) sel = (naAba()[0] || {}).id || null;
     pick(sel);
   }
   function pick(id) {
     const t = D.tenants.find(x => x.id === id);
     sel = id; dirty = false;
-    draft = t ? JSON.parse(JSON.stringify(t)) : { id: null, name: '', logo: null, color: '#1F3D2B', segment: 'basico', status: 'em_preparo', primary: false, modules: presetMods('basico') };
+    draft = t ? JSON.parse(JSON.stringify(t)) : aba === 'atacado'
+      ? { id: null, ramo: 'atacado', name: '', logo: null, color: '#1F3D2B', segment: 'basico', status: 'em_preparo', primary: false, modules: presetMods('basico') }
+      : { id: null, ramo: 'rural', name: '', logo: null, color: '#1F3D2B', segment: null, status: 'em_preparo', primary: false, modules: Object.fromEntries(D.ruralModules.map(m => [m.code, true])) };
     renderList(); renderEditor();
   }
   function presetMods(seg) { const s = D.segments.find(x => x.id === seg); const m = {}; D.modules.forEach(x => { m[x.code] = x.essential ? true : !!(s && s.modules[x.code]); }); return m; }
   function matchSegment() { return (D.segments.find(s => D.modules.every(m => m.essential || !!s.modules[m.code] === !!draft.modules[m.code])) || {}).id || null; }
 
+  function renderTabs() {
+    const n = k => D.tenants.filter(t => (k === 'atacado') === (ramoOf(t) === 'atacado')).length;
+    $('#rtabs').innerHTML = [['atacado', 'Atacado e varejo'], ['outros', 'Outros segmentos']].map(([k, lb]) => `<button type="button" role="tab" data-aba="${k}" aria-selected="${aba === k}">${lb} <small>${n(k)}</small></button>`).join('');
+    $('#rtabs').querySelectorAll('[data-aba]').forEach(b => b.addEventListener('click', () => {
+      if (b.dataset.aba === aba) return;
+      if (dirty && !confirm('Sair sem salvar as mudanças?')) return;
+      aba = b.dataset.aba; segUI = null; pick((naAba()[0] || {}).id || null);
+    }));
+  }
   function renderList() {
+    renderTabs();
     const L = $('#tlist');
-    L.innerHTML = D.tenants.map(t => `<button type="button" class="tn" data-t="${esc(t.id)}" aria-current="${t.id === sel}"><b>${esc(t.name)}${t.primary ? ' <span class="st ativa">principal</span>' : ''}</b><span>${esc((D.segments.find(s => s.id === t.segment) || {}).name || 'Sem segmento')} · <span class="st ${esc(t.status)}">${esc(STATUS[t.status] || t.status)}</span></span></button>`).join('')
-      + (sel === null ? '<button type="button" class="tn" aria-current="true"><b>Nova empresa</b><span>ainda não salva</span></button>' : '');
+    const lista = naAba();
+    L.innerHTML = (aba === 'outros' ? '<p class="small muted" style="margin:0 0 2px">Produtor rural</p>' : '') + (!lista.length && sel !== null ? '<p class="small muted" style="margin:0">Nenhuma empresa aqui ainda. Toque em "+ Nova".</p>' : '') + lista.map(t => `<button type="button" class="tn" data-t="${esc(t.id)}" aria-current="${t.id === sel}"><b>${esc(t.name)}${t.primary ? ' <span class="st ativa">principal</span>' : ''}</b><span>${esc(ramoOf(t) === 'rural' ? 'Produtor rural' : (D.segments.find(s => s.id === t.segment) || {}).name || 'Sem segmento')} · <span class="st ${esc(t.status)}">${esc(STATUS[t.status] || t.status)}</span></span></button>`).join('')
+      + (sel === null ? `<button type="button" class="tn" aria-current="true"><b>${aba === 'outros' ? 'Novo produtor rural' : 'Nova empresa'}</b><span>ainda não salva</span></button>` : '');
     L.querySelectorAll('[data-t]').forEach(b => b.addEventListener('click', () => { if (dirty && !confirm('Sair sem salvar as mudanças?')) return; pick(b.dataset.t); }));
   }
   $('#newT').addEventListener('click', () => { if (dirty && !confirm('Sair sem salvar as mudanças?')) return; pick(null); });
 
   function renderEditor() {
+    if (ramoOf(draft) === 'rural') return renderRural();
     const t = draft, on = Object.entries(t.modules).filter(([k, v]) => v).length, seg = matchSegment();
     const groups = [...new Set(D.modules.map(m => m.group))];
     $('#editor').innerHTML = `
@@ -89,8 +108,42 @@
     <div class="bar${dirty ? ' dirty' : ''}"><span>${dirty ? 'Há mudanças sem salvar.' : 'Tudo salvo.'}</span><div style="display:flex;gap:8px"><button class="btn ghost-light" type="button" id="undo" ${dirty ? '' : 'disabled'}>Desfazer</button><button class="btn primary" type="button" id="save" ${dirty ? '' : 'disabled'}>Salvar configuração</button></div></div>`;
     bind();
   }
+  /* ---------- Outros segmentos: produtor rural ---------- */
+  function renderRural() {
+    const t = draft, mods = D.ruralModules, on = mods.filter(m => t.modules[m.code]).length;
+    const groups = [...new Set(mods.map(m => m.group))];
+    const dono = (t.name || 'Pisaia').trim();
+    $('#editor').innerHTML = `
+    <section class="card top">
+      <div><h1>${esc(t.name || 'Novo produtor rural')}</h1><p class="muted small" style="margin:4px 0 0">Produtor rural · ${on} de ${mods.length} funções ligadas · essenciais sempre ativas</p></div>
+      <div class="field" style="min-width:180px"><label for="fst">Situação</label><select id="fst">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${t.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+    </section>
+    <div class="note">App do produtor: cada roça é um projeto (meeiros com a porcentagem sobre o valor vendido, funcionários, despesas, adiantamentos e acerto), com um painel geral. O nome da empresa aparece como o dono nas divisões: <b>${esc(dono)} 60% · Lucas 40%</b>.</div>
+    ${t.id ? accessCard(t) : '<div class="note">Salve para gerar o endereço e o acesso do produtor.</div>'}
+    <section class="card" style="display:grid;gap:16px" aria-labelledby="hid">
+      <h2 id="hid">Identidade</h2>
+      <div class="grid">
+        <div class="field"><label for="fname">Nome (aparece como o dono nas divisões)</label><input type="text" id="fname" maxlength="80" value="${esc(t.name)}" placeholder="Ex.: Pisaia"></div>
+        <div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Logo</span>
+          <div class="logo-row"><div class="logo-box">${t.logo ? `<img src="${esc(t.logo)}" alt="Logo atual">` : 'LOGO'}</div>
+          <label class="btn" for="flogo" style="display:inline-flex;align-items:center">Enviar imagem</label><input type="file" id="flogo" accept="image/png,image/jpeg,image/webp" hidden>
+          ${t.logo ? '<button class="btn" type="button" id="frmlogo">Tirar</button>' : ''}</div></div>
+        <div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Cor principal</span>
+          <div class="sw">${SWATCHES.map(([c, n]) => `<button type="button" data-c="${c}" aria-label="${n}" aria-pressed="${(t.color || '').toUpperCase() === c}" style="background:${c}"></button>`).join('')}<input type="color" id="fcolor" aria-label="Outra cor" value="${esc(t.color || '#1F3D2B')}"></div></div>
+      </div>
+      <div class="preview"><span class="small muted">Prévia do botão:</span><span class="pv-btn" style="background:${esc(t.color || '#1F3D2B')}">+ Lançar despesa</span></div>
+    </section>
+    ${groups.map(g => `<section class="card grp"><h2>${esc(g)}${g === 'Essenciais' ? '<small>Não podem ser desligadas</small>' : ''}</h2>
+      ${mods.filter(m => m.group === g).map(m => `<div class="mod"><div class="t"><div class="n">${esc(m.name)}</div><div class="d">${esc(m.desc)}</div></div>
+        ${m.essential ? '<span class="lock">Sempre ativo</span>' : `<button type="button" class="sw-t" role="switch" data-m="${esc(m.code)}" aria-checked="${!!t.modules[m.code]}" aria-label="${esc(m.name)}"><span></span></button>`}</div>`).join('')}</section>`).join('')}
+    <div class="bar${dirty ? ' dirty' : ''}"><span>${dirty ? 'Há mudanças sem salvar.' : 'Tudo salvo.'}</span><div style="display:flex;gap:8px"><button class="btn ghost-light" type="button" id="undo" ${dirty ? '' : 'disabled'}>Desfazer</button><button class="btn primary" type="button" id="save" ${dirty ? '' : 'disabled'}>${t.id ? 'Salvar configuração' : 'Criar produtor'}</button></div></div>`;
+    bindCommon();
+    const E = $('#editor');
+    E.querySelectorAll('[data-m]').forEach(b => b.addEventListener('click', () => { draft.modules[b.dataset.m] = !draft.modules[b.dataset.m]; touch(); }));
+  }
   /* todos os endereços da empresa, conforme os módulos ligados */
   function accessLinks(t, base) {
+    if (ramoOf(t) === 'rural') return [['App do produtor', base + '/', 'Painel, roças, lançamentos e acerto com os meeiros (celular ou computador)']];
     const m = t.modules || {}, L = [['Painel do administrador', base + '/#admin', 'Dono e gerentes']];
     L.push(['Vendedores', base + '/#vendedor', 'Lançar pedidos dos clientes']);
     if (m.app_cliente) L.push(['App dos clientes', base + '/cliente', 'Clientes fazem pedido sozinhos']);
@@ -106,11 +159,11 @@
     return `<section class="card" style="display:grid;gap:12px" aria-labelledby="hac">
       <h2 id="hac">Acesso da empresa</h2>
       <div class="links">${accessLinks(t, base).map(([lb, url, note]) => `<div class="lk"><div class="lk-t"><b>${esc(lb)}</b>${note ? `<span class="small muted">${esc(note)}</span>` : ''}</div><code class="link">${esc(url)}</code><div class="lk-b"><button type="button" class="btn" data-copy="${esc(url)}">Copiar</button><a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Abrir</a></div></div>`).join('')}</div>
-      ${t.modules.app_cliente ? '' : '<p class="small muted" style="margin:0">Sem app do cliente: os clientes compram pelo vendedor (não há endereço de cliente).</p>'}
-      <p class="small muted" style="margin:0">${st.products || 0} produtos · ${st.orders || 0} pedidos · ${st.users || 0} usuários${t.adminLogin ? ' · administrador: ' + esc(t.adminLogin) : ''}</p>
+      ${ramoOf(t) === 'rural' || t.modules.app_cliente ? '' : '<p class="small muted" style="margin:0">Sem app do cliente: os clientes compram pelo vendedor (não há endereço de cliente).</p>'}
+      <p class="small muted" style="margin:0">${ramoOf(t) === 'rural' ? `${st.rocas || 0} roças · ${st.lancamentos || 0} lançamentos` : `${st.products || 0} produtos · ${st.orders || 0} pedidos`} · ${st.users || 0} usuários${t.adminLogin ? ' · administrador: ' + esc(t.adminLogin) : ''}</p>
       ${t.primary ? '<p class="small muted" style="margin:0">A empresa principal cuida dos próprios acessos pelo painel dela.</p>' : `
       <div class="logo-row">
-        <div class="field" style="flex:1 1 200px"><label for="alog">Usuário do administrador</label><input type="text" id="alog" value="${esc(t.adminLogin || 'admin')}" maxlength="40" autocapitalize="off" spellcheck="false"></div>
+        <div class="field" style="flex:1 1 200px"><label for="alog">${ramoOf(t) === 'rural' ? 'Usuário do produtor' : 'Usuário do administrador'}</label><input type="text" id="alog" value="${esc(t.adminLogin || 'admin')}" maxlength="40" autocapitalize="off" spellcheck="false"></div>
         <button class="btn dark" type="button" id="agen" style="align-self:end">${t.adminLogin ? 'Gerar nova senha' : 'Criar acesso do administrador'}</button>
       </div>
       <div id="aout" aria-live="polite"></div>`}
@@ -123,7 +176,7 @@
     const b = $('#agen'); b.disabled = true;
     try {
       const r = await api('/api/central/tenant-admin', { id: draft.id, login });
-      const url = location.origin + '/t/' + r.tenant + '/#admin';
+      const url = location.origin + '/t/' + r.tenant + (ramoOf(draft) === 'rural' ? '/' : '/#admin');
       $('#aout').innerHTML = `<div class="note" style="display:grid;gap:6px"><b>Anote agora: esta senha aparece só uma vez.</b>
         <span>Endereço: <code class="link">${esc(url)}</code></span><span>Usuário: <code>${esc(r.login)}</code></span><span>Senha provisória: <code style="font-size:17px">${esc(r.password)}</code></span>
         <span class="small">No primeiro acesso, a pessoa cria a senha dela.</span></div>`;
@@ -132,7 +185,20 @@
     } catch (e) { if (e.status === 401) return showLogin('Sua sessão terminou. Entre de novo.'); toast(e.message); }
     finally { b.disabled = false; }
   }
-  function touch() { dirty = true; renderEditor(); }
+  function touch() { dirty = true; const y = window.scrollY; renderEditor(); window.scrollTo(0, y); }
+  function bindCommon() {
+    const E = $('#editor');
+    $('#fname').addEventListener('input', e => { draft.name = e.target.value; dirty = true; E.querySelector('h1').textContent = draft.name || 'Novo produtor rural'; $('#save').disabled = false; $('#undo').disabled = false; const bar = E.querySelector('.bar'); bar.classList.add('dirty'); bar.querySelector('span').textContent = 'Há mudanças sem salvar.'; });
+    $('#fst').addEventListener('change', e => { draft.status = e.target.value; touch(); });
+    E.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => { draft.color = b.dataset.c; touch(); }));
+    $('#fcolor').addEventListener('change', e => { draft.color = e.target.value.toUpperCase(); touch(); });
+    const rm = $('#frmlogo'); if (rm) rm.addEventListener('click', () => { draft.logo = null; touch(); });
+    $('#flogo').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) readLogo(f); });
+    $('#undo').addEventListener('click', () => pick(sel));
+    $('#save').addEventListener('click', save);
+    const ag = $('#agen'); if (ag) ag.addEventListener('click', genAdmin);
+    E.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Endereço copiado'); } catch (e) { toast('Não consegui copiar: selecione o endereço e copie.'); } }));
+  }
   function bind() {
     const E = $('#editor');
     $('#fname').addEventListener('input', e => { draft.name = e.target.value; dirty = true; E.querySelector('h1').textContent = draft.name || 'Nova empresa'; $('#save').disabled = false; $('#undo').disabled = false; const bar = E.querySelector('.bar'); bar.classList.add('dirty'); bar.querySelector('span').textContent = 'Há mudanças sem salvar.'; });
@@ -218,9 +284,10 @@
   }
   async function save() {
     const b = $('#save'); b.disabled = true;
-    const mods = {}; D.modules.forEach(m => { if (!m.essential) mods[m.code] = !!draft.modules[m.code]; });
+    const rural = ramoOf(draft) === 'rural';
+    const mods = {}; modsOf(draft).forEach(m => { if (!m.essential) mods[m.code] = !!draft.modules[m.code]; });
     try {
-      const r = await api('/api/central/tenant', { id: draft.id, name: draft.name, logo: draft.logo, color: draft.color, segment: matchSegment() || draft.segment, status: draft.status, modules: mods });
+      const r = await api('/api/central/tenant', { id: draft.id, ramo: draft.id ? undefined : (rural ? 'rural' : 'atacado'), name: draft.name, logo: draft.logo, color: draft.color, segment: rural ? null : matchSegment() || draft.segment, status: draft.status, modules: mods });
       sel = r.tenant.id; toast('Configuração salva'); await load(true);
     } catch (e) { if (e.status === 401) { pendingDraft = { sel, draft }; return showLogin('Sua sessão terminou. Entre de novo: suas mudanças continuam aqui para salvar.'); } toast(e.message); b.disabled = false; }
   }

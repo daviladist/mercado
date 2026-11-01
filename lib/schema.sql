@@ -273,3 +273,106 @@ create table if not exists segments (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+-- ===== Tino Produtor rural (outro segmento). Tudo por empresa (tenant_id = empresa). =====
+-- ramo da empresa: 'atacado' (atacado e varejo, o app de pedidos) ou 'rural' (app do produtor)
+alter table tenants add column if not exists ramo text not null default 'atacado';
+-- pessoas da fazenda: meeiros (parceiros com % sobre o valor vendido) e funcionários fixos (salário mensal)
+create table if not exists rural_pessoas (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  tipo text not null check (tipo in ('meeiro','funcionario')),
+  nome text not null,
+  documento text,
+  telefone text,
+  salario numeric(12,2),
+  roca_id text,
+  obs text,
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+-- roças (cada uma é um projeto independente): parceria = {pessoa: %} e regras = {categoria: {dono: %, pessoa: %}}
+create table if not exists rural_rocas (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  nome text not null,
+  cultura text,
+  local text,
+  area text,
+  inicio date,
+  modo text not null default 'funcionarios' check (modo in ('funcionarios','meeiro','misto')),
+  parceria jsonb not null default '{}'::jsonb,
+  regras jsonb not null default '{}'::jsonb,
+  obs text,
+  ativa boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+create table if not exists rural_veiculos (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  nome text not null,
+  tipo text,
+  placa text,
+  ativo boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+-- lançamentos: venda, despesa ou adiantamento. partes = divisão em % (venda: retrato da parceria no dia; despesa: quem paga).
+-- acertos = {pessoa: acerto}: em quais acertos o lançamento já entrou (cada meeiro acerta a parte dele)
+create table if not exists rural_lanc (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  tipo text not null check (tipo in ('venda','despesa','adiantamento')),
+  roca_id text,
+  data date not null,
+  categoria text,
+  descricao text,
+  valor numeric(12,2) not null check (valor > 0),
+  qtd numeric(12,3),
+  unidade text,
+  preco numeric(12,4),
+  comprador text,
+  pessoa_id text,
+  pessoa_nome text,
+  dias numeric(8,2),
+  veiculo_id text,
+  partes jsonb not null default '{}'::jsonb,
+  acertos jsonb not null default '{}'::jsonb,
+  criado_por text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+create index if not exists rural_lanc_roca on rural_lanc(tenant_id, roca_id, data);
+-- acertos com o meeiro: retrato dos valores no dia (o lançamento fica marcado e não entra de novo)
+create table if not exists rural_acertos (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  numero bigint not null,
+  roca_id text not null,
+  pessoa_id text not null,
+  pessoa_nome text,
+  data date not null,
+  vendas numeric(12,2) not null default 0,
+  parte numeric(12,2) not null default 0,
+  despesas numeric(12,2) not null default 0,
+  adiantamentos numeric(12,2) not null default 0,
+  saldo numeric(12,2) not null default 0,
+  itens int not null default 0,
+  obs text,
+  criado_por text,
+  created_at timestamptz not null default now(),
+  desfeito_em timestamptz,
+  desfeito_por text,
+  primary key (tenant_id, id)
+);
+create table if not exists rural_seq (
+  tenant_id text not null references tenants(id),
+  tipo text not null,
+  last_no bigint not null,
+  primary key (tenant_id, tipo)
+);
