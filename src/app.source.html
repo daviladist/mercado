@@ -5788,13 +5788,15 @@ function admCompra(){
 }
 function admRelatorios(){
   const k=ui.repKind||'ranking',nc=S.products.filter(isCritical).length;
-  $('#tabc').innerHTML=`<div class="seg repseg" role="group" aria-label="Tipo de relatório"><button id="rkR" aria-pressed="${k==='ranking'}">Ranking de vendas</button><button id="rkC" aria-pressed="${k==='compra'}">Sugestão de compra${nc?` <span class="cnt" style="background:var(--warn)">${nc}</span>`:''}</button><button id="rkV" aria-pressed="${k==='comissao'}">Comissão de vendedores</button><button id="rkF" aria-pressed="${k==='conf'}">Conferência</button><button id="rkB" aria-pressed="${k==='boa'}">Boas compras</button></div><div id="repc"></div>`;
+  $('#tabc').innerHTML=`<div class="seg repseg" role="group" aria-label="Tipo de relatório"><button id="rkR" aria-pressed="${k==='ranking'}">Ranking de vendas</button><button id="rkC" aria-pressed="${k==='compra'}">Sugestão de compra${nc?` <span class="cnt" style="background:var(--warn)">${nc}</span>`:''}</button><button id="rkV" aria-pressed="${k==='comissao'}">Comissão de vendedores</button><button id="rkF" aria-pressed="${k==='conf'}">Conferência</button><button id="rkB" aria-pressed="${k==='boa'}">Boas compras</button>${modOn('frete3')?`<button id="rkT" aria-pressed="${k==='frete'}">Frete de terceiro</button>`:''}</div><div id="repc"></div>`;
   $('#rkR').onclick=()=>{ui.repKind='ranking';admRelatorios()};
   $('#rkC').onclick=()=>{ui.repKind='compra';admRelatorios()};
   $('#rkV').onclick=()=>{ui.repKind='comissao';admRelatorios()};
   $('#rkF').onclick=()=>{ui.repKind='conf';admRelatorios()};
   $('#rkB').onclick=()=>{ui.repKind='boa';admRelatorios()};
-  ({compra:admCompra,comissao:admComissao,conf:admConfRep,boa:admBoaCompra}[k]||admRanking)();
+  {const b=$('#rkT');if(b)b.onclick=()=>{ui.repKind='frete';admRelatorios()}}
+  if(k==='frete'&&!modOn('frete3')){ui.repKind='ranking';admRanking();return}
+  ({frete:admFreteRep,compra:admCompra,comissao:admComissao,conf:admConfRep,boa:admBoaCompra}[k]||admRanking)();
 }
 /* ---------- relatório: o que a boa compra rendeu (custo de referência) ---------- */
 function admBoaCompra(){

@@ -1536,6 +1536,65 @@ function admFretes(){
     offerFile('frete-'+String(cr.name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'-'+F.from+'-a-'+F.to+'.xlsx',XLSX.write(wb,{type:'array',bookType:'xlsx'}))};
 }
 
+/* ---------------- RELATÓRIOS › Frete de terceiro (só com o módulo ligado na Central) ---------------- */
+function admFreteRep(){
+  const c=$('#repc'),F=ui.f3rep=ui.f3rep||Object.assign({cid:'todos',st:'todos'},monthRange());
+  const CR=f3List(true),bad=F.from>F.to,inSel=cid=>F.cid==='todos'||F.cid===cid;
+  const stOk=o=>F.st==='todos'?true:F.st==='concluidos'?o.status==='concluido':o.status!=='concluido';
+  const ords=bad?[]:S.orders.filter(o=>o.frete3&&o.status!=='cancelado'&&inSel(o.frete3.carrierId)&&f3Day(o)>=F.from&&f3Day(o)<=F.to&&stOk(o)).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const pays=bad?[]:(S.carrierPays||[]).filter(p=>inSel(p.carrierId)&&p.date>=F.from&&p.date<=F.to).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const sum=(L,f)=>f3R(L.reduce((s,x)=>s+(Number(f(x))||0),0));
+  const gerado=sum(ords,f3Val),notas=sum(ords,o=>o.total),pago=sum(pays,p=>p.amount);
+  const saldo=f3R(CR.filter(x=>inSel(x.id)).reduce((s,x)=>s+f3Summary(x.id).saldo,0));
+  const byCr=CR.filter(x=>inSel(x.id)).map(x=>{const O=ords.filter(o=>o.frete3.carrierId===x.id),P=pays.filter(p=>p.carrierId===x.id);return {x,n:O.length,notas:sum(O,o=>o.total),gerado:sum(O,f3Val),pago:sum(P,p=>p.amount),saldo:f3Summary(x.id).saldo}}).filter(r=>r.n||r.pago||r.saldo);
+  const nmCr=id=>(f3ById(id)||{}).name||'';
+  c.innerHTML=`<div class="sectionhead"><h2>Frete de terceiro</h2></div>
+    ${!CR.length?`<div class="empty">Nenhuma transportadora cadastrada. Cadastre em <b>CADASTROS › Fornecedores › Transportadoras</b>.</div>`:`
+    <section class="panel" style="display:grid;gap:10px;margin-bottom:12px">
+      <div class="row" style="gap:10px;flex-wrap:wrap;align-items:end">
+        <div class="field" style="min-width:200px"><label for="f3rc">Transportadora</label><select id="f3rc"><option value="todos">Todas</option>${CR.map(x=>`<option value="${x.id}" ${F.cid===x.id?'selected':''}>${esc(x.name)} · ${f3Pct(x.pct)}${x.active===false?' (inativa)':''}</option>`).join('')}</select></div>
+        <div class="field"><label for="f3rf">De</label><input type="date" id="f3rf" value="${F.from}"></div>
+        <div class="field"><label for="f3rt">Até</label><input type="date" id="f3rt" value="${F.to}"></div>
+        <div class="field"><label for="f3rs">Pedidos</label><select id="f3rs">${[['todos','Todos (menos cancelados)'],['concluidos','Só concluídos'],['abertos','Só em aberto']].map(([k,v])=>`<option value="${k}" ${F.st===k?'selected':''}>${v}</option>`).join('')}</select></div>
+        <button type="button" class="btn ghost" id="f3rx" ${ords.length||pays.length?'':'disabled'}>Baixar Excel</button>
+      </div>
+      ${bad?'<div class="err">A data inicial é depois da final.</div>':'<div class="small muted">O período vale para a data do pedido (frete gerado) e para a data do pagamento (frete pago). O saldo a pagar é o total de hoje, desde o início.</div>'}
+    </section>
+    <div class="dbkpis" style="margin-bottom:12px">
+      <div class="dbk hero"><span class="lbl">Frete gerado no período</span><b>${brl(gerado)}</b><span class="muted small">${ords.length} pedido${ords.length===1?'':'s'} · notas ${brl(notas)}</span></div>
+      <div class="dbk"><span class="lbl">Pago no período</span><b>${brl(pago)}</b><span class="muted small">${pays.length} pagamento${pays.length===1?'':'s'}</span></div>
+      <div class="dbk"><span class="lbl">Saldo a pagar hoje</span><b style="color:${saldo>0.004?'var(--warn)':'inherit'}">${brl(saldo)}</b><span class="muted small">${F.cid==='todos'?'todas as transportadoras':esc(nmCr(F.cid))}</span></div>
+      <div class="dbk"><span class="lbl">Frete sobre as notas</span><b>${notas>0?String(Math.round(gerado/notas*1000)/10).replace('.',','):'0'}%</b><span class="muted small">no período</span></div>
+    </div>
+    ${F.cid==='todos'&&byCr.length?`<section class="panel" style="margin-bottom:12px;display:grid;gap:8px"><span class="lbl">Por transportadora</span><div class="tablewrap"><table class="btable"><thead><tr><th>Transportadora</th><th class="num">Pedidos</th><th class="num">Valor das notas</th><th class="num">Frete gerado</th><th class="num">Pago no período</th><th class="num">Saldo a pagar hoje</th></tr></thead><tbody>
+      ${byCr.map(r=>`<tr><td><button type="button" class="link" data-f3rsel="${r.x.id}">${esc(r.x.name)}</button> <span class="muted small">${f3Pct(r.x.pct)}</span></td><td class="num">${r.n}</td><td class="num">${brl(r.notas)}</td><td class="num">${brl(r.gerado)}</td><td class="num">${brl(r.pago)}</td><td class="num"><b style="color:${r.saldo>0.004?'var(--warn)':'inherit'}">${brl(r.saldo)}</b></td></tr>`).join('')}
+      <tr><td><b>Total</b></td><td class="num"><b>${ords.length}</b></td><td class="num"><b>${brl(notas)}</b></td><td class="num"><b>${brl(gerado)}</b></td><td class="num"><b>${brl(pago)}</b></td><td class="num"><b>${brl(saldo)}</b></td></tr></tbody></table></div></section>`:''}
+    <section class="panel" style="margin-bottom:12px;display:grid;gap:8px"><span class="lbl">Pedidos com frete no período</span>
+      ${ords.length?`<div class="tablewrap"><table class="btable"><thead><tr><th>Data</th>${F.cid==='todos'?'<th>Transportadora</th>':''}<th>Pedido</th><th>Cliente</th><th>Situação</th><th class="num">Valor da nota</th><th class="num">%</th><th class="num">Frete</th></tr></thead><tbody>
+        ${ords.map(o=>`<tr><td class="num">${dBR(f3Day(o))}</td>${F.cid==='todos'?`<td>${esc(o.frete3.name||nmCr(o.frete3.carrierId))}</td>`:''}<td class="num">nº ${o.no}</td><td>${esc(o.customer||'')}</td><td>${esc(typeof stLabel==='function'?stLabel(o):o.status)}</td><td class="num">${brl(o.total)}</td><td class="num">${f3Pct(o.frete3.pct)}</td><td class="num"><b>${brl(f3Val(o))}</b></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nenhum pedido com frete de terceiro nesse filtro.</div>'}
+    </section>
+    <section class="panel" style="display:grid;gap:8px"><span class="lbl">Pagamentos feitos no período</span>
+      ${pays.length?`<div class="tablewrap"><table class="btable"><thead><tr><th>Data</th>${F.cid==='todos'?'<th>Transportadora</th>':''}<th class="num">Valor</th><th>Observação</th></tr></thead><tbody>
+        ${pays.map(p=>`<tr><td class="num">${dBR(p.date)}</td>${F.cid==='todos'?`<td>${esc(p.carrierName||nmCr(p.carrierId))}</td>`:''}<td class="num"><b>${brl(p.amount)}</b></td><td>${esc(p.note||'')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nenhum pagamento nesse período.</div>'}
+      <div class="small muted">Para lançar um pagamento: <b>FINANCEIRO › Frete de terceiro › Registrar pagamento</b>.</div>
+    </section>`}`;
+  const rer=()=>{const y=window.scrollY;admFreteRep();window.scrollTo(0,y)};
+  if(!CR.length)return;
+  $('#f3rc').onchange=e=>{F.cid=e.target.value;rer()};$('#f3rs').onchange=e=>{F.st=e.target.value;rer()};
+  $('#f3rf').onchange=e=>{F.from=e.target.value||F.from;rer()};$('#f3rt').onchange=e=>{F.to=e.target.value||F.to;rer()};
+  c.querySelectorAll('[data-f3rsel]').forEach(b=>b.onclick=()=>{F.cid=b.dataset.f3rsel;rer()});
+  $('#f3rx').onclick=()=>{if(typeof XLSX==='undefined'){toast('Não consegui carregar o Excel. Verifique a internet.');return}
+    const d=x=>String(x).slice(0,10).split('-').reverse().join('/');
+    const head=[[S.store.name],['Relatório de frete de terceiro · '+(F.cid==='todos'?'Todas as transportadoras':nmCr(F.cid))],['Período',d(F.from)+' a '+d(F.to)],[],
+      ['Frete gerado no período',gerado],['Pago no período',pago],['Saldo a pagar hoje',saldo],[]];
+    const rCr=F.cid==='todos'?[['Por transportadora'],['Transportadora','%','Pedidos','Valor das notas','Frete gerado','Pago no período','Saldo a pagar hoje'],...byCr.map(r=>[r.x.name,r.x.pct,r.n,r.notas,r.gerado,r.pago,r.saldo]),[]]:[];
+    const rO=[['Pedidos'],['Data','Transportadora','Pedido nº','Cliente','Situação','Valor da nota','%','Frete'],...ords.map(o=>[d(f3Day(o)),o.frete3.name||nmCr(o.frete3.carrierId),o.no,o.customer||'',typeof stLabel==='function'?stLabel(o):o.status,Number(o.total)||0,Number(o.frete3.pct),f3Val(o)]),[]];
+    const rP=[['Pagamentos'],['Data','Transportadora','Valor','Observação'],...pays.map(p=>[d(p.date),p.carrierName||nmCr(p.carrierId),Number(p.amount)||0,p.note||''])];
+    const ws=XLSX.utils.aoa_to_sheet([...head,...rCr,...rO,...rP]);ws['!cols']=[{wch:22},{wch:24},{wch:12},{wch:30},{wch:16},{wch:16},{wch:10},{wch:14}];
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Frete');
+    offerFile('relatorio-frete-'+(F.cid==='todos'?'todas':String(nmCr(F.cid)).toLowerCase().replace(/[^a-z0-9]+/g,'-'))+'-'+F.from+'-a-'+F.to+'.xlsx',XLSX.write(wb,{type:'array',bookType:'xlsx'}))};
+}
+
 
 /* foto provisória: etiqueta colorida com as iniciais do produto */
 function ph(name,hue){
@@ -6174,13 +6233,15 @@ function admCompra(){
 }
 function admRelatorios(){
   const k=ui.repKind||'ranking',nc=S.products.filter(isCritical).length;
-  $('#tabc').innerHTML=`<div class="seg repseg" role="group" aria-label="Tipo de relatório"><button id="rkR" aria-pressed="${k==='ranking'}">Ranking de vendas</button><button id="rkC" aria-pressed="${k==='compra'}">Sugestão de compra${nc?` <span class="cnt" style="background:var(--warn)">${nc}</span>`:''}</button><button id="rkV" aria-pressed="${k==='comissao'}">Comissão de vendedores</button><button id="rkF" aria-pressed="${k==='conf'}">Conferência</button><button id="rkB" aria-pressed="${k==='boa'}">Boas compras</button></div><div id="repc"></div>`;
+  $('#tabc').innerHTML=`<div class="seg repseg" role="group" aria-label="Tipo de relatório"><button id="rkR" aria-pressed="${k==='ranking'}">Ranking de vendas</button><button id="rkC" aria-pressed="${k==='compra'}">Sugestão de compra${nc?` <span class="cnt" style="background:var(--warn)">${nc}</span>`:''}</button><button id="rkV" aria-pressed="${k==='comissao'}">Comissão de vendedores</button><button id="rkF" aria-pressed="${k==='conf'}">Conferência</button><button id="rkB" aria-pressed="${k==='boa'}">Boas compras</button>${modOn('frete3')?`<button id="rkT" aria-pressed="${k==='frete'}">Frete de terceiro</button>`:''}</div><div id="repc"></div>`;
   $('#rkR').onclick=()=>{ui.repKind='ranking';admRelatorios()};
   $('#rkC').onclick=()=>{ui.repKind='compra';admRelatorios()};
   $('#rkV').onclick=()=>{ui.repKind='comissao';admRelatorios()};
   $('#rkF').onclick=()=>{ui.repKind='conf';admRelatorios()};
   $('#rkB').onclick=()=>{ui.repKind='boa';admRelatorios()};
-  ({compra:admCompra,comissao:admComissao,conf:admConfRep,boa:admBoaCompra}[k]||admRanking)();
+  {const b=$('#rkT');if(b)b.onclick=()=>{ui.repKind='frete';admRelatorios()}}
+  if(k==='frete'&&!modOn('frete3')){ui.repKind='ranking';admRanking();return}
+  ({frete:admFreteRep,compra:admCompra,comissao:admComissao,conf:admConfRep,boa:admBoaCompra}[k]||admRanking)();
 }
 /* ---------- relatório: o que a boa compra rendeu (custo de referência) ---------- */
 function admBoaCompra(){

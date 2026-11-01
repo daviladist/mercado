@@ -148,6 +148,7 @@ Para quem paga uma transportadora por entrega, com um % combinado sobre o valor 
 - **Cadastro:** CADASTROS › Fornecedores › Transportadoras (nome e % combinado).
 - **No pedido:** ao lançar/editar pelo painel, ou no cartão do pedido em PEDIDOS, marcar **Frete terceiro**: a transportadora e o % vêm sozinhos (dá para ajustar o % daquele pedido). O valor é sempre % × total do pedido; pedido cancelado não gera frete. O lucro estimado do pedido já desconta o frete.
 - **Relatório e pagamentos:** FINANCEIRO › Frete de terceiro: frete gerado, já pago e saldo a pagar por transportadora; lista por período com Excel; "Registrar pagamento" (data, valor, observação) abate do saldo.
+- **Relatório:** DASHBOARD › Relatórios › Frete de terceiro (só aparece com o módulo ligado): filtro por transportadora (ou Todas), período e situação do pedido; frete gerado, pago no período, saldo a pagar hoje, tabela por transportadora, pedidos, pagamentos e Excel.
 - **Segurança:** só o administrador vê. O servidor esconde frete, transportadoras e pagamentos dos outros papéis, guarda o % e o nome vindos do cadastro e preserva o frete quando o vendedor mexe no pedido. Testes: `tests/frete.py`.
 
 ## Desenvolver e testar no computador
