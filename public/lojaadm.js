@@ -115,8 +115,7 @@
 
   /* ---------- Início ---------- */
   function vInicio() {
-    const P = S.pedidos, agora = new Date(), mes = agora.toISOString().slice(0, 7);
-    const doMes = P.filter(p => p.status !== 'cancelado' && String(p.criadoEm).slice(0, 7) === mes);
+    const P = S.pedidos;
     const novos = P.filter(p => p.status === 'novo'), abertos = P.filter(p => ['confirmado', 'pronto'].includes(p.status));
     const top = S.produtos.filter(p => p.vendidos > 0).sort((a, b) => b.vendidos - a.vendidos).slice(0, 5);
     const semFoto = S.produtos.filter(p => p.ativo && !p.fotos.length).length, esgot = S.produtos.filter(p => p.ativo && esgotado(p)).length;
@@ -126,7 +125,7 @@
       <div class="kpis">
         <div class="k"><span>Pedidos novos</span><b class="${novos.length ? 'neg' : ''}">${novos.length}</b></div>
         <div class="k"><span>Em andamento</span><b>${abertos.length}</b></div>
-        <div class="k res"><span>Vendido no mês</span><b>${money(doMes.reduce((a, p) => a + p.total, 0))}</b></div>
+        <div class="k res"><span>Vendido no mês</span><b>${money(S.mes.vendido)}</b></div>
       </div>
       ${novos.length ? `<section class="card"><h2>Pedidos esperando você</h2><div class="list">${novos.slice(0, 8).map(itemPedido).join('')}</div></section>` : ''}
       <section class="card"><h2>Link da sua loja</h2><p class="small muted">Mande no WhatsApp, coloque no Instagram e no status. Quem abrir vê os produtos e faz o pedido.</p>
@@ -231,6 +230,9 @@
   function formProduto(p0) {
     const edit = !!p0;
     const F = p0 ? JSON.parse(JSON.stringify(p0)) : { id: 'x' + hex(6), nome: '', descricao: '', categoria: '', preco: '', precoDe: '', unidade: 'un', fotos: [], grupoVar: '', variacoes: [], estoque: '', faixas: [], ativo: true, destaque: false };
+    // o estoque que estava gravado quando a dona abriu (o servidor só troca o que ela mexeu)
+    const vistoProd = edit ? (p0.estoque == null ? null : p0.estoque) : undefined;
+    const vistoVar = new Map(edit ? p0.variacoes.map(v => [v.id, v.estoque == null ? null : v.estoque]) : []);
     if (edit) { F.preco = numIn(F.preco); F.precoDe = numIn(F.precoDe); F.estoque = F.estoque == null ? '' : String(F.estoque); F.variacoes = F.variacoes.map(v => Object.assign({}, v, { estoque: v.estoque == null ? '' : String(v.estoque) })); F.faixas = F.faixas.map(f => ({ min: String(f.min), preco: numIn(f.preco) })); }
     const cats = [...new Set(S.produtos.map(p => p.categoria).filter(Boolean))].sort();
     let enviando = 0;
@@ -315,7 +317,9 @@
       for (const v of (M('l_variacoes') ? F.variacoes : [])) {
         if (!String(v.nome).trim()) return err('Dê um nome para cada opção, ou tire a vazia.');
         const e = toInt(v.estoque); if (Number.isNaN(e)) return err('Estoque de ' + v.nome + ': use só números.');
-        vars.push({ id: v.id, nome: v.nome.trim(), estoque: e });
+        const x = { id: v.id, nome: v.nome.trim(), estoque: e };
+        if (vistoVar.has(v.id)) x.estoqueVisto = vistoVar.get(v.id);
+        vars.push(x);
       }
       const fx = [];
       for (const f of (M('l_volume') ? F.faixas : [])) {
@@ -328,6 +332,7 @@
       const est = toInt(F.estoque); if (Number.isNaN(est)) return err('Estoque: use só números.');
       if (enviando) return err('Espere as fotos terminarem de enviar.');
       const b = { id: F.id, nome: F.nome, preco, precoDe, categoria: F.categoria, descricao: F.descricao, unidade: F.unidade, fotos: F.fotos.map(f => f.id), grupoVar: comVar ? (F.grupoVar || 'Opção') : '', variacoes: vars, estoque: comVar ? null : est, faixas: fx, ativo: F.ativo, destaque: F.destaque };
+      if (edit) b.estoqueVisto = vistoProd;
       const bt = $('#ps'); bt.disabled = true;
       try { await api('/api/loja/admin/produto', b); await reload(); closeSheet(); toast(edit ? 'Produto salvo' : 'Publicado na vitrine ✓'); if (view !== 'produtos') go('produtos'); else render(); }
       catch (e) { bt.disabled = false; if (e.status === 401) { retomar = () => formProduto(F); return fail(e); } err(e.message); }

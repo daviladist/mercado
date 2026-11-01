@@ -209,7 +209,7 @@
       } catch (e) {
         enviando = false; bt.disabled = false; bt.textContent = 'Enviar pedido';
         if (e.status === 409) { await carregar(true); limparCart(); err(e.message); return; }
-        if (e.status === 0) { err(e.message + ' O pedido NÃO foi enviado ainda.'); return; }
+        if (e.status === 0) { err('A internet falhou e o pedido pode não ter chegado. Toque em "Enviar pedido" de novo sem mudar o carrinho: se já tiver chegado, ele não vai em dobro.'); return; }
         err(e.message);
       }
       enviando = false;

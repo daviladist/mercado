@@ -120,6 +120,23 @@ def corre():
     res.append(C(TID).req('/api/loja/pedido', dict(base, id=oid(), chave=chave(), itens=[{'produtoId': ULT, 'qtd': 1}], entrega='retirada', totalVisto=30))[0])
 th = [threading.Thread(target=corre) for _ in range(4)]; [t.start() for t in th]; [t.join() for t in th]
 check(sorted(res) == [200, 409, 409, 409], 'quatro clientes ao mesmo tempo pela última peça: só um leva (%s)' % sorted(res))
+# formulário aberto antes de uma venda não devolve peça que já foi vendida
+EST = xid(); A.req('/api/loja/admin/produto', {'id': EST, 'nome': 'Lenço de seda', 'preco': 40, 'estoque': 5})
+s, r = C(TID).req('/api/loja/pedido', dict(base, id=oid(), chave=chave(), itens=[{'produtoId': EST, 'qtd': 4}], entrega='retirada', totalVisto=160))
+s, _ = A.req('/api/loja/admin/produto', {'id': EST, 'nome': 'Lenço de seda', 'preco': 45, 'estoque': 5, 'estoqueVisto': 5})
+s2, st = A.req('/api/loja/admin/state'); e = next(p for p in st['produtos'] if p['id'] == EST)
+check(s == 200 and e['estoque'] == 1 and e['preco'] == 45, 'dona salva o produto aberto antes da venda sem mexer no estoque: o estoque continua 1 (não volta para 5)')
+s, r = A.req('/api/loja/admin/produto', {'id': EST, 'nome': 'Lenço de seda', 'preco': 45, 'estoque': 8, 'estoqueVisto': 5}); check(s == 409, 'mexeu no estoque, mas ele mudou desde que abriu: recusa para conferir')
+s, _ = A.req('/api/loja/admin/produto', {'id': EST, 'nome': 'Lenço de seda', 'preco': 45, 'estoque': 8, 'estoqueVisto': 1})
+s2, st = A.req('/api/loja/admin/state'); check(next(p for p in st['produtos'] if p['id'] == EST)['estoque'] == 8, 'com o estoque conferido, grava o novo (8)')
+# estoque em branco ("não controla") continua em branco depois de cancelar
+NC = xid(); A.req('/api/loja/admin/produto', {'id': NC, 'nome': 'Meia', 'preco': 10, 'estoque': 5})
+s, r = C(TID).req('/api/loja/pedido', dict(base, id=oid(), chave=chave(), itens=[{'produtoId': NC, 'qtd': 2}], entrega='retirada', totalVisto=20))
+A.req('/api/loja/admin/produto', {'id': NC, 'nome': 'Meia', 'preco': 10, 'estoque': None, 'estoqueVisto': 3})
+s2, st = A.req('/api/loja/admin/state'); pnc = next(p for p in st['pedidos'] if p['numero'] == r.get('numero'))
+A.req('/api/loja/admin/pedido/status', {'id': pnc['id'], 'status': 'cancelado'})
+s2, st = A.req('/api/loja/admin/state'); check(next(p for p in st['produtos'] if p['id'] == NC)['estoque'] is None, 'cancelar não volta a controlar estoque de produto que ficou "em branco"')
+s, _ = A.req('/api/loja/admin/produto', {'id': xid(), 'nome': 'Preço quebrado', 'preco': '1,005'}); check(s == 400, 'preço com mais de 2 casas é recusado')
 print('== acompanhar e painel')
 s, r = C(TID).req('/api/loja/acompanhar?c=' + K1); p1 = r.get('pedido', {})
 check(s == 200 and p1.get('numero') == 1 and p1.get('status') == 'novo' and 'clienteTel' not in p1, 'cliente acompanha o pedido pelo link (sem dados extras)')
@@ -160,7 +177,7 @@ s, _ = V.req('/api/loja/pedido', dict(base, id=oid(), chave=chave(), totalVisto=
 cen.req('/api/central/tenant', {'id': TID, 'status': 'suspensa'})
 s, _ = V.req('/api/loja/vitrine'); check(s == 403, 'loja suspensa: vitrine fechada')
 cen.req('/api/central/tenant', {'id': TID, 'status': 'ativa'})
-s, st = cen.req('/api/central/state'); tm = next(t for t in st['tenants'] if t['id'] == TID); check(tm['stats']['lojaProdutos'] == 4 and tm['stats']['lojaPedidos'] == 2, 'Central mostra produtos e pedidos da loja (%s)' % tm['stats'])
+s, st = cen.req('/api/central/state'); tm = next(t for t in st['tenants'] if t['id'] == TID); check(tm['stats']['lojaProdutos'] == 6 and tm['stats']['lojaPedidos'] == 4, 'Central mostra produtos e pedidos da loja (%s)' % tm['stats'])
 
 print('== limite de pedidos por aparelho (por último)')
 codes = [V.req('/api/loja/pedido', dict(base, id=oid(), chave=chave(), itens=[{'produtoId': BLU, 'qtd': 1}], entrega='retirada', totalVisto=49.9))[0] for _ in range(30)]
