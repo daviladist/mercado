@@ -12,7 +12,7 @@ const vercel = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'vercel.jso
 const headersFor = p => (vercel.headers || []).filter(h => new RegExp('^' + h.source.replace(/\(\.\*\)/g, '.*') + '$').test(p)).flatMap(h => h.headers);
 http.createServer((req, res) => {
   const p = req.url.split('?')[0];
-  if (p.startsWith('/api/') || /^\/t\/[a-z0-9-]{1,40}(\/cliente|\/pdv)?\/?$/.test(p)) return handle(req, res);   // páginas da empresa saem do servidor (como na Vercel)
+  if (p.startsWith('/api/') || /^\/t\/[a-z0-9-]{1,40}(\/cliente|\/pdv|\/loja)?\/?$/.test(p)) return handle(req, res);   // páginas da empresa saem do servidor (como na Vercel)
   // /t/<empresa> e /t/<empresa>/cliente: mesmo app, outra empresa (como os rewrites do vercel.json)
   const tm = /^\/t\/[a-z0-9-]{1,40}(\/cliente)?\/?$/.exec(p);
   let f = tm ? path.join(PUB, tm[1] ? 'cliente.html' : 'index.html') : path.join(PUB, p === '/' ? 'index.html' : p);

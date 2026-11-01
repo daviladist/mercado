@@ -376,3 +376,70 @@ create table if not exists rural_seq (
   last_no bigint not null,
   primary key (tenant_id, tipo)
 );
+-- ===== Tino Loja online (ramo 'loja'): vitrine pública + painel do comerciante. Tudo por empresa. =====
+-- configuração da loja (WhatsApp, endereço, formas de pagamento, entrega, pedido mínimo, aberta/fechada)
+create table if not exists loja_config (
+  tenant_id text primary key references tenants(id),
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+-- produtos: variações = [{id,nome,estoque}], faixas = [{min,preco}] (preço por quantidade), fotos = [ids]
+create table if not exists loja_produtos (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  nome text not null,
+  descricao text,
+  categoria text,
+  preco numeric(12,2) not null check (preco > 0),
+  preco_de numeric(12,2),
+  unidade text,
+  fotos jsonb not null default '[]'::jsonb,
+  grupo_var text,
+  variacoes jsonb not null default '[]'::jsonb,
+  estoque int,
+  faixas jsonb not null default '[]'::jsonb,
+  ativo boolean not null default true,
+  destaque boolean not null default false,
+  vendidos int not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+-- fotos dos produtos (fora da tabela de produtos para a vitrine carregar leve)
+create table if not exists loja_fotos (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  data text not null,
+  created_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+-- pedidos feitos pela vitrine. chave_hash = SHA-256 da chave do link de acompanhamento (a chave fica só com o cliente)
+create table if not exists loja_pedidos (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  numero bigint not null,
+  chave_hash text not null,
+  status text not null default 'novo' check (status in ('novo','confirmado','pronto','entregue','cancelado')),
+  cliente_nome text not null,
+  cliente_tel text not null,
+  entrega text not null check (entrega in ('retirada','entrega')),
+  endereco text,
+  pagamento text not null,
+  obs text,
+  itens jsonb not null,
+  subtotal numeric(12,2) not null,
+  taxa_entrega numeric(12,2) not null default 0,
+  total numeric(12,2) not null,
+  estoque_baixado boolean not null default false,
+  historico jsonb not null default '[]'::jsonb,
+  ip text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+create unique index if not exists loja_pedidos_chave on loja_pedidos(tenant_id, chave_hash);
+create index if not exists loja_pedidos_data on loja_pedidos(tenant_id, created_at);
+create table if not exists loja_seq (
+  tenant_id text primary key references tenants(id),
+  last_no bigint not null
+);
