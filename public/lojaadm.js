@@ -382,7 +382,7 @@
       if (M('l_entrega') && !b.retirada && !b.entrega) return err('Marque retirada, entrega ou as duas.');
       const bt = $('#cs'); bt.disabled = true;
       try { await api('/api/loja/admin/config', b); await reload(); toast('Loja salva'); render(); }
-      catch (e) { bt.disabled = false; if (e.status === 401 || e.login) { retomar = () => { toast('A sessão tinha terminado: confira e salve de novo.', true); }; return fail(e); } err(e.message); }
+      catch (e) { bt.disabled = false; if (e.status === 401 || e.login) { retomar = () => { go('loja'); toast('A sessão tinha terminado antes de salvar: confira a loja e salve de novo.', true); return true; }; return fail(e); } err(e.message); }
     });
   }
 
@@ -405,7 +405,7 @@
     $('#bn').hidden = false; $('#sair').hidden = false;
     const h = location.hash.slice(1);
     go(['inicio', 'pedidos', 'produtos', 'loja'].includes(h) ? h : 'inicio', true);
-    if (retomar) { const f = retomar; retomar = null; f(); toast('O que você estava fazendo continua aqui. Confira e salve.'); }
+    if (retomar) { const f = retomar; retomar = null; if (f() !== true) toast('O que você estava fazendo continua aqui. Confira e salve.'); }
   }
   if (brand.name) $('#coName').textContent = brand.name;
   if (brand.color && /^#[0-9a-f]{6}$/i.test(brand.color)) document.documentElement.style.setProperty('--brand', brand.color);
