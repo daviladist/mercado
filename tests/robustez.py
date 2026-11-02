@@ -106,5 +106,41 @@ cb = login(tid, 'cliente', 'cli.b', CP)
 s, r = cb.req('/api/sync', {'changes': [{'c': 'orders', 'id': 'b2', 'op': 'put', 'doc': ped}]}) if cb else (0, {})
 check(s == 200 and not r.get('rejected') and r.get('docs'), 'loja restaurada sem "store": pedido do cliente grava (%s %s)' % (s, rej(r) or r.get('error')))
 
+print('== 5. papéis: troca aprovada pelo vendedor e rotas novas (ranking do balcão, última compra)')
+XP = pw()
+s, r = A.req('/api/sync', {'changes': [
+    {'c': 'products', 'id': 'pb', 'op': 'put', 'doc': {'id': 'pb', 'name': 'Feijão 1kg', 'price': 9, 'cost': 7, 'unit': 'UN', 'active': True}},
+    {'c': 'cashiers', 'id': 'cx1', 'op': 'put', 'doc': {'id': 'cx1', 'name': 'Caixa', 'login': 'cx.rob', 'pass': XP}},
+    {'c': 'orders', 'id': 'rs1', 'op': 'put', 'doc': dict(adm_o, id='rs1', sellerId='sv1', status='separando', chk={'pa': True},
+        sugs=[{'id': 'sg1', 'type': 'troca', 'status': 'pendente', 'fromKey': 'pa', 'fromName': 'Arroz 5kg', 'pid': 'pb', 'name': 'Feijão 1kg', 'q': 2, 'toSeller': True}])}]})
+check(s == 200 and not r.get('rejected'), 'pedido em separação com troca esperando o vendedor')
+s, st = ven.req('/api/state'); o = next(x for x in st['S']['orders'] if x['id'] == 'rs1'); ver = st['V']['orders']['rs1']
+d = json.loads(json.dumps(o)); d['sugs'][0].update({'status': 'aprovada', 'decBy': 'Vendedor', 'sellerSeen': True})
+d['items'][0] = {'pid': 'pb', 'name': 'Feijão 1kg', 'q': 2, 'price': 9, 'base': 9}; d['chk'] = {'pb': True}   # como o app faz (approveSug)
+s, r = ven.req('/api/sync', {'changes': [{'c': 'orders', 'id': 'rs1', 'op': 'put', 'ver': ver, 'doc': d}]})
+doc = (r.get('docs') or [{}])[0].get('doc', {})
+check(s == 200 and not r.get('rejected') and doc.get('items', [{}])[0].get('pid') == 'pb' and doc.get('sugs', [{}])[0].get('status') == 'aprovada',
+      'vendedor aprova a troca pelo app (com a marcação de conferido): grava e troca o item (%s %s)' % (s, rej(r) or r.get('error')))
+s, cs = cen.req('/api/central/state'); dav = next(t for t in cs['tenants'] if t['primary']); cen.req('/api/central/tenant', {'id': dav['id'], 'modules': {'pdv': True}})
+cx = login('@', 'operador_caixa', 'cx.rob', XP); check(cx is not None, 'operador de caixa entra')
+for nome, c in [('operador de caixa', cx), ('vendedor', ven), ('cliente', cli)]:
+    s, r = c.req('/api/pdv/itens?de=2026-01-01&ate=2026-12-31'); check(s == 403, 'ranking do balcão (com custo) recusado para %s (%s)' % (nome, s))
+s, r = A.req('/api/pdv/itens?de=2026-01-01&ate=2026-12-31'); check(s == 200 and 'itens' in r, 'ranking do balcão responde para o administrador (%s)' % s)
+s, r = A.req('/api/pdv/itens?de=2026-12-31&ate=2026-01-01'); check(s == 400, 'período invertido é recusado (%s)' % s)
+s, st = cli.req('/api/state'); check(not any('lastBuyAt' in c for c in st['S']['customers']), 'cliente não recebe "última compra" de ninguém')
+s, st = ven.req('/api/state'); check(all(set(c) <= {'id', 'name', 'phone', 'address', 'bairro', 'city', 'doc', 'fiscal', 'ieOk', 'pays', 'sellerId', 'creditLimit', 'canNeg', 'table', 'lastBuyAt'} for c in st['S']['customers']),
+      'vendedor recebe só os dados combinados dos clientes (+ data da última compra)')
+
+print('== 6. restaurar apaga fotos que ninguém usa mais')
+FOTO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+s, r = B.req('/api/sync', {'changes': [{'c': 'products', 'id': 'pf', 'op': 'put', 'doc': {'id': 'pf', 'name': 'Com foto', 'price': 1, 'unit': 'UN', 'photo': FOTO}}]})
+url = (r.get('docs') or [{}])[0].get('doc', {}).get('photo', '')
+check(url.startswith('/api/photo/'), 'foto do produto guardada à parte (%s)' % url[:40])
+s, bk = B.req('/api/backup')
+s, r = B.req('/api/restore', {'data': {'products': [{'id': 'pa', 'name': 'Feijão', 'price': 9, 'unit': 'UN'}]}})
+check(s == 200 and r['stats']['photos'] == 0, 'restaurar um arquivo sem a foto: foto que ninguém usa sai do banco (fotos: %s)' % r.get('stats', {}).get('photos'))
+s, r = B.req('/api/restore', {'data': bk['data']})
+check(s == 200 and r['stats']['photos'] == 1, 'restaurar o backup completo traz a foto de volta (fotos: %s)' % r.get('stats', {}).get('photos'))
+
 print(f'\n{ok} OK, {len(fails)} falha(s)')
 if fails: print('\n'.join(' - ' + f for f in fails)); sys.exit(1)

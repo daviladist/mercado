@@ -147,10 +147,16 @@ function srvNetBar(){let b=document.getElementById('srvnet');const n=SRV.nPend;
   b.hidden=false;b.textContent='Sem internet: '+n+(n>1?' alterações ainda não foram enviadas':' alteração ainda não foi enviada')+'. O app envia sozinho quando a conexão voltar. Não feche o app.'}
 window.addEventListener('online',()=>{if(SRV.me)srvSync()});
 /* envio grande (ex.: planilha com centenas de produtos): vai em partes, uma depois da outra (o servidor aceita até 500 alterações e 4 MB por vez) */
-const SRV_MAXN=400,SRV_MAXB=2500000;
+const SRV_MAXN=400,SRV_MAXB=2500000,SRV_MAXONE=3500000;
+/* registro grande demais para o servidor (limite de 4 MB por envio): volta como está no servidor e avisa; o resto da fila segue */
+function srvDropHuge(L){const big=L.filter(x=>x.op==='put'&&JSON.stringify(x).length>SRV_MAXONE);if(!big.length)return L;
+  big.forEach(x=>{if(x.c==='meta'){const b=SRV.base.meta[x.id];if(b===undefined)delete S[x.id];else S[x.id]=JSON.parse(b);return}
+    const arr=S[x.c]||[],k=arr.findIndex(d=>d&&d.id===x.id),b=(SRV.base[x.c]||{})[x.id];if(k>=0){if(b)arr[k]=JSON.parse(b);else arr.splice(k,1)}});
+  srvAlert(big.length>1?big.length+' registros grandes demais para enviar (foto muito pesada?). Faça de novo com uma foto menor.':'registro grande demais para enviar (foto muito pesada?). Faça de novo com uma foto menor.');
+  try{srvSoftRender(true)}catch(e){}return L.filter(x=>!big.includes(x))}
 function srvChunk(L){const out=[];let n=0;for(const x of L){const z=JSON.stringify(x).length;if(out.length&&(out.length>=SRV_MAXN||n+z>SRV_MAXB))break;out.push(x);n+=z}return out}
 async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
-  const {ch:all,order:ord0}=srvDiff();SRV.nPend=all.length;if(SRV.offHit){SRV.offHit=false;srvAlert('Não foi gravado: função desligada para esta empresa.');srvSoftRender(true)}if(!all.length&&!Object.keys(ord0).length){srvPersist([]);SRV.offline=false;srvNetBar();return}
+  const d0=srvDiff(),all=srvDropHuge(d0.ch),ord0=d0.order;SRV.nPend=all.length;if(SRV.offHit){SRV.offHit=false;srvAlert('Não foi gravado: função desligada para esta empresa.');srvSoftRender(true)}if(!all.length&&!Object.keys(ord0).length){srvPersist([]);SRV.offline=false;srvNetBar();return}
   srvPersist(all);
   const ch=srvChunk(all),last=ch.length===all.length,order=last?ord0:{};
   SRV.busy=true;srvBadge(true);clearTimeout(SRV.retry);
@@ -2854,7 +2860,7 @@ function retApply(o,R,reason,who){const its=o.items.filter(i=>i.q>0),out=[];
 function admEntregas(){const c=$('#tabc');c.innerHTML=`<div class="sectionhead"><h2>Entregas</h2></div>${entregasHtml(null)}`;bindEntregas(c,null,()=>{const y=window.scrollY;admEntregas();window.scrollTo(0,y)})}
 function renderEnt(){const app=$('#app');
   if(!ui.driver){app.innerHTML=`<div class="loginhero"><img src="${brandLogo()}" alt="${esc(S.store.name)}"><div>Entregas</div></div><form class="login panel" id="dvl"><h2>Acesso do entregador</h2>
-    <div class="field"><label for="dvlu">Usuário</label><input type="text" id="dvlu" autocapitalize="none" required></div><div class="field"><label for="dvlp">Senha</label><input type="password" id="dvlp" required></div>
+    <div class="field"><label for="dvlu">Usuário</label><input type="text" id="dvlu" autocomplete="username" autocapitalize="none" required></div><div class="field"><label for="dvlp">Senha</label><input type="password" id="dvlp" autocomplete="current-password" required></div>
     <div class="err" id="dvle"></div><button class="btn block" type="submit">Entrar</button><div class="hint">O acesso é criado pelo administrador em CADASTROS &gt; Motoristas e veículos.</div>${srvTeamLinks('ent')}</form>`;srvBindTeamLinks();
     $('#dvl').onsubmit=e=>{e.preventDefault();srvLogin('entregador',$('#dvlu').value.trim(),$('#dvlp').value,$('#dvle'),$('#dvl button[type=submit]'))};return}
   app.innerHTML=`<div class="entview"><div class="sectionhead"><h2>Minhas entregas</h2><button class="btn ghost dlb" id="dvRef">Atualizar</button></div>${entregasHtml(ui.driver)}</div>`;
@@ -4795,7 +4801,7 @@ function renderFat(){
       </div>
       <div class="fatside"><span class="num fattot">${brl(o.total)}</span>
         <div class="row" style="gap:4px;justify-content:flex-end"><button class="iconpdf" data-fpdf="${o.id}" title="PDF do pedido" aria-label="PDF do pedido nº ${o.no}">${PDF_ICON}</button><button class="btn ghost dlb" data-fpick="${o.id}" title="Folha de separação, sem valores">Separação</button><button class="btn ghost dlb" data-fcsv="${o.id}" title="Arquivo para importar no sistema">Arquivo</button></div>
-        ${b?'':`<div class="row fatgo" style="gap:4px;flex-wrap:nowrap"><input type="text" inputmode="numeric" data-fnf="${o.id}" value="${esc(F.nf[o.id]||'')}" placeholder="${o.nf?'Nº NF (obrigatório)':'Nº NF (opcional)'}" aria-label="Número da nota do pedido ${o.no}"><button class="btn dlb" data-fok="${o.id}">Faturado</button></div>`}</div></div>`};
+        ${b?'':!['separado','pronto','saiu','concluido'].includes(o.status)?'<div class="small muted">Fatura depois que a conferência terminar.</div>':`<div class="row fatgo" style="gap:4px;flex-wrap:nowrap"><input type="text" inputmode="numeric" data-fnf="${o.id}" value="${esc(F.nf[o.id]||'')}" placeholder="${o.nf?'Nº NF (obrigatório)':'Nº NF (opcional)'}" aria-label="Número da nota do pedido ${o.no}"><button class="btn dlb" data-fok="${o.id}">Faturado</button></div>`}</div></div>`};
   app.innerHTML=`<div class="sectionhead"><h2>Faturamento</h2><button class="btn ghost dlb" id="fRef">Atualizar</button></div>
     <div class="seg repseg" role="group" aria-label="Lista"><button data-ft="fat" aria-pressed="${F.tab==='fat'}">A faturar (${aFat.length})</button><button data-ft="sep" aria-pressed="${F.tab==='sep'}">Em separação (${emSep.length})</button><button data-ft="feitos" aria-pressed="${F.tab==='feitos'}">Faturados</button><button data-ft="acerto" aria-pressed="false">Acerto${S.orders.some(pendSettle)?' ('+S.orders.filter(pendSettle).length+')':''}</button><button data-ft="prec" aria-pressed="false">Precificar notas${(S.receipts||[]).some(r=>r.status==='conferida')?' ('+(S.receipts||[]).filter(r=>r.status==='conferida').length+')':''}</button></div>
     <div class="panel fattools">
@@ -4812,6 +4818,8 @@ function renderFat(){
   const byId=id=>S.orders.find(o=>o.id===id);
   const nm=(os,k)=>(k+'-'+(os.length===1?'pedido-'+os[0].no:os.length+'-pedidos')+'-'+stamp());
   const bill=(os)=>{if(F.busy&&Date.now()-F.busy<800)return;/* duplo toque: o 2º toque cairia no botão do pedido de baixo */
+    /* o servidor só aceita faturar pedido já separado: avisa aqui em vez de mandar e ver "Não foi gravado" */
+    {const ns=os.find(o=>!['separado','pronto','saiu','concluido'].includes(o.status));if(ns){toast('Pedido nº '+ns.no+' ainda está em separação: fature depois que a conferência terminar.');return}}
     for(const o of os){const nf=String(F.nf[o.id]||'').replace(/[\s.]/g,'');if(nf&&!/^\d{1,12}$/.test(nf)){toast('Pedido nº '+o.no+': número da NF inválido. Use só números.');return}
       if(!nf&&o.nf){toast('Pedido nº '+o.no+' é com nota fiscal: digite o número da NF antes de marcar faturado.');return}
       const dup=nf&&S.orders.find(x=>x.id!==o.id&&x.billed&&x.billed.nf===nf);if(dup&&!confirm('A NF '+nf+' já foi usada no pedido nº '+dup.no+'. Usar mesmo assim no pedido nº '+o.no+'?'))return;

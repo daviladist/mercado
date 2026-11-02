@@ -73,7 +73,7 @@ test('configuração com nome herdado de objeto ("constructor") não vira confli
 
 test('app: envio grande vai em partes (até 400 alterações e ~2,5 MB por vez)', () => {
   const src = fs.readFileSync(path.join(__dirname, '../../public/app.js'), 'utf8');
-  const m = /const SRV_MAXN=[^\n]*\nfunction srvChunk\([^\n]*\n/.exec(src);
+  const m = /const SRV_MAXN=[\s\S]*?\nfunction srvChunk\([^\n]*\n/.exec(src);
   assert.ok(m, 'srvChunk está no app gerado');
   const ctx = {}; vm.runInNewContext(m[0] + 'this.srvChunk=srvChunk;', ctx);
   const L = Array.from({ length: 600 }, (_, i) => ({ c: 'products', id: 'p' + i, op: 'put', doc: { id: 'p' + i } }));
@@ -82,4 +82,21 @@ test('app: envio grande vai em partes (até 400 alterações e ~2,5 MB por vez)'
   const grande = Array.from({ length: 5 }, (_, i) => ({ c: 'products', id: 'g' + i, op: 'put', doc: { photo: 'x'.repeat(900000) } }));
   assert.strictEqual(ctx.srvChunk(grande).length, 2);
   assert.strictEqual(ctx.srvChunk([{ doc: 'y'.repeat(3000000) }]).length, 1, 'um registro grande sozinho ainda vai (o servidor responde)');
+});
+
+test('app: registro sozinho grande demais (> 3,5 MB) volta como estava e o resto da fila segue', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../../public/app.js'), 'utf8');
+  const m = /const SRV_MAXN=[\s\S]*?\nfunction srvChunk\([^\n]*\n/.exec(src);
+  const alerts = [];
+  const ctx = { S: { products: [{ id: 'a', photo: 'x'.repeat(3600000) }, { id: 'b', name: 'novo' }], store: { logo: 'y'.repeat(3600000) } },
+    SRV: { base: { products: { a: JSON.stringify({ id: 'a', photo: '' }) }, meta: { store: JSON.stringify({ name: 'LOJA' }) } } },
+    srvAlert: t => alerts.push(t), srvSoftRender: () => {} };
+  vm.runInNewContext(m[0] + 'this.srvDropHuge=srvDropHuge;', ctx);
+  const L = [{ c: 'products', id: 'a', op: 'put', doc: ctx.S.products[0] }, { c: 'products', id: 'b', op: 'put', doc: ctx.S.products[1] }, { c: 'meta', id: 'store', op: 'put', doc: ctx.S.store }];
+  const out = ctx.srvDropHuge(L);
+  assert.strictEqual(out.map(x => x.id).join(), 'b');
+  assert.strictEqual(ctx.S.products[0].photo, '', 'volta ao que está no servidor');
+  assert.strictEqual(JSON.stringify(ctx.S.store), '{"name":"LOJA"}');
+  assert.strictEqual(alerts.length, 1);
+  assert.match(alerts[0], /2 registros grandes demais/);
 });
