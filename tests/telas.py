@@ -57,8 +57,7 @@ for lg, role in [('vend1', 'vendedor'), ('cli1', 'cliente'), ('conf1', 'conferen
     x = C(); x.req('/api/login', {'role': role, 'login': lg, 'password': PW}); s, _ = x.req('/api/password', {'current': PW, 'next': NPW}); check(s == 200, 'senha própria de ' + role)
 def order(i): return next((x for x in A.req('/api/state')[1]['S']['orders'] if x['id'] == i), None)
 
-STUB = "window.jspdf={jsPDF:function(){const d={internal:{pageSize:{getWidth:()=>297,getHeight:()=>210}},lastAutoTable:{finalY:50}};const P=new Proxy(d,{get:(t,k)=>k in t?t[k]:k==='getNumberOfPages'?()=>1:k==='output'?()=>new ArrayBuffer(8):()=>P});return P}};"
-APP = None
+EXT = []   # scripts pedidos fora do próprio app (não pode haver: bibliotecas ficam em /vendor)
 def route(r, expose=False):
     u = r.request.url
     if u.startswith(BASE):
@@ -66,11 +65,14 @@ def route(r, expose=False):
             src = urllib.request.urlopen(u).read().decode(); i = src.rstrip().rfind('})();')
             return r.fulfill(body=src[:i] + 'window.__T={S:()=>S,save:()=>save()};\n' + src[i:], content_type='text/javascript')
         return r.continue_()
-    if 'jspdf.umd' in u: return r.fulfill(body=STUB, content_type='text/javascript')
-    if 'cdnjs' in u: return r.fulfill(body='', content_type='text/javascript')
+    if r.request.resource_type == 'script': EXT.append(u)
     return r.abort()
-def start(pw, path, lg, desk=False, expose=False):
-    b = pw.chromium.launch(); ctx = b.new_context(viewport={'width': 1280, 'height': 860} if desk else {'width': 390, 'height': 844})
+def start(pw, path, lg, desk=False, expose=False, device=None, init=None):
+    b = pw.chromium.launch()
+    opts = dict(device) if device else {'viewport': {'width': 1280, 'height': 860} if desk else {'width': 390, 'height': 844}}
+    opts.pop('default_browser_type', None)
+    ctx = b.new_context(accept_downloads=True, **opts)
+    if init: ctx.add_init_script(init)
     ctx.route('**/*', lambda r: route(r, expose))
     pg = ctx.new_page(); E = []
     pg.on('pageerror', lambda e: E.append('erro de JavaScript: ' + str(e)[:200]))
@@ -123,15 +125,39 @@ with sync_playwright() as pw:
     x = order('o2'); check(x and x['sugs'][0]['status'] == 'aprovada' and x['items'][0]['pid'] == 'pb', 'na loja: troca aprovada e item trocado')
     browse(pg, 12); check(not E, 'vendedor sem erro de JavaScript: %s' % E[:2]); b.close()
 
-    print('== conferente e entregador navegam pelas telas')
-    for path, lg, nome in [('/#conferente', 'conf1', 'conferente'), ('/#entregador', 'ent1', 'entregador')]:
-        b, pg, E = start(pw, path, lg); n = browse(pg, 15)
-        check(n >= 3 and not E, '%s: %d cliques, sem erro de JavaScript: %s' % (nome, n, E[:2])); b.close()
+    print('== conferente: lê os itens, registra divergência (falta) e conclui')
+    b, pg, E = start(pw, '/#conferente', 'conf1')
+    pg.click('[data-cfo=o1]'); pg.click('#cfStart'); pg.wait_for_selector('#scanin')
+    for _ in range(4): pg.fill('#scanin', '7890000000017'); pg.keyboard.press('Enter'); pg.wait_for_timeout(300)
+    check('bipados' not in pg.inner_text('#app') or '4 de 4' in pg.inner_text('#app'), 'leu as 4 embalagens do arroz pelo código de barras')
+    pg.click('[data-cfm=pk]'); pg.click('[data-cfqty=pk]'); pg.fill('#cfqq', '1'); pg.fill('#cfqn', 'peça quebrada'); pg.click('#cfqok'); wait_sync(pg)
+    check('Falta aprovada' in pg.inner_text('#app') and not alert(pg), 'falta do queijo registrada (1 de 1,5 kg) e aprovada sozinha (pedido de vendedor) (%s)' % alert(pg))
+    pg.fill('#cfvol', '2'); pg.click('#cfReady'); wait_sync(pg)
+    x = order('o1'); check(x and x['status'] == 'separado' and str(x.get('volumes')) == '2' and abs(x['total'] - 140) < 0.01 and x['items'][1]['q'] == 1,
+        'na loja: separado, 2 volumes, queijo 1 kg e total refeito R$ 140 (%s)' % str(x and (x['status'], x.get('volumes'), x['total'])))
+    check(not E, 'conferente sem erro de JavaScript: %s' % E[:2]); b.close()
+
+    print('== entregador: confirma a entrega com foto do canhoto')
+    import base64, struct, zlib, tempfile
+    def png(w, h):
+        raw = b''.join(b'\x00' + bytes([200, 60, 60]) * w for _ in range(h))
+        ch_ = lambda t, d: struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
+        return b'\x89PNG\r\n\x1a\n' + ch_(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)) + ch_(b'IDAT', zlib.compress(raw)) + ch_(b'IEND', b'')
+    foto = os.path.join(tempfile.mkdtemp(), 'canhoto.png'); open(foto, 'wb').write(png(160, 100))
+    b, pg, E = start(pw, '/#entregador', 'ent1')
+    pg.click('[data-dok=o5]'); pg.fill('#dnm-o5', 'Zé do caixa'); pg.set_input_files('[data-dph=o5]', foto); pg.wait_for_timeout(800)
+    pg.click('[data-dconf=o5]'); wait_sync(pg)
+    x = order('o5'); ph = (x or {}).get('delivered', {}).get('photo', '')
+    check(x and x['status'] == 'concluido' and x['delivered']['name'] == 'Zé do caixa' and ph.startswith('/api/photo/') and not alert(pg), 'entrega confirmada com nome e foto guardada à parte (%s)' % alert(pg))
+    img = A.op.open(urllib.request.Request(BASE + ph, headers={'X-Tenant': '@'})).read() if ph else b''
+    check(img[:4] in (b'\xff\xd8\xff\xe0', b'\xff\xd8\xff\xdb', b'\x89PNG') or img[:3] == b'\xff\xd8\xff', 'a loja abre a foto do canhoto (%d bytes)' % len(img))
+    pg.click('[data-dvph=o5]'); pg.wait_for_timeout(500)
+    check(not E, 'entregador sem erro de JavaScript: %s' % E[:2]); b.close()
 
     print('== faturamento')
     b, pg, E = start(pw, '/#faturamento', 'fat1')
     pg.locator('button', has_text='Em separação').first.click(); pg.wait_for_timeout(400)
-    check(pg.locator('[data-fok="o1"]').count() == 0 and pg.locator('text=Fatura depois que a conferência terminar').count() > 0, 'pedido em separação não mostra "Faturado" (o servidor recusaria)')
+    check(pg.locator('[data-fok="o2"]').count() == 0 and pg.locator('text=Fatura depois que a conferência terminar').count() > 0, 'pedido em separação não mostra "Faturado" (o servidor recusaria)')
     pg.locator('button', has_text='A faturar').first.click(); pg.wait_for_timeout(400)
     pg.wait_for_selector('[data-fok="o3"]', timeout=10000); pg.click('[data-fok="o3"]'); wait_sync(pg)
     x = order('o3'); check(x and x.get('billed') and not alert(pg), 'pedido separado faturado (%s)' % alert(pg))
@@ -168,6 +194,17 @@ with sync_playwright() as pw:
     check('sem conta a receber' not in pg.inner_text('#tabc'), 'aviso some depois de resolver')
     pg.locator('[data-tab="receber"][data-fin="perdas"], [data-fin="perdas"]').first.click(); pg.wait_for_timeout(500)
     t = pg.inner_text('#tabc'); check('perdas por avaria' in t.lower() and '40,00' in t, 'Perdas: 2 × custo R$ 20 = R$ 40,00 (%s)' % t[:200].replace('\n', ' '))
+    print('== PDF e Excel de verdade (bibliotecas do próprio app, sem CDN)')
+    pg.locator('[data-fin="receber"]').first.click(); pg.wait_for_timeout(500)
+    if pg.locator('[data-rst="todos"]').count(): pg.click('[data-rst="todos"]'); pg.wait_for_timeout(300)
+    from pypdf import PdfReader
+    import openpyxl, io
+    with pg.expect_download(timeout=20000) as dl: pg.click('#rpdf')
+    pdf = PdfReader(dl.value.path()); t = ''.join(p.extract_text() for p in pdf.pages).replace('\xa0', ' ')
+    check(len(pdf.pages) >= 1 and 'Contas a receber' in t and '50,00' in t, 'PDF do contas a receber gerado e legível (%d página(s))' % len(pdf.pages))
+    with pg.expect_download(timeout=20000) as dl: pg.click('#rxl')
+    check(dl.value.suggested_filename.endswith('.xlsx'), 'arquivo Excel com nome .xlsx (%s)' % dl.value.suggested_filename); wb = openpyxl.load_workbook(io.BytesIO(open(dl.value.path(), 'rb').read())); ws = wb.active; rows = [[c.value for c in r] for r in ws.iter_rows()]
+    check(rows and rows[0][0] == 'Cliente' and any(r[0] == 'Mercado Um' and r[6] == 50 for r in rows[1:]), 'Excel do contas a receber gerado e legível (%d linhas)' % len(rows))
     check(not E, 'financeiro sem erro de JavaScript: %s' % E[:2]); b.close()
 
     print('== fila do app: recusa do envio inteiro não perde nada')
@@ -189,5 +226,50 @@ with sync_playwright() as pw:
     check(not pg.evaluate("() => __T.S().products.some(p => p.id === 'prod-ruim')"), 'o recusado voltou a ficar como está no servidor')
     check(not E, 'administrador sem erro de JavaScript: %s' % E[:2]); b.close()
 
+    if os.environ.get('TINO_TESTE_ERRO') == '1':
+        print('== Central: painel de erros do servidor')
+        for _ in range(2): A.req('/api/teste-erro')
+        b = pw.chromium.launch(); ctx = b.new_context(viewport={'width': 1280, 'height': 860}); ctx.route('**/*', route); pg = ctx.new_page(); E = []
+        pg.on('pageerror', lambda e: E.append(str(e)[:200]))
+        pg.goto(BASE + '/central'); pg.fill('#lu', 'super_admin'); pg.fill('#lp', CPW); pg.keyboard.press('Enter'); pg.wait_for_selector('#errBtn', state='visible', timeout=15000)
+        check(pg.locator('#errN').is_visible() and pg.inner_text('#errN') == '1', 'contador vermelho de erros na Central (%s)' % pg.inner_text('#errN'))
+        pg.click('#errBtn'); pg.wait_for_selector('[data-eseen]', timeout=10000)
+        t = pg.inner_text('#editor'); check('forcado' in t and '/api/teste-erro' in t and '2 vezes' in t, 'lista mostra mensagem, rota e repetições')
+        pg.click('[data-eseen]'); pg.wait_for_timeout(800)
+        check(not pg.locator('#errN').is_visible() and 'visto' in pg.inner_text('#editor'), '"Marcar como visto" zera o contador')
+        check(not E, 'Central sem erro de JavaScript: %s' % E[:2]); b.close()
+
+    print('== celular: barra de baixo, cabeçalho e rolagem lateral (iPhone 13 com área segura e Pixel 7)')
+    TOP = r"""()=>{const fixed=[...document.querySelectorAll('header.top,#app .tabs,#app .navband,#app .subnavwrap,.cnav,#app .catbar')].filter(e=>e.offsetParent!==null);
+      const bars=fixed.map(f=>({el:f,r:f.getBoundingClientRect()}));const bad=[];window.scrollTo(0,0);
+      document.querySelectorAll('#app *').forEach(el=>{if(fixed.some(f=>f.contains(el))||el.offsetParent===null)return;const t=[...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim());
+        if(!(t||el.matches('button,input,select,textarea')))return;const r=el.getBoundingClientRect();if(r.height<2||r.width<2||r.bottom<0)return;
+        for(const b of bars){if(b.el.compareDocumentPosition(el)&Node.DOCUMENT_POSITION_FOLLOWING&&r.top<b.r.bottom-1&&r.bottom>b.r.top){bad.push((el.innerText||el.tagName).trim().slice(0,30));break}}});return bad.slice(0,3)}"""
+    BOTTOM = r"""(inset)=>{window.scrollTo(0,document.documentElement.scrollHeight);const H=innerHeight,skip=e=>!!e.closest('.toast,.toastu,#srvbadge,#srvalert,dialog,.menu,.drawer,[hidden]');
+      const bars=[...document.querySelectorAll('body *')].filter(e=>{const p=getComputedStyle(e).position;if(p!=='fixed'&&p!=='sticky')return false;if(skip(e))return false;const r=e.getBoundingClientRect();return r.height>0&&r.width>0&&r.bottom>=H-2&&r.top>H*0.5});
+      const bad=[];document.querySelectorAll('#app *').forEach(el=>{if(bars.some(b=>b.contains(el))||skip(el)||el.offsetParent===null)return;const t=[...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim());
+        if(!(t||el.matches('button,input,select,textarea,a')))return;const r=el.getBoundingClientRect();if(r.height<2||r.width<2||r.bottom<=0||r.top>=H)return;
+        for(const b of bars){const q=b.getBoundingClientRect();if(r.bottom>q.top+1&&r.top<q.bottom&&r.right>q.left&&r.left<q.right){bad.push((el.innerText||el.tagName).trim().slice(0,30)+' @'+Math.round(r.bottom)+'>'+Math.round(q.top));break}}});
+      const btn=[...document.querySelectorAll('.bnav>button,.bnav summary')].filter(e=>e.offsetParent!==null).map(e=>e.getBoundingClientRect());
+      return {bad:bad.slice(0,3),small:btn.filter(r=>r.height<44).length,low:btn.filter(r=>r.bottom>H-inset+1).length,n:btn.length,hx:document.documentElement.scrollWidth>innerWidth+1}}"""
+    def mob_check(pg, nome, inset, bnav=False):
+        pg.wait_for_timeout(500); top = pg.evaluate(TOP); r = pg.evaluate(BOTTOM, inset)
+        ok_ = not top and not r['bad'] and not r['hx'] and not r['small'] and not r['low'] and (r['n'] >= 4 or not bnav)
+        check(ok_, '%s: nada por baixo das barras, sem rolagem lateral%s %s' % (nome, ', menu de baixo com %d botões de 44 px+ acima da área segura' % r['n'] if bnav else '', '' if ok_ else (top, r)))
+    for dev, inset in [('iPhone 13', 34), ('Pixel 7', 0)]:
+        D_ = pw.devices[dev]
+        INIT = ("document.addEventListener('DOMContentLoaded',()=>document.querySelectorAll('style').forEach(s=>{s.textContent=s.textContent"
+                ".replace(/env\\(safe-area-inset-bottom(,\\s*0px)?\\)/g,'%dpx').replace(/env\\(safe-area-inset-top(,\\s*0px)?\\)/g,'%dpx')}))" % (inset, 47 if inset else 0))
+        b, pg, E = start(pw, '/#admin', AL, device=D_, init=INIT)
+        tabs = pg.evaluate("()=>[...document.querySelectorAll('.bnav>button[data-tab]')].map(b=>[b.dataset.tab,b.innerText.trim()])")
+        check(len(tabs) >= 4, '%s: menu de baixo do painel aparece (%s)' % (dev, [t[1] for t in tabs]))
+        for k, label in tabs:
+            pg.click('.bnav>button[data-tab="%s"]' % k); mob_check(pg, '%s › painel › %s' % (dev, label), inset, bnav=True)
+        check(not E, '%s: painel sem erro de JavaScript: %s' % (dev, E[:2])); b.close()
+        for path, lg, nome in [('/cliente', 'cli1', 'cliente'), ('/#vendedor', 'vend1', 'vendedor'), ('/#conferente', 'conf1', 'conferente'), ('/#entregador', 'ent1', 'entregador')]:
+            b, pg, E = start(pw, path, lg, device=D_, init=INIT); mob_check(pg, '%s › %s' % (dev, nome), inset)
+            check(not E, '%s › %s sem erro de JavaScript: %s' % (dev, nome, E[:2])); b.close()
+
+check(not EXT, 'nenhum script carregado de fora do app (CDN): %s' % EXT[:3])
 print(f'\n{ok} OK, {len(fails)} falha(s)')
 if fails: print('\n'.join(' - ' + f for f in fails)); sys.exit(1)
