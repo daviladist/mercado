@@ -147,3 +147,51 @@ test('servidor: concluir pedido sem prazo identificado não gera conta, mas o cl
   assert.equal(C.creditInfo(S.customers[0], 0).used, 800);
   assert.equal(C.payOptions(S.customers[0], 300).ci.blocked, true);
 });
+
+test('sem conta a receber: lançar com 1 toque (prazo escolhido) ou dispensar; dispensado sai do aviso e do limite', () => {
+  const S = base(), C = core(S);
+  const mk = id => { const o = { id, no: id === 'a' ? 1 : 2, customerId: 'c1', customer: 'Cliente', pay: 'Boleto', status: 'concluido', total: 100, doneAt: iso(), items: [] }; S.orders.push(o); return o; };
+  const a = mk('a'), b = mk('b');
+  assert.equal(C.creditInfo(S.customers[0], 0).used, 200);
+  const parts = C.recLaunch(a, [14, 28], '2026-11-02');
+  assert.deepEqual(parts.map(p => p.amount), [50, 50]);
+  assert.deepEqual(S.receivables.map(r => [r.orderId, r.due, r.parcel]), [['a', '2026-11-16', '1/2'], ['a', '2026-11-30', '2/2']]);
+  assert.equal(C.recMissing(a), false);
+  b.recDismiss = { at: iso(), by: 'Loja', why: 'Já recebido / à vista' };
+  assert.equal(C.recMissing(b), false);
+  assert.equal(C.creditInfo(S.customers[0], 0).used, 100);           // só as parcelas do pedido a
+});
+
+test('servidor: só a loja dispensa a cobrança; o cliente não vê nem mexe', () => {
+  const S = base(); S.store.min = 0;
+  const o = { id: 'o1', no: 1001, date: iso(), customerId: 'c1', customer: 'Cliente', pay: 'Boleto', status: 'concluido', total: 100, items: [{ pid: 'p1', name: 'Feijão', q: 10, price: 10 }], recDismiss: { at: iso(), by: 'Loja' } };
+  S.orders.push(o);
+  const P = policy.project(S, { role: 'cliente', ref_id: 'c1' });
+  assert.equal(P.orders[0].recDismiss, undefined);
+  const o2 = Object.assign(JSON.parse(JSON.stringify(o)), { id: 'o2', status: 'novo' }); delete o2.recDismiss; S.orders.push(o2);
+  const n = JSON.parse(JSON.stringify(o2)); n.recDismiss = { at: iso(), by: 'eu' };
+  assert.throws(() => policy.checkOrderUpdate(S, { role: 'cliente', ref_id: 'c1', name: 'Cliente' }, o2, n), /recDismiss/);
+});
+
+test('perdas por avaria: período pela conclusão, valor a custo (do item; sem ele, do produto)', () => {
+  const S = base(), C = core(S);
+  S.products[0].cost = 7;
+  S.orders.push({ id: 'x', no: 5, customer: 'Cli', status: 'concluido', doneAt: '2026-11-03T15:00:00.000Z', loss: { p1: 2, k1: 0.5 }, items: [{ pid: 'p1', name: 'Feijão', q: 8, cost: 6 }, { pid: 'k1', name: 'Queijo', q: 1 }] });
+  S.orders.push({ id: 'y', no: 6, customer: 'Cli', status: 'concluido', doneAt: '2026-12-03T15:00:00.000Z', loss: { p1: 9 }, items: [{ pid: 'p1', name: 'Feijão', q: 1 }] });
+  S.orders.push({ id: 'z', no: 7, customer: 'Cli', status: 'cancelado', doneAt: '2026-11-03T15:00:00.000Z', loss: { p1: 9 }, items: [] });
+  const L = C.lossRows('2026-11-01', '2026-11-30');
+  assert.deepEqual(L.map(r => [r.pid, r.q, r.cost, r.value]), [['p1', 2, 6, 12], ['k1', 0.5, null, null]]);
+  const T = C.lossSum(L);
+  assert.equal(T.total, 12); assert.equal(T.noCost, 1); assert.equal(T.by.length, 2);
+  assert.equal(C.lossRows('2026-12-01', '2026-12-31')[0].value, 63);   // sem custo no item: usa o do produto (7 × 9)
+});
+
+test('sem conta a receber: PIX/dinheiro/"à vista" sem prazo cadastrado não viram aviso (loja que não marcou como à vista)', () => {
+  const S = base(); S.cashPays = []; const C = core(S);
+  const mk = pay => ({ id: pay, customerId: 'c1', pay, status: 'concluido', total: 10, items: [] });
+  assert.equal(C.recMissing(mk('PIX')), false);
+  assert.equal(C.recMissing(mk('Dinheiro')), false);
+  assert.equal(C.recMissing(mk('Cartão à vista')), false);
+  assert.equal(C.recMissing(mk('Boleto')), true);
+  assert.equal(C.recMissing(mk('Pixel 30 dias')), true);
+});

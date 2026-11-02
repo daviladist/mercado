@@ -2168,7 +2168,7 @@ function orderActs(o){
   return `${entInfo(o)}<div class="row oacts" style="gap:6px;align-items:center">${main.join('')}
     <button class="iconpdf sm" data-dl="pdf" data-oid="${o.id}" data-tip="Baixar o pedido em PDF" aria-label="Baixar o pedido nº ${o.no} em PDF">${PDF_ICON}</button>
     <details class="more"><summary class="btn ghost dlb">Mais ▾</summary><div class="menu">${more.join('')}</div></details>
-    ${o.recLaunched&&st!=='cancelado'?'<span class="rulechip">No contas a receber</span>':''}${recMissing(o)?'<span class="rulechip" style="color:var(--warn)" title="Pedido a prazo concluído sem parcela no contas a receber: use Mais &gt; Lançar no contas a receber">Sem conta a receber</span>':''}</div>`;
+    ${o.recLaunched&&st!=='cancelado'?'<span class="rulechip">No contas a receber</span>':''}${recMissing(o)?'<span class="rulechip" style="color:var(--warn)" title="Pedido a prazo concluído sem parcela no contas a receber: resolva em Financeiro › A receber">Sem conta a receber</span>':''}${o.recDismiss&&!o.recLaunched&&st!=='cancelado'?`<span class="rulechip" title="${esc(o.recDismiss.why||'')}">Sem cobrança: dispensado por ${esc(o.recDismiss.by||'')} em ${dBR(isoDay(o.recDismiss.at))}</span> <button type="button" class="link" data-recund="${o.id}">voltar a cobrar</button>`:''}</div>`;
 }
 function orderCard(o,admin){
   const d=new Date(o.date),editing=admin&&ui.adj===o.id;
@@ -2962,13 +2962,15 @@ function admConferentes(){
 
 /* aba -> módulo da Central que precisa estar ligado */
 const TAB_MOD={pdv:'pdv',relatorios:'painel',decisoes:'decisoes',entregas:'entregas',semana:'ofertas',recmerc:'entrada',precnotas:'entrada',receber:['receber','pagar','caixa'],fretes:'frete3'};
+/* abas do Financeiro (Perdas por avaria vem das entregas) */
+const finTabs=()=>['receber','pagar','caixa','perdas'].filter(k=>modOn(k==='perdas'?'entregas':k));
 function renderAdmin(){
   const app=$('#app');
   if(!ui.admin){app.innerHTML=loginForm(true);bindLogin(true);return}
   pendSweep();if(ui.tab==='analise'||ui.tab==='separacao')ui.tab='decisoes';
   const nprog=S.orders.filter(o=>drvCan(o)&&!(o.deliv&&o.deliv.drv)).length+S.orders.filter(o=>o.occ&&o.occ.reboleto).length;
   const novos=S.orders.filter(o=>o.status==='novo').length,nsug=S.orders.reduce((n,o)=>n+(OPEN.includes(o.status)?sugPending(o).length:0),0);
-  const nan=S.orders.filter(o=>o.appr==='pendente'&&o.status!=='cancelado').length,ncnt=(S.counts||[]).filter(x=>x.status==='finalizada').length,venc=(S.receivables||[]).filter(r=>recStatus(r)==='vencido').length,crit=S.products.filter(isCritical).length;
+  const nan=S.orders.filter(o=>o.appr==='pendente'&&o.status!=='cancelado').length,ncnt=(S.counts||[]).filter(x=>x.status==='finalizada').length,venc=(S.receivables||[]).filter(r=>recStatus(r)==='vencido').length+S.orders.filter(recMissing).length,crit=S.products.filter(isCritical).length;
   /* menu em grupos: poucas abas em cima, micro abas dentro */
   const G=[['Início',[['hoje','Visão geral'],['relatorios','Relatórios']]],['Pedidos',[['pedidos','Pedidos'],['decisoes','Decisões'],['entregas','Entregas']]],['Ofertas',[['semana','Ofertas da semana']]],['Caixa (PDV)',[['pdv','Caixa (PDV)']]],['Produtos',[['produtos','Produtos'],['recmerc','Receber mercadoria'],['precnotas','Precificação de notas']]],['Financeiro',[['receber','Financeiro'],['fretes','Frete de terceiro']]],['Cadastros',[['cadastros','Cadastros'],['clientes',''],['config','']]]]
     .map(g=>[g[0],g[1].filter(x=>{const m=TAB_MOD[x[0]];return !m||(Array.isArray(m)?m.some(modOn):modOn(m))})]).filter(g=>g[1].some(x=>x[1]));
@@ -2978,8 +2980,8 @@ function renderAdmin(){
   const grp=G.find(g=>g[1].some(x=>x[0]===ui.tab))||G[0];ui.lastSub=ui.lastSub||{};ui.lastSub[grp[0]]=ui.tab;
   const tabs=G.map(g=>{const k=g===grp?g[1][0][0]:(ui.lastSub[g[0]]||g[1][0][0]),tot=g[1].reduce((a,x)=>a+(BD[x[0]]?BD[x[0]].n:0),0),red=g[1].some(x=>BD[x[0]]&&!BD[x[0]].c);return {k,label:g[0],sel:g===grp,b:tot?{n:tot,c:red?'':(g[1].map(x=>BD[x[0]]).find(Boolean)||{}).c}:null}});
   /* Financeiro: A receber, A pagar e Caixa da semana ficam direto no submenu (sem uma segunda faixa de botões) */
-  const okFin=['receber','pagar','caixa'].filter(modOn);if(!okFin.includes(ui.finTab))ui.finTab=okFin[0]||'receber';
-  const nvP=(S.payables||[]).filter(p=>!p.paidAt&&p.due<today()).length,FIN={receber:['A receber',BD.receber],pagar:['A pagar',nvP?{n:nvP,c:''}:null],caixa:['Caixa da semana',null]};
+  const okFin=finTabs();if(!okFin.includes(ui.finTab))ui.finTab=okFin[0]||'receber';
+  const nvP=(S.payables||[]).filter(p=>!p.paidAt&&p.due<today()).length,FIN={receber:['A receber',BD.receber],pagar:['A pagar',nvP?{n:nvP,c:''}:null],caixa:['Caixa da semana',null],perdas:['Perdas',null]};
   const subs=[];grp[1].filter(x=>x[1]).forEach(([k,v])=>{if(k==='receber')okFin.forEach(f=>subs.push([k,FIN[f][0],f,FIN[f][1]]));else subs.push([k,v,'',BD[k]])});
   app.innerHTML=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" data-tab="${t.k}" aria-selected="${t.sel}">${t.label}${cnt(t.b)}</button>`).join('')}</div>${subs.length>1?`<div class="subnavwrap"><div class="seg repseg subnav" role="group" aria-label="${grp[0]}">${subs.map(([k,v,f,b])=>`<button data-tab="${k}"${f?` data-fin="${f}"`:''} aria-pressed="${ui.tab===k&&(!f||ui.finTab===f)}">${v}${cnt(b)}</button>`).join('')}</div></div>`:''}<div id="tabc"></div>`;
   {const at=app.querySelector('.tabs [aria-selected="true"]');if(at&&at.scrollIntoView)try{at.scrollIntoView({block:'nearest',inline:'center'})}catch(e){}}
@@ -3570,7 +3572,13 @@ function creditInfo(c,extra){
 }
 /* pedido a prazo concluído que ficou SEM conta a receber (forma sem prazo, ou ninguém lançou): o dinheiro não está sendo cobrado */
 const REC_WIN=60;
-function recMissing(o){return !!o&&o.status==='concluido'&&!o.recLaunched&&!o.pdvVenda&&!isCash(o.pay)&&Number(o.total)>0.004}
+/* forma com cara de à vista (PIX, dinheiro, "à vista") e sem prazo cadastrado: não vira aviso nem pesa no limite, mesmo se a loja não marcou como à vista */
+const looksCash=pay=>!(S.payDays&&S.payDays[pay])&&/(^|[^a-z])(pix|dinheiro|[àa] vista)([^a-z]|$)/i.test(String(pay||''));
+function recMissing(o){return !!o&&o.status==='concluido'&&!o.recLaunched&&!o.recDismiss&&!o.pdvVenda&&!isCash(o.pay)&&!looksCash(o.pay)&&Number(o.total)>0.004}
+/* lança as parcelas de um pedido concluído (prazo escolhido; vencimentos contados de "base") */
+function recLaunch(o,days,base){const cu=S.customers.find(x=>x.id===o.customerId),grp=uid(),parts=splitParcels(o.total,days);
+  parts.forEach((p,i)=>S.receivables.push({id:uid(),group:grp,orderId:o.id,customerId:o.customerId,customer:cu?cu.name:o.customer,orderNo:String(o.no),desc:o.pay,parcel:(i+1)+'/'+parts.length,amount:p.amount,due:addDays(base,p.days),paidAt:'',created:new Date().toISOString()}));
+  o.recLaunched=true;delete o.recDismiss;return parts}
 /* aviso da conclusão quando o prazo da forma de pagamento não foi identificado (mesma regra do contas a receber automático) */
 function autoRecWarn(o){if(!o||o.status!=='concluido'||o.recLaunched||(S.store||{}).autoRec===false||isCash(o.pay))return '';
   let k=daysFromPay(o.pay);if(k.startsWith('outro:'))k=k.slice(6);
@@ -3753,6 +3761,7 @@ function admHoje(){
       ${tile('pedidos:todos','Vendido hoje',brl(sum(hoje)),hoje.length+' pedido'+(hoje.length===1?'':'s')+' feito'+(hoje.length===1?'':'s')+' hoje')}
       ${tile('receber:aberto','A receber hoje',brl(recHoje.reduce((s,r)=>s+r.amount,0)),recHoje.length+' parcela'+(recHoje.length===1?'':'s'))}
       ${tile('receber:vencido','Vencidos',brl(venc.reduce((s,r)=>s+r.amount,0)),venc.length+' parcela'+(venc.length===1?'':'s')+' em atraso',venc.length?'t-venc':'')}
+      ${(()=>{const M=modOn('receber')?S.orders.filter(recMissing):[];return M.length?tile('receber:cobrar','Sem conta a receber',brl(M.reduce((s,o)=>s+(Number(o.total)||0),0)),M.length+' pedido'+(M.length===1?'':'s')+' a prazo sem cobrança','t-venc'):''})()}
       ${tile('produtos:crit','Estoque crítico',crit,'produto'+(crit===1?'':'s')+' para comprar',crit?'t-warn':'')}
       ${tile('clientes:15','Clientes parados',parados,'sem comprar há 15 dias ou mais',parados?'t-warn':'')}
     </div>
@@ -4216,6 +4225,8 @@ function commEntries(){
     const base={o,sellerId:o.sellerId,seller:sellerById(o.sellerId).name};
     const recs=orderRecs(o);
     if(mode==='venda'||isCash(o.pay)||!recs.length&&isCash(o.pay)){out.push({...base,key:'o:'+o.id,date:(o.doneAt||o.date).slice(0,10),what:'Venda concluída',sold:o.total,comm:C});return}
+    /* cobrança dispensada (cliente já pagou / foi à vista): a comissão libera na data da dispensa */
+    if(o.recDismiss&&!recs.length){out.push({...base,key:'o:'+o.id,date:isoDay(o.recDismiss.at),what:'Venda concluída (recebida sem parcela)',sold:o.total,comm:C});return}
     const pc=parcelComm(C,recs,o.total);
     recs.filter(r=>r.paidAt).forEach(r=>out.push({...base,key:'r:'+r.id,date:r.paidAt,what:'Parcela '+r.parcel+' recebida',sold:r.amount,comm:pc[r.id]}));
   });
@@ -4224,7 +4235,7 @@ function commEntries(){
 /* comissão que ainda depende do cliente pagar (modo recebimento) */
 function commWaiting(sel){
   if(commMode()==='venda')return 0;
-  return r2(S.orders.filter(o=>o.status==='concluido'&&sellerById(o.sellerId)&&(!sel||o.sellerId===sel)&&!isCash(o.pay)).reduce((s,o)=>{const C=orderComm(o),paid=orderRecs(o).filter(r=>r.paidAt).reduce((a,r)=>a+r.amount,0);return s+Math.max(0,C*(1-paid/(o.total||1)))},0));
+  return r2(S.orders.filter(o=>o.status==='concluido'&&sellerById(o.sellerId)&&(!sel||o.sellerId===sel)&&!isCash(o.pay)&&!(o.recDismiss&&!orderRecs(o).length)).reduce((s,o)=>{const C=orderComm(o),paid=orderRecs(o).filter(r=>r.paidAt).reduce((a,r)=>a+r.amount,0);return s+Math.max(0,C*(1-paid/(o.total||1)))},0));
 }
 function paidMap(){const m=new Map();(S.commPayouts||[]).forEach(p=>Object.entries(p.items||{}).forEach(([k,v])=>m.set(k,{amount:v,payout:p})));return m}
 function admComissao(){
@@ -4517,6 +4528,7 @@ function admOrders(){
   $('#lanB').onclick=()=>{ui.lanc={cid:'',mode:'retirada',pay:'',cart:{},q:'',addr:'',bairro:'',note:''};admOrders();window.scrollTo(0,0)};
   c.querySelectorAll('[data-dl]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.oid);if(o)exportOrders([o],b.dataset.dl,(b.dataset.dl==='pick'?'separacao-pedido-':'pedido-')+o.no)});
   c.querySelectorAll('[data-dlall]').forEach(b=>b.onclick=()=>exportOrders(list,b.dataset.dlall,(b.dataset.dlall==='pickall'?'separacao-consolidada-':b.dataset.dlall==='pick'?'separacao-':'pedidos-')+FILTER_NAME[ui.ofilter]+'-'+stamp()));
+  c.querySelectorAll('[data-recund]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.recund);if(!o)return;delete o.recDismiss;save();toast('Pedido nº '+o.no+' voltou para a lista de cobrança (Financeiro › A receber)');admOrders()});
   c.querySelectorAll('[data-rec]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.rec);let pz=daysFromPay(o.pay),custom='';if(pz.startsWith('outro:')){custom=pz.slice(6).split(',').join(', ');pz='outro'}if(!pz)pz='7,14,21';
     ui.tab='receber';ui.finTab='receber';ui.recNew={cid:o.customerId,value:money(o.total),prazo:pz,custom,base:today(),orderNo:String(o.no),desc:o.pay};renderAdmin();window.scrollTo(0,0)});
   c.querySelectorAll('[data-osel]').forEach(s=>s.onchange=()=>{const o=S.orders.find(x=>x.id===s.dataset.osel);o.sellerId=s.value;o.sellerRate=sellerById(s.value)?Number(sellerById(s.value).commission)||0:'';save();toast(s.value?'Vendedor do pedido nº '+o.no+': '+sellerById(s.value).name:'Pedido nº '+o.no+' sem vendedor (comissão zero)');admOrders()});
@@ -6071,7 +6083,47 @@ function recForm(){
 /* a navegação do Financeiro (A receber, A pagar, Caixa da semana) fica no submenu do painel (renderAdmin) */
 function finSeg(){return ''}
 function bindFinSeg(c){c.querySelectorAll('[data-fin]').forEach(b=>b.onclick=()=>{ui.finTab=b.dataset.fin;admFin()})}
-function admFin(){const ok=['receber','pagar','caixa'].filter(modOn);if(!ok.includes(ui.finTab))ui.finTab=ok[0]||'receber';const T=ui.finTab;if(T==='pagar')admPagar();else if(T==='caixa'){admCaixa();pdvCaixaSemana()}else admReceber()}
+function admFin(){const ok=finTabs();if(!ok.includes(ui.finTab))ui.finTab=ok[0]||'receber';const T=ui.finTab;if(T==='pagar')admPagar();else if(T==='caixa'){admCaixa();pdvCaixaSemana()}else if(T==='perdas')admPerdas();else admReceber()}
+/* perdas por avaria (o.loss gravado pelo servidor na conclusão), a preço de CUSTO: o do item no pedido; sem ele, o do produto hoje */
+function lossRows(from,to){const out=[];(S.orders||[]).forEach(o=>{if(o.status!=='concluido'||!o.loss)return;const d=isoDay(o.doneAt||o.date);if(d<from||d>to)return;
+  Object.entries(o.loss).forEach(([pid,q])=>{q=Number(q)||0;if(!(q>0))return;const it=(o.items||[]).find(i=>i.pid===pid&&!i.occLine&&!i.extra),p=S.products.find(x=>x.id===pid);
+    const cu=it&&Number(it.cost)>0?Number(it.cost):p&&Number(p.cost)>0?Number(p.cost):null;
+    out.push({d,o,pid,name:(it&&it.name)||(p&&p.name)||pid,unit:(it&&it.unit)||(p&&p.unit)||'',q,cost:cu,value:cu==null?null:Math.round(q*cu*100)/100})})});
+  return out.sort((a,b)=>a.d.localeCompare(b.d)||String(a.o.no).localeCompare(String(b.o.no)))}
+function lossSum(L){const by=new Map();L.forEach(r=>{const x=by.get(r.pid)||{name:r.name,unit:r.unit,q:0,value:0,noCost:false};x.q=Math.round((x.q+r.q)*1000)/1000;if(r.value==null)x.noCost=true;else x.value=Math.round((x.value+r.value)*100)/100;by.set(r.pid,x)});
+  return {by:[...by.values()].sort((a,b)=>b.value-a.value||b.q-a.q),total:Math.round(L.reduce((s,r)=>s+(r.value||0),0)*100)/100,noCost:L.filter(r=>r.value==null).length}}
+function admPerdas(){const c=$('#tabc'),F=ui.lossF=ui.lossF||monthRange(),bad=F.from>F.to,L=bad?[]:lossRows(F.from,F.to),T=lossSum(L);
+  const qn=v=>Number(v).toLocaleString('pt-BR',{maximumFractionDigits:3});
+  c.innerHTML=`<div class="sectionhead"><h2>Perdas por avaria</h2><div class="row" style="gap:6px">${L.length?'<button class="btn ghost" id="lpdf">Baixar PDF</button><button class="btn ghost" id="lxl">Baixar Excel</button>':''}</div></div>
+    <section class="panel" style="display:grid;gap:10px;margin-bottom:12px"><div class="row" style="gap:10px;flex-wrap:wrap;align-items:end">
+      <div class="field"><label for="lfrom">De</label><input type="date" id="lfrom" value="${F.from}"></div><div class="field"><label for="lto">Até</label><input type="date" id="lto" value="${F.to}"></div></div>
+      ${bad?'<div class="err">A data inicial é depois da final.</div>':'<div class="small muted">Embalagens avariadas que voltaram da entrega e saíram do estoque como perda (pela data de conclusão do pedido). Valor a preço de custo.</div>'}</section>
+    <div class="tiles"><div class="tile"><span class="lbl">Perdas no período</span><b class="num">${brl(T.total)}</b><span class="small muted">a preço de custo</span></div>
+      <div class="tile"><span class="lbl">Ocorrências</span><b class="num">${L.length}</b><span class="small muted">${T.by.length} produto${T.by.length===1?'':'s'}</span></div></div>
+    ${T.noCost?`<div class="notice" style="margin-bottom:8px">${T.noCost} linha${T.noCost===1?'':'s'} sem preço de custo: não entra${T.noCost===1?'':'m'} no valor. Cadastre o custo do produto.</div>`:''}
+    ${L.length?`<div class="tablewrap" style="margin-bottom:12px"><table class="btable"><thead><tr><th>Produto</th><th class="r">Quantidade</th><th class="r">Valor a custo</th></tr></thead><tbody>
+      ${T.by.map(x=>`<tr><td><b>${esc(x.name)}</b> <span class="small muted">${esc(x.unit)}</span></td><td class="r num">${qn(x.q)}</td><td class="r num">${x.noCost&&!x.value?'—':brl(x.value)}</td></tr>`).join('')}
+      <tr class="tot"><td><b>Total</b></td><td></td><td class="r num"><b>${brl(T.total)}</b></td></tr></tbody></table></div>
+    <div class="tablewrap"><table class="btable"><thead><tr><th>Data</th><th>Pedido</th><th>Cliente</th><th>Produto</th><th class="r">Qtd</th><th class="r">Custo unit.</th><th class="r">Valor</th></tr></thead><tbody>
+      ${L.map(r=>`<tr><td class="num">${dBR(r.d)}</td><td class="num">nº ${esc(r.o.no)}</td><td>${esc(r.o.customer||'')}</td><td>${esc(r.name)}</td><td class="r num">${qn(r.q)}</td><td class="r num">${r.cost==null?'—':brl(r.cost)}</td><td class="r num"><b>${r.value==null?'—':brl(r.value)}</b></td></tr>`).join('')}</tbody></table></div>`
+    :`<div class="empty">Nenhuma perda por avaria no período.</div>`}`;
+  bindFinSeg(c);
+  const rer=()=>{const y=window.scrollY;admPerdas();window.scrollTo(0,y)};
+  $('#lfrom').onchange=e=>{F.from=e.target.value||F.from;rer()};$('#lto').onchange=e=>{F.to=e.target.value||F.to;rer()};
+  if(!L.length)return;
+  const fn='perdas-por-avaria-'+F.from+'-a-'+F.to;
+  $('#lpdf').onclick=()=>finPdf({file:fn,title:'Perdas por avaria',sub:dBR(F.from)+' a '+dBR(F.to),
+    tiles:[['Perdas no período (a custo)',brl(T.total),T.total>0.004],['Ocorrências',String(L.length)],['Produtos',String(T.by.length)]],
+    sections:[{title:'Por produto',head:['Produto','Unidade','Quantidade','Valor a custo'],right:[2,3],body:T.by.map(x=>[x.name,x.unit,qn(x.q),x.noCost&&!x.value?'—':brl(x.value)]),foot:['Total','','',brl(T.total)]},
+      {title:'Ocorrências',head:['Data','Pedido','Cliente','Produto','Qtd','Custo unit.','Valor'],right:[4,5,6],body:L.map(r=>[dBR(r.d),'nº '+r.o.no,r.o.customer||'',r.name,qn(r.q),r.cost==null?'—':brl(r.cost),r.value==null?'—':brl(r.value)]),foot:['Total','','','','','',brl(T.total)]}],
+    note:'Embalagens avariadas na entrega, baixadas do estoque como perda. Valor = quantidade × custo do item no pedido (sem ele, o custo atual do produto).'});
+  $('#lxl').onclick=()=>{if(typeof XLSX==='undefined'){toast('Não consegui carregar o Excel. Verifique a internet.');return}try{
+    const rows=[[S.store.name],['Perdas por avaria · '+dBR(F.from)+' a '+dBR(F.to)],[],['Data','Pedido nº','Cliente','Produto','Unidade','Quantidade','Custo unit. (R$)','Valor (R$)'],
+      ...L.map(r=>[dBR(r.d),r.o.no,r.o.customer||'',r.name,r.unit,r.q,r.cost==null?'':r.cost,r.value==null?'':r.value]),['','','','TOTAL','','','',T.total]];
+    const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:12},{wch:10},{wch:28},{wch:30},{wch:16},{wch:11},{wch:15},{wch:13}];fmtCols(ws,[6,7],4,4+L.length);
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Perdas');offerFile(fn+'.xlsx',XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+  }catch(e){pdfFail(e,'planilha')}};
+}
 const payStatus=p=>p.paidAt?'pago':p.due<today()?'vencido':'aberto';
 const PAY_CATS=['Fornecedor','Frete e combustível','Salários','Aluguel','Impostos','Comissão','Outros'];
 function admPagar(){const c=$('#tabc');S.payables=S.payables||[];const F=ui.payF||(ui.payF={st:'aberto'}),E=ui.payNew;
@@ -6147,8 +6199,11 @@ function admReceber(){
     ${ui.recNew?recForm():''}
     ${(()=>{const M=S.orders.filter(recMissing).filter(o=>!F.cid||o.customerId===F.cid);if(!M.length)return '';const t=M.reduce((s,o)=>s+(Number(o.total)||0),0);
       return `<div class="panel" style="margin-bottom:12px;border-color:var(--warn)"><b style="color:var(--warn)">${M.length} pedido${M.length===1?'':'s'} a prazo concluído${M.length===1?'':'s'} sem conta a receber · ${brl(t)}</b>
-        <div class="small">${M.slice(0,12).map(o=>'nº '+esc(o.no)+' ('+esc(o.customer||'')+', '+esc(o.pay||'')+')').join(' · ')}${M.length>12?' · e mais '+(M.length-12):''}</div>
-        <div class="small muted">Esse valor não está sendo cobrado. Em Pedidos, abra o pedido e use Mais &gt; Lançar no contas a receber. Se a forma de pagamento é paga na hora (ex.: cartão na entrega), marque-a como À vista em Cadastros &gt; Formas de pagamento.</div></div>`})()}
+        <div class="small muted">Esse valor não está sendo cobrado. Escolha o prazo e toque em <b>Lançar</b> (vencimentos contados de hoje), ou <b>Dispensar</b> se o cliente já pagou ou foi à vista. Forma paga na hora (ex.: cartão na entrega)? Marque-a como À vista em Cadastros › Pagamento.</div>
+        <div class="list" style="margin-top:8px">${M.slice(0,30).map(o=>{const d=daysFromPay(o.pay).replace('outro:',''),k=PRAZOS.some(p=>p[0]===d&&d!=='0')?d:'28';
+          return `<div class="prow" style="grid-template-columns:minmax(0,1fr) auto;align-items:center"><div class="t"><b>nº ${esc(o.no)} · ${esc(o.customer||'')}</b><span class="small muted">${esc(o.pay||'')} · concluído em ${dBR(isoDay(o.doneAt||o.date))} · <b>${brl(o.total)}</b></span></div>
+            <div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end"><select data-rmpz="${o.id}" aria-label="Prazo do pedido nº ${esc(o.no)}" style="width:auto;min-height:38px">${PRAZOS.filter(p=>p[0]!=='0'&&p[0]!=='outro').map(p=>`<option value="${p[0]}" ${p[0]===k?'selected':''}>${p[1]}</option>`).join('')}</select>
+            <button type="button" class="btn dlb" data-rmok="${o.id}">Lançar</button><button type="button" class="btn ghost dlb" data-rmdis="${o.id}">Dispensar</button></div></div>`}).join('')}${M.length>30?`<div class="small muted">e mais ${M.length-30} pedido(s): resolva estes primeiro.</div>`:''}</div></div>`})()}
     <div class="tiles">
       <button class="tile" data-rst="aberto" aria-pressed="${F.st==='aberto'}"><span class="lbl">No prazo</span><b class="num">${brl(sum('aberto'))}</b><span class="small muted">a vencer</span></button>
       <button class="tile t-venc" data-rst="vencido" aria-pressed="${F.st==='vencido'}"><span class="lbl">Vencido</span><b class="num">${brl(sum('vencido'))}</b><span class="small muted">${nVenc} título${nVenc===1?'':'s'} sem pagamento</span></button>
@@ -6168,6 +6223,10 @@ function admReceber(){
         ${ui.confirmDel===r.id?`<button class="btn danger dlb" data-rdelok="${r.id}">Confirmar exclusão</button>`:`<button class="btn ghost dlb" data-rdel="${r.id}">Excluir</button>`}</div></div>
     </div>`}).join('')}</div>`:`<div class="empty">${all.length?'Nenhum título com esse filtro.':'Nenhum lançamento ainda. Toque em "+ Novo lançamento" ou use "Lançar no contas a receber" em um pedido.'}</div>`}`;
   bindFinSeg(c);
+  c.querySelectorAll('[data-rmok]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.rmok);if(!o||!recMissing(o))return;const sel=c.querySelector(`[data-rmpz="${o.id}"]`),days=parseDays(sel?sel.value:'28');if(!days.length)return;
+    const parts=recLaunch(o,days,today());save();toast('Pedido nº '+o.no+': '+parts.length+' parcela'+(parts.length===1?'':'s')+' lançada'+(parts.length===1?'':'s')+' no contas a receber');admReceber()});
+  c.querySelectorAll('[data-rmdis]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.rmdis);if(!o)return;if(!confirm('Dispensar a cobrança do pedido nº '+o.no+' ('+brl(o.total)+')? Use quando o cliente já pagou ou foi à vista. Fica registrado quem dispensou e quando.'))return;
+    o.recDismiss={at:new Date().toISOString(),by:ui.adminName||'Loja',why:'Já recebido / à vista'};save();toast('Pedido nº '+o.no+': cobrança dispensada');admReceber()});
   $('#rnew').onclick=()=>{ui.recNew={cid:S.customers[0]?.id||'',value:'',prazo:'7,14,21',custom:'',base:today(),orderNo:'',desc:''};admReceber()};
   c.querySelectorAll('[data-rst]').forEach(b=>b.onclick=()=>{F.st=b.dataset.rst;ui.confirmDel=null;admReceber()});
   $('#rfcli').onchange=e=>{F.cid=e.target.value;admReceber()};
@@ -6199,9 +6258,9 @@ function admReceber(){
     const cu=S.customers.find(x=>x.id===f.cid);if(!cu){$('#rerr').textContent='Cadastre o cliente antes de lançar.';return}
     const val=pnum(f.value);if(!(val>0)){$('#rerr').textContent='Informe um valor válido, ex.: 1.250,00.';return}
     const days=f.prazo==='outro'?parseDays(f.custom):parseDays(f.prazo);if(!days.length){$('#rerr').textContent='Informe os dias de cada parcela, ex.: 10, 20, 30.';return}
-    const parts=splitParcels(val,days),grp=uid();
-    parts.forEach((p,i)=>S.receivables.push({id:uid(),group:grp,customerId:cu.id,customer:cu.name,orderNo:f.orderNo,desc:f.desc,parcel:(i+1)+'/'+parts.length,amount:p.amount,due:addDays(f.base,p.days),paidAt:'',created:new Date().toISOString()}));
-    if(f.orderNo){const o=S.orders.find(x=>String(x.no)===String(f.orderNo));if(o)o.recLaunched=true}
+    const parts=splitParcels(val,days),grp=uid(),lo=f.orderNo?S.orders.find(x=>String(x.no)===String(f.orderNo)&&x.customerId===cu.id):null;
+    parts.forEach((p,i)=>S.receivables.push(Object.assign({id:uid(),group:grp,customerId:cu.id,customer:cu.name,orderNo:f.orderNo,desc:f.desc,parcel:(i+1)+'/'+parts.length,amount:p.amount,due:addDays(f.base,p.days),paidAt:'',created:new Date().toISOString()},lo?{orderId:lo.id}:{})));
+    if(lo){lo.recLaunched=true;delete lo.recDismiss}
     save();ui.recNew=null;F.st='todos';F.cid=cu.id;toast(parts.length+' lançamento'+(parts.length===1?'':'s')+' gerado'+(parts.length===1?'':'s')+' para '+cu.name);admReceber();
   };
 }

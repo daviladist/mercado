@@ -150,6 +150,26 @@ with sync_playwright() as pw:
     check('23,00' in pg.inner_text('body'), 'venda concluída com troco de R$ 23,00')
     check(not E, 'caixa sem erro de JavaScript: %s' % E[:2]); b.close()
 
+    print('== financeiro: pedido a prazo sem conta (lançar / dispensar) e perdas por avaria')
+    s, st = A.req('/api/state'); vp = st['V']['meta'].get('payments')
+    s, r = A.req('/api/sync', {'changes': [{'c': 'meta', 'id': 'payments', 'op': 'put', 'ver': vp, 'doc': ['PIX', 'Dinheiro', 'Boleto 28 dias', 'Boleto']},
+        o('f1', 'concluido', {'pay': 'Boleto', 'total': 100, 'doneAt': hoje + 'T12:00:00.000Z'}), o('f2', 'concluido', {'pay': 'Boleto', 'total': 60, 'doneAt': hoje + 'T12:00:00.000Z'}),
+        o('f3', 'concluido', {'pay': 'PIX', 'recLaunched': True, 'doneAt': hoje + 'T12:00:00.000Z', 'loss': {'pa': 2}})]})
+    check(s == 200 and not r.get('rejected'), 'pedidos do financeiro gravados: %s' % (r.get('rejected') or r.get('error') or ''))
+    b, pg, E = start(pw, '/#admin', AL, desk=True)
+    pg.locator('[data-tab="receber"]').first.click(); pg.wait_for_timeout(500)
+    t = pg.inner_text('#tabc'); check('2 pedidos a prazo concluídos sem conta a receber' in t, 'A receber: aviso com os 2 pedidos sem conta (%s)' % t[:300].replace('\n', ' '))
+    pg.select_option('[data-rmpz="f1"]', '14,28'); pg.click('[data-rmok="f1"]'); wait_sync(pg)
+    pg.click('[data-rmdis="f2"]'); wait_sync(pg)
+    st = A.req('/api/state')[1]['S']; f1 = next(x for x in st['orders'] if x['id'] == 'f1'); f2 = next(x for x in st['orders'] if x['id'] == 'f2')
+    R = sorted(r['amount'] for r in st['receivables'] if r.get('orderId') == 'f1')
+    check(f1.get('recLaunched') and R == [50, 50], 'Lançar: 2 parcelas de R$ 50 no prazo escolhido (%s)' % R)
+    check(f2.get('recDismiss', {}).get('by') and f2['recDismiss'].get('at') and not f2.get('recLaunched'), 'Dispensar: grava quem e quando, sem criar conta')
+    check('sem conta a receber' not in pg.inner_text('#tabc'), 'aviso some depois de resolver')
+    pg.locator('[data-tab="receber"][data-fin="perdas"], [data-fin="perdas"]').first.click(); pg.wait_for_timeout(500)
+    t = pg.inner_text('#tabc'); check('perdas por avaria' in t.lower() and '40,00' in t, 'Perdas: 2 × custo R$ 20 = R$ 40,00 (%s)' % t[:200].replace('\n', ' '))
+    check(not E, 'financeiro sem erro de JavaScript: %s' % E[:2]); b.close()
+
     print('== fila do app: recusa do envio inteiro não perde nada')
     b, pg, E = start(pw, '/#admin', AL, desk=True, expose=True)
     calls = []
