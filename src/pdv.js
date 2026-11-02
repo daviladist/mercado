@@ -278,7 +278,7 @@ const pdvPixHtml=v=>`<div class="pdvqr"><div id="pdvqrimg" class="pdvmut">Gerand
 function pdvPixQr(v){const draw=()=>{const box=$('#pdvqrimg');if(!box)return;try{const q=window.qrcode(0,'M');q.addData(pdvBrCode(v));q.make();box.innerHTML='<img alt="QR Code do PIX" src="'+q.createDataURL(6,8)+'">'}catch(e){box.textContent='QR indisponível: use o código abaixo (copia e cola).'}};
   if(window.qrcode){draw();return}pdvQrLib().then(draw,()=>{const b=$('#pdvqrimg');if(b)b.textContent='Sem QR (sem internet?): use o código abaixo.'})}
 /* gerador de QR carregado ao abrir o caixa (com internet), para o PIX funcionar mesmo se a conexão cair depois */
-function pdvQrLib(){if(window.qrcode)return Promise.resolve();if(PDV.qrLib)return PDV.qrLib;PDV.qrLib=new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';s.onload=ok;s.onerror=()=>{PDV.qrLib=null;no()};document.head.appendChild(s)});return PDV.qrLib}
+function pdvQrLib(){if(window.qrcode)return Promise.resolve();if(PDV.qrLib)return PDV.qrLib;PDV.qrLib=new Promise((ok,no)=>{const s=document.createElement('script');s.src='/vendor/qrcode-generator-1.4.4.js';s.onload=ok;s.onerror=()=>{PDV.qrLib=null;no()};document.head.appendChild(s)});return PDV.qrLib}
 async function pdvFinish(){if(PDV.busy)return;PDV.busy=true;const ok=$('#pdvpok');if(ok)ok.disabled=true;
   const body=Object.assign(pdvBody(),{id:PDV.saleId,caixaId:PDV.st.caixa.id,autorizacao:PDV.auth||'',pagamentos:PDV.pays.map(p=>({forma:p.forma,valor:p.valor,recebido:p.recebido,conferido:!!p.conferido})),totalEsperado:PDV.payTotal,clientAt:new Date().toISOString()});
   const snap={items:PDV.items.slice(),cust:PDV.cust,T:pdvTotals(),pays:PDV.pays.slice(),troco:Math.max(0,Math.round((pdvPaid()-PDV.payTotal)*100)/100)};
@@ -424,7 +424,7 @@ function pdvSnapCut(){const pk=(o,ks)=>{const x={};ks.forEach(k=>{if(o&&o[k]!==u
 function pdvSnapSave(){if(!SRV.me||!PDV.st||!PDV.st.caixa)return;
   const snap={at:Date.now(),me:SRV.me,T:TENANT,st:PDV.st,S:pdvSnapCut()};
   try{localStorage.setItem(PDV_SNAP(),JSON.stringify(snap))}catch(e){}
-  try{if('serviceWorker' in navigator)navigator.serviceWorker.ready.then(r=>r.active&&r.active.postMessage({guardar:[location.pathname,'/app.js']}))}catch(e){}}
+  try{if('serviceWorker' in navigator)navigator.serviceWorker.ready.then(r=>r.active&&r.active.postMessage({guardar:[location.pathname,'/app.js','/vendor/jspdf-2.5.1.umd.min.js','/vendor/jspdf-autotable-3.8.2.min.js','/vendor/qrcode-generator-1.4.4.js']}))}catch(e){}}
 function pdvSnapDrop(){try{localStorage.removeItem(PDV_SNAP())}catch(e){}}
 function pdvOfflineBoot(){if(!PDV_PATH)return false;let x=null;try{x=JSON.parse(localStorage.getItem(PDV_SNAP())||'null')}catch(e){}
   if(!x||!x.me||!x.st||!x.st.caixa||Date.now()-x.at>3*864e5)return false;   // catálogo de até 3 dias
