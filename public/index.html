@@ -1170,6 +1170,19 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;text
   body.hasbnav header.top .iconbtn:not(#admOut){display:none}
   .helptip .helpbody{position:fixed;left:12px;right:12px;top:auto;bottom:calc(80px + env(safe-area-inset-bottom,0px));width:auto}
 }
+.pfmore{border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.pfmore>summary{cursor:pointer;list-style:none;padding:12px 14px;font-weight:700;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;min-height:44px}
+.pfmore>summary::-webkit-details-marker{display:none}
+.pfmore>summary::before{content:'▸';color:var(--accent);transition:transform .15s;display:inline-block}
+.pfmore[open]>summary::before{transform:rotate(90deg)}
+.pfmorebody{display:grid;gap:14px;padding:0 14px 14px}
+.card .ph.phx{aspect-ratio:auto;height:96px}
+.card .ph.phx img{object-fit:contain;padding:8px}
+.misspanel{margin-bottom:12px;border-color:color-mix(in srgb,var(--warn) 45%,var(--line));border-left:5px solid var(--warn);background:color-mix(in srgb,var(--warn) 7%,var(--surface));display:grid;gap:6px}
+.misst{color:var(--warn);font-size:15px}
+.misspanel .prow{background:var(--surface)}
+.misspanel [data-rmok],.misspanel [data-rmdis]{min-height:44px}
+@media (max-width:640px){.misspanel .prow{grid-template-columns:1fr!important}.misspanel .prow .row{justify-content:flex-start!important}.misspanel [data-rmok]{flex:1}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head><body>
@@ -1195,6 +1208,6 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;text
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="/app.js?v=591793140e"></script>
+<script src="/app.js?v=c90563bbfa"></script>
 
 </body></html>

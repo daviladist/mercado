@@ -1168,6 +1168,19 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;text
   body.hasbnav header.top .iconbtn:not(#admOut){display:none}
   .helptip .helpbody{position:fixed;left:12px;right:12px;top:auto;bottom:calc(80px + env(safe-area-inset-bottom,0px));width:auto}
 }
+.pfmore{border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.pfmore>summary{cursor:pointer;list-style:none;padding:12px 14px;font-weight:700;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;min-height:44px}
+.pfmore>summary::-webkit-details-marker{display:none}
+.pfmore>summary::before{content:'▸';color:var(--accent);transition:transform .15s;display:inline-block}
+.pfmore[open]>summary::before{transform:rotate(90deg)}
+.pfmorebody{display:grid;gap:14px;padding:0 14px 14px}
+.card .ph.phx{aspect-ratio:auto;height:96px}
+.card .ph.phx img{object-fit:contain;padding:8px}
+.misspanel{margin-bottom:12px;border-color:color-mix(in srgb,var(--warn) 45%,var(--line));border-left:5px solid var(--warn);background:color-mix(in srgb,var(--warn) 7%,var(--surface));display:grid;gap:6px}
+.misst{color:var(--warn);font-size:15px}
+.misspanel .prow{background:var(--surface)}
+.misspanel [data-rmok],.misspanel [data-rmdis]{min-height:44px}
+@media (max-width:640px){.misspanel .prow{grid-template-columns:1fr!important}.misspanel .prow .row{justify-content:flex-start!important}.misspanel [data-rmok]{flex:1}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 
@@ -1568,7 +1581,7 @@ function card(p,vars){
   if(R.retira.on&&R.retira.price>0)offers.push(`Retirando no depósito: <b>${uP(ieAdj(p,R.retira.price),p)}</b>`);
   const now=q?priceFor(p,q,ui.mode,ui.pay):null;
   return `<article class="card ${(vars?vars.some(v=>ui.cart[v.id]):q)?'incart':''}">
-    <div class="ph"><img src="${esc(p.photo||ph(p.name,150))}" alt="${esc(p.name)}" loading="lazy">${promo?`<span class="flag">Promoção${R.promo.until?' até '+fmtDate(R.promo.until):''}</span>`:''}</div>
+    <div class="ph${!p.photo||String(p.photo).startsWith('data:image/svg')?' phx':''}"><img src="${esc(p.photo||ph(p.name,150))}" alt="${esc(p.name)}" loading="lazy">${promo?`<span class="flag">Promoção${R.promo.until?' até '+fmtDate(R.promo.until):''}</span>`:''}</div>
     <div class="body">
       ${vars?`<div class="name">${esc(p.fam)}</div>${famChips(p,vars)}`:`<div class="name">${esc(p.name)}</div>`}
       <div class="unit">${esc(p.unit)}${p.code?' · Cód. '+esc(p.code):''}</div>
@@ -2513,8 +2526,8 @@ function bindVendSep(app,me,rer){
 function admSep(){
   const c=$('#decS')||$('#tabc'),open=S.orders.filter(o=>OPEN.includes(o.status)&&sugPending(o).length).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   const since=addDays(today(),-6),hist=[];S.orders.forEach(o=>(o.sugs||[]).forEach(s=>{if(s.status!=='pendente'&&String(s.doneAt||s.at).slice(0,10)>=since)hist.push({o,s})}));hist.sort((a,b)=>String(b.s.doneAt||'').localeCompare(String(a.s.doneAt||'')));
-  c.innerHTML=`<div class="sectionhead"><h3 class="dech">Trocas e faltas da separação</h3></div>
-    <p class="small muted" style="margin:0 0 12px">O que o conferente encontrou na separação. Nos pedidos de vendedor, a <b>falta</b> já entra direto e o vendedor é avisado; a <b>troca</b> vai como pergunta para o vendedor. Você acompanha tudo aqui e também pode decidir no lugar dele.</p>
+  c.innerHTML=`<div class="sectionhead"><h3 class="dech">Trocas e faltas da separação${helpTip('O que o conferente encontrou na separação. Nos pedidos de vendedor, a <b>falta</b> já entra direto e o vendedor é avisado; a <b>troca</b> vai como pergunta para o vendedor. Você acompanha tudo aqui e também pode decidir no lugar dele.','Como funcionam trocas e faltas')}</h3></div>
+
     ${open.length?open.map(o=>{const sl=ordSeller(o);return `<section class="panel sepcard"><div class="sephead"><b>nº ${o.no} · ${esc(o.customer)}</b><span class="small muted">${sl?'Vendedor <b>'+esc(sl.name)+'</b> · ':''}${esc(stLabel(o))} · ${brl(o.total)}</span></div>${sugBox(o)}</section>`}).join(''):'<div class="empty">Nada esperando decisão.</div>'}
     <section class="panel" style="margin-top:14px;display:grid;gap:6px"><span class="lbl">Últimos 7 dias</span>
       ${hist.length?hist.slice(0,60).map(({o,s})=>`<div class="seph small"><span class="muted">${new Date(s.doneAt||s.at).toLocaleDateString('pt-BR')} ${hm(s.doneAt||s.at)}</span> · nº ${o.no} · ${esc(o.customer)} · ${sugDesc(o,s)} · <b class="${s.status==='aprovada'?'mgok':'neg'}">${s.type==='qtd'&&s.auto?'falta registrada':s.status==='aprovada'?'aprovada':'recusada'}</b>${s.decBy?' por '+esc(s.decBy):''}${s.type==='qtd'&&s.auto&&ordSeller(o)?' · vendedor '+(s.sellerSeen?'viu':'avisado'):''}</div>`).join(''):'<div class="small muted">Nenhuma troca ou falta nos últimos 7 dias.</div>'}</section>`;
@@ -4757,8 +4770,8 @@ function admAnalise(){
   const changes=o=>{const its=o.items.filter(i=>i.q>0);let pr=0,cm=0;its.forEach((i,k)=>{if(Math.abs(prOf(o,i,k)-i.price)>0.004)pr++;if(Math.abs(rateOf(o,i,k)-itemCommRate(o,i))>1e-9)cm++});return {pr,cm,any:pr+cm>0}};
   const back=S.orders.filter(o=>(o.appr==='ajustar'||o.appr==='contra')&&o.status!=='cancelado');
   const hist=S.orders.filter(o=>['aprovado','recusado','liberado','aceito'].includes(o.appr)).sort((a,b)=>String(b.apprAt||'').localeCompare(String(a.apprAt||''))).slice(0,10);
-  c.innerHTML=`<div class="sectionhead"><h3 class="dech">Preço e margem</h3></div>
-    <p class="small muted" style="margin:0 0 12px">Pedidos que o vendedor enviou com a margem abaixo do mínimo dele, e pedidos em que o cliente propôs um preço. Enquanto você não aprovar, eles não vão para o conferente nem para o faturamento. Você pode mudar o <b>preço</b>, a <b>margem</b> (o preço se ajusta sozinho) ou a <b>comissão</b> de cada produto. Responda com <b>Aprovar</b>, <b>Aprovar com outro preço</b> (volta para o vendedor ou cliente confirmar) ou <b>Recusar</b>.</p>
+  c.innerHTML=`<div class="sectionhead"><h3 class="dech">Preço e margem${helpTip('Pedidos que o vendedor enviou com a margem abaixo do mínimo dele, e pedidos em que o cliente propôs um preço. Enquanto você não aprovar, eles não vão para o conferente nem para o faturamento. Você pode mudar o <b>preço</b>, a <b>margem</b> (o preço se ajusta sozinho) ou a <b>comissão</b> de cada produto. Responda com <b>Aprovar</b>, <b>Aprovar com outro preço</b> (volta para o vendedor ou cliente confirmar) ou <b>Recusar</b>.','Como funciona a aprovação')}</h3></div>
+
     ${list.length?list.map(o=>{const its=o.items.filter(i=>i.q>0),ch=changes(o);let T=0,C=0,CM=0,G=0;
       const rows=its.map((i,k)=>{const r=rateOf(o,i,k),pr=prOf(o,i,k),ii=pr!==i.price?{...i,price:pr}:i,x=anItemCalc(o,ii,r);T+=x.net;C+=x.cost;CM+=x.comm;G+=pr*i.q;const base=i.base>0?i.base:null;
         const pch=Math.abs(pr-i.price)>0.004,cch=Math.abs(r-itemCommRate(o,i))>1e-9;
@@ -4979,8 +4992,8 @@ function admProducts(){
   if(ui.bulk){bulkView();return}
   if(ui.combosView){admCombos();return}
   const cats=catNames(),PFR=prodFiltered();
-  c.innerHTML=`<div class="sectionhead"><h2>Produtos</h2><div class="row"><details class="more"><summary class="btn ghost">Mais opções ▾</summary><div class="menu"><button class="mi" id="cbP">Combos (${(S.combos||[]).length})</button><button class="mi" id="bulkP">CADASTRO EM MASSA (planilha e StarIA)</button><button class="mi" id="ucP">Atualizar custos pelo StarIA</button><button class="mi" id="pbP">${ui.pbulk?'Sair da alteração em massa':'Alterar vários de uma vez (categoria, família…)'}</button>${S.products.some(p=>p.active&&ieF(p)<1)?'<button class="mi" id="plIE">'+PDFI+'Tabela para clientes com IE (com nota)</button>':''}</div></details><button class="btn ghost" id="newS">+ Novo pelo StarIA</button><button class="btn" id="newP">+ Novo produto</button><button class="iconpdf" id="plP" title="Baixar tabela / folha de pedido em PDF" aria-label="Baixar tabela / folha de pedido em PDF"><svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><path d="M8 3h11l7 7v17a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="var(--surface)" stroke="currentColor" stroke-width="1.8"/><path d="M19 3v7h7" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="15" width="20" height="9" rx="2" fill="#C62828"/><text x="13" y="22" text-anchor="middle" font-family="Arial" font-weight="700" font-size="7" fill="#fff">PDF</text></svg></button></div></div>
-    <p class="small muted" style="margin:0 0 12px">Produtos desativados ficam guardados e não aparecem para o cliente. Use isso para reaproveitar de uma semana para outra.</p>
+  c.innerHTML=`<div class="sectionhead"><h2>Produtos${helpTip('Produtos desativados ficam guardados e não aparecem para o cliente. Use isso para reaproveitar de uma semana para outra.','Produtos desativados')}</h2><div class="row"><details class="more"><summary class="btn ghost">Mais opções ▾</summary><div class="menu"><button class="mi" id="cbP">Combos (${(S.combos||[]).length})</button><button class="mi" id="bulkP">CADASTRO EM MASSA (planilha e StarIA)</button><button class="mi" id="ucP">Atualizar custos pelo StarIA</button><button class="mi" id="pbP">${ui.pbulk?'Sair da alteração em massa':'Alterar vários de uma vez (categoria, família…)'}</button>${S.products.some(p=>p.active&&ieF(p)<1)?'<button class="mi" id="plIE">'+PDFI+'Tabela para clientes com IE (com nota)</button>':''}</div></details><button class="btn ghost" id="newS">+ Novo pelo StarIA</button><button class="btn" id="newP">+ Novo produto</button><button class="iconpdf" id="plP" title="Baixar tabela / folha de pedido em PDF" aria-label="Baixar tabela / folha de pedido em PDF"><svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><path d="M8 3h11l7 7v17a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="var(--surface)" stroke="currentColor" stroke-width="1.8"/><path d="M19 3v7h7" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="15" width="20" height="9" rx="2" fill="#C62828"/><text x="13" y="22" text-anchor="middle" font-family="Arial" font-weight="700" font-size="7" fill="#fff">PDF</text></svg></button></div></div>
+
     <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="text" id="aq" placeholder="Buscar por nome, código ou código de barras" value="${esc(ui.aq||'')}" aria-label="Buscar produto"></div>
     ${pfBar(PFR.F,PFR.L.length)}
     ${ui.pbulk?prodBulkHtml(PFR.L):''}
@@ -5115,7 +5128,7 @@ async function stariaLookup(term){
   return null;
 }
 function stariaBox(){return `<div class="staria" id="stbox">
-  <div><span class="lbl">Puxar do StarIA</span><div class="small muted">Digite o EAN ou o código interno. Vêm o código, o EAN, o nome e o custo do fornecedor na última compra (valor da nota, não o CMV). O resto você completa aqui.</div></div>
+  <div><span class="lbl">Puxar do StarIA</span>${helpTip('Digite o EAN ou o código interno. Vêm o código, o EAN, o nome e o custo do fornecedor na última compra (valor da nota, não o CMV). O resto você completa aqui.','O que vem do StarIA')}<div class="small muted">Digite o EAN ou o código e toque em Buscar.</div></div>
   <div class="row" style="gap:8px"><input type="text" id="stq" inputmode="numeric" placeholder="EAN ou código interno" style="flex:1;min-width:160px" aria-label="EAN ou código interno no StarIA"><button type="button" class="btn" id="stgo">Buscar</button></div>
   <div id="stres" aria-live="polite"></div></div>`}
 function bindStaria(){
@@ -5185,20 +5198,22 @@ function productForm(){
     <div class="psec" data-sec="cad">${stariaBox()}
     <div class="photo-pick"><img id="pimg" src="${e.photo||ph(e.name||'Novo Produto',150)}" alt="Foto do produto">
       <div class="field"><span class="lbl">Foto do produto</span>
-        <div class="pastezone" id="pzone" contenteditable="true" role="textbox" aria-label="Colar imagem do produto" spellcheck="false"><b>Cole a imagem aqui</b> (Ctrl+V, ou toque e segure e escolha Colar no celular). Também pode arrastar a imagem para cá.</div>
-        <span class="small muted">Na internet, clique com o botão direito na foto e escolha <b>Copiar imagem</b>. Ou envie um arquivo:</span>
+        <div class="pastezone" id="pzone" contenteditable="true" role="textbox" aria-label="Colar imagem do produto" spellcheck="false"><b>Cole ou arraste a imagem aqui</b></div>
+        <span class="small muted">Na internet: botão direito na foto › <b>Copiar imagem</b>.</span>
         <label class="btn ghost dlb filebtn" style="justify-self:start">Escolher foto do aparelho<input type="file" id="pfile" accept="image/*" class="vhide"></label></div></div>
     <div class="field"><label for="pn">Nome</label><input type="text" id="pn" value="${esc(e.name)}" placeholder="Ex.: Arroz Tipo 1 5kg" required></div>
-    <div class="grid2 pquick"><div class="field"><label for="pqp">Preço de venda${RU?' da embalagem':''} (R$)</label><input type="text" inputmode="decimal" id="pqp" value="${money(e.price)}" placeholder="0,00"></div><div class="field"><label for="pqc">Preço de custo${RU?' da embalagem':''} (R$)</label><input type="text" inputmode="decimal" id="pqc" value="${money(e.cost)}" placeholder="0,00"></div><span class="small muted" style="grid-column:1/-1;margin-top:-6px">Margem, comissão e condições de preço ficam em <b>Precificação</b>.</span></div>
-    ${varBox(e)}
+    <div class="grid2 pquick"><div class="field"><label for="pqp">Preço de venda${RU?' da embalagem':''} (R$)</label><input type="text" inputmode="decimal" id="pqp" value="${money(e.price)}" placeholder="0,00"></div><div class="field"><label for="pqc">Preço de custo${RU?' da embalagem':''} (R$)</label><input type="text" inputmode="decimal" id="pqc" value="${money(e.cost)}" placeholder="0,00"></div><span class="small muted" style="grid-column:1/-1;margin-top:-6px">Margem, comissão e condições: aba <b>Precificação</b>.</span></div>
     <div class="grid2">
       <div class="field"><label for="pcode">Código interno</label><input type="text" id="pcode" value="${esc(e.code)}" placeholder="Ex.: 10234"></div>
       <div class="field"><label for="pean">Código de barras (EAN)</label><input type="text" id="pean" inputmode="numeric" value="${esc(e.ean)}" placeholder="Ex.: 7891234567890"></div>
     </div>
+    <details class="pfmore" ${e.fam||e._von||e.ean2||(e.eans||[]).length?'open':''}><summary>Mais opções <span class="small muted">sabores, código do fardo (DUN-14)</span></summary><div class="pfmorebody">
+    ${varBox(e)}
     <div class="grid2">
       <div class="field"><label for="pean2">Código de barras da embalagem <span class="small muted">(DUN-14, opcional)</span></label><input type="text" id="pean2" inputmode="numeric" value="${esc(e.ean2||'')}" placeholder="Código impresso no fardo/caixa"></div>
       ${(e.eans||[]).length?`<div class="field" id="peansbox"><span class="lbl">Códigos ligados no caixa</span><span class="small">${esc(e.eans.join(', '))}</span> <button type="button" class="btn ghost sm" id="peansdel">Apagar estes códigos</button></div>`:''}
       <div class="small muted" style="align-self:end">Usado pelo conferente ao bipar. Se o fardo tem código próprio, cadastre aqui; os dois códigos são aceitos.</div>
+    </div></details>
     </div>
     <div class="grid2">
       <div class="field"><label for="pc">Categoria</label><select id="pc">${(()=>{const L=cats.slice();const cur=(e.cat||'').trim();if(cur&&!L.includes(cur))L.push(cur);return (cur?'':'<option value="">Escolha a categoria</option>')+L.map(x=>`<option ${x===cur?'selected':''}>${esc(x)}</option>`).join('')})()}<option value="__new">+ Nova categoria…</option></select><input type="text" id="pcnew" placeholder="Nome da nova categoria" hidden style="margin-top:6px">
@@ -5231,13 +5246,15 @@ function productForm(){
       <div class="field"><label for="pstk">Estoque atual (opcional)</label><input type="number" inputmode="numeric" id="pstk" value="${esc(e.stock??'')}" placeholder="Ex.: 100"></div>
       <div class="field"><label for="pmin">Estoque mínimo / crítico (opcional)</label><input type="number" inputmode="numeric" id="pmin" value="${esc(e.minStock??'')}" placeholder="Ex.: 20"></div>
     </div>
+    <div class="small muted" style="margin-top:-6px">Estoque na unidade de venda.${helpTip('Baixa sozinho quando um pedido é concluído. Chegando no mínimo, o produto fica marcado como "Comprar". Não bloqueia pedidos e o cliente não vê.','Como funciona o estoque')}</div>
+    <label class="switch"><input type="checkbox" id="pa" ${e.active?'checked':''}> Aparece para os clientes</label>
+    <details class="pfmore" ${hasVal(e.idealStock)||e.pdvBlock?'open':''}><summary>Mais opções <span class="small muted">estoque ideal${modOn('pdv')?', caixa (PDV)':''}</span></summary><div class="pfmorebody">
     <div class="grid2">
-      <div class="field"><label for="pideal">Estoque ideal (opcional)</label><input type="number" inputmode="numeric" id="pideal" value="${esc(e.idealStock??'')}" placeholder="Ex.: 100"><span class="small muted">Usado na sugestão de compra: ideal − atual.</span></div>
+      <div class="field"><label for="pideal">Estoque ideal (opcional)</label><input type="number" inputmode="numeric" id="pideal" value="${esc(e.idealStock??'')}" placeholder="Ex.: 100"><span class="small muted">Sugestão de compra: ideal − atual.</span></div>
       <div></div>
     </div>
-    <div class="small muted" style="margin-top:-6px">Na unidade de venda. Baixa sozinho quando um pedido é concluído. Chegando no mínimo, o produto fica marcado como "Comprar". Não bloqueia pedidos e o cliente não vê.</div>
-    <label class="switch"><input type="checkbox" id="pa" ${e.active?'checked':''}> Aparece para os clientes</label>
-    ${modOn('pdv')?`<label class="switch"><input type="checkbox" id="ppdvb" ${e.pdvBlock?'checked':''}> Bloquear venda no caixa (PDV) <span class="small muted">· marque só se este produto NÃO pode ser vendido no balcão</span></label>`:''}
+    ${modOn('pdv')?`<label class="switch"><input type="checkbox" id="ppdvb" ${e.pdvBlock?'checked':''}> Bloquear venda no caixa (PDV)</label>`:''}
+    </div></details>
     </div>
     <div class="psec" data-sec="prec">
     <div class="rules">
@@ -5738,8 +5755,8 @@ function admPerdas(){const c=$('#tabc'),F=ui.lossF=ui.lossF||monthRange(),bad=F.
   c.innerHTML=`<div class="sectionhead"><h2>Perdas por avaria</h2><div class="row" style="gap:6px">${L.length?'<button class="btn ghost" id="lpdf">Baixar PDF</button><button class="btn ghost" id="lxl">Baixar Excel</button>':''}</div></div>
     <section class="panel" style="display:grid;gap:10px;margin-bottom:12px"><div class="row" style="gap:10px;flex-wrap:wrap;align-items:end">
       <div class="field"><label for="lfrom">De</label><input type="date" id="lfrom" value="${F.from}"></div><div class="field"><label for="lto">Até</label><input type="date" id="lto" value="${F.to}"></div></div>
-      ${bad?'<div class="err">A data inicial é depois da final.</div>':'<div class="small muted">Embalagens avariadas que voltaram da entrega e saíram do estoque como perda (pela data de conclusão do pedido). Valor a preço de custo.</div>'}</section>
-    <div class="tiles"><div class="tile"><span class="lbl">Perdas no período</span><b class="num">${brl(T.total)}</b><span class="small muted">a preço de custo</span></div>
+      ${bad?'<div class="err">A data inicial é depois da final.</div>':'<div class="small muted">Avarias que voltaram da entrega, a preço de custo.'+helpTip('Embalagens avariadas que voltaram da entrega e saíram do estoque como perda, pela data de conclusão do pedido. Valor = quantidade × custo do item no pedido (sem ele, o custo atual do produto).','Como é calculado')+'</div>'}</section>
+    <div class="tiles"><div class="tile ${T.total>0.004?'t-venc':''}"><span class="lbl">Perdas no período</span><b class="num">${brl(T.total)}</b><span class="small muted">a preço de custo</span></div>
       <div class="tile"><span class="lbl">Ocorrências</span><b class="num">${L.length}</b><span class="small muted">${T.by.length} produto${T.by.length===1?'':'s'}</span></div></div>
     ${T.noCost?`<div class="notice" style="margin-bottom:8px">${T.noCost} linha${T.noCost===1?'':'s'} sem preço de custo: não entra${T.noCost===1?'':'m'} no valor. Cadastre o custo do produto.</div>`:''}
     ${L.length?`<div class="tablewrap" style="margin-bottom:12px"><table class="btable"><thead><tr><th>Produto</th><th class="r">Quantidade</th><th class="r">Valor a custo</th></tr></thead><tbody>
@@ -5813,7 +5830,7 @@ function admCaixa(){const c=$('#tabc'),t=today(),W=ui.cxW||0,start=addDays(t,W*7
     <div class="tiles"><div class="tile"><span class="lbl">Entra (a receber)</span><b class="num mgok">${brl(R)}</b></div><div class="tile"><span class="lbl">Sai (a pagar)</span><b class="num neg">${brl(P)}</b></div><div class="tile"><span class="lbl">Saldo da semana</span><b class="num ${R-P<0?'neg':'mgok'}">${brl(R-P)}</b></div></div>
     ${W===0&&(atrR||atrP)?`<div class="notice" style="margin:10px 0">Atrasados: <b>${brl(atrR)}</b> para receber de clientes · <b>${brl(atrP)}</b> de contas vencidas para pagar.</div>`:''}
     <div class="tablewrap"><table class="btable cxtable"><thead><tr><th>Dia</th><th class="r">Entra</th><th class="r">Sai</th><th class="r">Saldo do dia</th><th class="r">Acumulado</th></tr></thead><tbody>${days.map(x=>{acc+=x.r-x.p;return `<tr class="${x.d===t?'cxhoje':''}"><td>${wd(x.d)} ${dBR(x.d).slice(0,5)}</td><td class="r num">${x.r?brl(x.r):'—'}</td><td class="r num">${x.p?brl(x.p):'—'}</td><td class="r num ${x.r-x.p<0?'neg':''}">${x.r||x.p?brl(x.r-x.p):'—'}</td><td class="r num ${acc<0?'neg':''}"><b>${brl(acc)}</b></td></tr>`}).join('')}</tbody></table></div>
-    <div class="small muted" style="margin-top:10px">"Entra" é o que os clientes devem pagar em cada dia (contas a receber em aberto). "Sai" é o que você lançou em Contas a pagar. Não conta o dinheiro que já está no caixa nem as vendas à vista do dia.</div>`;
+    <div class="small muted" style="margin-top:10px">Entra = contas a receber; sai = contas a pagar.${helpTip('"Entra" é o que os clientes devem pagar em cada dia (contas a receber em aberto). "Sai" é o que você lançou em Contas a pagar. Não conta o dinheiro que já está no caixa nem as vendas à vista do dia.','Como ler o caixa da semana')}</div>`;
   bindFinSeg(c);c.querySelectorAll('[data-cxw]').forEach(b=>b.onclick=()=>{ui.cxW=(ui.cxW||0)+Number(b.dataset.cxw);admCaixa()});
   $('#cxpdf').onclick=()=>{let ac=0;const inW=x=>x.due>=start&&x.due<=end,byD=(a,b)=>String(a.due).localeCompare(String(b.due));
     const eR=rec.filter(inW).sort(byD),eP=pay.filter(inW).sort(byD);
@@ -5839,11 +5856,11 @@ function admReceber(){
   c.innerHTML=`${finSeg()}<div class="sectionhead"><h2>Contas a receber</h2><div class="row" style="gap:6px">${list.length?'<button class="btn ghost" id="rpdf">Baixar PDF</button><button class="btn ghost" id="rxl">Baixar Excel</button>':''}<button class="btn" id="rnew">+ Novo lançamento</button></div></div>
     ${ui.recNew?recForm():''}
     ${(()=>{const M=S.orders.filter(recMissing).filter(o=>!F.cid||o.customerId===F.cid);if(!M.length)return '';const t=M.reduce((s,o)=>s+(Number(o.total)||0),0);
-      return `<div class="panel" style="margin-bottom:12px;border-color:var(--warn)"><b style="color:var(--warn)">${M.length} pedido${M.length===1?'':'s'} a prazo concluído${M.length===1?'':'s'} sem conta a receber · ${brl(t)}</b>
-        <div class="small muted">Esse valor não está sendo cobrado. Escolha o prazo e toque em <b>Lançar</b> (vencimentos contados de hoje), ou <b>Dispensar</b> se o cliente já pagou ou foi à vista. Forma paga na hora (ex.: cartão na entrega)? Marque-a como À vista em Cadastros › Pagamento.</div>
+      return `<div class="panel misspanel"><b class="misst">${M.length} pedido${M.length===1?'':'s'} a prazo concluído${M.length===1?'':'s'} sem conta a receber · ${brl(t)}</b>
+        <div class="small">Esse valor não está sendo cobrado. <b>Lançar</b> cria as parcelas; <b>Dispensar</b> se o cliente já pagou.${helpTip('Os vencimentos são contados a partir de hoje, no prazo escolhido. Forma paga na hora (ex.: cartão na entrega)? Marque-a como À vista em Cadastros › Pagamento e ela deixa de aparecer aqui.','Lançar ou dispensar')}</div>
         <div class="list" style="margin-top:8px">${M.slice(0,30).map(o=>{const d=daysFromPay(o.pay).replace('outro:',''),k=PRAZOS.some(p=>p[0]===d&&d!=='0')?d:'28';
           return `<div class="prow" style="grid-template-columns:minmax(0,1fr) auto;align-items:center"><div class="t"><b>nº ${esc(o.no)} · ${esc(o.customer||'')}</b><span class="small muted">${esc(o.pay||'')} · concluído em ${dBR(isoDay(o.doneAt||o.date))} · <b>${brl(o.total)}</b></span></div>
-            <div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end"><select data-rmpz="${o.id}" aria-label="Prazo do pedido nº ${esc(o.no)}" style="width:auto;min-height:38px">${PRAZOS.filter(p=>p[0]!=='0'&&p[0]!=='outro').map(p=>`<option value="${p[0]}" ${p[0]===k?'selected':''}>${p[1]}</option>`).join('')}</select>
+            <div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end"><select data-rmpz="${o.id}" aria-label="Prazo do pedido nº ${esc(o.no)}" style="width:auto;min-height:44px">${PRAZOS.filter(p=>p[0]!=='0'&&p[0]!=='outro').map(p=>`<option value="${p[0]}" ${p[0]===k?'selected':''}>${p[1]}</option>`).join('')}</select>
             <button type="button" class="btn dlb" data-rmok="${o.id}">Lançar</button><button type="button" class="btn ghost dlb" data-rmdis="${o.id}">Dispensar</button></div></div>`}).join('')}${M.length>30?`<div class="small muted">e mais ${M.length-30} pedido(s): resolva estes primeiro.</div>`:''}</div></div>`})()}
     <div class="tiles">
       <button class="tile" data-rst="aberto" aria-pressed="${F.st==='aberto'}"><span class="lbl">No prazo</span><b class="num">${brl(sum('aberto'))}</b><span class="small muted">a vencer</span></button>
@@ -6168,7 +6185,7 @@ async function stariaClient(doc){
     buys:vi?Number(vi.valorVendaTotal)||0:null,cupons:vi?Number(vi.quantidadeCupons)||0:null,recv:ri?Number(ri.valorLiquido)||0:null,titles:ri?Number(ri.quantidadeTitulos)||0:null};
 }
 function stClientBox(){return `<div class="staria" id="scbox">
-  <div><span class="lbl">Puxar do StarIA</span><div class="small muted">Digite o CNPJ ou o CPF. Do StarIA vêm o nome e o código do cliente; do cadastro público do CNPJ (Receita Federal) vêm razão social, endereço, telefone e e-mail. A inscrição estadual não vem por nenhum dos dois: digite se o cliente tiver.</div></div>
+  <div><span class="lbl">Puxar do StarIA</span>${helpTip('Do StarIA vêm o nome e o código do cliente; do cadastro público do CNPJ (Receita Federal) vêm razão social, endereço, telefone e e-mail. A inscrição estadual não vem por nenhum dos dois: digite se o cliente tiver.','O que vem do StarIA')}<div class="small muted">Digite o CNPJ ou CPF e toque em Buscar: preenche o resto.</div></div>
   <div class="row" style="gap:8px"><input type="text" id="scq" inputmode="numeric" placeholder="CNPJ ou CPF" style="flex:1;min-width:180px" aria-label="CNPJ ou CPF no StarIA"><button type="button" class="btn" id="scgo">Buscar</button></div>
   <div id="scres" aria-live="polite"></div></div>`}
 function bindStClient(){
@@ -6215,9 +6232,8 @@ function admClients(){
         <div class="field"><label for="cdoc">CNPJ / CPF</label><input type="text" id="cdoc" inputmode="numeric" value="${esc(fmtDoc(e.doc||''))}" placeholder="00.000.000/0000-00 ou 000.000.000-00" maxlength="18"><span class="small muted" id="cdochint">${docHint(e.doc||'')}</span></div>
         <div class="field"><label for="cien">Inscrição estadual</label><input type="text" id="cien" value="${esc(cfd.ie||'')}" placeholder="Número ou ISENTO"></div>
       </div>
-      <label class="switch iesw"><input type="checkbox" id="cie" ${e.ieOk?'checked':''}> <span><b>Contribuinte de ICMS com inscrição estadual ativa</b><br><span class="small muted">Comprando com nota fiscal, recebe o "Preço com IE" dos produtos. Marque depois de conferir a IE no Sintegra.</span></span></label>
-      <label class="switch iesw"><input type="checkbox" id="cneg" ${e.canNeg?'checked':''}> <span><b>Pode negociar preço no app</b><br><span class="small muted">Libera o botão "Negociar preço" no carrinho deste cliente (vale quando a negociação está em "Só os clientes marcados").</span></span></label>
-      ${modOn('app_cliente')?`<label class="switch iesw"><input type="checkbox" id="capp" ${cliApp(e)?'checked':''}> <span><b>Acesso ao app do cliente</b><br><span class="small muted">Marque para o cliente entrar no app e fazer pedidos sozinho (aí é preciso usuário e senha). Desmarcado, ele compra pelo vendedor ou pela loja.</span></span></label>`:'<div class="small muted">Esta empresa não usa o app do cliente: não é preciso usuário nem senha. Os pedidos dele entram pelo vendedor ou pela loja.</div>'}
+      <label class="switch iesw"><input type="checkbox" id="cie" ${e.ieOk?'checked':''}> <span><b>Contribuinte de ICMS com inscrição estadual ativa</b>${helpTip('Comprando com nota fiscal, recebe o "Preço com IE" dos produtos. Marque depois de conferir a IE no Sintegra.')}</span></label>
+      ${modOn('app_cliente')?`<label class="switch iesw"><input type="checkbox" id="capp" ${cliApp(e)?'checked':''}> <span><b>Acesso ao app do cliente</b>${helpTip('Marque para o cliente entrar no app e fazer pedidos sozinho (aí é preciso usuário e senha). Desmarcado, ele compra pelo vendedor ou pela loja.')}</span></label>`:'<div class="small muted">Esta empresa não usa o app do cliente: não é preciso usuário nem senha. Os pedidos dele entram pelo vendedor ou pela loja.</div>'}
       <div class="grid2" id="cappbox" ${modOn('app_cliente')&&cliApp(e)?'':'style="display:none"'}>
         <div class="field"><label for="cl">Usuário de acesso</label><input type="text" id="cl" value="${esc(e.login)}" autocapitalize="none" placeholder="Ex.: mercearia.sj"></div>
         <div class="field"><label for="cp">Senha</label><input type="text" id="cp" value="${esc(e.pass)}" required></div>
@@ -6236,17 +6252,16 @@ function admClients(){
           <div class="field a-3"><label for="cmun">Município</label><input type="text" id="cmun" list="cmunl" value="${esc((cityById(e.city)||{}).name||cfd.cidade||'')}"><datalist id="cmunl">${(S.cities||[]).map(ct=>`<option value="${esc(ct.name)}">`).join('')}</datalist></div>
           <div class="field"><label for="cuf">UF</label><select id="cuf">${UFS.map(u=>`<option ${u===(cfd.uf||'ES')?'selected':''}>${u}</option>`).join('')}</select></div>
         </div>
-        <span class="small muted">O município também é a cidade de entrega do romaneio. Se ainda não existir em Cidades de entrega, é criado ao salvar.</span>
+        <span class="small muted">Município = cidade de entrega do romaneio.${helpTip('Se ainda não existir em Cidades de entrega, é criada ao salvar.')}</span>
       </div>
-      <div class="grid2">
-        <div class="field"><label for="csel">Vendedor responsável</label>${sellerSelect('csel',e.sellerId,'Vendedor responsável')}</div>
-        <div class="field"><label for="clim">Limite de crédito a prazo (R$)</label><input type="text" inputmode="decimal" id="clim" value="${money(e.creditLimit)}" placeholder="Em branco = sem limite"></div>
-      </div>
-      <span class="small muted" style="margin-top:-8px">Limite: soma das parcelas em aberto e dos pedidos a prazo ainda não lançados. Passando do limite, ou com parcela vencida, o cliente só consegue pedir à vista.</span>
-      <div class="field"><span class="lbl">Formas de pagamento liberadas</span>
-        <span class="small muted">O cliente só vê no carrinho as formas marcadas aqui.</span>
+      <div class="field"><label for="csel">Vendedor responsável</label>${sellerSelect('csel',e.sellerId,'Vendedor responsável')}</div>
+      <details class="pfmore" ${e.id&&(e.canNeg||hasVal(e.creditLimit)&&e.creditLimit!==''||allowedPays(e).length!==S.payments.length)?'open':''}><summary>Mais opções <span class="small muted">limite de crédito, formas de pagamento, negociação</span></summary><div class="pfmorebody">
+      <div class="field"><label for="clim">Limite de crédito a prazo (R$)${helpTip('Soma das parcelas em aberto e dos pedidos a prazo ainda não lançados. Passando do limite, ou com parcela vencida, o cliente só consegue pedir à vista.')}</label><input type="text" inputmode="decimal" id="clim" value="${money(e.creditLimit)}" placeholder="Em branco = sem limite"></div>
+      <div class="field"><span class="lbl">Formas de pagamento liberadas${helpTip('O cliente só vê no carrinho as formas marcadas aqui.')}</span>
         <div class="paychecks">${S.payments.map((p,i)=>`<label class="switch"><input type="checkbox" id="cpay${i}" data-cpay="${esc(p)}" ${allowedPays(e).includes(p)?'checked':''}> ${esc(p)}${(S.cashPays||[]).includes(p)?' <span class="small muted">(à vista)</span>':''}</label>`).join('')}</div>
         <div class="row" style="gap:6px"><button type="button" class="btn ghost" id="cpall" style="min-height:36px;padding:6px 12px">Marcar todas</button><button type="button" class="btn ghost" id="cpcash" style="min-height:36px;padding:6px 12px">Só à vista</button></div></div>
+      <label class="switch iesw"><input type="checkbox" id="cneg" ${e.canNeg?'checked':''}> <span><b>Pode negociar preço no app</b>${helpTip('Libera o botão "Negociar preço" no carrinho deste cliente (vale quando a negociação está em "Só os clientes marcados").')}</span></label>
+      </div></details>
       <div class="err" id="cerr"></div>
       <div class="row"><button class="btn" type="submit">Salvar cliente</button><button class="btn ghost" type="button" id="ccancel">Cancelar</button>
       ${e.id?(ui.confirmDel===e.id?`<span class="small">Remover acesso?</span><button class="btn danger" type="button" id="cdelok">Sim, remover</button>`:`<button class="btn danger" type="button" id="cdel">Remover</button>`):''}</div>
@@ -6304,8 +6319,7 @@ function admClients(){
   const cities=(S.cities||[]).filter(ct=>S.customers.some(x=>x.city===ct.id)),sels=(S.sellers||[]).filter(sv=>S.customers.some(x=>x.sellerId===sv.id));
   const CS=(id,lab,opts,cur)=>`<select id="${id}" aria-label="${lab}">${opts.map(([v,t])=>`<option value="${esc(v)}" ${String(cur)===String(v)?'selected':''}>${esc(t)}</option>`).join('')}</select>`;
   const cact=['city','sel','ie','venc'].filter(k=>CO[k]).length+(CO.q?1:0)+(CO.sort!=='az'?1:0);
-  c.innerHTML=`<div class="sectionhead"><h2>Clientes</h2><button class="btn" id="newC">+ Novo cliente</button></div>
-    <p class="small muted" style="margin:0 0 12px">Só entra quem você cadastrar aqui. Passe o usuário e a senha para o cliente.</p>
+  c.innerHTML=`<div class="sectionhead"><h2>Clientes${helpTip('Só entra no app quem você cadastrar aqui com acesso ao app. Passe o usuário e a senha para o cliente.','Acesso dos clientes')}</h2><button class="btn" id="newC">+ Novo cliente</button></div>
     <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="text" id="cq" placeholder="Buscar por nome, razão social, CNPJ, telefone ou bairro" value="${esc(CO.q)}" aria-label="Buscar cliente"></div>
      <div class="pfbar">
        ${CS('cosort','Ordem',[['az','Ordem: A a Z'],['za','Ordem: Z a A'],['valor','Ordem: quem mais comprou (R$)'],['ped','Ordem: mais pedidos'],['recente','Ordem: comprou mais recente'],['parado','Ordem: mais tempo sem comprar'],['novo','Ordem: cadastro mais novo']],CO.sort)}
