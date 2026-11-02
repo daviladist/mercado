@@ -38,12 +38,17 @@ body.pdvmode .pdvmd{font-family:var(--pdvfont,var(--body))}
 .pdvin .qt{background:var(--acc);color:var(--accfg);font-weight:800;border-radius:8px;padding:4px 10px;font-size:18px}
 .pdvt{background:#fff;border:1px solid var(--l);border-radius:12px;overflow:auto;flex:1;min-height:240px;max-height:calc(100vh - 260px)}
 .pdvt table{width:100%;border-collapse:collapse;font-size:16px}.pdvt th{position:sticky;top:0;background:#EFE7D6;text-align:left;padding:8px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#3B4A3F}
-.pdvt td{padding:8px;border-top:1px solid #EFE7D6}.pdvt td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pdvt th.n{text-align:right}.pdvt td{padding:8px;border-top:1px solid #EFE7D6}.pdvt td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pdvt tr.cx td{text-decoration:line-through;color:#9A8F7A}.pdvt tr.last td{background:#FBEFD9}
 .pdvr{display:flex;flex-direction:column;gap:10px}
 .pdvbox{background:#fff;border:1px solid var(--l);border-radius:12px;padding:12px 14px}
 .pdvtot{background:var(--bar);color:var(--barfg);border-radius:12px;padding:16px;display:grid;gap:4px}
 .pdvtot .lb{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--barfg);opacity:.88}.pdvtot .v{font-size:clamp(40px,6vw,64px);font-weight:800;line-height:1;color:var(--acconbar);font-variant-numeric:tabular-nums}
+.pdvcta{display:grid;gap:10px}
+.pdvpay{background:var(--acc);color:var(--accfg);border:0;border-radius:12px;min-height:64px;font:inherit;font-size:22px;font-weight:800;padding:0 18px;cursor:pointer}
+.pdvpay b{font-size:13px;opacity:.75;margin-left:6px}.pdvpay:focus-visible{outline:3px solid var(--g);outline-offset:2px}
+@media (max-width:820px){.pdvcta{position:fixed;left:0;right:0;bottom:0;z-index:40;grid-template-columns:1fr auto;align-items:stretch;gap:8px;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));background:var(--bg);box-shadow:0 -6px 18px rgba(0,0,0,.18)}
+  .pdvcta .pdvtot{padding:8px 12px;gap:0}.pdvcta .pdvtot .v{font-size:30px}.pdvcta .pdvpay{min-height:0;font-size:18px}.pdv{padding-bottom:96px}.pdvt{min-height:160px}}
 .pdvrow{display:flex;justify-content:space-between;gap:10px;font-size:15px}.pdvrow b{font-variant-numeric:tabular-nums}
 .pdvlast{font-size:18px;font-weight:700}.pdvmut{color:var(--m);font-size:13px}
 .pdvf{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;background:var(--bar2);border-top:1px solid var(--bar)}
@@ -95,10 +100,11 @@ async function renderPdv(){pdvCss();document.body.classList.add('pdvmode');const
       <aside class="pdvr" aria-label="Total"><div class="pdvbox"><div class="pdvmut">Cliente (F4)</div><div class="pdvlast" id="pdvcli"></div></div>
         <div class="pdvbox" id="pdvnote" aria-live="assertive" hidden></div><div class="pdvbox" id="pdvlast" aria-live="polite"></div>
         <div class="pdvbox"><div class="pdvrow"><span>Itens</span><b id="pdvn">0</b></div><div class="pdvrow"><span>Subtotal</span><b id="pdvsub">${pdvMoney(0)}</b></div><div class="pdvrow"><span>Desconto (F6)</span><b id="pdvdesc">—</b></div></div>
-        <div class="pdvtot"><span class="lb">Total a pagar</span><span class="v" id="pdvtot">${pdvMoney(0)}</span><span class="lb" id="pdvsrc"></span></div></aside></div>
+        <div class="pdvcta"><div class="pdvtot"><span class="lb">Total a pagar</span><span class="v" id="pdvtot">${pdvMoney(0)}</span><span class="lb" id="pdvsrc"></span></div><button type="button" class="pdvpay" id="pdvpayb">Pagamento <b>F10</b></button></div></aside></div>
     <div class="pdvf" role="toolbar" aria-label="Atalhos">${PDV_KEYS.map(k=>`<button type="button" data-k="${k}"><b>${k}</b>${PDV_HELP[k]}</button>`).join('')}</div>
     <div id="pdvmodal"></div><div id="pdvprint" aria-hidden="true"></div></div>`;
   app.querySelectorAll('.pdvf [data-k]').forEach(b=>b.onclick=()=>pdvAction(b.dataset.k));
+  {const pb=$('#pdvpayb');if(pb)pb.onclick=()=>{if(!PDV.modal)pdvAction('F10')}}
   const inp=$('#pdvc');inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const v=inp.value;inp.value='';pdvScan(v)}};
   pdvPaint();pdvFocus();pdvFila()}
 function pdvFocus(){if(PDV.modal)return;const i=$('#pdvc');if(i&&document.activeElement!==i)i.focus()}
@@ -117,6 +123,10 @@ function pdvNet(){const n=$('#pdvnet');if(n){n.className='net'+(PDV.online?'':' 
 function pdvFind(code){const c=String(code||'').trim();if(!c)return null;const d=c.replace(/\D/g,'');
   return S.products.find(p=>d&&(String(p.ean||'')===d||String(p.ean2||'')===d||(Array.isArray(p.eans)&&p.eans.includes(d))))||S.products.find(p=>String(p.code||'').toLowerCase()===c.toLowerCase())||null}
 function pdvUnit(p,q){const ie=!!(PDV.cust&&PDV.cust.ie);try{return Math.round(withIe(ie,()=>withOner('retirada',()=>priceFor(p,q,'retirada','').price))*100)/100}catch(e){return Number(p.price)||0}}
+/* o mesmo produto lido em seguida soma na mesma linha (preço por quantidade recalculado); produto por kg e linha cancelada não somam */
+function pdvPush(p,q){const L=PDV.items[PDV.items.length-1];
+  if(L&&!L.cancel&&L.pid===p.id&&!isKg(p)&&L.q+q<=999){L.q=Math.round((L.q+q)*1000)/1000;L.unit=pdvUnit(p,L.q);return}
+  PDV.items.push({pid:p.id,name:p.name,ean:p.ean||'',q,unit:pdvUnit(p,q)})}
 function pdvScan(raw){let v=String(raw||'').trim();if(!v)return;let q=PDV.qty||1;
   if(v.includes('*')){const m=/^(\d+(?:[.,]\d+)?)\s*\*\s*(\S+)$/.exec(v);if(!m){pdvBeep(false);toast('Quantidade inválida. Use: quantidade*código (ex.: 4*789...).');return}q=pdvQtyNum(m[1]);v=m[2].trim()}
   if(!(q>0)){pdvBeep(false);toast('Quantidade inválida.');return}
@@ -125,7 +135,7 @@ function pdvScan(raw){let v=String(raw||'').trim();if(!v)return;let q=PDV.qty||1
   if(!p){pdvBeep(false);pdvUnknown(v);return}
   if(p.pdvBlock){pdvBeep(false);toast(p.name+': bloqueado para venda no caixa.');return}
   if(!isKg(p)&&Math.abs(q-Math.round(q))>1e-9){pdvBeep(false);toast('Este produto é vendido por unidade.');return}
-  pdvNote('');PDV.items.push({pid:p.id,name:p.name,ean:p.ean||'',q,unit:pdvUnit(p,q)});PDV.qty=null;PDV.auth=null;pdvBeep(true);pdvChanged()}
+  pdvNote('');pdvPush(p,q);PDV.qty=null;PDV.auth=null;pdvBeep(true);pdvChanged()}
 function pdvChanged(){pdvSave('venda',{items:PDV.items,cust:PDV.cust,desc:PDV.desc,saleId:PDV.saleId});PDV.quote=null;
   const qt=document.querySelector('.pdvin .qt');if(qt&&!PDV.qty)qt.remove();pdvPaint();pdvRequote()}
 function pdvSig(){return JSON.stringify([PDV.cust&&PDV.cust.id,PDV.items.map(i=>[i.pid,i.q,!!i.cancel]),PDV.desc])}
@@ -173,7 +183,7 @@ function pdvListNav(input,listSel,onPick){let i=0;const items=()=>[...document.q
   return ()=>{i=0;mark();items().forEach(b=>b.onclick=()=>onPick(b.dataset.id))}}
 /* F2: busca por nome */
 function pdvSearch(onPick){pdvModal('busca',`<h2>Buscar produto</h2><input id="pdvsq" placeholder="Nome, código ou parte do nome" autocomplete="off"><div class="pdvlist" id="pdvsl" role="listbox"></div><div class="pdvmut">↑ ↓ para escolher · Enter confirma · Esc volta</div>`,()=>$('#pdvsq').focus());
-  const inp=$('#pdvsq');const bind=pdvListNav(inp,'#pdvsl',id=>{const p=S.products.find(x=>x.id===id);if(!p)return;if(onPick){onPick(p);return}pdvClose();if(p.pdvBlock){pdvBeep(false);toast(p.name+': bloqueado para venda no caixa.');return}const q=PDV.qty||1;if(!isKg(p)&&Math.abs(q-Math.round(q))>1e-9){pdvBeep(false);toast('Este produto é vendido por unidade.');return}PDV.items.push({pid:p.id,name:p.name,ean:p.ean||'',q,unit:pdvUnit(p,q)});PDV.qty=null;PDV.auth=null;pdvBeep(true);pdvChanged()});
+  const inp=$('#pdvsq');const bind=pdvListNav(inp,'#pdvsl',id=>{const p=S.products.find(x=>x.id===id);if(!p)return;if(onPick){onPick(p);return}pdvClose();if(p.pdvBlock){pdvBeep(false);toast(p.name+': bloqueado para venda no caixa.');return}const q=PDV.qty||1;if(!isKg(p)&&Math.abs(q-Math.round(q))>1e-9){pdvBeep(false);toast('Este produto é vendido por unidade.');return}pdvPush(p,q);PDV.qty=null;PDV.auth=null;pdvBeep(true);pdvChanged()});
   const run=()=>{const t=inp.value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');const L=(t?S.products.filter(p=>(String(p.name).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').includes(t)||String(p.code||'')===t||String(p.ean||'')===t)):[]).slice(0,40);
     $('#pdvsl').innerHTML=L.map(p=>`<button type="button" role="option" data-id="${esc(p.id)}"><span>${esc(p.name)} <span class="pdvmut">${esc(p.unit||'')}${p.pdvBlock?' · bloqueado no caixa':''}</span></span><b>${pdvMoney(pdvUnit(p,1))}</b></button>`).join('')||(t?'<div class="pdvmut">Nada encontrado.</div>':'');bind()};
   inp.oninput=run}
