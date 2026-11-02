@@ -2943,16 +2943,21 @@ function renderAdmin(){
   const novos=S.orders.filter(o=>o.status==='novo').length,nsug=S.orders.reduce((n,o)=>n+(OPEN.includes(o.status)?sugPending(o).length:0),0);
   const nan=S.orders.filter(o=>o.appr==='pendente'&&o.status!=='cancelado').length,ncnt=(S.counts||[]).filter(x=>x.status==='finalizada').length,venc=(S.receivables||[]).filter(r=>recStatus(r)==='vencido').length,crit=S.products.filter(isCritical).length;
   /* menu em grupos: poucas abas em cima, micro abas dentro */
-  const G=[['Dashboard',[['hoje','Visão geral'],['relatorios','Relatórios']]],['Pedidos',[['pedidos','Pedidos'],['decisoes','Decisões'],['entregas','Entregas']]],['Ofertas',[['semana','Ofertas da semana']]],['Caixa (PDV)',[['pdv','Caixa (PDV)']]],['Produtos',[['produtos','Produtos'],['recmerc','Receber mercadoria'],['precnotas','Precificação de notas']]],['Financeiro',[['receber','Financeiro'],['fretes','Frete de terceiro']]],['Cadastros',[['cadastros','Cadastros'],['clientes',''],['config','']]]]
+  const G=[['Início',[['hoje','Visão geral'],['relatorios','Relatórios']]],['Pedidos',[['pedidos','Pedidos'],['decisoes','Decisões'],['entregas','Entregas']]],['Ofertas',[['semana','Ofertas da semana']]],['Caixa (PDV)',[['pdv','Caixa (PDV)']]],['Produtos',[['produtos','Produtos'],['recmerc','Receber mercadoria'],['precnotas','Precificação de notas']]],['Financeiro',[['receber','Financeiro'],['fretes','Frete de terceiro']]],['Cadastros',[['cadastros','Cadastros'],['clientes',''],['config','']]]]
     .map(g=>[g[0],g[1].filter(x=>{const m=TAB_MOD[x[0]];return !m||(Array.isArray(m)?m.some(modOn):modOn(m))})]).filter(g=>g[1].some(x=>x[1]));
   if(!G.some(g=>g[1].some(x=>x[0]===ui.tab)))ui.tab='hoje';
   const BD={pedidos:novos?{n:novos,c:''}:null,decisoes:(nan+nsug)?{n:nan+nsug,c:''}:null,entregas:nprog?{n:nprog,c:'var(--accent)'}:null,semana:ncnt?{n:ncnt,c:'var(--accent)'}:null,receber:venc?{n:venc,c:''}:null,produtos:crit?{n:crit,c:'var(--warn)'}:null,precnotas:(()=>{const n=(S.receipts||[]).filter(r=>r.status==='conferida').length+(S.imports||[]).filter(x=>x.status==='pendente'||x.status==='consultando').length;return n?{n,c:''}:null})()};
   const cnt=b=>b?`<span class="cnt" ${b.c?`style="background:${b.c}"`:''}>${b.n}</span>`:'';
   const grp=G.find(g=>g[1].some(x=>x[0]===ui.tab))||G[0];ui.lastSub=ui.lastSub||{};ui.lastSub[grp[0]]=ui.tab;
   const tabs=G.map(g=>{const k=g===grp?g[1][0][0]:(ui.lastSub[g[0]]||g[1][0][0]),tot=g[1].reduce((a,x)=>a+(BD[x[0]]?BD[x[0]].n:0),0),red=g[1].some(x=>BD[x[0]]&&!BD[x[0]].c);return {k,label:g[0],sel:g===grp,b:tot?{n:tot,c:red?'':(g[1].map(x=>BD[x[0]]).find(Boolean)||{}).c}:null}});
-  const subs=grp[1].filter(x=>x[1]);
-  app.innerHTML=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" data-tab="${t.k}" aria-selected="${t.sel}">${t.label}${cnt(t.b)}</button>`).join('')}</div>${subs.length>1?`<div class="subnavwrap"><div class="seg repseg subnav" role="group" aria-label="${grp[0]}">${subs.map(([k,v])=>`<button data-tab="${k}" aria-pressed="${ui.tab===k}">${v}${cnt(BD[k])}</button>`).join('')}</div></div>`:''}<div id="tabc"></div>`;
-  app.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ui.tab=b.dataset.tab;ui.backWeek=false;ui.romView=false;ui.lanc=null;ui.stBulk=null;ui.stCost=null;ui.combosView=false;ui.comboEdit=null;ui.adj=null;ui.recNew=null;ui.edit=null;ui.bulk=null;ui.confirmDel=null;renderAdmin()});
+  /* Financeiro: A receber, A pagar e Caixa da semana ficam direto no submenu (sem uma segunda faixa de botões) */
+  const okFin=['receber','pagar','caixa'].filter(modOn);if(!okFin.includes(ui.finTab))ui.finTab=okFin[0]||'receber';
+  const nvP=(S.payables||[]).filter(p=>!p.paidAt&&p.due<today()).length,FIN={receber:['A receber',BD.receber],pagar:['A pagar',nvP?{n:nvP,c:''}:null],caixa:['Caixa da semana',null]};
+  const subs=[];grp[1].filter(x=>x[1]).forEach(([k,v])=>{if(k==='receber')okFin.forEach(f=>subs.push([k,FIN[f][0],f,FIN[f][1]]));else subs.push([k,v,'',BD[k]])});
+  app.innerHTML=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" data-tab="${t.k}" aria-selected="${t.sel}">${t.label}${cnt(t.b)}</button>`).join('')}</div>${subs.length>1?`<div class="subnavwrap"><div class="seg repseg subnav" role="group" aria-label="${grp[0]}">${subs.map(([k,v,f,b])=>`<button data-tab="${k}"${f?` data-fin="${f}"`:''} aria-pressed="${ui.tab===k&&(!f||ui.finTab===f)}">${v}${cnt(b)}</button>`).join('')}</div></div>`:''}<div id="tabc"></div>`;
+  {const at=app.querySelector('.tabs [aria-selected="true"]');if(at&&at.scrollIntoView)try{at.scrollIntoView({block:'nearest',inline:'center'})}catch(e){}}
+  {const tb=app.querySelector('.tabs');if(tb){const edge=()=>{tb.classList.toggle('more-r',tb.scrollLeft+tb.clientWidth<tb.scrollWidth-4);tb.classList.toggle('more-l',tb.scrollLeft>4)};tb.addEventListener('scroll',edge,{passive:true});edge()}}
+  app.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ui.tab=b.dataset.tab;if(b.dataset.fin)ui.finTab=b.dataset.fin;ui.backWeek=false;ui.romView=false;ui.lanc=null;ui.stBulk=null;ui.stCost=null;ui.combosView=false;ui.comboEdit=null;ui.adj=null;ui.recNew=null;ui.edit=null;ui.bulk=null;ui.confirmDel=null;renderAdmin()});
   ({fretes:admFretes,pdv:()=>pdvAdmin($('#tabc')),recmerc:()=>recScreen($('#tabc')),precnotas:()=>precScreen($('#tabc')),entregas:admEntregas,decisoes:admDecisoes,separacao:admSep,cadastros:admCadastros,hoje:()=>{admHoje();pdvDashCard()},pedidos:admOrders,receber:admFin,relatorios:admRelatorios,produtos:admProducts,semana:admSemana,analise:admAnalise,clientes:admClients,config:admConfig})[ui.tab]();rcAlert();
 }
 /* ---------- baixar pedidos em PDF ou Excel ---------- */
@@ -6026,8 +6031,8 @@ function recForm(){
   </form>`;
 }
 /* ================= FINANCEIRO: a receber, a pagar e caixa da semana ================= */
-function finSeg(){const T=ui.finTab||'receber',nv=(S.payables||[]).filter(p=>!p.paidAt&&p.due<today()).length;
-  return `<div class="seg repseg finseg" role="group" aria-label="Financeiro">${modOn('receber')?`<button data-fin="receber" aria-pressed="${T==='receber'}">A receber</button>`:''}${modOn('pagar')?`<button data-fin="pagar" aria-pressed="${T==='pagar'}">A pagar${nv?` <span class="tabbadge">${nv}</span>`:''}</button>`:''}${modOn('caixa')?`<button data-fin="caixa" aria-pressed="${T==='caixa'}">Caixa da semana</button>`:''}</div>`}
+/* a navegação do Financeiro (A receber, A pagar, Caixa da semana) fica no submenu do painel (renderAdmin) */
+function finSeg(){return ''}
 function bindFinSeg(c){c.querySelectorAll('[data-fin]').forEach(b=>b.onclick=()=>{ui.finTab=b.dataset.fin;admFin()})}
 function admFin(){const ok=['receber','pagar','caixa'].filter(modOn);if(!ok.includes(ui.finTab))ui.finTab=ok[0]||'receber';const T=ui.finTab;if(T==='pagar')admPagar();else if(T==='caixa'){admCaixa();pdvCaixaSemana()}else admReceber()}
 const payStatus=p=>p.paidAt?'pago':p.due<today()?'vencido':'aberto';
