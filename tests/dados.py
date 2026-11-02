@@ -67,6 +67,30 @@ check(s == 200 and not r.get('rejected'), 'loja lança a parcela do pedido')
 s, r = cli.req('/api/sync', {'changes': [{'c': 'orders', 'id': 'od4', 'op': 'put', 'doc': dict(ped, items=[{'pid': 'pf', 'q': 15, 'price': 10}])}]})
 check(s == 200 and not r.get('rejected'), 'com a parcela lançada, R$ 150 a prazo cabem no limite (800 + 150 <= 1000): conta uma vez só (%s)' % rej(r))
 
+print('== venda sem estoque: opção da empresa na Central')
+cen = C(); cen.req_t = None
+def creq(path, body=None):
+    h = {'Content-Type': 'application/json', 'X-App': '1'} if body is not None else {}
+    r = urllib.request.Request(BASE + path, data=json.dumps(body).encode() if body is not None else None, headers=h, method='POST' if body is not None else 'GET')
+    try:
+        with cen.op.open(r) as x: return x.status, json.loads(x.read() or b'{}')
+    except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b'{}')
+s, _ = creq('/api/central/login', {'login': 'super_admin', 'password': os.environ['CENTRAL_PASSWORD']}); check(s == 200, 'Central entra')
+s, cs = creq('/api/central/state'); TP = next(t for t in cs['tenants'] if t['primary'])
+check(TP['modules'].get('trava_estoque') is False, 'empresa existente, sem o campo gravado: PERMITE venda sem estoque (padrão)')
+s, st = A.req('/api/state'); est = next(p for p in st['S']['products'] if p['id'] == 'pf')['stock']
+acima = lambda oid: cli.req('/api/sync', {'changes': [{'c': 'orders', 'id': oid, 'op': 'put', 'doc': dict(ped, pay='PIX', items=[{'pid': 'pf', 'q': est + 5, 'price': 10}])}]})
+s, r = acima('od5'); check(s == 200 and not r.get('rejected'), 'permitindo (padrão): pedido acima do estoque entra (%s)' % rej(r))
+s, r = creq('/api/central/tenant', {'id': TP['id'], 'modules': {'trava_estoque': True}}); check(s == 200, 'Central marca "Não permitir venda sem estoque"')
+s, r = acima('od6')
+check(s == 200 and len(rej(r)) == 1 and ('Só temos %s un. de Feijão' % est) in (rej(r)[0] or ''), 'não permitindo: pedido acima do estoque recusado com a quantidade que tem (%s)' % rej(r))
+s, r = cli.req('/api/sync', {'changes': [{'c': 'orders', 'id': 'od7', 'op': 'put', 'doc': dict(ped, pay='PIX', items=[{'pid': 'pf', 'q': est, 'price': 10}])}]})
+check(s == 200 and not r.get('rejected'), 'não permitindo: o estoque exato passa')
+ao = {'id': 'od8', 'date': now, 'customerId': 'cd1', 'customer': 'Mercado Dados', 'status': 'novo', 'pay': 'PIX', 'mode': 'retirada', 'items': [{'pid': 'pf', 'name': 'Feijão', 'q': est + 50, 'price': 10}], 'sub': 0, 'disc': 0, 'total': 10}
+s, r = A.req('/api/sync', {'changes': [{'c': 'orders', 'id': 'od8', 'op': 'put', 'doc': ao}]}); check(s == 200 and not r.get('rejected'), 'a loja (administrador) sempre pode lançar acima do estoque')
+s, r = creq('/api/central/tenant', {'id': TP['id'], 'modules': {'trava_estoque': False}}); check(s == 200, 'Central volta para "Permitir venda sem estoque"')
+s, r = acima('od9'); check(s == 200 and not r.get('rejected'), 'permitindo de novo: aceita (%s)' % rej(r))
+
 print('\n%d verificações OK, %d falhas' % (ok, len(fails)))
 if fails:
     print('FALHAS:'); [print(' -', f) for f in fails]; sys.exit(1)

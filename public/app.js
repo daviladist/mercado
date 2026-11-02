@@ -1500,11 +1500,14 @@ function admTransportadoras(){
 }
 
 /* ---------------- FINANCEIRO › Frete de terceiro ---------------- */
+/* frete DEVIDO: o pedido já saiu com a transportadora (ou foi concluído). Antes disso o frete está "a vencer" e não entra no saldo */
+const f3Due=o=>o&&(o.status==='saiu'||o.status==='concluido');
 function f3Summary(cid){
   const orders=S.orders.filter(o=>o.frete3&&o.frete3.carrierId===cid&&o.status!=='cancelado');
   const pays=(S.carrierPays||[]).filter(p=>p.carrierId===cid);
-  const gerado=f3R(orders.reduce((s,o)=>s+f3Val(o),0)),pago=f3R(pays.reduce((s,p)=>s+(Number(p.amount)||0),0));
-  return {orders,pays,gerado,pago,saldo:f3R(gerado-pago)};
+  const devido=f3R(orders.filter(f3Due).reduce((s,o)=>s+f3Val(o),0)),aVencer=f3R(orders.filter(o=>!f3Due(o)).reduce((s,o)=>s+f3Val(o),0));
+  const pago=f3R(pays.reduce((s,p)=>s+(Number(p.amount)||0),0));
+  return {orders,pays,gerado:f3R(devido+aVencer),devido,aVencer,pago,saldo:f3R(devido-pago)};
 }
 function admFretes(){
   const c=$('#tabc');const F=ui.f3r=ui.f3r||Object.assign({cid:'',pay:null},monthRange());
@@ -1518,12 +1521,13 @@ function admFretes(){
   const P=F.pay;
   c.innerHTML=`<div class="sectionhead"><h2>Frete de terceiro</h2></div>
     <div class="list" style="margin-bottom:14px">${L.map(x=>{const s=f3Summary(x.id);return `<button type="button" class="prow" data-f3cr="${x.id}" aria-pressed="${x.id===F.cid}" style="grid-template-columns:minmax(0,1fr) auto;text-align:left;${x.id===F.cid?'outline:2px solid var(--accent)':''}">
-      <div class="t"><b>${esc(x.name)} · ${f3Pct(x.pct)}</b><span class="small muted">Frete gerado ${brl(s.gerado)} · pago ${brl(s.pago)}</span></div>
+      <div class="t"><b>${esc(x.name)} · ${f3Pct(x.pct)}</b><span class="small muted">Devido ${brl(s.devido)} · pago ${brl(s.pago)}${s.aVencer>0.004?' · a vencer '+brl(s.aVencer):''}</span></div>
       <div class="num" style="text-align:right"><div class="small muted">A pagar</div><b style="color:${s.saldo>0.004?'var(--warn)':'inherit'}">${brl(s.saldo)}</b></div></button>`}).join('')}</div>
     <section class="panel" style="display:grid;gap:12px">
       <div class="sectionhead" style="margin:0"><h2 style="margin:0">${esc(cr.name)}</h2><button class="btn" id="f3PayNew">Registrar pagamento</button></div>
       <div class="grid3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
-        <div class="panel"><div class="small muted">Frete gerado (total)</div><b class="num">${brl(Sm.gerado)}</b></div>
+        <div class="panel"><div class="small muted">Frete devido (pedidos que já saíram)</div><b class="num">${brl(Sm.devido)}</b></div>
+        <div class="panel"><div class="small muted">A vencer (pedidos que ainda não saíram)</div><b class="num">${brl(Sm.aVencer)}</b><div class="small muted">não entra no saldo</div></div>
         <div class="panel"><div class="small muted">Já pago</div><b class="num">${brl(Sm.pago)}</b></div>
         <div class="panel"><div class="small muted">Saldo a pagar</div><b class="num" style="font-size:1.25em;color:${Sm.saldo>0.004?'var(--warn)':'inherit'}">${brl(Sm.saldo)}</b>${Sm.saldo<-0.004?'<div class="small chgtxt">Pago a mais (crédito com a transportadora)</div>':''}</div>
       </div>
@@ -1563,14 +1567,14 @@ function admFretes(){
       F.pay=null;save();toast('Pagamento de '+brl(amount)+' registrado. Saldo agora: '+brl(f3Summary(cr.id).saldo));rer()}}
   $('#f3pdf').onclick=()=>finPdf({file:'frete-'+String(cr.name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'-'+F.from+'-a-'+F.to,
     title:'Frete de terceiro · '+cr.name+' · '+f3Pct(cr.pct),sub:'Período '+dBR(F.from)+' a '+dBR(F.to),
-    tiles:[['Frete no período ('+per.length+')',brl(perTot)],['Frete gerado (total)',brl(Sm.gerado)],['Já pago',brl(Sm.pago)],['Saldo a pagar',brl(Sm.saldo),Sm.saldo>0.004]],
+    tiles:[['Frete no período ('+per.length+')',brl(perTot)],['Frete devido (já saiu)',brl(Sm.devido)],['A vencer (ainda não saiu)',brl(Sm.aVencer)],['Já pago',brl(Sm.pago)],['Saldo a pagar',brl(Sm.saldo),Sm.saldo>0.004]],
     sections:[{title:'Fretes do período',head:['Data','Pedido','Cliente','Valor da nota','%','Frete'],right:[3,4,5],body:per.map(o=>[dBR(f3Day(o)),'nº '+o.no,o.customer||'',brl(o.total),f3Pct(o.frete3.pct),brl(f3Val(o))]),foot:per.length?['Total','','',brl(perBase),'',brl(perTot)]:null,empty:'Nenhum pedido com frete desta transportadora no período.'},
       {title:'Pagamentos feitos (todos)',head:['Data','Valor','Observação'],right:[1],body:pays.map(p=>[dBR(p.date),brl(p.amount),p.note||'']),foot:pays.length?['Total',brl(Sm.pago),'']:null,empty:'Nenhum pagamento lançado.'}],
-    note:'Saldo a pagar = todo o frete gerado desde o início menos todos os pagamentos.'});
+    note:'Saldo a pagar = frete devido (pedidos que já saíram ou foram concluídos, desde o início) menos todos os pagamentos. O frete a vencer (pedidos que ainda não saíram) aparece à parte.'});
   $('#f3xls').onclick=()=>{if(typeof XLSX==='undefined'){toast('Não consegui carregar o Excel. Verifique a internet.');return}
     const head=[[S.store.name],['Frete de terceiro · '+cr.name+' · '+f3Pct(cr.pct)],['Período',F.from.split('-').reverse().join('/')+' a '+F.to.split('-').reverse().join('/')],[],['Data','Pedido nº','Cliente','Valor da nota (R$)','%','Frete (R$)']];
     const rows=per.map(o=>[f3Day(o).split('-').reverse().join('/'),o.no,o.customer||'',Number(o.total)||0,Number(o.frete3.pct),f3Val(o)]);
-    const foot=[['','','Total do período',perBase,'',perTot],[],['Pagamentos'],['Data','Valor (R$)','Observação'],...pays.map(p=>[String(p.date).split('-').reverse().join('/'),Number(p.amount)||0,p.note||'']),[],['Frete gerado (total)','',Sm.gerado],['Já pago','',Sm.pago],['Saldo a pagar','',Sm.saldo]];
+    const foot=[['','','Total do período',perBase,'',perTot],[],['Pagamentos'],['Data','Valor (R$)','Observação'],...pays.map(p=>[String(p.date).split('-').reverse().join('/'),Number(p.amount)||0,p.note||'']),[],['Frete devido (já saiu)','',Sm.devido],['A vencer (ainda não saiu)','',Sm.aVencer],['Já pago','',Sm.pago],['Saldo a pagar (devido − pago)','',Sm.saldo]];
     const ws=XLSX.utils.aoa_to_sheet([...head,...rows,...foot]);ws['!cols']=[{wch:14},{wch:12},{wch:34},{wch:18},{wch:8},{wch:14}];
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Frete');
     offerFile('frete-'+String(cr.name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'-'+F.from+'-a-'+F.to+'.xlsx',XLSX.write(wb,{type:'array',bookType:'xlsx'}))};
@@ -1585,8 +1589,8 @@ function admFreteRep(){
   const pays=bad?[]:(S.carrierPays||[]).filter(p=>inSel(p.carrierId)&&p.date>=F.from&&p.date<=F.to).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   const sum=(L,f)=>f3R(L.reduce((s,x)=>s+(Number(f(x))||0),0));
   const gerado=sum(ords,f3Val),notas=sum(ords,o=>o.total),pago=sum(pays,p=>p.amount);
-  const saldo=f3R(CR.filter(x=>inSel(x.id)).reduce((s,x)=>s+f3Summary(x.id).saldo,0));
-  const byCr=CR.filter(x=>inSel(x.id)).map(x=>{const O=ords.filter(o=>o.frete3.carrierId===x.id),P=pays.filter(p=>p.carrierId===x.id);return {x,n:O.length,notas:sum(O,o=>o.total),gerado:sum(O,f3Val),pago:sum(P,p=>p.amount),saldo:f3Summary(x.id).saldo}}).filter(r=>r.n||r.pago||r.saldo);
+  const saldo=f3R(CR.filter(x=>inSel(x.id)).reduce((s,x)=>s+f3Summary(x.id).saldo,0)),aVencer=f3R(CR.filter(x=>inSel(x.id)).reduce((s,x)=>s+f3Summary(x.id).aVencer,0));
+  const byCr=CR.filter(x=>inSel(x.id)).map(x=>{const O=ords.filter(o=>o.frete3.carrierId===x.id),P=pays.filter(p=>p.carrierId===x.id),Sx=f3Summary(x.id);return {x,n:O.length,notas:sum(O,o=>o.total),gerado:sum(O,f3Val),pago:sum(P,p=>p.amount),saldo:Sx.saldo,aVencer:Sx.aVencer}}).filter(r=>r.n||r.pago||r.saldo||r.aVencer);
   const nmCr=id=>(f3ById(id)||{}).name||'';
   c.innerHTML=`<div class="sectionhead"><h2>Frete de terceiro</h2></div>
     ${!CR.length?`<div class="empty">Nenhuma transportadora cadastrada. Cadastre em <b>CADASTROS › Fornecedores › Transportadoras</b>.</div>`:`
@@ -1598,17 +1602,18 @@ function admFreteRep(){
         <div class="field"><label for="f3rs">Pedidos</label><select id="f3rs">${[['todos','Todos (menos cancelados)'],['concluidos','Só concluídos'],['abertos','Só em aberto']].map(([k,v])=>`<option value="${k}" ${F.st===k?'selected':''}>${v}</option>`).join('')}</select></div>
         <button type="button" class="btn ghost" id="f3rp" ${ords.length||pays.length?'':'disabled'}>Baixar PDF</button><button type="button" class="btn ghost" id="f3rx" ${ords.length||pays.length?'':'disabled'}>Baixar Excel</button>
       </div>
-      ${bad?'<div class="err">A data inicial é depois da final.</div>':'<div class="small muted">O período vale para a data do pedido (frete gerado) e para a data do pagamento (frete pago). O saldo a pagar é o total de hoje, desde o início.</div>'}
+      ${bad?'<div class="err">A data inicial é depois da final.</div>':'<div class="small muted">O período vale para a data do pedido (frete gerado) e para a data do pagamento (frete pago). O saldo a pagar é o frete devido de hoje (pedidos que já saíram), desde o início, menos os pagamentos; o frete de pedidos que ainda não saíram fica em "a vencer".</div>'}
     </section>
     <div class="dbkpis" style="margin-bottom:12px">
       <div class="dbk hero"><span class="lbl">Frete gerado no período</span><b>${brl(gerado)}</b><span class="muted small">${ords.length} pedido${ords.length===1?'':'s'} · notas ${brl(notas)}</span></div>
       <div class="dbk"><span class="lbl">Pago no período</span><b>${brl(pago)}</b><span class="muted small">${pays.length} pagamento${pays.length===1?'':'s'}</span></div>
       <div class="dbk"><span class="lbl">Saldo a pagar hoje</span><b style="color:${saldo>0.004?'var(--warn)':'inherit'}">${brl(saldo)}</b><span class="muted small">${F.cid==='todos'?'todas as transportadoras':esc(nmCr(F.cid))}</span></div>
+      <div class="dbk"><span class="lbl">A vencer hoje</span><b>${brl(aVencer)}</b><span class="muted small">pedidos que ainda não saíram</span></div>
       <div class="dbk"><span class="lbl">Frete sobre as notas</span><b>${notas>0?String(Math.round(gerado/notas*1000)/10).replace('.',','):'0'}%</b><span class="muted small">no período</span></div>
     </div>
-    ${F.cid==='todos'&&byCr.length?`<section class="panel" style="margin-bottom:12px;display:grid;gap:8px"><span class="lbl">Por transportadora</span><div class="tablewrap"><table class="btable"><thead><tr><th>Transportadora</th><th class="num">Pedidos</th><th class="num">Valor das notas</th><th class="num">Frete gerado</th><th class="num">Pago no período</th><th class="num">Saldo a pagar hoje</th></tr></thead><tbody>
-      ${byCr.map(r=>`<tr><td><button type="button" class="link" data-f3rsel="${r.x.id}">${esc(r.x.name)}</button> <span class="muted small">${f3Pct(r.x.pct)}</span></td><td class="num">${r.n}</td><td class="num">${brl(r.notas)}</td><td class="num">${brl(r.gerado)}</td><td class="num">${brl(r.pago)}</td><td class="num"><b style="color:${r.saldo>0.004?'var(--warn)':'inherit'}">${brl(r.saldo)}</b></td></tr>`).join('')}
-      <tr><td><b>Total</b></td><td class="num"><b>${ords.length}</b></td><td class="num"><b>${brl(notas)}</b></td><td class="num"><b>${brl(gerado)}</b></td><td class="num"><b>${brl(pago)}</b></td><td class="num"><b>${brl(saldo)}</b></td></tr></tbody></table></div></section>`:''}
+    ${F.cid==='todos'&&byCr.length?`<section class="panel" style="margin-bottom:12px;display:grid;gap:8px"><span class="lbl">Por transportadora</span><div class="tablewrap"><table class="btable"><thead><tr><th>Transportadora</th><th class="num">Pedidos</th><th class="num">Valor das notas</th><th class="num">Frete gerado</th><th class="num">Pago no período</th><th class="num">Saldo a pagar hoje</th><th class="num">A vencer</th></tr></thead><tbody>
+      ${byCr.map(r=>`<tr><td><button type="button" class="link" data-f3rsel="${r.x.id}">${esc(r.x.name)}</button> <span class="muted small">${f3Pct(r.x.pct)}</span></td><td class="num">${r.n}</td><td class="num">${brl(r.notas)}</td><td class="num">${brl(r.gerado)}</td><td class="num">${brl(r.pago)}</td><td class="num"><b style="color:${r.saldo>0.004?'var(--warn)':'inherit'}">${brl(r.saldo)}</b></td><td class="num">${brl(r.aVencer)}</td></tr>`).join('')}
+      <tr><td><b>Total</b></td><td class="num"><b>${ords.length}</b></td><td class="num"><b>${brl(notas)}</b></td><td class="num"><b>${brl(gerado)}</b></td><td class="num"><b>${brl(pago)}</b></td><td class="num"><b>${brl(saldo)}</b></td><td class="num"><b>${brl(aVencer)}</b></td></tr></tbody></table></div></section>`:''}
     <section class="panel" style="margin-bottom:12px;display:grid;gap:8px"><span class="lbl">Pedidos com frete no período</span>
       ${ords.length?`<div class="tablewrap"><table class="btable"><thead><tr><th>Data</th>${F.cid==='todos'?'<th>Transportadora</th>':''}<th>Pedido</th><th>Cliente</th><th>Situação</th><th class="num">Valor da nota</th><th class="num">%</th><th class="num">Frete</th></tr></thead><tbody>
         ${ords.map(o=>`<tr><td class="num">${dBR(f3Day(o))}</td>${F.cid==='todos'?`<td>${esc(o.frete3.name||nmCr(o.frete3.carrierId))}</td>`:''}<td class="num">nº ${o.no}</td><td>${esc(o.customer||'')}</td><td>${esc(typeof stLabel==='function'?stLabel(o):o.status)}</td><td class="num">${brl(o.total)}</td><td class="num">${f3Pct(o.frete3.pct)}</td><td class="num"><b>${brl(f3Val(o))}</b></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nenhum pedido com frete de terceiro nesse filtro.</div>'}
@@ -1626,18 +1631,18 @@ function admFreteRep(){
   $('#f3rp').onclick=()=>{const all=F.cid==='todos',stL={todos:'Todos os pedidos (menos cancelados)',concluidos:'Só concluídos',abertos:'Só em aberto'}[F.st];
     finPdf({file:'relatorio-frete-'+(all?'todas':String(nmCr(F.cid)).toLowerCase().replace(/[^a-z0-9]+/g,'-'))+'-'+F.from+'-a-'+F.to,landscape:true,
       title:'Relatório de frete de terceiro · '+(all?'Todas as transportadoras':nmCr(F.cid)),sub:dBR(F.from)+' a '+dBR(F.to)+' · '+stL,
-      tiles:[['Frete gerado no período ('+ords.length+')',brl(gerado)],['Pago no período ('+pays.length+')',brl(pago)],['Saldo a pagar hoje',brl(saldo),saldo>0.004],['Frete sobre as notas',(notas>0?String(Math.round(gerado/notas*1000)/10).replace('.',','):'0')+'%']],
-      sections:(all&&byCr.length?[{title:'Por transportadora',head:['Transportadora','%','Pedidos','Valor das notas','Frete gerado','Pago no período','Saldo a pagar hoje'],right:[1,2,3,4,5,6],
-          body:byCr.map(r=>[r.x.name,f3Pct(r.x.pct),String(r.n),brl(r.notas),brl(r.gerado),brl(r.pago),brl(r.saldo)]),foot:['Total','',String(ords.length),brl(notas),brl(gerado),brl(pago),brl(saldo)]}]:[]).concat([
+      tiles:[['Frete gerado no período ('+ords.length+')',brl(gerado)],['Pago no período ('+pays.length+')',brl(pago)],['Saldo a pagar hoje',brl(saldo),saldo>0.004],['A vencer (ainda não saiu)',brl(aVencer)],['Frete sobre as notas',(notas>0?String(Math.round(gerado/notas*1000)/10).replace('.',','):'0')+'%']],
+      sections:(all&&byCr.length?[{title:'Por transportadora',head:['Transportadora','%','Pedidos','Valor das notas','Frete gerado','Pago no período','Saldo a pagar hoje','A vencer'],right:[1,2,3,4,5,6,7],
+          body:byCr.map(r=>[r.x.name,f3Pct(r.x.pct),String(r.n),brl(r.notas),brl(r.gerado),brl(r.pago),brl(r.saldo),brl(r.aVencer)]),foot:['Total','',String(ords.length),brl(notas),brl(gerado),brl(pago),brl(saldo),brl(aVencer)]}]:[]).concat([
         {title:'Pedidos com frete no período',head:['Data','Transportadora','Pedido','Cliente','Situação','Valor da nota','%','Frete'],right:[5,6,7],
           body:ords.map(o=>[dBR(f3Day(o)),o.frete3.name||nmCr(o.frete3.carrierId),'nº '+o.no,o.customer||'',typeof stLabel==='function'?stLabel(o):o.status,brl(o.total),f3Pct(o.frete3.pct),brl(f3Val(o))]),foot:ords.length?['Total','','','','',brl(notas),'',brl(gerado)]:null,empty:'Nenhum pedido com frete de terceiro nesse filtro.'},
         {title:'Pagamentos feitos no período',head:['Data','Transportadora','Valor','Observação'],right:[2],body:pays.map(p=>[dBR(p.date),p.carrierName||nmCr(p.carrierId),brl(p.amount),p.note||'']),foot:pays.length?['Total','',brl(pago),'']:null,empty:'Nenhum pagamento nesse período.'}]),
-      note:'Período vale para a data do pedido (frete gerado) e a data do pagamento. O saldo a pagar é o total de hoje, desde o início.'})};
+      note:'Período vale para a data do pedido (frete gerado) e a data do pagamento. Saldo a pagar = frete devido hoje (pedidos que já saíram), desde o início, menos os pagamentos. A vencer = pedidos que ainda não saíram.'})};
   $('#f3rx').onclick=()=>{if(typeof XLSX==='undefined'){toast('Não consegui carregar o Excel. Verifique a internet.');return}
     const d=x=>String(x).slice(0,10).split('-').reverse().join('/');
     const head=[[S.store.name],['Relatório de frete de terceiro · '+(F.cid==='todos'?'Todas as transportadoras':nmCr(F.cid))],['Período',d(F.from)+' a '+d(F.to)],[],
-      ['Frete gerado no período',gerado],['Pago no período',pago],['Saldo a pagar hoje',saldo],[]];
-    const rCr=F.cid==='todos'?[['Por transportadora'],['Transportadora','%','Pedidos','Valor das notas','Frete gerado','Pago no período','Saldo a pagar hoje'],...byCr.map(r=>[r.x.name,r.x.pct,r.n,r.notas,r.gerado,r.pago,r.saldo]),[]]:[];
+      ['Frete gerado no período',gerado],['Pago no período',pago],['Saldo a pagar hoje',saldo],['A vencer (ainda não saiu)',aVencer],[]];
+    const rCr=F.cid==='todos'?[['Por transportadora'],['Transportadora','%','Pedidos','Valor das notas','Frete gerado','Pago no período','Saldo a pagar hoje','A vencer'],...byCr.map(r=>[r.x.name,r.x.pct,r.n,r.notas,r.gerado,r.pago,r.saldo,r.aVencer]),[]]:[];
     const rO=[['Pedidos'],['Data','Transportadora','Pedido nº','Cliente','Situação','Valor da nota','%','Frete'],...ords.map(o=>[d(f3Day(o)),o.frete3.name||nmCr(o.frete3.carrierId),o.no,o.customer||'',typeof stLabel==='function'?stLabel(o):o.status,Number(o.total)||0,Number(o.frete3.pct),f3Val(o)]),[]];
     const rP=[['Pagamentos'],['Data','Transportadora','Valor','Observação'],...pays.map(p=>[d(p.date),p.carrierName||nmCr(p.carrierId),Number(p.amount)||0,p.note||''])];
     const ws=XLSX.utils.aoa_to_sheet([...head,...rCr,...rO,...rP]);ws['!cols']=[{wch:22},{wch:24},{wch:12},{wch:30},{wch:16},{wch:16},{wch:10},{wch:14}];
@@ -3481,8 +3486,11 @@ const hasStock=p=>p&&p.stock!==''&&p.stock!=null&&!isNaN(p.stock);
 const hasMin=p=>p&&p.minStock!==''&&p.minStock!=null&&!isNaN(p.minStock);
 const isCritical=p=>hasStock(p)&&hasMin(p)&&Number(p.stock)<=Number(p.minStock);
 /* deixa o estoque coerente com a situação do pedido: concluído baixa; se sair de concluído, devolve */
+/* perda por avaria na entrega (o.loss = {produto: embalagens}): sai do estoque junto com o pedido concluído, mas não volta como vendável */
+function lossOf(pid,days){const lim=days?addDays(today(),-days):'';return S.orders.reduce((s,o)=>s+(o.status==='concluido'&&o.loss&&String(o.doneAt||o.date||'').slice(0,10)>=lim?Number(o.loss[pid])||0:0),0)}
 function syncStock(o){if(typeof SRV!=='undefined')return;
   const want={};
+  if(o.status==='concluido')Object.entries(o.loss||{}).forEach(([pid,q])=>{const p=S.products.find(x=>x.id===pid);if(hasStock(p)&&Number(q)>0)want[pid]=(want[pid]||0)+Number(q)});
   if(o.status==='concluido')o.items.forEach(i=>{if(!(i.q>0))return;(i.combo?(i.components||[]).map(c=>({p:S.products.find(x=>x.id===c.pid),q:c.q*i.q})):[{p:itemProduct(i),q:i.q}]).forEach(({p,q})=>{if(hasStock(p))want[p.id]=(want[p.id]||0)+q})});
   const had=o.stockApplied||{};
   new Set([...Object.keys(want),...Object.keys(had)]).forEach(pid=>{const d=(want[pid]||0)-(had[pid]||0);if(!d)return;const p=S.products.find(x=>x.id===pid);if(p&&hasStock(p))p.stock=Number(p.stock)-d});
@@ -5286,10 +5294,11 @@ function admProducts(){
     <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="text" id="aq" placeholder="Buscar por nome, código ou código de barras" value="${esc(ui.aq||'')}" aria-label="Buscar produto"></div>
     ${pfBar(PFR.F,PFR.L.length)}
     ${ui.pbulk?prodBulkHtml(PFR.L):''}
+    ${(()=>{const n=S.products.filter(p=>hasStock(p)&&Number(p.stock)<0).length;return n?`<div class="critbar"><span><b>${n} produto${n===1?'':'s'} com estoque negativo</b> · saiu mais do que o sistema tinha: faça uma contagem</span></div>`:''})()}
     ${(()=>{const n=S.products.filter(isCritical).length;return n?`<div class="critbar"><span><b>${n} produto${n===1?'':'s'} em estoque crítico</b> · hora de comprar</span><button class="btn ${ui.critOnly?'':'ghost'} dlb" id="critF">${ui.critOnly?'Mostrar todos':'Ver só esses'}</button></div>`:''})()}
     <div class="list">${PFR.L.map(p=>{const n=['qty','vista','retira','promo','limite'].filter(k=>p.rules[k].on).length;return `<div class="prow ${p.active?'':'off'} ${ui.pbulk?'pbsel':''}">
       ${ui.pbulk?`<label class="imck"><input type="checkbox" data-psel="${p.id}" ${ui.pbulk.sel[p.id]?'checked':''} aria-label="Marcar ${esc(p.name)}"></label>`:''}<img src="${p.photo}" alt="">
-      <div class="t"><b>${esc(p.name)}${p.fam?` <span class="varchip" title="Sabor de ${esc(p.fam)}">${esc(p.var||'sabor')}</span>`:''}${(()=>{const b=belowMin(p);return b?` <span class="apchip no" title="No preço de tabela, depois da comissão">abaixo do mínimo: ${String(Math.round(b.mg*10)/10).replace('.',',')}% de ${String(b.min).replace('.',',')}%</span>`:''})()}</b><span class="small muted">${esc(catLabel(p))} · ${codesLine(p.code,p.ean)||'Sem código'}${packOf(p)?' · '+nfmt(packOf(p))+(isKg(p)?' kg · ':' un. · ')+brl(p.price/packOf(p))+'/'+uw(p):''}${p.trib?' · <b>Tributado</b>':''}${['mgmaior','mgmenor'].includes(PFR.F.sort)||PFR.F.x==='lowmg'?(prodMg(p)==null?' · sem custo':` · margem <b class="${prodMg(p)<0?'neg':prodMg(p)<8?'wkwarn':''}">${(Math.round(prodMg(p)*10)/10).toLocaleString('pt-BR')}%</b>`):''}${PFR.sold?` · vendeu <b>${qBR(PFR.sold(p))}</b> em 90 dias`:''}${p.stock!==''&&p.stock!=null?` · <span class="${p.stock<=0?'stk0':''}">Estoque: ${Number(p.stock).toLocaleString('pt-BR')}${hasMin(p)?' (mín. '+Number(p.minStock).toLocaleString('pt-BR')+(p.idealStock!==''&&p.idealStock!=null?' · ideal '+Number(p.idealStock).toLocaleString('pt-BR'):'')+')':''}</span>${isCritical(p)?' <span class="crit">Comprar</span>':''}`:''}</span><div class="num" style="font-weight:700">${brl(p.price)}${ieF(p)<1?` <span class="mgchip iechip">com IE ${brl(Number(p.iePrice))}</span>`:''}${hasVal(p.commission)?` <span class="mgchip">comissão ${String(p.commission).replace('.',',')}%</span>`:''}${p.cost>0?` <span class="mgchip ${p.price<p.cost?'neg':''}">custo ${brl(p.cost)} · margem ${(Math.round(mgOf(effCost(p,p.cost,p.price),p.price)*10)/10).toLocaleString('pt-BR')}%${p.trib?' (tributado)':''} · markup ${(Math.round(mkOf(p.cost,p.price)*10)/10).toLocaleString('pt-BR')}%</span>`:''}${Number(p.refCost)>0?` <span class="mgchip" title="A trava do vendedor usa este custo">custo de referência ${brl(Number(p.refCost))}</span>`:''}${n?` <span class="rulechip">${n} condiç${n>1?'ões':'ão'} de preço</span>`:''}${p.active?'':' <span class="small muted">· desativado</span>'}</div></div>
+      <div class="t"><b>${esc(p.name)}${p.fam?` <span class="varchip" title="Sabor de ${esc(p.fam)}">${esc(p.var||'sabor')}</span>`:''}${(()=>{const b=belowMin(p);return b?` <span class="apchip no" title="No preço de tabela, depois da comissão">abaixo do mínimo: ${String(Math.round(b.mg*10)/10).replace('.',',')}% de ${String(b.min).replace('.',',')}%</span>`:''})()}</b><span class="small muted">${esc(catLabel(p))} · ${codesLine(p.code,p.ean)||'Sem código'}${packOf(p)?' · '+nfmt(packOf(p))+(isKg(p)?' kg · ':' un. · ')+brl(p.price/packOf(p))+'/'+uw(p):''}${p.trib?' · <b>Tributado</b>':''}${['mgmaior','mgmenor'].includes(PFR.F.sort)||PFR.F.x==='lowmg'?(prodMg(p)==null?' · sem custo':` · margem <b class="${prodMg(p)<0?'neg':prodMg(p)<8?'wkwarn':''}">${(Math.round(prodMg(p)*10)/10).toLocaleString('pt-BR')}%</b>`):''}${PFR.sold?` · vendeu <b>${qBR(PFR.sold(p))}</b> em 90 dias`:''}${p.stock!==''&&p.stock!=null?` · <span class="${p.stock<=0?'stk0':''}">Estoque: ${Number(p.stock).toLocaleString('pt-BR')}${hasMin(p)?' (mín. '+Number(p.minStock).toLocaleString('pt-BR')+(p.idealStock!==''&&p.idealStock!=null?' · ideal '+Number(p.idealStock).toLocaleString('pt-BR'):'')+')':''}</span>${isCritical(p)?' <span class="crit">Comprar</span>':''}${Number(p.stock)<0?' <span class="crit" title="Saiu mais do que tinha: confira o estoque (contagem)">Estoque negativo</span>':''}`:''}${(()=>{const l=lossOf(p.id,90);return l>0?` · <span class="wkwarn" title="Avaria na entrega: baixada do estoque como perda">perda por avaria: ${qBR(l)} em 90 dias</span>`:''})()}</span><div class="num" style="font-weight:700">${brl(p.price)}${ieF(p)<1?` <span class="mgchip iechip">com IE ${brl(Number(p.iePrice))}</span>`:''}${hasVal(p.commission)?` <span class="mgchip">comissão ${String(p.commission).replace('.',',')}%</span>`:''}${p.cost>0?` <span class="mgchip ${p.price<p.cost?'neg':''}">custo ${brl(p.cost)} · margem ${(Math.round(mgOf(effCost(p,p.cost,p.price),p.price)*10)/10).toLocaleString('pt-BR')}%${p.trib?' (tributado)':''} · markup ${(Math.round(mkOf(p.cost,p.price)*10)/10).toLocaleString('pt-BR')}%</span>`:''}${Number(p.refCost)>0?` <span class="mgchip" title="A trava do vendedor usa este custo">custo de referência ${brl(Number(p.refCost))}</span>`:''}${n?` <span class="rulechip">${n} condiç${n>1?'ões':'ão'} de preço</span>`:''}${p.active?'':' <span class="small muted">· desativado</span>'}</div></div>
       <div class="row" style="gap:6px"><button class="btn ghost" data-tog="${p.id}" style="min-height:40px;padding:8px 10px">${p.active?'Desativar':'Ativar'}</button><button class="btn ghost" data-ed="${p.id}" style="min-height:40px;padding:8px 10px">Editar</button><button class="btn ghost" data-edp="${p.id}" style="min-height:40px;padding:8px 10px">Precificar</button></div>
     </div>`}).join('')||'<div class="empty">Nenhum produto encontrado.</div>'}</div>`;
   $('#aq').oninput=e=>{ui.aq=e.target.value;const pos=e.target.selectionStart;admProducts();const n=$('#aq');n.focus();n.setSelectionRange(pos,pos)};
@@ -6171,7 +6180,7 @@ function effCost(p,cost,price,ie){return p&&p.trib&&Number(cost)>0?effCostRaw(co
 function taxBreak(cost,price,ie){const t=taxCfg(),cr=cost*(t.pc+t.ic)/100,db=price*(t.pd+icmsVenda(ie))/100;return {cr,db,net:cost-cr,eff:cost-cr+db}}
 function orderIeSale(o){if(!o||!o.nf)return false;const c=S.customers.find(x=>x.id===o.customerId);return ieClient(c)}
 function itemCost(i,unitPrice,ie){let c=null;if(i.cost>0)c=Number(i.cost);const p=itemProduct(i);if(c==null&&p&&p.cost>0)c=Number(p.cost);if(c==null)return null;return p&&p.trib?effCostRaw(c,unitPrice!=null?unitPrice:i.price,ie||!!i.ie):c}
-function buildRanking(f){
+function buildRanking(f,pdvRows){
   const orders=S.orders.filter(o=>o.status==='concluido'&&!o.pdvVenda&&orderDay(o)>=f.from&&orderDay(o)<=f.to&&(f.mode==='todos'||o.mode===f.mode));
   const map=new Map();let nOrders=0;
   orders.forEach(o=>{let used=false;
@@ -6191,22 +6200,36 @@ function buildRanking(f){
     });
     if(used)nOrders++;
   });
+  /* vendas do balcão (PDV), somadas por produto no servidor: entram como retirada, já com o desconto do caixa, sem comissão */
+  let nPdv=0;
+  if(f.pdv&&pdvRows&&f.mode!=='entrega')pdvRows.forEach(x=>{const p=S.products.find(y=>y.id===x.pid),i={pid:x.pid,name:p?p.name:x.nome,code:p?p.code||'':'',ean:p?p.ean||'':'',unit:p?p.unit||'':''};
+    const cat=itemCat(i);if(f.cat!=='todas'&&cat!==f.cat)return;const q=Number(x.q)||0,t=Number(x.t)||0;if(!(q>0))return;
+    const key=i.code||i.ean||i.name,r=map.get(key)||{code:i.code,name:i.name,unit:i.unit,cat,q:0,rev:0,costed:0,cost:0,comm:0,orders:new Set(),noCost:false};
+    r.q+=q;r.rev+=t;r.costed+=t;r.cost+=(Number(x.c)||0)+(Number(x.tnc)||0);if(Number(x.tnc)>0.004)r.noCost=true;r.pdvN=(r.pdvN||0)+(Number(x.n)||0);map.set(key,r)});
+  if(f.pdv&&pdvRows&&f.mode!=='entrega')nPdv=Number(pdvRows.nVendas)||0;
   const rows=[...map.values()].map(r=>({...r,orders:r.orders.size,profit:r.costed-r.cost-r.comm,margin:r.costed>0?(r.costed-r.cost-r.comm)/r.costed*100:null}));
   rows.sort(f.sort==='rev'?(a,b)=>b.rev-a.rev||b.q-a.q:(a,b)=>b.q-a.q||b.rev-a.rev);
   const tot={q:rows.reduce((s,r)=>s+r.q,0),rev:rows.reduce((s,r)=>s+r.rev,0),costed:rows.reduce((s,r)=>s+r.costed,0),cost:rows.reduce((s,r)=>s+r.cost,0),comm:rows.reduce((s,r)=>s+r.comm,0)};
   tot.profit=tot.costed-tot.cost-tot.comm;tot.margin=tot.costed>0?tot.profit/tot.costed*100:null;
-  return {rows,tot,nOrders,missing:rows.some(r=>r.noCost)};
+  return {rows,tot,nOrders,nPdv,missing:rows.some(r=>r.noCost)};
 }
+/* itens vendidos no balcão no período (só administrador; o servidor soma por produto) */
+function rkPdvLoad(F,rer){const key=F.from+'|'+F.to,P=ui.rkPdv;if(P&&P.key===key)return P.err?null:P.rows;if(P&&P.loading===key)return null;
+  if(typeof api!=='function'){ui.rkPdv={key,rows:null,err:'sem servidor'};return null}
+  ui.rkPdv={loading:key};api('/api/pdv/itens?de='+F.from+'&ate='+F.to).then(r=>{const rows=r.itens||[];rows.nVendas=r.vendas||0;ui.rkPdv={key,rows};rer()},e=>{ui.rkPdv={key,rows:null,err:e.message||'erro'};toast('Não consegui buscar as vendas do balcão: '+(e.message||'erro'));rer()});return null}
 const pctBR=v=>v==null?'—':(Math.round(v*10)/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
-function repFilterText(f){return `Período ${dBR(f.from)} a ${dBR(f.to)} · ${f.mode==='todos'?'Entrega e retirada':f.mode==='entrega'?'Somente entrega':'Somente retirada'} · ${f.cat==='todas'?'Todas as categorias':'Categoria: '+f.cat} · Ordenado por ${f.sort==='rev'?'faturamento':'quantidade'}`}
+function repFilterText(f){return `Período ${dBR(f.from)} a ${dBR(f.to)}${f.pdv?' · com vendas do balcão':''} · ${f.mode==='todos'?'Entrega e retirada':f.mode==='entrega'?'Somente entrega':'Somente retirada'} · ${f.cat==='todas'?'Todas as categorias':'Categoria: '+f.cat} · Ordenado por ${f.sort==='rev'?'faturamento':'quantidade'}`}
 function admRanking(){
   const c=$('#repc'),F=ui.repF||(ui.repF={...monthRange(),mode:'todos',cat:'todas',sort:'q'});
   const cats=[...new Set([...S.products.map(p=>p.cat),...S.orders.flatMap(o=>o.items.map(itemCat))].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const bad=F.from>F.to;
-  const R=bad?null:buildRanking(F);
+  const pdvOk=modOn('pdv');if(!pdvOk)F.pdv=false;
+  const pdvRows=F.pdv&&!bad?rkPdvLoad(F,()=>{if(ui.tab==='relatorios'&&(ui.repKind||'ranking')==='ranking')admRelatorios()}):null,pdvWait=F.pdv&&!bad&&!pdvRows&&!(ui.rkPdv&&ui.rkPdv.err);
+  const R=bad?null:buildRanking(F,pdvRows);
   c.innerHTML=`<div class="sectionhead"><h2>Relatórios</h2>${R&&R.rows.length?'<div class="row" style="gap:6px"><button class="btn ghost ico1" id="repPdf" aria-label="Baixar PDF" data-tip="Baixar PDF">'+PDFI+'</button><button class="btn ghost" id="repXls">Baixar Excel</button></div>':''}</div>
     <div class="panel" style="display:grid;gap:12px;margin-bottom:14px">
-      <div><b>Ranking de produtos mais vendidos</b><div class="small muted">Entram só os pedidos com situação <b>Concluído</b>, pela data do pedido. Valores já com o desconto da retirada. <b>Não inclui as vendas do balcão (PDV)</b>, nem as que foram enviadas para a nota: elas ficam no resumo do Caixa PDV.</div></div>
+      <div><b>Ranking de produtos mais vendidos</b><div class="small muted">Entram só os pedidos com situação <b>Concluído</b>, pela data do pedido. Valores já com o desconto da retirada. ${F.pdv?'Vendas do balcão (PDV) <b>incluídas</b>, pela data da venda, com o desconto do caixa e sem comissão.':'<b>Sem as vendas do balcão (PDV)</b>'+(pdvOk?': marque "Incluir vendas do balcão" para somar.':'.')}</div></div>
+      ${pdvOk?`<label class="switch"><input type="checkbox" id="rpdv" ${F.pdv?'checked':''}> Incluir vendas do balcão (PDV)${pdvWait?' <span class="small muted">· buscando…</span>':''}</label>`:''}
       <div class="repf">
         <div class="field"><label for="rfrom">De</label><input type="date" id="rfrom" value="${F.from}"></div>
         <div class="field"><label for="rto">Até</label><input type="date" id="rto" value="${F.to}"></div>
@@ -6218,17 +6241,18 @@ function admRanking(){
       ${bad?'<div class="err">A data inicial está depois da data final.</div>':''}
     </div>
     ${R?(R.rows.length?`<div class="tiles">
-      <div class="tile"><span class="lbl">Faturamento</span><b class="num">${brl(R.tot.rev)}</b><span class="small muted">${R.nOrders} pedido${R.nOrders===1?'':'s'} concluído${R.nOrders===1?'':'s'}</span></div>
+      <div class="tile"><span class="lbl">Faturamento</span><b class="num">${brl(R.tot.rev)}</b><span class="small muted">${R.nOrders} pedido${R.nOrders===1?'':'s'} concluído${R.nOrders===1?'':'s'}${R.nPdv?' + '+R.nPdv+' venda'+(R.nPdv===1?'':'s')+' no balcão':''}</span></div>
       <div class="tile"><span class="lbl">Itens vendidos</span><b class="num">${R.tot.q.toLocaleString('pt-BR')}</b><span class="small muted">${R.rows.length} produto${R.rows.length===1?'':'s'} diferentes</span></div>
       <div class="tile t-pago"><span class="lbl">Margem média</span><b class="num">${pctBR(R.tot.margin)}</b><span class="small muted">lucro de ${brl(R.tot.profit)}${R.tot.comm>0.004?' · já sem '+brl(R.tot.comm)+' de comissão':''}</span></div>
     </div>
     ${R.missing?'<div class="notice" style="margin-bottom:10px">Alguns produtos estão sem preço de custo: eles entram com lucro zero (margem 0%). Cadastre o custo para a margem ficar exata.</div>':''}
     <div class="tablewrap"><table class="btable rtable"><thead><tr><th class="r">#</th><th>Produto</th><th>Categoria</th><th class="r">Qtd</th><th class="r">Faturamento</th><th class="r">Comissão</th><th class="r">Lucro</th><th class="r">Margem média</th></tr></thead><tbody>
-      ${R.rows.map((r,i)=>`<tr><td class="r num"><b>${i+1}º</b></td><td><b>${esc(r.name)}</b><div class="codes">${r.code?'Cód. '+esc(r.code)+' · ':''}${esc(r.unit||'')} · ${r.orders} pedido${r.orders===1?'':'s'}</div></td><td>${esc(r.cat)}</td><td class="r num"><b>${r.q.toLocaleString('pt-BR')}</b></td><td class="r num">${brl(r.rev)}</td><td class="r num">${r.comm>0.004?brl(r.comm):'—'}</td><td class="r num">${r.margin==null?'—':brl(r.profit)}</td><td class="r num"><span class="mbar"><span style="width:${r.margin==null?0:Math.max(0,Math.min(100,r.margin*2))}%"></span></span><b class="${r.margin!=null&&r.margin<0?'neg':''}">${pctBR(r.margin)}</b></td></tr>`).join('')}
+      ${R.rows.map((r,i)=>`<tr><td class="r num"><b>${i+1}º</b></td><td><b>${esc(r.name)}</b><div class="codes">${r.code?'Cód. '+esc(r.code)+' · ':''}${esc(r.unit||'')} · ${r.orders} pedido${r.orders===1?'':'s'}${r.pdvN?' · '+r.pdvN+' no balcão':''}</div></td><td>${esc(r.cat)}</td><td class="r num"><b>${r.q.toLocaleString('pt-BR')}</b></td><td class="r num">${brl(r.rev)}</td><td class="r num">${r.comm>0.004?brl(r.comm):'—'}</td><td class="r num">${r.margin==null?'—':brl(r.profit)}</td><td class="r num"><span class="mbar"><span style="width:${r.margin==null?0:Math.max(0,Math.min(100,r.margin*2))}%"></span></span><b class="${r.margin!=null&&r.margin<0?'neg':''}">${pctBR(r.margin)}</b></td></tr>`).join('')}
       <tr class="tot"><td></td><td><b>Total</b></td><td></td><td class="r num"><b>${R.tot.q.toLocaleString('pt-BR')}</b></td><td class="r num"><b>${brl(R.tot.rev)}</b></td><td class="r num"><b>${brl(R.tot.comm)}</b></td><td class="r num"><b>${brl(R.tot.profit)}</b></td><td class="r num"><b>${pctBR(R.tot.margin)}</b></td></tr>
     </tbody></table></div>`:`<div class="empty">Nenhum pedido concluído com esses filtros.<br>Só entram pedidos com a situação "Concluído".</div>`):''}`;
   const upd=()=>{F.from=$('#rfrom').value||F.from;F.to=$('#rto').value||F.to;F.mode=$('#rmode').value;F.cat=$('#rcat').value;F.sort=$('#rsort').value;admRelatorios()};
   ['rfrom','rto','rmode','rcat','rsort'].forEach(id=>document.getElementById(id).onchange=upd);
+  {const cb=$('#rpdv');if(cb)cb.onchange=()=>{F.pdv=cb.checked;if(F.pdv&&ui.rkPdv&&ui.rkPdv.err)ui.rkPdv=null;admRelatorios()}}
   c.querySelectorAll('[data-rper]').forEach(b=>b.onclick=()=>{const k=b.dataset.rper,t=today();
     if(k==='mes')Object.assign(F,monthRange());
     else if(k==='ant'){const d=new Date(),y=d.getMonth()===0?d.getFullYear()-1:d.getFullYear(),m=d.getMonth()===0?12:d.getMonth(),f=n=>String(n).padStart(2,'0');F.from=y+'-'+f(m)+'-01';F.to=y+'-'+f(m)+'-'+f(new Date(y,m,0).getDate())}
@@ -6272,13 +6296,19 @@ function admRanking(){
 }
 /* ---------- RELATÓRIO: sugestão de compra (estoque crítico até o estoque ideal) ---------- */
 const hasIdeal=p=>p&&p.idealStock!==''&&p.idealStock!=null&&!isNaN(p.idealStock);
+/* reservado: o que os pedidos em aberto (ainda não concluídos) vão tirar do estoque. Combos entram desmontados.
+   Venda do balcão enviada para a nota não conta (o estoque dela já baixou). */
+function reservedMap(){const m={};(S.orders||[]).forEach(o=>{if(!OPEN.includes(o.status)||o.pdvVenda)return;(o.items||[]).forEach(i=>{if(!(i.q>0)||i.occLine)return;
+  (i.combo?(i.components||[]).map(c=>({pid:c.pid,q:Number(c.q)*i.q})):[{pid:(itemProduct(i)||{}).id,q:i.q}]).forEach(x=>{if(x.pid&&x.q>0)m[x.pid]=(m[x.pid]||0)+Number(x.q)})})});
+  Object.keys(m).forEach(k=>{m[k]=Math.round(m[k]*1000)/1000});return m}
 function buildPurchase(f){
-  const rows=S.products.filter(p=>isCritical(p)&&(f.cat==='todas'||p.cat===f.cat)).map(p=>{
-    const st=Number(p.stock),ideal=hasIdeal(p)?Number(p.idealStock):null;
-    const sug=ideal==null?null:Math.max(0,Math.ceil(ideal-st));
+  const RS=reservedMap();
+  const rows=S.products.filter(p=>hasStock(p)&&hasMin(p)&&(f.cat==='todas'||p.cat===f.cat)).map(p=>{
+    const st=Number(p.stock),res=RS[p.id]||0,disp=Math.round((st-res)*1000)/1000,ideal=hasIdeal(p)?Number(p.idealStock):null;
+    const sug=ideal==null?null:Math.max(0,Math.ceil(Math.round((ideal-disp)*1000)/1000));
     const cost=p.cost>0?Number(p.cost):null;
-    return {p,code:p.code||'',ean:p.ean||'',name:p.name,cat:p.cat||'Outros',unit:p.unit||'',stock:st,min:Number(p.minStock),ideal,sug,cost,total:sug!=null&&cost!=null?sug*cost:null};
-  }).sort((a,b)=>a.cat.localeCompare(b.cat,'pt-BR')||(a.stock-a.min)-(b.stock-b.min)||a.name.localeCompare(b.name,'pt-BR'));
+    return {p,code:p.code||'',ean:p.ean||'',name:p.name,cat:p.cat||'Outros',unit:p.unit||'',stock:st,res,disp,min:Number(p.minStock),ideal,sug,cost,total:sug!=null&&cost!=null?sug*cost:null};
+  }).filter(r=>r.disp<=r.min).sort((a,b)=>a.cat.localeCompare(b.cat,'pt-BR')||(a.disp-a.min)-(b.disp-b.min)||a.name.localeCompare(b.name,'pt-BR'));
   return {rows,total:rows.reduce((s,r)=>s+(r.total||0),0),units:rows.reduce((s,r)=>s+(r.sug||0),0),noIdeal:rows.filter(r=>r.ideal==null).length,noCost:rows.filter(r=>r.sug&&r.cost==null).length};
 }
 function admCompra(){
@@ -6287,7 +6317,7 @@ function admCompra(){
   const R=buildPurchase(F);
   c.innerHTML=`<div class="sectionhead"><h2>Sugestão de compra</h2>${R.rows.length?'<div class="row" style="gap:6px"><button class="btn ghost ico1" id="buyPdf" aria-label="Baixar PDF" data-tip="Baixar PDF">'+PDFI+'</button><button class="btn ghost" id="buyXls">Baixar Excel</button></div>':''}</div>
     <div class="panel" style="display:grid;gap:12px;margin-bottom:14px">
-      <div class="small muted">Lista os produtos com estoque igual ou abaixo do <b>estoque mínimo</b> e sugere quanto comprar para voltar ao <b>estoque ideal</b>: ideal − estoque atual. Ex.: ideal 100, tem 19, comprar 81.</div>
+      <div class="small muted">Lista os produtos com <b>estoque disponível</b> igual ou abaixo do <b>estoque mínimo</b> e sugere quanto comprar para voltar ao <b>estoque ideal</b>. Disponível = estoque − <b>reservado</b> (o que os pedidos em aberto ainda vão tirar). Ex.: tem 50, reservado 31, disponível 19, ideal 100: comprar 81.</div>
       <div class="field" style="max-width:280px"><label for="bcat">Categoria / setor</label><select id="bcat"><option value="todas">Todas</option>${cats.map(x=>`<option ${x===F.cat?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
     </div>
     ${R.rows.length?`<div class="tiles">
@@ -6297,22 +6327,22 @@ function admCompra(){
     </div>
     ${R.noIdeal?`<div class="notice" style="margin-bottom:8px">${R.noIdeal} produto${R.noIdeal===1?' está':'s estão'} sem estoque ideal cadastrado e fica${R.noIdeal===1?'':'m'} sem sugestão. Preencha o estoque ideal no cadastro do produto.</div>`:''}
     ${R.noCost?`<div class="notice" style="margin-bottom:8px">${R.noCost} produto${R.noCost===1?'':'s'} sem preço de custo não entra${R.noCost===1?'':'m'} no custo estimado.</div>`:''}
-    <div class="tablewrap"><table class="btable rtable"><thead><tr><th>Produto</th><th>Categoria</th><th class="r">Estoque</th><th class="r">Mínimo</th><th class="r">Ideal</th><th class="r">Comprar</th><th class="r">Custo unit.</th><th class="r">Custo estimado</th></tr></thead><tbody>
+    <div class="tablewrap"><table class="btable rtable"><thead><tr><th>Produto</th><th>Categoria</th><th class="r">Estoque</th><th class="r">Reservado</th><th class="r">Disponível</th><th class="r">Mínimo</th><th class="r">Ideal</th><th class="r">Comprar</th><th class="r">Custo unit.</th><th class="r">Custo estimado</th></tr></thead><tbody>
       ${R.rows.map(r=>`<tr><td><b>${esc(r.name)}</b><div class="codes">${codesLine(r.code,r.ean)||''}${r.unit?' · '+esc(r.unit):''}${r.p.active?'':' · desativado na loja'}</div></td><td>${esc(r.cat)}</td>
-        <td class="r num ${r.stock<=0?'neg':''}"><b>${r.stock.toLocaleString('pt-BR')}</b></td><td class="r num">${r.min.toLocaleString('pt-BR')}</td><td class="r num">${r.ideal==null?'—':r.ideal.toLocaleString('pt-BR')}</td>
+        <td class="r num ${r.stock<=0?'neg':''}">${r.stock.toLocaleString('pt-BR')}</td><td class="r num">${r.res?r.res.toLocaleString('pt-BR'):'—'}</td><td class="r num ${r.disp<=0?'neg':''}"><b>${r.disp.toLocaleString('pt-BR')}</b></td><td class="r num">${r.min.toLocaleString('pt-BR')}</td><td class="r num">${r.ideal==null?'—':r.ideal.toLocaleString('pt-BR')}</td>
         <td class="r num"><b class="buyq">${r.sug==null?'—':r.sug.toLocaleString('pt-BR')}</b></td><td class="r num">${r.cost==null?'—':brl(r.cost)}</td><td class="r num">${r.total==null?'—':brl(r.total)}</td></tr>`).join('')}
-      <tr class="tot"><td><b>Total</b></td><td></td><td></td><td></td><td></td><td class="r num"><b>${R.units.toLocaleString('pt-BR')}</b></td><td></td><td class="r num"><b>${brl(R.total)}</b></td></tr>
+      <tr class="tot"><td><b>Total</b></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="r num"><b>${R.units.toLocaleString('pt-BR')}</b></td><td></td><td class="r num"><b>${brl(R.total)}</b></td></tr>
     </tbody></table></div>`:`<div class="empty">Nenhum produto em estoque crítico${F.cat!=='todas'?' nessa categoria':''}.<br>Os produtos entram aqui quando o estoque chega no mínimo cadastrado.</div>`}`;
   $('#bcat').onchange=e=>{F.cat=e.target.value;admRelatorios()};
   if(!R.rows.length)return;
   const fname='sugestao-de-compra-'+stamp(),ftxt=(F.cat==='todas'?'Todas as categorias':'Categoria: '+F.cat)+' · Gerado em '+new Date().toLocaleDateString('pt-BR');
   $('#buyXls').onclick=()=>{try{
     const aoa=[[S.store.name],['Sugestão de compra · estoque crítico até o estoque ideal'],[ftxt],[],
-      ['Código','Código de barras','Produto','Categoria','Unidade','Estoque atual','Estoque mínimo','Estoque ideal','Comprar','Custo unit. (R$)','Custo estimado (R$)'],
-      ...R.rows.map(r=>[r.code,r.ean,r.name,r.cat,r.unit,r.stock,r.min,r.ideal??'',r.sug??'',r.cost??'',r.total==null?'':Math.round(r.total*100)/100]),
-      ['','','TOTAL','','','','','',R.units,'',Math.round(R.total*100)/100]];
-    const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:10},{wch:16},{wch:34},{wch:16},{wch:20},{wch:12},{wch:13},{wch:12},{wch:10},{wch:14},{wch:17}];
-    fmtCols(ws,[9,10],5,5+R.rows.length);
+      ['Código','Código de barras','Produto','Categoria','Unidade','Estoque atual','Reservado (pedidos em aberto)','Disponível','Estoque mínimo','Estoque ideal','Comprar','Custo unit. (R$)','Custo estimado (R$)'],
+      ...R.rows.map(r=>[r.code,r.ean,r.name,r.cat,r.unit,r.stock,r.res,r.disp,r.min,r.ideal??'',r.sug??'',r.cost??'',r.total==null?'':Math.round(r.total*100)/100]),
+      ['','','TOTAL','','','','','','','',R.units,'',Math.round(R.total*100)/100]];
+    const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:10},{wch:16},{wch:34},{wch:16},{wch:20},{wch:12},{wch:14},{wch:12},{wch:13},{wch:12},{wch:10},{wch:14},{wch:17}];
+    fmtCols(ws,[11,12],5,5+R.rows.length);
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Sugestão de compra');
     offerFile(fname+'.xlsx',XLSX.write(wb,{type:'array',bookType:'xlsx'}));
   }catch(e){pdfFail(e,'planilha')}};
@@ -6322,21 +6352,21 @@ function admCompra(){
       doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text('Sugestão de compra · estoque crítico até o estoque ideal',10,18.5);doc.setFontSize(9);doc.text(ftxt,W-10,12,{align:'right'})};
     head();
     doc.autoTable({startY:28,margin:{top:28,left:10,right:10,bottom:14},
-      head:[['Código','Cód. barras','Produto','Categoria','Unidade','Estoque','Mínimo','Ideal','COMPRAR','Custo unit.','Custo estimado']],
-      body:[...R.rows.map(r=>[r.code,r.ean,r.name,r.cat,r.unit,r.stock.toLocaleString('pt-BR'),r.min.toLocaleString('pt-BR'),r.ideal==null?'—':r.ideal.toLocaleString('pt-BR'),r.sug==null?'sem ideal':r.sug.toLocaleString('pt-BR'),r.cost==null?'—':brl(r.cost),r.total==null?'—':brl(r.total)]),
-        ['','','TOTAL','','','','','',R.units.toLocaleString('pt-BR'),'',brl(R.total)]],
+      head:[['Código','Cód. barras','Produto','Categoria','Unidade','Estoque','Reserv.','Disp.','Mínimo','Ideal','COMPRAR','Custo unit.','Custo estimado']],
+      body:[...R.rows.map(r=>[r.code,r.ean,r.name,r.cat,r.unit,r.stock.toLocaleString('pt-BR'),r.res?r.res.toLocaleString('pt-BR'):'—',r.disp.toLocaleString('pt-BR'),r.min.toLocaleString('pt-BR'),r.ideal==null?'—':r.ideal.toLocaleString('pt-BR'),r.sug==null?'sem ideal':r.sug.toLocaleString('pt-BR'),r.cost==null?'—':brl(r.cost),r.total==null?'—':brl(r.total)]),
+        ['','','TOTAL','','','','','','','',R.units.toLocaleString('pt-BR'),'',brl(R.total)]],
       theme:'plain',styles:{fontSize:9,cellPadding:2.2,valign:'middle',lineColor:[213,221,216],lineWidth:{bottom:.2}},
       headStyles:{fillColor:[225,236,248],textColor:[60,72,66],fontStyle:'bold',fontSize:8.5},
-      columnStyles:{0:{cellWidth:18},1:{cellWidth:30},2:{fontStyle:'bold'},3:{cellWidth:26},4:{cellWidth:32},5:{halign:'right',cellWidth:18},6:{halign:'right',cellWidth:18},7:{halign:'right',cellWidth:16},8:{halign:'right',cellWidth:22,fontStyle:'bold',fontSize:11},9:{halign:'right',cellWidth:24},10:{halign:'right',cellWidth:28}},
+      columnStyles:{0:{cellWidth:16},1:{cellWidth:26},2:{fontStyle:'bold'},3:{cellWidth:22},4:{cellWidth:24},5:{halign:'right',cellWidth:15},6:{halign:'right',cellWidth:15},7:{halign:'right',cellWidth:15,fontStyle:'bold'},8:{halign:'right',cellWidth:15},9:{halign:'right',cellWidth:14},10:{halign:'right',cellWidth:20,fontStyle:'bold',fontSize:11},11:{halign:'right',cellWidth:21},12:{halign:'right',cellWidth:24}},
       didParseCell:d=>{if(d.section!=='body')return;if(d.row.index===R.rows.length){d.cell.styles.fontStyle='bold';d.cell.styles.fillColor=[225,236,248]}else if(d.row.index%2===1)d.cell.styles.fillColor=[245,248,252];
-        if(d.column.index===8&&d.row.index<R.rows.length)d.cell.styles.textColor=[10,102,178]},
+        if(d.column.index===10&&d.row.index<R.rows.length)d.cell.styles.textColor=[10,102,178]},
       willDrawPage:d=>{if(d.pageNumber>1)head()}});
-    const n=doc.getNumberOfPages();for(let p=1;p<=n;p++){doc.setPage(p);doc.setFontSize(8);doc.setTextColor(93,107,100);doc.text('Comprar = estoque ideal − estoque atual. Custo estimado pelo preço de custo cadastrado.',10,H-6);doc.text('Página '+p+' de '+n,W-10,H-6,{align:'right'})}
+    const n=doc.getNumberOfPages();for(let p=1;p<=n;p++){doc.setPage(p);doc.setFontSize(8);doc.setTextColor(93,107,100);doc.text('Disponível = estoque − reservado (pedidos em aberto). Comprar = estoque ideal − disponível. Custo estimado pelo preço de custo cadastrado.',10,H-6);doc.text('Página '+p+' de '+n,W-10,H-6,{align:'right'})}
     offerFile(fname+'.pdf',doc.output('arraybuffer'));
   }catch(e){pdfFail(e)}};
 }
 function admRelatorios(){
-  const k=ui.repKind||'ranking',nc=S.products.filter(isCritical).length;
+  const k=ui.repKind||'ranking',nc=buildPurchase({cat:'todas'}).rows.length;
   $('#tabc').innerHTML=`<div class="seg repseg" role="group" aria-label="Tipo de relatório"><button id="rkR" aria-pressed="${k==='ranking'}">Ranking de vendas</button><button id="rkC" aria-pressed="${k==='compra'}">Sugestão de compra${nc?` <span class="cnt" style="background:var(--warn)">${nc}</span>`:''}</button><button id="rkV" aria-pressed="${k==='comissao'}">Comissão de vendedores</button><button id="rkF" aria-pressed="${k==='conf'}">Conferência</button><button id="rkB" aria-pressed="${k==='boa'}">Boas compras</button>${modOn('frete3')?`<button id="rkT" aria-pressed="${k==='frete'}">Frete de terceiro</button>`:''}</div><div id="repc"></div>`;
   $('#rkR').onclick=()=>{ui.repKind='ranking';admRelatorios()};
   $('#rkC').onclick=()=>{ui.repKind='compra';admRelatorios()};

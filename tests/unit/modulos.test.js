@@ -25,7 +25,7 @@ test('toda coleção e papel protegidos apontam para módulo que existe e não �
 });
 test('códigos únicos', () => { assert.strictEqual(new Set(M.MODULES.map(m => m.code)).size, M.MODULES.length); });
 test('módulo que diz "servidor" tem efeito no servidor (dados, configuração ou login)', () => {
-  M.MODULES.filter(m => m.enforced === 'servidor' && m.code !== 'negociacao').forEach(m => {
+  M.MODULES.filter(m => m.enforced === 'servidor' && m.code !== 'negociacao' && !m.rule).forEach(m => {
     assert.ok((m.colls || []).length || (m.metas || []).length || (m.roles || []).length, m.code);
   });
   M.MODULES.filter(m => m.enforced === 'tela').forEach(m => assert.ok(!(m.colls || []).length && !(m.metas || []).length, m.code));
@@ -51,4 +51,11 @@ test('sem app do cliente, a vitrine semanal desliga junto', () => {
   assert.strictEqual(r.app_cliente, false); assert.strictEqual(r.ofertas, false);
   assert.strictEqual(M.resolve({ default_on: true, modules: {} }).app_cliente, true);
   assert.strictEqual(M.presetFor('atacado').app_cliente, true);
+});
+
+test('venda sem estoque: PERMITIDA por padrão em todas as empresas (principal, nova, antiga sem o campo) e fora dos pacotes', () => {
+  assert.strictEqual(M.resolve({ default_on: true, modules: {} }).trava_estoque, false);
+  assert.strictEqual(M.resolve({ default_on: false, modules: { app_cliente: true } }).trava_estoque, false);
+  assert.strictEqual(M.resolve({ modules: { trava_estoque: true } }).trava_estoque, true);
+  for (const k of Object.keys(M.SEGMENTS)) assert.strictEqual(M.presetFor(k).trava_estoque, false, k);
 });
