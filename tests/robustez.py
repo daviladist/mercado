@@ -142,5 +142,17 @@ check(s == 200 and r['stats']['photos'] == 0, 'restaurar um arquivo sem a foto: 
 s, r = B.req('/api/restore', {'data': bk['data']})
 check(s == 200 and r['stats']['photos'] == 1, 'restaurar o backup completo traz a foto de volta (fotos: %s)' % r.get('stats', {}).get('photos'))
 
+print('== 7. painel de erros do servidor na Central')
+s, r = cen.req('/api/central/errors-seen', {'all': True}); check(s == 200 and r['unseen'] == 0, 'Central começa sem erros não vistos')
+for _ in range(3): s, r = B.req('/api/teste-erro')
+check(s == 500 and r.get('error') == 'Erro no servidor. Tente de novo.', 'erro inesperado responde "tente de novo" sem detalhe técnico (%s)' % s)
+s, st = cen.req('/api/central/state'); check(st.get('errUnseen') == 1, 'contador da Central: 1 erro não visto (o mesmo erro 3 vezes soma) (%s)' % st.get('errUnseen'))
+s, E = cen.req('/api/central/errors'); e = (E.get('errors') or [{}])[0]
+check(e.get('tenant_id') == tid and e.get('route') == '/api/teste-erro' and e.get('n') == 3 and 'forcado' in e.get('message', '') and str(e.get('place', '')).startswith('lib/api.js:'),
+      'erro registrado com empresa, rota, mensagem, lugar no código e 3 vezes: %s' % {k: e.get(k) for k in ('tenant_id', 'route', 'n', 'message', 'place')})
+s, r = B.req('/api/central/errors'); check(s in (401, 403), 'administrador de empresa não vê o painel de erros (%s)' % s)
+s, r = cen.req('/api/central/errors-seen', {'ids': [e.get('id')]}); check(s == 200 and r['unseen'] == 0, 'marcar como visto zera o contador')
+s, E = cen.req('/api/central/errors'); check(E['errors'][0]['seen'] is True, 'erro continua na lista, marcado como visto')
+
 print(f'\n{ok} OK, {len(fails)} falha(s)')
 if fails: print('\n'.join(' - ' + f for f in fails)); sys.exit(1)

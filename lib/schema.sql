@@ -273,3 +273,17 @@ create table if not exists segments (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+-- erros inesperados do servidor (500) para o painel da Central: rota, mensagem e local no código, SEM dados de clientes nem senhas.
+-- O mesmo erro repetido soma no contador (n); ficam só os 500 mais recentes.
+create table if not exists server_errors (
+  id bigserial primary key,
+  at timestamptz not null default now(),
+  last_at timestamptz not null default now(),
+  n int not null default 1,
+  tenant_id text,
+  route text not null,
+  message text not null,
+  place text,
+  seen boolean not null default false
+);
+create index if not exists server_errors_open on server_errors(seen, last_at desc);

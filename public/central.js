@@ -24,12 +24,29 @@
     catch (er) { $('#lerr').textContent = er.message; $('#lp').value = ''; }
     finally { b.disabled = false; }
   });
+  /* painel de erros do servidor: contador vermelho no topo e lista com "marcar como visto" */
+  function errCount(n) { const b = $('#errN'); n = Number(n) || 0; b.textContent = n > 99 ? '99+' : String(n); b.hidden = !n; $('#errBtn').setAttribute('aria-label', 'Erros do servidor' + (n ? ': ' + n + ' não vistos' : '')); }
+  const dt = s => { try { return new Date(s).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }); } catch (e) { return ''; } };
+  async function renderErrors() {
+    let E; try { E = await api('/api/central/errors'); } catch (e) { toast(e.message); return; }
+    errCount(E.unseen);
+    const tn = id => { const t = D.tenants.find(x => x.id === id); return t ? t.name : (id || 'sem empresa'); };
+    $('#editor').innerHTML = `<section class="card"><div class="top"><div><h1>Erros do servidor</h1><p class="muted small" style="margin:4px 0 0">Erros inesperados (o sistema já recusou ou mostrou "tente de novo"). Sem dados de clientes. Ficam os 500 mais recentes.</p></div>
+      ${E.unseen ? '<button class="btn dark" id="errAll" type="button">Marcar todos como vistos</button>' : ''}</div>
+      <div class="errl">${E.errors.length ? E.errors.map(x => `<div class="erri${x.seen ? '' : ' novo'}"><div style="min-width:0;flex:1"><div class="m">${esc(x.message)}</div>
+        <div class="small muted">${esc(tn(x.tenant_id))} · <code>${esc(x.route)}</code>${x.place ? ' · <code>' + esc(x.place) + '</code>' : ''} · ${esc(dt(x.last_at))}${x.n > 1 ? ' · <b>' + x.n + ' vezes</b> (desde ' + esc(dt(x.at)) + ')' : ''}</div></div>
+        ${x.seen ? '<span class="small muted">visto</span>' : `<button class="btn" type="button" data-eseen="${esc(x.id)}">Marcar como visto</button>`}</div>`).join('') : '<p class="muted">Nenhum erro registrado. Tudo certo.</p>'}</div></section>`;
+    const mark = async b => { try { const r = await api('/api/central/errors-seen', b); errCount(r.unseen); renderErrors(); } catch (e) { toast(e.message); } };
+    document.querySelectorAll('[data-eseen]').forEach(b => b.addEventListener('click', () => mark({ ids: [Number(b.dataset.eseen)] })));
+    const all = $('#errAll'); if (all) all.addEventListener('click', () => mark({ all: true }));
+  }
+  $('#errBtn').addEventListener('click', () => { if (dirty && !confirm('Sair sem salvar as mudanças?')) return; dirty = false; renderErrors(); });
   $('#logout').addEventListener('click', async () => { try { await api('/api/central/logout', {}); } catch (e) { /* segue */ } D = null; showLogin(); });
 
   async function load(keep) {
     try { D = await api('/api/central/state'); }
     catch (e) { if (e.status === 401) return showLogin(); toast(e.message); return; }
-    $('#loginView').hidden = true; $('#appView').hidden = false; $('#who').hidden = false; $('#whoName').textContent = D.me.login;
+    $('#loginView').hidden = true; $('#appView').hidden = false; $('#who').hidden = false; $('#whoName').textContent = D.me.login; errCount(D.errUnseen);
     if (pendingDraft) { const p = pendingDraft; pendingDraft = null; sel = p.sel; pick(sel); draft = p.draft; dirty = true; renderList(); renderEditor(); return; }
     if (!keep || !D.tenants.some(t => t.id === sel)) sel = (D.tenants[0] || {}).id || null;
     pick(sel);

@@ -8,6 +8,8 @@ const vm = require('vm');
 const store = require('../../lib/store');
 const policy = require('../../lib/policy');
 const { planSync } = require('../../lib/api');
+const errlog = require('../../lib/errlog');
+const logged = []; errlog.logError = async (tid, route, e) => { logged.push(route); };   // sem banco aqui
 
 const base = () => {
   const S = {}; store.COLLS.forEach(c => { S[c] = []; });
@@ -38,6 +40,7 @@ test('erro inesperado numa alteração: só ela é recusada, as outras seguem e 
     assert.strictEqual(out.rejected[0].id, 'ruim');
     assert.ok(!out.S.products.some(x => x.id === 'meio-gravado'), 'conferência refeita do zero, sem a mudança pela metade');
     assert.strictEqual(loads, 2);
+    assert.ok(logged.includes('/api/sync (products)'), 'erro inesperado vai para o painel da Central');
   } finally { store.loadAll = loadAll; policy.applySync = apply; console.error = err; }
 });
 
@@ -113,4 +116,9 @@ test('histórico de aprovação: só em pedido em aberto e no máximo 50 registr
   { const { S, V } = mk('novo', 3); assert.strictEqual(send(S, V).writes[0].doc.apprHist.length, 4); }
   for (const st of ['concluido', 'cancelado']) { const { S, V } = mk(st, 3); assert.throws(() => send(S, V), e => e.status === 403); }
   { const { S, V } = mk('novo', 50); assert.throws(() => send(S, V), e => e.status === 400 && /cheio/.test(e.message)); }
+});
+
+test('painel de erros: mensagem sem CPF/CNPJ, e-mail nem texto longo', () => {
+  const c = errlog.clean('value "12.345.678/0001-90" de joao@x.com.br falhou: "' + 'a'.repeat(40) + '"\nlinha 2');
+  assert.ok(!/12\.345|joao@|aaaa|linha 2/.test(c), c);
 });
