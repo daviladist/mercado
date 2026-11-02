@@ -422,19 +422,20 @@
         ${edit && !travado ? '<button class="btn dan full" type="button" id="fx">Excluir este lançamento</button>' : ''}`;
       openSheet(title.charAt(0).toUpperCase() + title.slice(1), html, bind);
     }
+    const maxVence = () => (Number(hoje().slice(0, 4)) + 5) + hoje().slice(4);
     /* forma de pagamento da venda; cheque pede o vencimento e, se quiser, os dados do cheque */
     function pagHtml() {
       const ch = F.cheque || {};
       const pags = S.pagamentos || [];
       return `<div class="field"><span class="lbl">Forma de pagamento</span><div class="chips">${pags.map(p => `<button type="button" class="chip" data-pg="${esc(p.id)}" aria-pressed="${F.pagamento === p.id}">${esc(p.icone)} ${esc(p.nome)}</button>`).join('')}</div></div>
         ${F.pagamento === 'cheque' ? `<div class="chq">
-          <div class="field"><label for="fvc">Vencimento do cheque (obrigatório)</label><input type="date" id="fvc" value="${esc(F.vence || '')}" required></div>
+          <div class="field"><label for="fvc">Vencimento do cheque (obrigatório)</label><input type="date" id="fvc" value="${esc(F.vence || '')}" max="${maxVence()}" required></div>
           ${F.chequeAberto ? `<p class="small muted" style="margin:0">Dados do cheque: opcional, preencha o que quiser.</p>
             <div class="field"><label for="fce">Nome de quem passou o cheque</label><input type="text" id="fce" maxlength="80" value="${esc(ch.emitente || '')}" placeholder="Ex.: José da Silva"></div>
             <div class="grid2"><div class="field"><label for="fcb">Banco</label><input type="text" id="fcb" maxlength="40" value="${esc(ch.banco || '')}" placeholder="Ex.: Sicoob"></div><div class="field"><label for="fcn">Número do cheque</label><input type="text" inputmode="numeric" id="fcn" maxlength="20" value="${esc(ch.numero || '')}" placeholder="Ex.: 000123"></div></div>
             <div class="grid2"><div class="field"><label for="fca">Agência</label><input type="text" inputmode="numeric" id="fca" maxlength="10" value="${esc(ch.agencia || '')}"></div><div class="field"><label for="fcc">Conta</label><input type="text" inputmode="numeric" id="fcc" maxlength="20" value="${esc(ch.conta || '')}"></div></div>`
           : '<button type="button" class="btn ghost full" id="fcx">+ Dados do cheque (opcional)</button>'}</div>` : ''}
-        ${F.pagamento === 'prazo' ? `<div class="field"><label for="fvc">Vai receber em (opcional)</label><input type="date" id="fvc" value="${esc(F.vence || '')}"></div>` : ''}`;
+        ${F.pagamento === 'prazo' ? `<div class="field"><label for="fvc">Vai receber em (opcional)</label><input type="date" id="fvc" value="${esc(F.vence || '')}" max="${maxVence()}"></div>` : ''}`;
     }
     /* venda corrigida na mesma roça: mostra a divisão gravada (do dia da venda), não a parceria de hoje */
     function vendaNote(r, v) { const ps = edit && F.rocaId === origRoca && Object.keys(origPartes).length ? origPartes : vendaPartes(r); return Object.entries(ps).map(([k, p]) => esc(nomeParte(k)) + ' (' + pctTxt(p) + '): <b>' + money((v || 0) * p / 100) + '</b>').join(' · '); }
@@ -734,7 +735,7 @@
   }
   /* cheques que ainda vão vencer (e os vencidos nos últimos 7 dias), do mais perto para o mais longe */
   function chequesHtml() {
-    const lim = new Date(Date.now() - 3 * 3600e3 - 7 * 864e5).toISOString().slice(0, 10), h = hoje();
+    const h = hoje(), d7 = new Date(h + 'T12:00:00Z'); d7.setUTCDate(d7.getUTCDate() - 7); const lim = d7.toISOString().slice(0, 10);
     const cs = S.lanc.filter(l => l.tipo === 'venda' && l.pagamento === 'cheque' && l.vence && l.vence >= lim).sort((a, b) => a.vence < b.vence ? -1 : a.vence > b.vence ? 1 : 0);
     if (!cs.length) return '';
     const tot = r2(cs.filter(l => l.vence >= h).reduce((a, l) => a + l.valor, 0));
