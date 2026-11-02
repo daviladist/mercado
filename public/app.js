@@ -146,12 +146,16 @@ function srvNetBar(){let b=document.getElementById('srvnet');const n=SRV.nPend;
   if(!b){b=document.createElement('div');b.id='srvnet';b.className='srvnet';b.setAttribute('role','status');document.body.appendChild(b)}
   b.hidden=false;b.textContent='Sem internet: '+n+(n>1?' alterações ainda não foram enviadas':' alteração ainda não foi enviada')+'. O app envia sozinho quando a conexão voltar. Não feche o app.'}
 window.addEventListener('online',()=>{if(SRV.me)srvSync()});
+/* envio grande (ex.: planilha com centenas de produtos): vai em partes, uma depois da outra (o servidor aceita até 500 alterações e 4 MB por vez) */
+const SRV_MAXN=400,SRV_MAXB=2500000;
+function srvChunk(L){const out=[];let n=0;for(const x of L){const z=JSON.stringify(x).length;if(out.length&&(out.length>=SRV_MAXN||n+z>SRV_MAXB))break;out.push(x);n+=z}return out}
 async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
-  const {ch,order}=srvDiff();SRV.nPend=ch.length;if(SRV.offHit){SRV.offHit=false;srvAlert('Não foi gravado: função desligada para esta empresa.');srvSoftRender(true)}if(!ch.length&&!Object.keys(order).length){srvPersist([]);SRV.offline=false;srvNetBar();return}
-  srvPersist(ch);
+  const {ch:all,order:ord0}=srvDiff();SRV.nPend=all.length;if(SRV.offHit){SRV.offHit=false;srvAlert('Não foi gravado: função desligada para esta empresa.');srvSoftRender(true)}if(!all.length&&!Object.keys(ord0).length){srvPersist([]);SRV.offline=false;srvNetBar();return}
+  srvPersist(all);
+  const ch=srvChunk(all),last=ch.length===all.length,order=last?ord0:{};
   SRV.busy=true;srvBadge(true);clearTimeout(SRV.retry);
   try{const sent={};ch.forEach(x=>{if(x.op==='put')sent[x.c+':'+x.id]=JSON.stringify(x.doc)});const r=await api('/api/sync',{changes:ch,order});
-    SRV.offline=false;const t=srvApply(r,order,sent);
+    SRV.offline=false;SRV.fails=0;if(!last)SRV.again=true;const t=srvApply(r,order,sent);
     // recusadas: mostra o motivo e volta aquele registro para como está no servidor (as outras gravações seguem)
     if((r.rejected||[]).length){r.rejected.forEach(x=>{SRV.rej[x.id]=x.error;const arr=S[x.c]||[],k=arr.findIndex(d=>d&&d.id===x.id),b=(SRV.base[x.c]||{})[x.id];
         if(k>=0){if(b)arr[k]=JSON.parse(b);else arr.splice(k,1)}t.add(x.c)});
@@ -161,7 +165,9 @@ async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
   catch(e){if(e.status===401){toast('Sua sessão terminou. Entre de novo.');setTimeout(()=>location.reload(),1200);return}if(srvKicked(e))return;
     if(e.data&&e.data.mustReset){srvResetScreen();return}
     if(e.status===0||e.status>=500&&e.status!==501){/* sem internet ou servidor fora: guarda e tenta de novo sozinho */
-      SRV.offline=e.status===0;srvNetBar();if(ui.view==='cliente'&&ui.cliPage==='ok')try{renderClient()}catch(_){}if(!SRV.offline)toast('O servidor não respondeu. Vamos tentar de novo em instantes.');
+      SRV.offline=e.status===0;srvNetBar();
+      // servidor recusando várias vezes seguidas (não é falta de internet): avisa de forma clara, sem perder nada
+      if(!SRV.offline){SRV.fails=(SRV.fails||0)+1;if(SRV.fails===4)srvAlert('o servidor não conseguiu gravar depois de várias tentativas. O que você fez continua guardado neste aparelho e será enviado sozinho. Se continuar assim, avise a loja ou o suporte.')}if(ui.view==='cliente'&&ui.cliPage==='ok')try{renderClient()}catch(_){}if(!SRV.offline)toast('O servidor não respondeu. Vamos tentar de novo em instantes.');
       SRV.retry=setTimeout(srvSync,SRV.offline?5000:8000);return}
     if(e.status===409){/* alguém gravou o mesmo registro antes: junta as mudanças quando foram em campos diferentes */
       const P=srvPatches(ch);try{await loadState()}catch(_){}
@@ -1817,7 +1823,7 @@ function validDoc(d){
   return false;
 }
 function docHint(v){v=String(v).replace(/\D/g,'');if(!v)return 'Opcional. O cliente também pode entrar no app com o CNPJ/CPF no lugar do usuário.';if(v.length===11)return validDoc(v)?'CPF válido':'CPF inválido';if(v.length===14)return validDoc(v)?'CNPJ válido':'CNPJ inválido';return v.length<11?'Digite os 11 números do CPF ou os 14 do CNPJ.':'Faltam números para o CNPJ.'}
-function allowedPays(c){const all=S.payments;return c&&Array.isArray(c.pays)?all.filter(p=>c.pays.includes(p)):all}
+function allowedPays(c){const all=Array.isArray(S.payments)?S.payments:[];return c&&Array.isArray(c.pays)?all.filter(p=>c.pays.includes(p)):all}
 function cartSavings(){return withOner(ui.mode,()=>cartItems().reduce((s,i)=>s+((i.p.isCombo?i.p.listPrice:baseOf(i.p))-i.price)*i.q,0))}
 function matches(p,q){if(!q)return true;const d=q.replace(/\s/g,'');return p.name.toLowerCase().includes(q)||String(p.code||'').toLowerCase().includes(d)||String(p.ean||'').includes(d)||String(p.ean2||'').includes(d)||(p.eans||[]).some(c=>String(c).includes(d))||String(p.sub||'').toLowerCase().includes(q)}
 function codesLine(code,ean){const a=[];if(code)a.push('Cód. '+esc(code));if(ean)a.push('EAN '+esc(ean));return a.join(' · ')}
@@ -1921,7 +1927,7 @@ function rowCard(p,vars){
   if(R.limite.on&&R.limite.max>0)off.push(`<span class="lim">Máx. ${R.limite.max}/pedido</span>`);
   const now=q?priceFor(p,q,ui.mode,ui.pay):null;
   return `<article class="lrow ${(vars?vars.some(v=>ui.cart[v.id]):q)?'incart':''}">
-    <img src="${p.photo||ph(p.name,150)}" alt="${esc(p.name)}" loading="lazy">
+    <img src="${esc(p.photo||ph(p.name,150))}" alt="${esc(p.name)}" loading="lazy">
     <div class="li">${vars?`<b>${esc(p.fam)}</b>${famChips(p,vars)}`:`<b>${esc(p.name)}</b>`}<span>${vars?'Sabor: <b>'+esc(p.var||'')+'</b> · ':''}${esc(p.unit)}${p.code?' · Cód. '+esc(p.code):''}${promo?` · <em>Promoção${R.promo.until?' até '+fmtDate(R.promo.until):''}</em>`:''}</span></div>
     <div class="lo">${off.join('')}${now&&now.price<baseOf(p)?`<span class="yours">Seu preço: ${uP(now.price,p)}</span>`:''}${tiersOk.length?'<small class="pmc">Pague menos comprando mais</small>':''}</div>
     <div class="lp num">${ieNow(p)?`<s class="ieold">sem IE ${uP(p.price*onerF(p),p)}</s>`:promo?`<s>${uP(baseOf(p),p)}</s>`:''}<span class="ltrow">${ieNow(p)?'<span class="iebadge">com IE</span>':''}<span class="lt">${n?brl(Math.round(shown/n*100)/100)+'<small>/'+uw(p)+'</small>':brl(shown)}</span></span>${n?`<span class="upx num">${esc(packWord(p).replace(/^./,x=>x.toUpperCase()))} c/ ${nfmt(n)}${isKg(p)?' kg':''}: ${brl(shown)}</span>`:''}${ieTag(p)}</div>
@@ -1943,7 +1949,7 @@ function card(p,vars){
   if(R.retira.on&&R.retira.price>0)offers.push(`Retirando no depósito: <b>${uP(ieAdj(p,R.retira.price),p)}</b>`);
   const now=q?priceFor(p,q,ui.mode,ui.pay):null;
   return `<article class="card ${(vars?vars.some(v=>ui.cart[v.id]):q)?'incart':''}">
-    <div class="ph"><img src="${p.photo||ph(p.name,150)}" alt="${esc(p.name)}" loading="lazy">${promo?`<span class="flag">Promoção${R.promo.until?' até '+fmtDate(R.promo.until):''}</span>`:''}</div>
+    <div class="ph"><img src="${esc(p.photo||ph(p.name,150))}" alt="${esc(p.name)}" loading="lazy">${promo?`<span class="flag">Promoção${R.promo.until?' até '+fmtDate(R.promo.until):''}</span>`:''}</div>
     <div class="body">
       ${vars?`<div class="name">${esc(p.fam)}</div>${famChips(p,vars)}`:`<div class="name">${esc(p.name)}</div>`}
       <div class="unit">${esc(p.unit)}${p.code?' · Cód. '+esc(p.code):''}</div>

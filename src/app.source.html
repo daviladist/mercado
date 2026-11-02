@@ -1345,7 +1345,7 @@ function validDoc(d){
   return false;
 }
 function docHint(v){v=String(v).replace(/\D/g,'');if(!v)return 'Opcional. O cliente também pode entrar no app com o CNPJ/CPF no lugar do usuário.';if(v.length===11)return validDoc(v)?'CPF válido':'CPF inválido';if(v.length===14)return validDoc(v)?'CNPJ válido':'CNPJ inválido';return v.length<11?'Digite os 11 números do CPF ou os 14 do CNPJ.':'Faltam números para o CNPJ.'}
-function allowedPays(c){const all=S.payments;return c&&Array.isArray(c.pays)?all.filter(p=>c.pays.includes(p)):all}
+function allowedPays(c){const all=Array.isArray(S.payments)?S.payments:[];return c&&Array.isArray(c.pays)?all.filter(p=>c.pays.includes(p)):all}
 function cartSavings(){return withOner(ui.mode,()=>cartItems().reduce((s,i)=>s+((i.p.isCombo?i.p.listPrice:baseOf(i.p))-i.price)*i.q,0))}
 function matches(p,q){if(!q)return true;const d=q.replace(/\s/g,'');return p.name.toLowerCase().includes(q)||String(p.code||'').toLowerCase().includes(d)||String(p.ean||'').includes(d)||String(p.ean2||'').includes(d)||(p.eans||[]).some(c=>String(c).includes(d))||String(p.sub||'').toLowerCase().includes(q)}
 function codesLine(code,ean){const a=[];if(code)a.push('Cód. '+esc(code));if(ean)a.push('EAN '+esc(ean));return a.join(' · ')}
@@ -1455,7 +1455,7 @@ function rowCard(p,vars){
   if(R.limite.on&&R.limite.max>0)off.push(`<span class="lim">Máx. ${R.limite.max}/pedido</span>`);
   const now=q?priceFor(p,q,ui.mode,ui.pay):null;
   return `<article class="lrow ${(vars?vars.some(v=>ui.cart[v.id]):q)?'incart':''}">
-    <img src="${p.photo||ph(p.name,150)}" alt="${esc(p.name)}" loading="lazy">
+    <img src="${esc(p.photo||ph(p.name,150))}" alt="${esc(p.name)}" loading="lazy">
     <div class="li">${vars?`<b>${esc(p.fam)}</b>${famChips(p,vars)}`:`<b>${esc(p.name)}</b>`}<span>${vars?'Sabor: <b>'+esc(p.var||'')+'</b> · ':''}${esc(p.unit)}${p.code?' · Cód. '+esc(p.code):''}${promo?` · <em>Promoção${R.promo.until?' até '+fmtDate(R.promo.until):''}</em>`:''}</span></div>
     <div class="lo">${off.join('')}${now&&now.price<baseOf(p)?`<span class="yours">Seu preço: ${uP(now.price,p)}</span>`:''}${tiersOk.length?'<small class="pmc">Pague menos comprando mais</small>':''}</div>
     <div class="lp num">${ieNow(p)?`<s class="ieold">sem IE ${uP(p.price*onerF(p),p)}</s>`:promo?`<s>${uP(baseOf(p),p)}</s>`:''}<span class="ltrow">${ieNow(p)?'<span class="iebadge">com IE</span>':''}<span class="lt">${n?brl(Math.round(shown/n*100)/100)+'<small>/'+uw(p)+'</small>':brl(shown)}</span></span>${n?`<span class="upx num">${esc(packWord(p).replace(/^./,x=>x.toUpperCase()))} c/ ${nfmt(n)}${isKg(p)?' kg':''}: ${brl(shown)}</span>`:''}${ieTag(p)}</div>
@@ -1477,7 +1477,7 @@ function card(p,vars){
   if(R.retira.on&&R.retira.price>0)offers.push(`Retirando no depósito: <b>${uP(ieAdj(p,R.retira.price),p)}</b>`);
   const now=q?priceFor(p,q,ui.mode,ui.pay):null;
   return `<article class="card ${(vars?vars.some(v=>ui.cart[v.id]):q)?'incart':''}">
-    <div class="ph"><img src="${p.photo||ph(p.name,150)}" alt="${esc(p.name)}" loading="lazy">${promo?`<span class="flag">Promoção${R.promo.until?' até '+fmtDate(R.promo.until):''}</span>`:''}</div>
+    <div class="ph"><img src="${esc(p.photo||ph(p.name,150))}" alt="${esc(p.name)}" loading="lazy">${promo?`<span class="flag">Promoção${R.promo.until?' até '+fmtDate(R.promo.until):''}</span>`:''}</div>
     <div class="body">
       ${vars?`<div class="name">${esc(p.fam)}</div>${famChips(p,vars)}`:`<div class="name">${esc(p.name)}</div>`}
       <div class="unit">${esc(p.unit)}${p.code?' · Cód. '+esc(p.code):''}</div>

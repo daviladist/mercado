@@ -1,0 +1,85 @@
+'use strict';
+/* Robustez da gravação (sem banco): erro inesperado num registro, loja sem configuração, envio em partes no app. */
+const test = require('node:test');
+const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const store = require('../../lib/store');
+const policy = require('../../lib/policy');
+const { planSync } = require('../../lib/api');
+
+const base = () => {
+  const S = {}; store.COLLS.forEach(c => { S[c] = []; });
+  S.products = [{ id: 'pa', name: 'Arroz', price: 25, unit: 'UN', active: true }];
+  S.customers = [{ id: 'cl1', name: 'Cliente', sellerId: 's1' }];
+  S.sellers = [{ id: 's1', name: 'Vend', allCli: true }];
+  const V = { meta: {} }; store.COLLS.forEach(c => { V[c] = {}; });
+  return { S, V };
+};
+const ADMIN = { role: 'admin', ref_id: 'adm', tenant_id: 't', name: 'Dono' };
+const T = { modules: new Proxy({}, { get: () => true }) };
+
+test('erro inesperado numa alteração: só ela é recusada, as outras seguem e nada fica pela metade', async () => {
+  const loadAll = store.loadAll, apply = policy.applySync;
+  let loads = 0;
+  store.loadAll = async () => { loads++; return base(); };
+  policy.applySync = (S, V, u, chs, ef) => {
+    const r = apply(S, V, u, chs, ef);
+    if (chs[0].id === 'ruim') { S.products.push({ id: 'meio-gravado' }); throw new TypeError('quebrou'); }
+    return r;
+  };
+  const err = console.error; console.error = () => {};
+  try {
+    const p = (id) => ({ c: 'products', id, op: 'put', doc: { id, name: id, price: 1 } });
+    const out = await planSync(ADMIN, T, [p('bom1'), p('ruim'), p('bom2')]);
+    assert.deepStrictEqual(out.writes.map(w => w.id), ['bom1', 'bom2']);
+    assert.strictEqual(out.rejected.length, 1);
+    assert.strictEqual(out.rejected[0].id, 'ruim');
+    assert.ok(!out.S.products.some(x => x.id === 'meio-gravado'), 'conferência refeita do zero, sem a mudança pela metade');
+    assert.strictEqual(loads, 2);
+  } finally { store.loadAll = loadAll; policy.applySync = apply; console.error = err; }
+});
+
+test('muitos erros inesperados no mesmo envio: desiste (erro do servidor) em vez de repetir sem fim', async () => {
+  const loadAll = store.loadAll, apply = policy.applySync;
+  store.loadAll = async () => base();
+  policy.applySync = () => { throw new TypeError('sempre'); };
+  const err = console.error; console.error = () => {};
+  try {
+    const chs = Array.from({ length: 10 }, (_, i) => ({ c: 'products', id: 'x' + i, op: 'put', doc: {} }));
+    await assert.rejects(planSync(ADMIN, T, chs), /sempre/);
+  } finally { store.loadAll = loadAll; policy.applySync = apply; console.error = err; }
+});
+
+test('loja sem "store" e sem formas de pagamento: pedido do cliente é recusado com motivo (não quebra)', () => {
+  const { S, V } = base(); S.__mods = {};
+  const u = { role: 'cliente', ref_id: 'cl1', name: 'Cliente' };
+  assert.throws(() => policy.applySync(S, V, u, [{ c: 'orders', id: 'o1', op: 'put', doc: { items: [{ pid: 'pa', q: 1 }], pay: 'PIX', mode: 'retirada' } }]),
+    e => e.status === 400 && /forma de pagamento/.test(e.message));
+  S.payments = ['PIX'];
+  const r = policy.applySync(S, V, u, [{ c: 'orders', id: 'o2', op: 'put', doc: { items: [{ pid: 'pa', q: 1 }], pay: 'PIX', mode: 'retirada' } }]);
+  assert.strictEqual(r.writes[0].doc.total, 25);
+  assert.throws(() => policy.applySync(S, V, u, [{ c: 'orders', id: 'o3', op: 'put', doc: { items: [null], pay: 'PIX' } }]), e => e.status === 400);
+  assert.throws(() => policy.applySync(S, V, u, [{ c: 'orders', id: 'o4', op: 'put', doc: { items: 'x', pay: 'PIX' } }]), e => e.status === 400);
+});
+
+test('configuração com nome herdado de objeto ("constructor") não vira conflito falso', () => {
+  const { S, V } = base();
+  const r = policy.applySync(S, V, ADMIN, [{ c: 'meta', id: 'constructor', op: 'put', doc: { a: 1 } }]);
+  assert.strictEqual(r.writes.length, 1);
+  assert.strictEqual(r.writes[0].ver, undefined);
+});
+
+test('app: envio grande vai em partes (até 400 alterações e ~2,5 MB por vez)', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../../public/app.js'), 'utf8');
+  const m = /const SRV_MAXN=[^\n]*\nfunction srvChunk\([^\n]*\n/.exec(src);
+  assert.ok(m, 'srvChunk está no app gerado');
+  const ctx = {}; vm.runInNewContext(m[0] + 'this.srvChunk=srvChunk;', ctx);
+  const L = Array.from({ length: 600 }, (_, i) => ({ c: 'products', id: 'p' + i, op: 'put', doc: { id: 'p' + i } }));
+  const a = ctx.srvChunk(L); assert.strictEqual(a.length, 400);
+  assert.strictEqual(ctx.srvChunk(L.slice(400)).length, 200);
+  const grande = Array.from({ length: 5 }, (_, i) => ({ c: 'products', id: 'g' + i, op: 'put', doc: { photo: 'x'.repeat(900000) } }));
+  assert.strictEqual(ctx.srvChunk(grande).length, 2);
+  assert.strictEqual(ctx.srvChunk([{ doc: 'y'.repeat(3000000) }]).length, 1, 'um registro grande sozinho ainda vai (o servidor responde)');
+});
