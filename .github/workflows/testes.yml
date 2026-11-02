@@ -43,3 +43,33 @@ jobs:
           PGURL: postgres://tester:tester-ci-only@127.0.0.1:5432
           PGPASSWORD: tester-ci-only
         run: bash tests/ci_banco.sh
+  telas:
+    # testes de tela com navegador de verdade (cliente, vendedor, conferente, faturamento, entregador, caixa e a fila do app)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: tester-ci-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U tester" --health-interval 2s --health-timeout 2s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Navegador para os testes (Playwright + Chromium)
+        run: |
+          pip install playwright==1.63.0
+          python -m playwright install --with-deps chromium
+      - name: Testes de tela de cada papel
+        env:
+          PGURL: postgres://tester:tester-ci-only@127.0.0.1:5432
+          PGPASSWORD: tester-ci-only
+        run: bash tests/ci_telas.sh

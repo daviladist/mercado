@@ -100,3 +100,17 @@ test('app: registro sozinho grande demais (> 3,5 MB) volta como estava e o resto
   assert.strictEqual(alerts.length, 1);
   assert.match(alerts[0], /2 registros grandes demais/);
 });
+
+test('histórico de aprovação: só em pedido em aberto e no máximo 50 registros', () => {
+  const mk = (status, n) => {
+    const { S, V } = base(); S.__mods = {}; S.payments = ['PIX'];
+    S.orders = [{ id: 'o1', no: 1001, customerId: 'cl1', customer: 'Cliente', sellerId: 's1', status, pay: 'PIX', mode: 'retirada', items: [{ pid: 'pa', name: 'Arroz', q: 1, price: 25, base: 25 }], sub: 25, disc: 0, total: 25,
+      apprHist: Array.from({ length: n }, (_, i) => ({ at: '2026-01-01', by: 'x', what: 'h' + i })) }];
+    V.orders = { o1: 1 }; return { S, V };
+  };
+  const u = { role: 'cliente', ref_id: 'cl1', name: 'Cliente' };
+  const send = (S, V) => policy.applySync(S, V, u, [{ c: 'orders', id: 'o1', op: 'put', ver: 1, doc: Object.assign(JSON.parse(JSON.stringify(S.orders[0])), { apprHist: S.orders[0].apprHist.concat([{ what: 'novo' }]) }) }]);
+  { const { S, V } = mk('novo', 3); assert.strictEqual(send(S, V).writes[0].doc.apprHist.length, 4); }
+  for (const st of ['concluido', 'cancelado']) { const { S, V } = mk(st, 3); assert.throws(() => send(S, V), e => e.status === 403); }
+  { const { S, V } = mk('novo', 50); assert.throws(() => send(S, V), e => e.status === 400 && /cheio/.test(e.message)); }
+});
