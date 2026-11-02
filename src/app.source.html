@@ -1145,6 +1145,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;text
 .helptip{display:inline-block;position:relative;vertical-align:middle;margin-left:6px}
 .helptip>summary{list-style:none;cursor:pointer;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:800;background:var(--accent-soft);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent)}
 .helptip>summary::-webkit-details-marker{display:none}
+.helptip:not([open])>.helpbody{display:none}
 .helptip[open]>summary{background:var(--accent);color:var(--accent-fg)}
 .helptip .helpbody{position:absolute;z-index:35;top:30px;left:-8px;width:min(340px,80vw);background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;box-shadow:0 10px 26px rgba(0,0,0,.18);font-size:13px;font-weight:400;line-height:1.45;text-transform:none;letter-spacing:0;font-family:var(--body)}
 .sectionhead h2 .helptip{margin-left:8px}
