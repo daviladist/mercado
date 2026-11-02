@@ -1127,6 +1127,10 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;text
 .filebtn{position:relative;cursor:pointer}
 #pf[data-mode=prec] .pquick{display:none}
 .pfsave{position:sticky;bottom:0;z-index:5;background:var(--surface);margin:0 -16px -16px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);border-radius:0 0 12px 12px}
+@media (max-width:560px){
+  .tiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.tiles .tile{padding:8px 8px;min-width:0}.tiles .tile .lbl{font-size:10.5px;letter-spacing:.3px}.tiles .tile b.num{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tiles .tile .small{font-size:11px;line-height:1.25}
+  .rec .ra{grid-template-columns:1fr;justify-items:stretch}.rec .ra>.row{justify-content:flex-start!important}.rec .ra>.row .btn[data-rpay]{flex:1}
+}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 
