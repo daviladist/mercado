@@ -119,7 +119,7 @@ R(`    ui.neg=ui.neg||{};ui.neg[id]=pack;ui.negEdit=null;rer();
 
 // ---------- 7b. estoque e contas automáticas dos pedidos: só o servidor faz (o navegador não mexe)
 R("function syncStock(o){\n", "function syncStock(o){if(typeof SRV!=='undefined')return;\n");
-R("function autoReceivables(o,prev){\n", "function autoReceivables(o,prev){if(typeof SRV!=='undefined')return '';\n");
+R("function autoReceivables(o,prev){\n", "function autoReceivables(o,prev){if(typeof SRV!=='undefined')return autoRecWarn(o);\n");
 
 // ---------- 8. backup e restauração pelo servidor; senhas provisórias
 R("function backupNow(){const data=JSON.stringify({app:'pedidos-atacado',version:1,savedAt:new Date().toISOString(),data:S});\n  offerFile('backup-atacado-davila-'+stamp()+'.json',data).then(ok=>{if(ok){S.store.lastBackup=today();save();render()}})}", 'function backupNow(){srvBackup()}');

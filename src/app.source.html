@@ -1200,6 +1200,9 @@ function packOf(p){const n=p&&Number(p.perPack);return n>1?n:null}
 /* produto vendido por peso: a embalagem tem X kg e o preço "unitário" é por kg */
 const isKg=p=>!!(p&&p.kg);
 const ppkV=v=>{const n=parseFloat(String(v==null?'':v).replace(',','.'));return isNaN(n)?NaN:n};
+/* quantidade digitada num item do pedido: em kg aceita 2,5 (até 3 casas); nos demais, só inteiro. Inválido ou negativo = 0 */
+const itemIsKg=i=>!!(i&&(i.kg||isKg(itemProduct(i))));
+function qtyIn(v,i){const n=ppkV(String(v==null?'':v).trim());if(!(n>0))return 0;return itemIsKg(i)?Math.round(n*1000)/1000:Math.floor(n+1e-9)}
 const uw=p=>isKg(p)?'kg':'un.';
 const nfmt=n=>Number(n).toLocaleString('pt-BR',{maximumFractionDigits:3});
 const pkq=(p,n)=>nfmt(n)+(isKg(p)?' kg':' unidades');
@@ -1607,7 +1610,7 @@ function adjEditor(o){
     <p class="small muted" style="margin:0">Digite quanto foi separado de cada item. Use 0 para item em falta. O cliente mantém o preço negociado no pedido, mesmo que a quantidade fique abaixo da faixa de desconto.</p>
     ${o.items.map((i,k)=>`<div class="adjrow"><div class="t"><b>${esc(i.name)}</b><span class="codes">${codesLine(i.code,i.ean)||esc(i.unit)} · ${brl(i.price)} cada${i.label?' · '+esc(i.label)+' (mantido)':''}</span></div>
       <div class="adjq"><span class="small muted">Pedido <b class="num" style="color:var(--fg)">${origQ(i)}</b></span>
-      <label class="small" for="aq-${o.id}-${k}">Separado</label><input type="number" inputmode="numeric" min="0" id="aq-${o.id}-${k}" data-aq="${k}" value="${qs[k]}"></div></div>`).join('')}
+      <label class="small" for="aq-${o.id}-${k}">Separado</label><input type="number" inputmode="${itemIsKg(i)?'decimal':'numeric'}" step="${itemIsKg(i)?'0.001':'1'}" min="0" id="aq-${o.id}-${k}" data-aq="${k}" value="${qs[k]}"></div></div>`).join('')}
     <div class="adjtot num" id="adjtot">${adjTotText(o)}</div>
     <div class="err" id="adjerr"></div>
     <div class="row" style="gap:6px"><button class="btn dlb" data-adjsave="">Salvar ajuste</button><button class="btn dlb" data-adjsave="pronto">Salvar e marcar ${o.mode==='entrega'?'Separado':'Pronto para retirada'}</button><button class="btn dlb" data-adjsave="concluido">Salvar e concluir</button><button class="btn ghost dlb" id="adjcancel">Cancelar</button></div>
@@ -1659,7 +1662,7 @@ function orderActs(o){
   return `${entInfo(o)}<div class="row oacts" style="gap:6px;align-items:center">${main.join('')}
     <button class="iconpdf sm" data-dl="pdf" data-oid="${o.id}" data-tip="Baixar o pedido em PDF" aria-label="Baixar o pedido nº ${o.no} em PDF">${PDF_ICON}</button>
     <details class="more"><summary class="btn ghost dlb">Mais ▾</summary><div class="menu">${more.join('')}</div></details>
-    ${o.recLaunched&&st!=='cancelado'?'<span class="rulechip">No contas a receber</span>':''}</div>`;
+    ${o.recLaunched&&st!=='cancelado'?'<span class="rulechip">No contas a receber</span>':''}${recMissing(o)?'<span class="rulechip" style="color:var(--warn)" title="Pedido a prazo concluído sem parcela no contas a receber: use Mais &gt; Lançar no contas a receber">Sem conta a receber</span>':''}</div>`;
 }
 function orderCard(o,admin){
   const d=new Date(o.date),editing=admin&&ui.adj===o.id;
@@ -2174,7 +2177,7 @@ function entProofForm(o,pickup,collect){const P=(ui.dPhoto||{})[o.id],cash=isCas
     <label>Observação <span class="muted">(opcional)</span><input type="text" id="dno-${o.id}" placeholder="Ex.: entregue no depósito dos fundos"></label>
     <div class="row" style="gap:6px"><button class="btn" data-dconf="${o.id}" data-pk="${pickup?1:0}">${pickup?'Confirmar retirada':'Confirmar entrega'}</button><button class="btn ghost" data-dx="${o.id}">Cancelar</button></div></div>`}
 function entRetForm(o){const R=(ui.dRet||{})[o.id]||{};
-  return `<div class="entform"><b>Devolução: quanto voltou de cada produto?</b>${o.items.filter(i=>i.q>0).map((i,k)=>`<label class="entret"><span>${esc(i.name)} <span class="muted">(entregue ${i.q})</span></span><input type="number" min="0" max="${i.q}" data-rq="${o.id}" data-k="${k}" value="${R[k]||''}" placeholder="0"></label>`).join('')}
+  return `<div class="entform"><b>Devolução: quanto voltou de cada produto?</b>${o.items.filter(i=>i.q>0).map((i,k)=>`<label class="entret"><span>${esc(i.name)} <span class="muted">(entregue ${i.q})</span></span><input type="number" min="0" max="${i.q}" step="${itemIsKg(i)?'0.001':'1'}" inputmode="${itemIsKg(i)?'decimal':'numeric'}" data-rq="${o.id}" data-k="${k}" value="${R[k]||''}" placeholder="0"></label>`).join('')}
     <label>Motivo<input type="text" id="drs-${o.id}" placeholder="Ex.: 2 fardos amassados"></label>
     <div class="row" style="gap:6px"><button class="btn" data-dretok="${o.id}">Registrar devolução</button><button class="btn ghost" data-dx="${o.id}">Cancelar</button></div></div>`}
 /* escolher o motorista: botão ao lado da situação, abre busca por nome */
@@ -2350,7 +2353,7 @@ function bindEntregas(root,drvId,rer){const F=ui.dForm=ui.dForm||{};bindDrvPick(
 }
 /* devolução: tira do pedido, devolve ao estoque e abate do contas a receber em aberto */
 function retApply(o,R,reason,who){const its=o.items.filter(i=>i.q>0),out=[];
-  its.forEach((i,k)=>{const q=parseInt(R[k])||0;if(q>0)out.push({i,q:Math.min(q,i.q)})});if(!out.length)return '!Informe a quantidade devolvida.';
+  its.forEach((i,k)=>{const q=qtyIn(R[k],i);if(q>0)out.push({i,q:Math.min(q,i.q)})});if(!out.length)return '!Informe a quantidade devolvida.';
   const before=o.total;out.forEach(({i,q})=>{i.qRet=(i.qRet||0)+q;i.q-=q});Object.assign(o,orderTotals(o));syncStock(o);const amount=Math.round((before-o.total)*100)/100;
   let left=amount;(S.receivables||[]).filter(r=>r.orderId===o.id&&!r.paidAt).sort((a,b)=>String(b.due).localeCompare(String(a.due))).forEach(r=>{if(left<=0.004)return;const t=Math.min(r.amount,left);r.amount=Math.round((r.amount-t)*100)/100;left=Math.round((left-t)*100)/100;r.adjNote=(r.adjNote?r.adjNote+' · ':'')+'devolução −'+brl(t)});
   S.receivables=(S.receivables||[]).filter(r=>!(r.orderId===o.id&&!r.paidAt&&!(r.amount>0.004)));
@@ -3045,13 +3048,22 @@ function creditInfo(c,extra){
   const recs=(S.receivables||[]).filter(r=>r.customerId===c.id&&!r.paidAt);
   const overdue=recs.filter(r=>recStatus(r)==='vencido').reduce((s,r)=>s+r.amount,0);
   const pend=S.orders.filter(o=>o.customerId===c.id&&OPEN.includes(o.status)&&!isCash(o.pay)&&!o.recLaunched).reduce((s,o)=>s+o.total,0);
-  const used=Math.round((recs.reduce((s,r)=>s+r.amount,0)+pend)*100)/100;
+  /* concluído a prazo sem conta a receber (prazo não identificado): o cliente ainda deve, então conta no limite (últimos REC_WIN dias) */
+  const lim=addDays(today(),-REC_WIN),semConta=Math.round(S.orders.filter(o=>o.customerId===c.id&&recMissing(o)&&String(o.doneAt||o.date||'').slice(0,10)>=lim).reduce((s,o)=>s+(Number(o.total)||0),0)*100)/100;
+  const used=Math.round((recs.reduce((s,r)=>s+r.amount,0)+pend+semConta)*100)/100;
   const avail=limit?Math.round((limit-used)*100)/100:null;
   let reason='';
   if(overdue>0.004)reason='Você tem '+brl(overdue)+' em parcelas vencidas.';
   else if(limit&&used+(extra||0)>limit+0.004)reason=avail>0?'Este pedido passa do seu limite de crédito. Disponível a prazo: '+brl(avail)+'.':'Seu limite de crédito a prazo está todo utilizado.';
-  return {limit,used,avail,overdue,blocked:!!reason,reason};
+  return {limit,used,avail,overdue,semConta,blocked:!!reason,reason};
 }
+/* pedido a prazo concluído que ficou SEM conta a receber (forma sem prazo, ou ninguém lançou): o dinheiro não está sendo cobrado */
+const REC_WIN=60;
+function recMissing(o){return !!o&&o.status==='concluido'&&!o.recLaunched&&!o.pdvVenda&&!isCash(o.pay)&&Number(o.total)>0.004}
+/* aviso da conclusão quando o prazo da forma de pagamento não foi identificado (mesma regra do contas a receber automático) */
+function autoRecWarn(o){if(!o||o.status!=='concluido'||o.recLaunched||(S.store||{}).autoRec===false||isCash(o.pay))return '';
+  let k=daysFromPay(o.pay);if(k.startsWith('outro:'))k=k.slice(6);
+  return k&&parseDays(k).length?'':'Não identifiquei o prazo de "'+o.pay+'". Lance no contas a receber pelo botão do pedido.'}
 /* formas liberadas para este pedido: bloqueado = só as à vista */
 function payOptions(c,total){const ap=allowedPays(c),ci=creditInfo(c,total);return {list:ci.blocked?ap.filter(isCash):ap,ci}}
 
@@ -3059,9 +3071,9 @@ function payOptions(c,total){const ap=allowedPays(c),ci=creditInfo(c,total);retu
 function autoReceivables(o,prev){
   if(o.status==='concluido'&&!o.recLaunched){
     if((S.store||{}).autoRec===false||isCash(o.pay))return '';
+    const warn=autoRecWarn(o);if(warn)return warn;
     let k=daysFromPay(o.pay);if(k.startsWith('outro:'))k=k.slice(6);
     const days=parseDays(k);
-    if(!k||!days.length)return 'Não identifiquei o prazo de "'+o.pay+'". Lance no contas a receber pelo botão do pedido.';
     const cu=S.customers.find(x=>x.id===o.customerId),grp=uid(),parts=splitParcels(o.total,days),base=today();
     parts.forEach((p,i)=>S.receivables.push({id:uid(),group:grp,auto:true,orderId:o.id,customerId:o.customerId,customer:cu?cu.name:o.customer,orderNo:String(o.no),desc:o.pay,parcel:(i+1)+'/'+parts.length,amount:p.amount,due:addDays(base,p.days),paidAt:'',created:new Date().toISOString()}));
     o.recLaunched=true;o.recAuto=true;
@@ -3409,6 +3421,8 @@ function admCadastros(){
   ({caixas:()=>pdvAdmOperadores($('#cadc')),transportadoras:admTransportadoras,fornecedores:admFornecedores,conferentes:admConferentes,faturamento:admFaturamento,categorias:admCategorias,vendedores:admVendedores,clientes:admClients,pagamentos:admPagamentos,cidades:admCidades,veiculos:admVeiculos,loja:admConfig})[k]();
 }
 /* formas de pagamento com prazo próprio, reconhecido no pedido e no contas a receber */
+/* forma a prazo sem os dias das parcelas: o contas a receber automático não consegue gerar parcelas */
+const payNoTerm=p=>!isCash(p)&&!parseDays(String(daysFromPay(p)).replace('outro:','')).length;
 function admPagamentos(){
   const c=$('#cadc'),E=ui.payEdit;
   const users=p=>S.customers.filter(x=>allowedPays(x).includes(p)).length;
@@ -3421,10 +3435,11 @@ function admPagamentos(){
     ${f.idx==null?`<label class="switch"><input type="checkbox" id="pyall" ${f.all?'checked':''}> Liberar para todos os clientes já cadastrados</label>`:''}
     <div class="err" id="pyerr"></div>
     <div class="row"><button class="btn" type="submit">Salvar</button><button class="btn ghost" type="button" id="pycancel">Cancelar</button></div></form>`};
+  const noTerm=S.payments.filter(payNoTerm);
   c.innerHTML=`<div class="sectionhead"><h2>Formas de pagamento</h2><button class="btn" id="pynew">+ Nova forma</button></div>
-    ${E?form():''}
+    ${E?form():''}${noTerm.length?`<div class="panel" style="margin-bottom:12px;border-color:var(--warn)"><b>Atenção:</b> ${noTerm.map(esc).join(', ')} ${noTerm.length===1?'está':'estão'} como <b>a prazo</b>, mas sem os dias das parcelas. Pedido concluído com ${noTerm.length===1?'essa forma':'essas formas'} não entra sozinho no contas a receber. Clique em Editar e informe os dias (ex.: 28), ou mude para À vista.</div>`:''}
     <div class="tablewrap"><table class="btable"><thead><tr><th>Forma</th><th>Tipo</th><th>Prazo das parcelas</th><th class="r">Clientes com acesso</th><th></th></tr></thead><tbody>
-    ${S.payments.map((p,i)=>`<tr><td><b>${esc(p)}</b></td><td>${isCash(p)?'<span class="rulechip">À vista</span>':'<span class="rulechip" style="color:var(--warn)">A prazo</span>'}</td><td>${esc(payTermsText(p))}</td><td class="r num">${users(p)}</td>
+    ${S.payments.map((p,i)=>`<tr><td><b>${esc(p)}</b></td><td>${isCash(p)?'<span class="rulechip">À vista</span>':'<span class="rulechip" style="color:var(--warn)">A prazo</span>'}</td><td>${payNoTerm(p)?'<span class="chgtxt">Sem prazo: pedido concluído não gera parcela. Edite e informe os dias, ou mude para À vista.</span>':esc(payTermsText(p))}</td><td class="r num">${users(p)}</td>
       <td class="r"><div class="row" style="gap:6px;justify-content:flex-end"><button class="btn ghost dlb" data-pye="${i}">Editar</button>${ui.confirmDel==='pay'+i?`<button class="btn danger dlb" data-pydok="${i}">Confirmar exclusão</button>`:`<button class="btn ghost dlb" data-pyd="${i}">Excluir</button>`}</div></td></tr>`).join('')}
     </tbody></table></div>
     <p class="small muted">O prazo cadastrado aqui é o que o contas a receber usa para gerar as parcelas. Pedidos antigos guardam o nome da forma usada na época.</p>`;
@@ -3674,6 +3689,12 @@ function orderRecs(o){return (S.receivables||[]).filter(r=>r.orderId===o.id||(r.
 const commMode=()=>S.store.commMode==='venda'?'venda':'recebimento';
 const r2=v=>Math.round(v*100)/100;
 /* todas as linhas de comissão que existem hoje, antes do fechamento */
+/* comissão de cada parcela, proporcional ao valor; quando as parcelas somam o total do pedido, a última leva a sobra
+   dos centavos (a soma fecha com a comissão do pedido: 10,00 em 3 parcelas = 3,33 + 3,33 + 3,34) */
+function parcelComm(C,recs,total){const m={},t=Number(total)||0,amt=r=>Number(r.amount)||0;if(!recs.length)return m;
+  const L=recs.slice().sort((a,b)=>String(a.due||'').localeCompare(String(b.due||''))||String(a.id).localeCompare(String(b.id)));
+  const closes=Math.abs(L.reduce((s,r)=>s+amt(r),0)-t)<0.006;let acc=0;
+  L.forEach((r,k)=>{const v=closes&&k===L.length-1?Math.round((C-acc)*100)/100:Math.round(C*amt(r)/(t||1)*100)/100;acc+=v;m[r.id]=v});return m}
 function commEntries(){
   const out=[],mode=commMode();
   S.orders.forEach(o=>{
@@ -3682,7 +3703,8 @@ function commEntries(){
     const base={o,sellerId:o.sellerId,seller:sellerById(o.sellerId).name};
     const recs=orderRecs(o);
     if(mode==='venda'||isCash(o.pay)||!recs.length&&isCash(o.pay)){out.push({...base,key:'o:'+o.id,date:(o.doneAt||o.date).slice(0,10),what:'Venda concluída',sold:o.total,comm:C});return}
-    recs.filter(r=>r.paidAt).forEach(r=>out.push({...base,key:'r:'+r.id,date:r.paidAt,what:'Parcela '+r.parcel+' recebida',sold:r.amount,comm:r2(C*r.amount/(o.total||1))}));
+    const pc=parcelComm(C,recs,o.total);
+    recs.filter(r=>r.paidAt).forEach(r=>out.push({...base,key:'r:'+r.id,date:r.paidAt,what:'Parcela '+r.parcel+' recebida',sold:r.amount,comm:pc[r.id]}));
   });
   return out;
 }
@@ -4003,7 +4025,7 @@ function admOrders(){
   c.querySelectorAll('[data-adj]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.adj);ui.adj=o.id;ui.adjQ=o.items.map(i=>i.q);admOrders();const f=document.getElementById('aq-'+o.id+'-0');if(f){f.focus();f.select()}});
   const ao=ui.adj&&S.orders.find(x=>x.id===ui.adj);
   if(ao){
-    c.querySelectorAll('[data-aq]').forEach(inp=>inp.oninput=()=>{const v=parseInt(inp.value);ui.adjQ[+inp.dataset.aq]=isNaN(v)||v<0?0:v;$('#adjtot').innerHTML=adjTotText(ao)});
+    c.querySelectorAll('[data-aq]').forEach(inp=>inp.oninput=()=>{ui.adjQ[+inp.dataset.aq]=qtyIn(inp.value,ao.items[+inp.dataset.aq]);$('#adjtot').innerHTML=adjTotText(ao)});
     $('#adjcancel').onclick=()=>{ui.adj=null;admOrders()};
     c.querySelectorAll('[data-adjsave]').forEach(b=>b.onclick=()=>{
       if(ui.adjQ.every(q=>q===0)){$('#adjerr').textContent='Todos os itens estão com 0. Para desistir do pedido, mude a situação para Cancelado.';return}
@@ -4827,6 +4849,8 @@ const pnum=v=>{v=String(v??'').trim().replace(/\s|R\$/g,'');if(!v)return '';let 
   else if(t.includes(','))t=t.replace(',','.');
   else if(/^\d{1,3}(\.\d{3})+$/.test(t))t=t.replace(/\./g,'');
   if(!/^\d+(\.\d+)?$/.test(t))return '';const n=Number(t);return isFinite(n)?Math.round(n*100)/100:''};
+/* número das Configurações: em branco = 0; digitado errado = NaN (a tela recusa em vez de gravar 100× maior) */
+function cfgNum(v){const s=String(v??'').trim();if(!s)return 0;const n=pnum(s);return n===''?NaN:n}
 const mgOf=(c,v)=>(v-c)/v*100, mkOf=(c,v)=>(v-c)/c*100;
 function ruleBox(k,title,help,inner){const on=ui.edit.rules[k].on;return `<div class="rule ${on?'on':''}">
   <label class="switch"><input type="checkbox" id="ron-${k}" data-ron="${k}" ${on?'checked':''}> ${title}</label>
@@ -5196,7 +5220,7 @@ document.addEventListener('paste',ev=>{
 const COLS={fam:['familia','família','produto sem sabor','produto (sem o sabor)'],var:['sabor','variacao','variação','sabor/variacao','sabor / variação'],sub:['subcategoria','sub categoria'],ie:['preco com ie','preco com inscricao estadual','preco ie','com ie'],pack:['unidades na embalagem','unidades por embalagem'],comm:['comissao','comissao do vendedor','comissao vendedor'],tA:['preco tabela a','tabela a'],tB:['preco tabela b','tabela b'],idealStock:['estoque ideal','estoque maximo'],minStock:['estoque minimo','estoque critico'],stock:['estoque','estoque atual'],cost:['preco de custo','custo'],code:['codigo interno','cod interno','codigo'],ean:['codigo de barras','ean','barras'],name:['nome do produto','nome','produto','descricao'],cat:['categoria'],unit:['unidade de venda','unidade','embalagem'],price:['preco normal','preco'],active:['ativo'],t1min:['qtd faixa 1'],t1pr:['preco faixa 1'],t2min:['qtd faixa 2'],t2pr:['preco faixa 2'],vista:['preco a vista','a vista'],retira:['preco retirada','retirada'],promo:['preco promocao','promocao'],until:['promocao ate'],limite:['limite por pedido','limite']};
 const norm=s=>String(s??'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\(.*?\)|\*/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
 function mapHeader(row){const m={},h=row.map(norm);for(const [k,al] of Object.entries(COLS)){let i=h.findIndex(x=>al.includes(x));if(i<0&&k!=='price'&&k!=='code')i=h.findIndex(x=>al.some(a=>a.length>5&&x.startsWith(a)));if(i>=0&&!Object.values(m).includes(i))m[k]=i}return m}
-function bnum(v){if(v==null||v==='')return '';if(typeof v==='number')return Math.round(v*100)/100;let s=String(v).replace(/[R$\s]/g,'');if(!s)return '';if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');const n=parseFloat(s);return isNaN(n)?NaN:Math.round(n*100)/100}
+function bnum(v){if(v==null||v==='')return '';if(typeof v==='number')return Math.round(v*100)/100;let s=String(v).replace(/[R$\s]/g,'');if(!s)return '';if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');else if(/^-?\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');const n=parseFloat(s);return isNaN(n)?NaN:Math.round(n*100)/100}
 function bint(v){const n=bnum(v);return n===''?'':(isNaN(n)?NaN:Math.round(n))}
 function bdate(v){if(v==null||v==='')return '';if(v instanceof Date&&!isNaN(v)){v=new Date(v.getTime()+432e5);return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0')}if(typeof v==='number'){const d=new Date(Math.round((v-25569)*864e5));return d.toISOString().slice(0,10)}const m=String(v).trim().match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);if(m){const y=m[3].length===2?'20'+m[3]:m[3];return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0')}const iso=String(v).match(/^\d{4}-\d{2}-\d{2}/);return iso?iso[0]:NaN}
 function bstr(v){if(v==null)return '';if(typeof v==='number')return String(Math.round(v));return String(v).trim()}
@@ -5488,14 +5512,16 @@ function resize(file){return new Promise((res,rej)=>{const r=new FileReader();r.
 const PRAZOS=[['0','À vista'],['7','7 dias'],['14','14 dias'],['21','21 dias'],['28','28 dias'],['30','30 dias'],['7,14','7 / 14'],['7,14,21','7 / 14 / 21'],['14,28','14 / 28'],['7,14,21,28','7 / 14 / 21 / 28'],['30,60','30 / 60'],['30,60,90','30 / 60 / 90'],['outro','Outro prazo']];
 const addDays=(iso,n)=>{const [y,m,d]=iso.split('-').map(Number);const t=new Date(y,m-1,d+n);return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0')};
 const dBR=iso=>{if(!iso)return '';const [y,m,d]=String(iso).split('-');return esc(d+'/'+m+'/'+y)};
+/* data (AAAA-MM-DD) no dia local; aceita também data e hora gravadas em UTC (contas pagas antes desta versão) */
+const isoDay=v=>{const t=String(v||'');if(t.length>10&&t.includes('T')){const d=new Date(t);if(!isNaN(d))return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}return t.slice(0,10)};
 const daysBetween=(a,b)=>{const p=s=>{const [y,m,d]=s.split('-').map(Number);return Date.UTC(y,m-1,d)};return Math.round((p(b)-p(a))/864e5)};
 function recStatus(r){if(r.paidAt)return 'pago';return r.due<today()?'vencido':'aberto'}
 const REC_ST={aberto:'Em aberto',vencido:'Vencido',pago:'Pago'};
 function parseDays(str){return String(str).split(/[\/,;\s]+/).map(x=>parseInt(x)).filter(n=>!isNaN(n)&&n>=0&&n<=720)}
 /* prazo sugerido a partir do nome da forma de pagamento, ex.: "Boleto 14 dias" -> 14 */
-function daysFromPay(pay){const ex=S.payDays&&S.payDays[pay];if(ex!=null&&ex!==''){const k=parseDays(ex).join(',');if(k)return PRAZOS.some(p=>p[0]===k)?k:'outro:'+k}const n=String(pay||'').match(/\d+(?:\s*[\/,]\s*\d+)*/);if(!n)return (S.cashPays||[]).includes(pay)?'0':'';const k=parseDays(n[0]).join(',');return PRAZOS.some(p=>p[0]===k)?k:'outro:'+k}
+function daysFromPay(pay){const ex=S.payDays&&S.payDays[pay];if(ex!=null&&ex!==''){const k=parseDays(ex).join(',');if(k)return PRAZOS.some(p=>p[0]===k)?k:'outro:'+k}const n=String(pay||'').replace(/\d+\s*x(?![a-z])/gi,' ').match(/\d+(?:\s*[\/,]\s*\d+)*/);if(!n)return (S.cashPays||[]).includes(pay)?'0':'';const k=parseDays(n[0]).join(',');return PRAZOS.some(p=>p[0]===k)?k:'outro:'+k}
 /* divide o valor em parcelas iguais; a última leva os centavos que sobram */
-function splitParcels(total,days){const n=days.length,cents=Math.round(total*100),base=Math.floor(cents/n);return days.map((d,i)=>({days:d,amount:(i===n-1?cents-base*(n-1):base)/100}))}
+function splitParcels(total,days){const cents=Math.round(total*100);if(cents>0&&cents<days.length)days=days.slice(0,cents);const n=days.length,base=Math.floor(cents/n);return days.map((d,i)=>({days:d,amount:(i===n-1?cents-base*(n-1):base)/100}))}
 function recForm(){
   const f=ui.recNew;
   const days=f.prazo==='outro'?parseDays(f.custom):parseDays(f.prazo);
@@ -5543,7 +5569,7 @@ function admPagar(){const c=$('#tabc');S.payables=S.payables||[];const F=ui.payF
       <div class="err" id="pfe"></div><div class="row" style="gap:6px"><button class="btn" type="submit">Salvar</button><button class="btn ghost" type="button" id="pfx">Cancelar</button></div></form>`:''}
     <div class="tiles"><div class="tile"><span class="lbl">Vencido</span><b class="num ${sum('vencido')?'neg':''}">${brl(sum('vencido'))}</b></div><div class="tile"><span class="lbl">Próximos 7 dias</span><b class="num">${brl(semana)}</b></div><div class="tile"><span class="lbl">Em aberto</span><b class="num">${brl(sum('aberto')+sum('vencido'))}</b></div></div>
     <div class="seg" role="group" aria-label="Filtro" style="margin:10px 0">${[['aberto','Em aberto'],['vencido','Vencidas'],['pago','Pagas'],['todos','Todas']].map(([k,v])=>`<button data-pst="${k}" aria-pressed="${F.st===k}">${v}</button>`).join('')}</div>
-    ${L.length?`<div class="list">${L.map(p=>`<div class="prow payrow"><div class="t"><b>${esc(p.desc)}</b><span class="small muted">${esc(p.cat||'')} · vence ${dBR(p.due)}${p.parcel?' · parcela '+esc(p.parcel):''}${p.paidAt?' · pago em '+dBR(String(p.paidAt).slice(0,10)):''}</span></div>
+    ${L.length?`<div class="list">${L.map(p=>`<div class="prow payrow"><div class="t"><b>${esc(p.desc)}</b><span class="small muted">${esc(p.cat||'')} · vence ${dBR(p.due)}${p.parcel?' · parcela '+esc(p.parcel):''}${p.paidAt?' · pago em '+dBR(isoDay(p.paidAt)):''}</span></div>
       <b class="num ${payStatus(p)==='vencido'?'neg':''}">${brl(p.amount)}</b><div class="row" style="gap:6px">${p.paidAt?`<button class="btn ghost dlb" data-punpay="${p.id}">Desfazer</button>`:`<button class="btn dlb" data-ppay="${p.id}">Paguei</button>`}${ui.confirmDel==='pay'+p.id?`<button class="btn danger dlb" data-pdelok="${p.id}">Confirmar</button>`:`<button class="btn ghost dlb" data-pdel="${p.id}">Excluir</button>`}</div></div>`).join('')}</div>`:'<div class="empty">Nenhuma conta aqui.</div>'}
     <div class="small muted" style="margin-top:10px">Lance as contas da semana (fornecedores, frete, salários). Assim o "Caixa da semana" mostra o que entra e o que sai.</div>`;
   bindFinSeg(c);const rer=()=>{const y=window.scrollY;admPagar();window.scrollTo(0,y)};
@@ -5552,7 +5578,7 @@ function admPagar(){const c=$('#tabc');S.payables=S.payables||[];const F=ui.payF
     finPdf({file:'contas-a-pagar-'+({aberto:'em-aberto',vencido:'vencidas',pago:'pagas',todos:'todas'})[F.st]+'-'+stamp(),title:'Contas a pagar',sub:stL,
       tiles:[['Vencido',brl(sum('vencido')),sum('vencido')>0],['Próximos 7 dias',brl(semana)],['Em aberto',brl(sum('aberto')+sum('vencido'))],['Total da lista ('+L.length+')',brl(tot)]],
       sections:[{head:['Descrição','Tipo','Parcela','Vencimento','Situação','Valor'],right:[5],
-        body:L.map(p=>{const st=payStatus(p);return [p.desc,p.cat||'',p.parcel||'',dBR(p.due),st==='pago'?'Pago em '+dBR(String(p.paidAt).slice(0,10)):st==='vencido'?'Vencida':'Em aberto',brl(p.amount)]}),
+        body:L.map(p=>{const st=payStatus(p);return [p.desc,p.cat||'',p.parcel||'',dBR(p.due),st==='pago'?'Pago em '+dBR(isoDay(p.paidAt)):st==='vencido'?'Vencida':'Em aberto',brl(p.amount)]}),
         red:(i,j)=>j===4&&payStatus(L[i])==='vencido',foot:['Total','','','','',brl(tot)]}]})}}
   {const x=$('#pfx');if(x)x.onclick=()=>{ui.payNew=null;rer()}}
   {const f=$('#pform');if(f)f.onsubmit=e=>{e.preventDefault();const d=$('#pfd').value.trim(),v=pnum($('#pfv').value),du=$('#pfdu').value,n=Math.max(1,parseInt($('#pfn').value)||1),iv=Math.max(1,parseInt($('#pfi').value)||30);
@@ -5560,7 +5586,7 @@ function admPagar(){const c=$('#tabc');S.payables=S.payables||[];const F=ui.payF
     const g=uid(),parts=splitParcels(v,Array.from({length:n},(_,k)=>k*iv));parts.forEach((pp,k)=>S.payables.push({id:uid(),group:g,desc:d,cat:$('#pfc').value,amount:pp.amount,due:addDays(du,pp.days),parcel:n>1?(k+1)+'/'+n:'',paidAt:'',created:new Date().toISOString()}));
     ui.payNew=null;save();toast(n>1?n+' parcelas lançadas':'Conta lançada');rer()}}
   c.querySelectorAll('[data-pst]').forEach(b=>b.onclick=()=>{F.st=b.dataset.pst;rer()});
-  c.querySelectorAll('[data-ppay]').forEach(b=>b.onclick=()=>{const p=S.payables.find(x=>x.id===b.dataset.ppay);if(p){p.paidAt=new Date().toISOString();save();toast('Conta marcada como paga')}rer()});
+  c.querySelectorAll('[data-ppay]').forEach(b=>b.onclick=()=>{const p=S.payables.find(x=>x.id===b.dataset.ppay);if(p){p.paidAt=today();save();toast('Conta marcada como paga')}rer()});
   c.querySelectorAll('[data-punpay]').forEach(b=>b.onclick=()=>{const p=S.payables.find(x=>x.id===b.dataset.punpay);if(p){p.paidAt='';save()}rer()});
   c.querySelectorAll('[data-pdel]').forEach(b=>b.onclick=()=>{ui.confirmDel='pay'+b.dataset.pdel;rer()});
   c.querySelectorAll('[data-pdelok]').forEach(b=>b.onclick=()=>{S.payables=S.payables.filter(x=>x.id!==b.dataset.pdelok);ui.confirmDel=null;save();rer()});
@@ -5600,6 +5626,10 @@ function admReceber(){
   const tot=list.reduce((s,r)=>s+r.amount,0);
   c.innerHTML=`${finSeg()}<div class="sectionhead"><h2>Contas a receber</h2><div class="row" style="gap:6px">${list.length?'<button class="btn ghost" id="rpdf">Baixar PDF</button><button class="btn ghost" id="rxl">Baixar Excel</button>':''}<button class="btn" id="rnew">+ Novo lançamento</button></div></div>
     ${ui.recNew?recForm():''}
+    ${(()=>{const M=S.orders.filter(recMissing).filter(o=>!F.cid||o.customerId===F.cid);if(!M.length)return '';const t=M.reduce((s,o)=>s+(Number(o.total)||0),0);
+      return `<div class="panel" style="margin-bottom:12px;border-color:var(--warn)"><b style="color:var(--warn)">${M.length} pedido${M.length===1?'':'s'} a prazo concluído${M.length===1?'':'s'} sem conta a receber · ${brl(t)}</b>
+        <div class="small">${M.slice(0,12).map(o=>'nº '+esc(o.no)+' ('+esc(o.customer||'')+', '+esc(o.pay||'')+')').join(' · ')}${M.length>12?' · e mais '+(M.length-12):''}</div>
+        <div class="small muted">Esse valor não está sendo cobrado. Em Pedidos, abra o pedido e use Mais &gt; Lançar no contas a receber. Se a forma de pagamento é paga na hora (ex.: cartão na entrega), marque-a como À vista em Cadastros &gt; Formas de pagamento.</div></div>`})()}
     <div class="tiles">
       <button class="tile" data-rst="aberto" aria-pressed="${F.st==='aberto'}"><span class="lbl">Em aberto</span><b class="num">${brl(sum('aberto'))}</b><span class="small muted">ainda no prazo</span></button>
       <button class="tile t-venc" data-rst="vencido" aria-pressed="${F.st==='vencido'}"><span class="lbl">Vencido</span><b class="num">${brl(sum('vencido'))}</b><span class="small muted">${nVenc} título${nVenc===1?'':'s'} sem pagamento</span></button>
@@ -5675,7 +5705,7 @@ function taxBreak(cost,price,ie){const t=taxCfg(),cr=cost*(t.pc+t.ic)/100,db=pri
 function orderIeSale(o){if(!o||!o.nf)return false;const c=S.customers.find(x=>x.id===o.customerId);return ieClient(c)}
 function itemCost(i,unitPrice,ie){let c=null;if(i.cost>0)c=Number(i.cost);const p=itemProduct(i);if(c==null&&p&&p.cost>0)c=Number(p.cost);if(c==null)return null;return p&&p.trib?effCostRaw(c,unitPrice!=null?unitPrice:i.price,ie||!!i.ie):c}
 function buildRanking(f){
-  const orders=S.orders.filter(o=>o.status==='concluido'&&orderDay(o)>=f.from&&orderDay(o)<=f.to&&(f.mode==='todos'||o.mode===f.mode));
+  const orders=S.orders.filter(o=>o.status==='concluido'&&!o.pdvVenda&&orderDay(o)>=f.from&&orderDay(o)<=f.to&&(f.mode==='todos'||o.mode===f.mode));
   const map=new Map();let nOrders=0;
   orders.forEach(o=>{let used=false;
     o.items.forEach(i=>{
@@ -5709,7 +5739,7 @@ function admRanking(){
   const R=bad?null:buildRanking(F);
   c.innerHTML=`<div class="sectionhead"><h2>Relatórios</h2>${R&&R.rows.length?'<div class="row" style="gap:6px"><button class="btn ghost ico1" id="repPdf" aria-label="Baixar PDF" data-tip="Baixar PDF">'+PDFI+'</button><button class="btn ghost" id="repXls">Baixar Excel</button></div>':''}</div>
     <div class="panel" style="display:grid;gap:12px;margin-bottom:14px">
-      <div><b>Ranking de produtos mais vendidos</b><div class="small muted">Entram só os pedidos com situação <b>Concluído</b>, pela data do pedido. Valores já com o desconto da retirada.</div></div>
+      <div><b>Ranking de produtos mais vendidos</b><div class="small muted">Entram só os pedidos com situação <b>Concluído</b>, pela data do pedido. Valores já com o desconto da retirada. <b>Não inclui as vendas do balcão (PDV)</b>, nem as que foram enviadas para a nota: elas ficam no resumo do Caixa PDV.</div></div>
       <div class="repf">
         <div class="field"><label for="rfrom">De</label><input type="date" id="rfrom" value="${F.from}"></div>
         <div class="field"><label for="rto">Até</label><input type="date" id="rto" value="${F.to}"></div>
@@ -6126,9 +6156,12 @@ function admConfig(){
     <div class="row"><button class="btn" type="submit">Salvar</button><button class="btn danger" type="button" id="reset">${ui.confirmDel==='reset'?'Confirmar: apagar tudo e voltar aos exemplos':'Restaurar dados de exemplo'}</button></div>
   </form>${backupPanel()}`;
   bindBackup();
-  const num=v=>parseFloat(String(v).replace(/\./g,'').replace(',','.'))||0;
+  const num=v=>{const n=cfgNum(v);return isNaN(n)?0:n};
   $('#reset').onclick=()=>{if(ui.confirmDel==='reset'){S=seed();save();ui.confirmDel=null;toast('Dados de exemplo restaurados');render()}else{ui.confirmDel='reset';admConfig()}};
   $('#sf').onsubmit=ev=>{ev.preventDefault();
+    {const bad=['smin','smtol','spw','spe','sngmi','sngmt','sngmx','sngap','sngdm','txpc','txic','txpd','txidno','txidie'].map(id=>document.getElementById(id)).filter(i=>i&&isNaN(cfgNum(i.value)));
+      if(bad.length){const lb=i=>{const l=i.closest('label')||(i.id&&document.querySelector('label[for="'+i.id+'"]'));return l?l.textContent.replace(/\s+/g,' ').trim():i.id};
+        toast('Número inválido em: '+bad.map(lb).join(' · ')+'. Use vírgula para os centavos, ex.: 9,25. Nada foi salvo.');bad[0].focus();return}}
     Object.assign(S.store,{semEstoque:$('#ssem')?$('#ssem').value:'manter',name:$('#sn').value.trim()||S.store.name,from:$('#sfrom').value,to:$('#sto').value,pickupDisc:0,pickupOner:false,min:num($('#smin').value),pickup:$('#spick').value.trim(),autoRec:$('#sauto').checked,scanRequired:$('#sscan').checked,billGate:$('#sbg').value,conds:Object.fromEntries([...document.querySelectorAll('[data-scond]')].map(x=>[x.dataset.scond,x.checked])),mgTol:Math.max(0,num($('#smtol').value)),pendWarnH:Math.max(0,num($('#spw').value)),pendExpH:Math.max(0,num($('#spe').value)),neg:{who:$('#sngwho').value,minItems:Math.max(0,Math.round(num($('#sngmi').value))),minTotal:num($('#sngmt').value),maxItems:Math.max(1,Math.round(num($('#sngmx').value))||1),autoPct:Math.max(0,num($('#sngap').value)),defMin:num($('#sngdm').value)},tax:{pc:num($('#txpc').value),ic:num($('#txic').value),pd:num($('#txpd').value),idNo:num($('#txidno').value),idIe:num($('#txidie').value)}});
     save();toast('Configurações salvas');renderTop();
   };

@@ -77,4 +77,10 @@ APW="$(gen)"
 curl -sf -X POST "localhost:$PORTA/api/setup" -H 'Content-Type: application/json' -H 'X-App: 1' \
   -d "{\"code\":\"$SETUP_CODE\",\"name\":\"Dono\",\"login\":\"eduardo\",\"password\":\"$APW\"}" >/dev/null
 BASE=http://localhost:$PORTA ADMIN_LOGIN=eduardo ADMIN_PASSWORD="$APW" python3 tests/robustez.py
+echo "== 8. Dinheiro: pedido a prazo sem prazo identificado continua no limite de crédito"
+newdb tino_ci_dados; serve tino_ci_dados
+APW="$(gen)"
+curl -sf -X POST "localhost:$PORTA/api/setup" -H 'Content-Type: application/json' -H 'X-App: 1' \
+  -d "{\"code\":\"$SETUP_CODE\",\"name\":\"Dono\",\"login\":\"eduardo\",\"password\":\"$APW\"}" >/dev/null
+BASE=http://localhost:$PORTA ADMIN_LOGIN=eduardo ADMIN_PASSWORD="$APW" python3 tests/dados.py
 echo "Testes com banco: tudo certo."
