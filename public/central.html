@@ -94,6 +94,10 @@ code{font-family:ui-monospace,Menlo,monospace;background:var(--cream);border:1px
 code.link{display:block;overflow-wrap:anywhere;padding:8px 10px}
 .links{display:grid;gap:8px}.lk{display:grid;grid-template-columns:minmax(150px,200px) minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #E7DECB}.lk:first-child{border-top:0}.lk-t{display:grid;gap:2px}.lk-b{display:flex;gap:6px}.lk-b .btn{min-height:36px;padding:6px 12px;text-decoration:none;display:inline-flex;align-items:center;color:inherit}
 @media (max-width:720px){.lk{grid-template-columns:1fr}}
+.rtabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:var(--line-2);border-radius:10px;padding:4px;margin-bottom:6px}
+.rtabs button{min-height:44px;border:0;border-radius:8px;background:transparent;font-weight:600;font-size:13px;color:#3B4A3F;padding:0 6px}
+.rtabs button[aria-selected=true]{background:var(--green);color:#fff}
+.rtabs small{font-weight:500;opacity:.75}
 .note{background:var(--gold-soft);border-radius:8px;padding:10px 12px;font-size:13px;color:#5C3D00}
 @media (max-width:640px){nav{max-width:none}}
 .subopt{display:flex;gap:12px;align-items:flex-start;margin-top:12px;padding:12px 14px;border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:10px;background:var(--gold-soft);cursor:pointer}
@@ -141,6 +145,7 @@ code.link{display:block;overflow-wrap:anywhere;padding:8px 10px}
 
 <div class="wrap" id="appView" hidden>
   <nav aria-label="Empresas">
+    <div class="rtabs" id="rtabs" role="tablist" aria-label="Tipo de empresa"></div>
     <div class="head"><h2>Empresas</h2><button class="btn" id="newT" type="button">+ Nova</button></div>
     <div id="tlist" style="display:flex;flex-direction:column;gap:8px"></div>
   </nav>

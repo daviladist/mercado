@@ -38,6 +38,7 @@ q() { psql "$PGURL/tino_ci_migr" -tAq -c "$1"; }
 [ "$(q "select count(*) from photos_t where tenant_id='davila'")" = "1" ] || { echo "FALHA: fotos"; exit 1; }
 [ "$(q "select last_no from order_seq where tenant_id='davila'")" = "1002" ] || { echo "FALHA: numeração dos pedidos"; exit 1; }
 [ "$(q "select count(*) from schema_version")" = "1" ] || { echo "FALHA: schema_version"; exit 1; }
+[ "$(q "select ramo from tenants where id='davila'")" = "atacado" ] || { echo "FALHA: empresa principal não ficou em Atacado e varejo"; exit 1; }
 if q "insert into docs_t(coll,id,data) values('products','px','{}')" 2>/dev/null; then echo "FALHA: gravou sem empresa"; exit 1; fi
 if q "insert into docs_t(tenant_id,coll,id,data) values('nao-existe','products','px','{}')" 2>/dev/null; then echo "FALHA: gravou em empresa inexistente"; exit 1; fi
 [ "$(q "select to_regclass('public.docs') is null and to_regclass('public.users') is null")" = "t" ] || { echo "FALHA: nomes antigos das tabelas continuam existindo"; exit 1; }
@@ -83,4 +84,16 @@ APW="$(gen)"
 curl -sf -X POST "localhost:$PORTA/api/setup" -H 'Content-Type: application/json' -H 'X-App: 1' \
   -d "{\"code\":\"$SETUP_CODE\",\"name\":\"Dono\",\"login\":\"eduardo\",\"password\":\"$APW\"}" >/dev/null
 BASE=http://localhost:$PORTA ADMIN_LOGIN=eduardo ADMIN_PASSWORD="$APW" python3 tests/dados.py
+echo "== 9. Produtor rural (outros segmentos)"
+newdb tino_ci_rural; serve tino_ci_rural
+APW="$(gen)"
+curl -sf -X POST "localhost:$PORTA/api/setup" -H 'Content-Type: application/json' -H 'X-App: 1' \
+  -d "{\"code\":\"$SETUP_CODE\",\"name\":\"Dono\",\"login\":\"eduardo\",\"password\":\"$APW\"}" >/dev/null
+BASE=http://localhost:$PORTA ADMIN_LOGIN=eduardo ADMIN_PASSWORD="$APW" python3 tests/rural.py
+echo "== 10. Loja online"
+newdb tino_ci_loja; serve tino_ci_loja
+APW="$(gen)"
+curl -sf -X POST "localhost:$PORTA/api/setup" -H 'Content-Type: application/json' -H 'X-App: 1' \
+  -d "{\"code\":\"$SETUP_CODE\",\"name\":\"Dono\",\"login\":\"eduardo\",\"password\":\"$APW\"}" >/dev/null
+BASE=http://localhost:$PORTA ADMIN_LOGIN=eduardo ADMIN_PASSWORD="$APW" python3 tests/loja.py
 echo "Testes com banco: tudo certo."
