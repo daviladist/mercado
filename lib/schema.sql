@@ -459,3 +459,7 @@ create table if not exists loja_seq (
 );
 -- roça com a cara da cultura: ícone escolhido (o app tira a cor do ícone)
 alter table rural_rocas add column if not exists icone text;
+-- forma de pagamento da venda (dinheiro, pix, cheque, transferencia, prazo); vence = vencimento do cheque ou data para receber a prazo
+alter table rural_lanc add column if not exists pagamento text;
+alter table rural_lanc add column if not exists vence date;
+alter table rural_lanc add column if not exists cheque jsonb not null default '{}'::jsonb;

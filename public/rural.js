@@ -21,6 +21,9 @@
   const newId = k => k + hex(k === 'l' ? 8 : 6);
   const hoje = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
   const dBR = s => s ? String(s).slice(0, 10).split('-').reverse().join('/') : '';
+  /* forma de pagamento de uma venda, em texto curto: "Pix", "Cheque p/ 15/12/2026" */
+  const pagDe = id => (S.pagamentos || []).find(p => p.id === id);
+  const pagTxt = l => { const p = l.pagamento && pagDe(l.pagamento); if (!p) return ''; return p.nome + (l.vence && (l.pagamento === 'cheque' || l.pagamento === 'prazo') ? ' p/ ' + dBR(l.vence) : ''); };
   const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const slug = (/^\/t\/([a-z0-9-]{1,40})/.exec(location.pathname) || [])[1] || '';
   let brand = {}; try { brand = JSON.parse((document.querySelector('meta[name="tino-brand"]') || {}).content || '{}'); } catch (e) { brand = {}; }
@@ -209,6 +212,7 @@
         <div class="k res"><span>Sobrou para ${esc(DONO())}</span><b>${money(R.resultado)}</b></div>
       </div>
       ${R.parteMeeiros ? `<p class="small muted">Do vendido, ${money(R.parteMeeiros)} é a parte dos meeiros. Gastos pagos pelos meeiros: ${money(r2(R.desp - R.despDono))}.</p>` : ''}
+      ${chequesHtml()}
       ${pend.length ? `<section class="card"><h2>Acertos com meeiros</h2><div class="list">${pend.map(p => `<button type="button" class="it" data-acerto="${esc(p.roca.id)}/${esc(p.pid)}"><span class="ic">🤝</span><span class="tx"><b>${esc(nomeParte(p.pid))}</b><span>${esc(p.roca.nome)} · ${p.n} lançamento(s) em aberto</span></span><span class="vl ${p.saldo >= 0 ? 'pos' : 'neg'}">${money(Math.abs(p.saldo))}<small>${p.saldo >= 0 ? esc(DONO()) + ' paga' : esc(nomeParte(p.pid)) + ' deve'}</small></span></button>`).join('')}</div></section>` : ''}
       <section class="card"><div class="between"><h2>Roças</h2><button class="btn sm" type="button" id="nr">+ Nova roça</button></div>
         ${S.rocas.filter(r => r.ativa).map(r => { const x = resumo(L.filter(l => l.rocaId === r.id)); return `<button type="button" class="roca" data-roca="${esc(r.id)}" style="border-left:5px solid ${visual(r).cor}"><div class="t"><div class="row" style="flex-wrap:nowrap;min-width:0">${tile(r)}<div style="min-width:0"><b>${esc(r.nome)}</b><p class="small muted">${esc([r.cultura, r.local, modoTxt(r.modo)].filter(Boolean).join(' · '))}</p></div></div><span class="${x.resultado >= 0 ? 'pos' : 'neg'}" style="font-weight:800">${money(x.resultado)}</span></div>
@@ -220,6 +224,7 @@
     bindPer();
     $('#nr').addEventListener('click', () => wizard());
     $('#lc').addEventListener('click', lancarMenu);
+    document.querySelectorAll('#main [data-lc]').forEach(b => b.addEventListener('click', () => formLanc(S.lanc.find(l => l.id === b.dataset.lc))));
     document.querySelectorAll('[data-roca]').forEach(b => b.addEventListener('click', () => { rocaTab = 'resumo'; go('roca', b.dataset.roca); }));
     document.querySelectorAll('[data-acerto]').forEach(b => b.addEventListener('click', () => go('acerto', b.dataset.acerto)));
   }
@@ -309,7 +314,7 @@
     if (!list.length) return '<div class="card empty"><div class="big">📝</div><p class="muted">Nada lançado ainda.</p></div>';
     const ic = l => l.tipo === 'venda' ? '💰' : l.tipo === 'adiantamento' ? '🤝' : cat(l.categoria).icone;
     const tit = l => l.tipo === 'venda' ? 'Venda' + (l.qtd ? ' · ' + numIn(l.qtd) + ' ' + (l.unidade || '') : '') : l.tipo === 'adiantamento' ? 'Adiantamento · ' + (l.pessoaNome || '') : cat(l.categoria).nome + (l.pessoaNome ? ' · ' + l.pessoaNome : '');
-    const sub = l => [dBR(l.data), !semRoca && (l.rocaId ? (roca(l.rocaId) || {}).nome : 'Geral'), l.veiculoId && ((S.veiculos.find(v => v.id === l.veiculoId) || {}).nome), l.descricao, l.comprador, Object.keys(l.acertos || {}).length ? 'acertado' : ''].filter(Boolean).join(' · ');
+    const sub = l => [dBR(l.data), !semRoca && (l.rocaId ? (roca(l.rocaId) || {}).nome : 'Geral'), l.veiculoId && ((S.veiculos.find(v => v.id === l.veiculoId) || {}).nome), l.descricao, l.comprador, l.tipo === 'venda' && pagTxt(l), Object.keys(l.acertos || {}).length ? 'acertado' : ''].filter(Boolean).join(' · ');
     return `<section class="card"><div class="list">${list.map(l => `<button type="button" class="it" data-lc="${esc(l.id)}"><span class="ic">${ic(l)}</span><span class="tx"><b>${esc(tit(l))}</b><span>${esc(sub(l))}</span></span><span class="vl ${l.tipo === 'venda' ? 'pos' : l.tipo === 'adiantamento' ? 'inf' : 'neg'}">${l.tipo === 'venda' ? '+' : '−'} ${money(l.valor)}${l.tipo === 'despesa' && Object.keys(partesDe(l)).length > 1 ? '<small>dividida</small>' : ''}</span></button>`).join('')}</div></section>`;
   }
   function bindLanc() { document.querySelectorAll('[data-lc]').forEach(b => b.addEventListener('click', () => { const l = S.lanc.find(x => x.id === b.dataset.lc); if (l) formLanc(l); })); }
@@ -376,6 +381,7 @@
     const F = Object.assign({ tipo: 'despesa', data: hoje(), valor: '', rocaId: null }, JSON.parse(JSON.stringify(src || {})));
     if (edit) { F.valor = numIn(F.valor); F.qtd = numIn(F.qtd); F.preco = numIn(F.preco); F.dias = numIn(F.dias); }
     const travado = edit && Object.keys(F.acertos || {}).length > 0;
+    if (edit && F.cheque && Object.keys(F.cheque).length) F.chequeAberto = true;
     const origRoca = edit ? F.rocaId : null, origPartes = edit ? JSON.parse(JSON.stringify(F.partes || {})) : null;
     const ativas = S.rocas.filter(r => r.ativa || r.id === F.rocaId);
     if (!F.rocaId && F.tipo !== 'despesa' && ativas.length === 1) F.rocaId = ativas[0].id;
@@ -407,13 +413,28 @@
         ${F.tipo === 'venda' && r && meeirosDe(r).length ? `<p class="note" id="vnote" ${toNum(F.valor) > 0 ? '' : 'hidden'}>${vendaNote(r, toNum(F.valor))}</p>` : ''}
         ${quemPagaHtml(F)}
         ${F.tipo === 'despesa' && M('r_veiculos') && S.veiculos.some(v => v.ativo) ? `<div class="field"><span class="lbl">É de algum veículo ou máquina? (opcional)</span><div class="chips">${S.veiculos.filter(v => v.ativo || v.id === F.veiculoId).map(v => `<button type="button" class="chip" data-ve="${esc(v.id)}" aria-pressed="${F.veiculoId === v.id}">🚜 ${esc(v.nome)}</button>`).join('')}</div></div>` : ''}
-        ${F.tipo === 'venda' ? `<div class="field"><label for="fc">Comprador (opcional)</label><input type="text" id="fc" maxlength="80" value="${esc(F.comprador || '')}" placeholder="Ex.: Ceasa, atravessador"></div>` : ''}
+        ${F.tipo === 'venda' ? `<div class="field"><label for="fc">Comprador (opcional)</label><input type="text" id="fc" maxlength="80" value="${esc(F.comprador || '')}" placeholder="Ex.: Ceasa, atravessador"></div>
+          ${pagHtml()}` : ''}
         <div class="grid2"><div class="field"><label for="fd">Data</label><input type="date" id="fd" value="${esc(F.data)}" max="${hoje()}"></div>
         <div class="field"><label for="fds">${diar ? 'O que ele fez' : F.categoria === 'outros' ? 'O que foi' : 'Observação (opcional)'}</label><input type="text" id="fds" maxlength="200" value="${esc(F.descricao || '')}" placeholder="${diar ? 'Ex.: roçada, colheita' : F.tipo === 'adiantamento' ? 'Ex.: dinheiro, compra de veneno' : 'Ex.: 10 sacos, nota 123'}"></div></div>
         <p class="neg small" id="fe" role="alert" style="font-weight:600;min-height:16px"></p>
         <button class="btn pri full" type="button" id="fs" ${travado ? 'disabled' : ''}>${edit ? 'Salvar a correção' : 'Lançar'}</button>
         ${edit && !travado ? '<button class="btn dan full" type="button" id="fx">Excluir este lançamento</button>' : ''}`;
       openSheet(title.charAt(0).toUpperCase() + title.slice(1), html, bind);
+    }
+    /* forma de pagamento da venda; cheque pede o vencimento e, se quiser, os dados do cheque */
+    function pagHtml() {
+      const ch = F.cheque || {};
+      const pags = S.pagamentos || [];
+      return `<div class="field"><span class="lbl">Forma de pagamento</span><div class="chips">${pags.map(p => `<button type="button" class="chip" data-pg="${esc(p.id)}" aria-pressed="${F.pagamento === p.id}">${esc(p.icone)} ${esc(p.nome)}</button>`).join('')}</div></div>
+        ${F.pagamento === 'cheque' ? `<div class="chq">
+          <div class="field"><label for="fvc">Vencimento do cheque (obrigatório)</label><input type="date" id="fvc" value="${esc(F.vence || '')}" required></div>
+          ${F.chequeAberto ? `<p class="small muted" style="margin:0">Dados do cheque: opcional, preencha o que quiser.</p>
+            <div class="field"><label for="fce">Nome de quem passou o cheque</label><input type="text" id="fce" maxlength="80" value="${esc(ch.emitente || '')}" placeholder="Ex.: José da Silva"></div>
+            <div class="grid2"><div class="field"><label for="fcb">Banco</label><input type="text" id="fcb" maxlength="40" value="${esc(ch.banco || '')}" placeholder="Ex.: Sicoob"></div><div class="field"><label for="fcn">Número do cheque</label><input type="text" inputmode="numeric" id="fcn" maxlength="20" value="${esc(ch.numero || '')}" placeholder="Ex.: 000123"></div></div>
+            <div class="grid2"><div class="field"><label for="fca">Agência</label><input type="text" inputmode="numeric" id="fca" maxlength="10" value="${esc(ch.agencia || '')}"></div><div class="field"><label for="fcc">Conta</label><input type="text" inputmode="numeric" id="fcc" maxlength="20" value="${esc(ch.conta || '')}"></div></div>`
+          : '<button type="button" class="btn ghost full" id="fcx">+ Dados do cheque (opcional)</button>'}</div>` : ''}
+        ${F.pagamento === 'prazo' ? `<div class="field"><label for="fvc">Vai receber em (opcional)</label><input type="date" id="fvc" value="${esc(F.vence || '')}"></div>` : ''}`;
     }
     /* venda corrigida na mesma roça: mostra a divisão gravada (do dia da venda), não a parceria de hoje */
     function vendaNote(r, v) { const ps = edit && F.rocaId === origRoca && Object.keys(origPartes).length ? origPartes : vendaPartes(r); return Object.entries(ps).map(([k, p]) => esc(nomeParte(k)) + ' (' + pctTxt(p) + '): <b>' + money((v || 0) * p / 100) + '</b>').join(' · '); }
@@ -432,6 +453,8 @@
       const g = id => { const e = document.getElementById(id); return e ? e.value : undefined; };
       ['fv:valor', 'fd:data', 'fds:descricao', 'fq:qtd', 'fpr:preco', 'fc:comprador', 'fpn:pessoaNome', 'fdi:dias'].forEach(x => { const [id, k] = x.split(':'); const v = g(id); if (v !== undefined) F[k] = v; });
       document.querySelectorAll('[data-pp]').forEach(i => { F.partes = F.partes || {}; F.partes[i.dataset.pp] = toNum(i.value) || 0; });
+      const vc = g('fvc'); if (vc !== undefined) F.vence = vc;
+      if (g('fce') !== undefined) { F.cheque = Object.assign({}, F.cheque); [['fce', 'emitente'], ['fcb', 'banco'], ['fcn', 'numero'], ['fca', 'agencia'], ['fcc', 'conta']].forEach(([id, k]) => { F.cheque[k] = g(id); }); }
     }
     function bind(pn) {
       const redraw = () => { const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
@@ -441,6 +464,8 @@
       pn.querySelectorAll('[data-cat]').forEach(b => b.addEventListener('click', () => { keep(); F.categoria = b.dataset.cat; regra(); redraw(); }));
       pn.querySelectorAll('[data-pe]').forEach(b => b.addEventListener('click', () => { keep(); F.pessoaId = b.dataset.pe; redraw(); }));
       pn.querySelectorAll('[data-un]').forEach(b => b.addEventListener('click', () => { keep(); F.unidade = F.unidade === b.dataset.un ? null : b.dataset.un; redraw(); }));
+      pn.querySelectorAll('[data-pg]').forEach(b => b.addEventListener('click', () => { keep(); F.pagamento = F.pagamento === b.dataset.pg ? null : b.dataset.pg; redraw(); }));
+      const fcx = $('#fcx'); if (fcx) fcx.addEventListener('click', () => { keep(); F.chequeAberto = true; redraw(); const e = $('#fce'); if (e) e.focus(); });
       pn.querySelectorAll('[data-ve]').forEach(b => b.addEventListener('click', () => { keep(); F.veiculoId = F.veiculoId === b.dataset.ve ? null : b.dataset.ve; redraw(); }));
       pn.querySelectorAll('[data-qp]').forEach(b => b.addEventListener('click', () => {
         keep(); const k = b.dataset.qp, r = roca(F.rocaId);
@@ -464,6 +489,7 @@
       if (F.tipo === 'adiantamento' && !F.pessoaId) return err('Escolha o meeiro.');
       if (!(valor > 0)) return err('Informe o valor.');
       if (F.categoria === 'outros' && !String(F.descricao || '').trim()) return err('Em "Outros", escreva o que foi.');
+      if (F.tipo === 'venda' && F.pagamento === 'cheque' && !F.vence) return err('Informe a data de vencimento do cheque.');
       if (F.categoria === 'diarista' && String(F.pessoaNome || '').trim().length < 2) return err('Escreva o nome do diarista.');
       if (F.tipo === 'despesa' && !F.rocaId && !M('r_gerais') && !F.veiculoId && F.categoria !== 'salario') return err('Escolha a roça.');
       let partes;
@@ -473,6 +499,7 @@
         if (soma !== 100) return err('A divisão precisa somar 100% (agora soma ' + pctTxt(soma) + ').');
       }
       const b = { id: F.id || newId('l'), novo: !edit, tipo: F.tipo, rocaId: F.rocaId || null, data: F.data, valor, categoria: F.categoria || null, descricao: F.descricao || '', qtd: toNum(F.qtd), unidade: F.unidade || null, preco: toNum(F.preco), comprador: F.comprador || '', pessoaId: F.pessoaId || null, pessoaNome: F.pessoaNome || '', dias: toNum(F.dias), veiculoId: F.veiculoId || null, partes };
+      if (F.tipo === 'venda') { b.pagamento = F.pagamento || null; b.vence = F.pagamento === 'cheque' || F.pagamento === 'prazo' ? F.vence || null : null; b.cheque = F.pagamento === 'cheque' ? F.cheque || {} : {}; }
       F.id = b.id; // tocar duas vezes não lança duas vezes
       const bt = $('#fs'); bt.disabled = true;
       try { await api('/api/rural/lanc', b); await reload(); closeSheet(); toast((edit ? 'Correção salva: ' : 'Lançado ✓ ') + money(valor)); render(); }
@@ -705,6 +732,14 @@
       });
     });
   }
+  /* cheques que ainda vão vencer (e os vencidos nos últimos 7 dias), do mais perto para o mais longe */
+  function chequesHtml() {
+    const lim = new Date(Date.now() - 3 * 3600e3 - 7 * 864e5).toISOString().slice(0, 10), h = hoje();
+    const cs = S.lanc.filter(l => l.tipo === 'venda' && l.pagamento === 'cheque' && l.vence && l.vence >= lim).sort((a, b) => a.vence < b.vence ? -1 : a.vence > b.vence ? 1 : 0);
+    if (!cs.length) return '';
+    const tot = r2(cs.filter(l => l.vence >= h).reduce((a, l) => a + l.valor, 0));
+    return `<section class="card"><div class="between"><h2>Cheques a vencer</h2><b class="pos">${money(tot)}</b></div><div class="list">${cs.slice(0, 8).map(l => { const venc = l.vence < h, hj = l.vence === h; return `<button type="button" class="it" data-lc="${esc(l.id)}"><span class="ic">🧾</span><span class="tx"><b>${hj ? 'Vence hoje' : (venc ? 'Venceu ' : 'Vence ') + dBR(l.vence)}</b><span>${esc([(l.cheque || {}).emitente || l.comprador, (roca(l.rocaId) || {}).nome, (l.cheque || {}).banco, (l.cheque || {}).numero && 'nº ' + l.cheque.numero].filter(Boolean).join(' · '))}</span></span><span class="vl ${venc ? 'neg' : 'pos'}">${money(l.valor)}</span></button>`; }).join('')}</div>${cs.length > 8 ? `<p class="small muted">E mais ${cs.length - 8} cheque(s).</p>` : ''}</section>`;
+  }
   function formVeiculo(v0) {
     const v = Object.assign({ id: newId('v'), ativo: true }, v0 || {}), edit = !!v0;
     const TIPOS = ['Carro', 'Caminhonete', 'Caminhão', 'Trator', 'Moto', 'Roçadeira', 'Bomba', 'Outro'];
@@ -727,6 +762,15 @@
   }
 
   /* ---------- relatório ---------- */
+  function pagRel(base) {
+    const vs = base.filter(l => l.tipo === 'venda'); if (!vs.length) return '';
+    const t = {}; vs.forEach(l => { const k = l.pagamento && pagDe(l.pagamento) ? l.pagamento : ''; t[k] = r2((t[k] || 0) + l.valor); });
+    const ks = (S.pagamentos || []).map(p => p.id).filter(k => t[k]).concat(t[''] ? [''] : []);
+    if (ks.length === 1 && ks[0] === '') return '';
+    const tot = r2(vs.reduce((a, l) => a + l.valor, 0)) || 1;
+    return `<section class="card"><h2>Vendas por forma de pagamento</h2><div class="scroll"><table><thead><tr><th>Forma</th><th class="n">Total</th><th class="n">%</th></tr></thead><tbody>
+      ${ks.map(k => { const p = pagDe(k); return `<tr><td>${p ? esc(p.icone + ' ' + p.nome) : 'Não informada'}</td><td class="n">${money(t[k])}</td><td class="n">${pctTxt(r2(t[k] / tot * 100))}</td></tr>`; }).join('')}</tbody></table></div></section>`;
+  }
   function vRelatorio() {
     const base = S.lanc.filter(noPeriodo).filter(l => relRoca === '' ? true : relRoca === 'geral' ? !l.rocaId : l.rocaId === relRoca);
     const R = resumo(base), tot = R.despDono || 1;
@@ -749,6 +793,7 @@
         <tr class="tot"><td>${R.resultado >= 0 ? 'Ganhou' : 'Perdeu'}</td><td class="n ${R.resultado >= 0 ? 'pos' : 'neg'}">${money(R.resultado)}</td></tr></tbody></table>
         ${R.desp !== R.despDono ? `<p class="small muted">Gasto total ${money(R.desp)}, dos quais ${money(r2(R.desp - R.despDono))} por conta dos meeiros.</p>` : ''}
         ${R.adiant ? `<p class="small muted">Adiantamentos a meeiros no período: ${money(R.adiant)} (são descontados no acerto, não são gasto de ${esc(DONO())}).</p>` : ''}</section>
+      ${pagRel(base)}
       <section class="card"><h2>Onde gastou</h2>${cats.length ? `<div class="scroll"><table><thead><tr><th>Tipo</th><th class="n">Total</th><th class="n">${esc(DONO())}</th><th class="n">% dos gastos</th></tr></thead><tbody>
         ${cats.map(([c, v], i) => `<tr><td>${cat(c).icone} ${esc(cat(c).nome)}${i === 0 ? ' <b class="neg small">maior gasto</b>' : ''}</td><td class="n">${money(v.total)}</td><td class="n">${money(v.dono)}</td><td class="n">${pctTxt(r2(v.dono / tot * 100))}</td></tr>`).join('')}
         <tr class="tot"><td>Total</td><td class="n">${money(R.desp)}</td><td class="n">${money(R.despDono)}</td><td class="n">100%</td></tr></tbody></table></div>` : '<p class="muted small">Sem gastos no período.</p>'}</section>
