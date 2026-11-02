@@ -38,7 +38,7 @@ with sync_playwright() as pw:
     tabs = pg.evaluate("()=>[...document.querySelectorAll('.tabs [data-tab]')].map(b=>[b.dataset.tab,b.innerText])")
     for k, label in tabs:
         pg.click(f'.tabs [data-tab="{k}"]'); pg.wait_for_timeout(600); chk(pg, 'admin › ' + label)
-        subs = pg.evaluate("()=>[...document.querySelectorAll('.subnav [data-tab], .finseg button, .cadg [data-cadg]')].map(b=>[b.dataset.tab?'[data-tab=\"'+b.dataset.tab+'\"]':b.dataset.cadg?'[data-cadg=\"'+b.dataset.cadg+'\"]':null,b.innerText]).filter(x=>x[0])")
+        subs = pg.evaluate("()=>[...document.querySelectorAll('.subnav [data-tab], .finseg button, .cadg [data-cadg]')].map(b=>[b.dataset.tab?'[data-tab=\"'+b.dataset.tab+'\"]'+(b.dataset.fin?'[data-fin=\"'+b.dataset.fin+'\"]':''):b.dataset.cadg?'[data-cadg=\"'+b.dataset.cadg+'\"]':null,b.innerText]).filter(x=>x[0])")
         for sel, sl in subs:
             pg.click('#app ' + sel); pg.wait_for_timeout(600); chk(pg, f'admin › {label} › {sl}')
             for c in pg.evaluate("()=>[...document.querySelectorAll('.cadsub [data-cad]')].map(b=>[b.dataset.cad,b.innerText])"):
