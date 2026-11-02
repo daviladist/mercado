@@ -480,3 +480,5 @@ create table if not exists loja_staria (
   created_at timestamptz not null default now(),
   primary key (tenant_id, id)
 );
+-- pagamento da venda dividido em partes: [{forma, valor, vence, cheque}] (a soma fecha com o valor da venda)
+alter table rural_lanc add column if not exists pagamentos jsonb not null default '[]'::jsonb;

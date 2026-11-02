@@ -23,7 +23,13 @@
   const dBR = s => s ? String(s).slice(0, 10).split('-').reverse().join('/') : '';
   /* forma de pagamento de uma venda, em texto curto: "Pix", "Cheque p/ 15/12/2026" */
   const pagDe = id => (S.pagamentos || []).find(p => p.id === id);
-  const pagTxt = l => { const p = l.pagamento && pagDe(l.pagamento); if (!p) return ''; return p.nome + (l.vence && (l.pagamento === 'cheque' || l.pagamento === 'prazo') ? ' p/ ' + dBR(l.vence) : ''); };
+  const pagsDe = l => Array.isArray(l.pagamentos) && l.pagamentos.length ? l.pagamentos : l.pagamento ? [{ forma: l.pagamento, valor: l.valor, vence: l.vence, cheque: l.cheque || {} }] : [];
+  const pagTxt = l => {
+    const ps = pagsDe(l).filter(x => pagDe(x.forma)); if (!ps.length) return '';
+    if (ps.length === 1) { const x = ps[0]; return pagDe(x.forma).nome + (x.vence && (x.forma === 'cheque' || x.forma === 'prazo') ? ' p/ ' + dBR(x.vence) : ''); }
+    const n = {}; ps.forEach(x => { n[x.forma] = (n[x.forma] || 0) + 1; });
+    return Object.keys(n).map(k => n[k] > 1 ? (k === 'cheque' ? n[k] + ' cheques' : pagDe(k).nome + ' (' + n[k] + 'x)') : pagDe(k).nome).join(' + ');
+  };
   const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const slug = (/^\/t\/([a-z0-9-]{1,40})/.exec(location.pathname) || [])[1] || '';
   let brand = {}; try { brand = JSON.parse((document.querySelector('meta[name="tino-brand"]') || {}).content || '{}'); } catch (e) { brand = {}; }
@@ -381,7 +387,9 @@
     const F = Object.assign({ tipo: 'despesa', data: hoje(), valor: '', rocaId: null }, JSON.parse(JSON.stringify(src || {})));
     if (edit) { F.valor = numIn(F.valor); F.qtd = numIn(F.qtd); F.preco = numIn(F.preco); F.dias = numIn(F.dias); }
     const travado = edit && Object.keys(F.acertos || {}).length > 0;
-    if (edit && F.cheque && Object.keys(F.cheque).length) F.chequeAberto = true;
+    // pagamento: lista de partes {forma, valor, vence, cheque, aberto}; uma parte só = a venda toda
+    F.pags = (edit ? pagsDe(src) : []).map(x => ({ forma: x.forma, valor: numIn(x.valor), vence: x.vence || '', cheque: Object.assign({}, x.cheque || {}), aberto: !!Object.keys(x.cheque || {}).length }));
+    F.dividir = F.pags.length > 1;
     const origRoca = edit ? F.rocaId : null, origPartes = edit ? JSON.parse(JSON.stringify(F.partes || {})) : null;
     const ativas = S.rocas.filter(r => r.ativa || r.id === F.rocaId);
     if (!F.rocaId && F.tipo !== 'despesa' && ativas.length === 1) F.rocaId = ativas[0].id;
@@ -423,19 +431,45 @@
       openSheet(title.charAt(0).toUpperCase() + title.slice(1), html, bind);
     }
     const maxVence = () => (Number(hoje().slice(0, 4)) + 5) + hoje().slice(4);
-    /* forma de pagamento da venda; cheque pede o vencimento e, se quiser, os dados do cheque */
+    /* forma de pagamento da venda: uma forma só ou dividida em partes (ex.: 3 cheques; parte Pix, parte dinheiro).
+       Cheque pede o vencimento (obrigatório) e, se quiser, os dados do cheque. */
+    const PF = () => S.pagamentos || [];
+    function chequeCampos(x, i) {
+      const ch = x.cheque || {};
+      return `<div class="field"><label for="pvc${i}">Vencimento do cheque (obrigatório)</label><input type="date" id="pvc${i}" data-pvc="${i}" value="${esc(x.vence || '')}" max="${maxVence()}" required></div>
+        ${x.aberto ? `<p class="small muted" style="margin:0">Dados do cheque: opcional, preencha o que quiser.</p>
+          <div class="field"><label for="pce${i}">Nome de quem passou o cheque</label><input type="text" id="pce${i}" data-pc="${i}:emitente" maxlength="80" value="${esc(ch.emitente || '')}" placeholder="Ex.: José da Silva"></div>
+          <div class="grid2"><div class="field"><label for="pcb${i}">Banco</label><input type="text" id="pcb${i}" data-pc="${i}:banco" maxlength="40" value="${esc(ch.banco || '')}" placeholder="Ex.: Sicoob"></div><div class="field"><label for="pcn${i}">Número do cheque</label><input type="text" inputmode="numeric" id="pcn${i}" data-pc="${i}:numero" maxlength="20" value="${esc(ch.numero || '')}" placeholder="Ex.: 000123"></div></div>
+          <div class="grid2"><div class="field"><label for="pca${i}">Agência</label><input type="text" inputmode="numeric" id="pca${i}" data-pc="${i}:agencia" maxlength="10" value="${esc(ch.agencia || '')}"></div><div class="field"><label for="pcc${i}">Conta</label><input type="text" inputmode="numeric" id="pcc${i}" data-pc="${i}:conta" maxlength="20" value="${esc(ch.conta || '')}"></div></div>`
+        : `<button type="button" class="btn ghost full" data-pab="${i}">+ Dados do cheque (opcional)</button>`}`;
+    }
+    const prazoCampo = (x, i) => `<div class="field"><label for="pvc${i}">Vai receber em (opcional)</label><input type="date" id="pvc${i}" data-pvc="${i}" value="${esc(x.vence || '')}" max="${maxVence()}"></div>`;
     function pagHtml() {
-      const ch = F.cheque || {};
-      const pags = S.pagamentos || [];
-      return `<div class="field"><span class="lbl">Forma de pagamento</span><div class="chips">${pags.map(p => `<button type="button" class="chip" data-pg="${esc(p.id)}" aria-pressed="${F.pagamento === p.id}">${esc(p.icone)} ${esc(p.nome)}</button>`).join('')}</div></div>
-        ${F.pagamento === 'cheque' ? `<div class="chq">
-          <div class="field"><label for="fvc">Vencimento do cheque (obrigatório)</label><input type="date" id="fvc" value="${esc(F.vence || '')}" max="${maxVence()}" required></div>
-          ${F.chequeAberto ? `<p class="small muted" style="margin:0">Dados do cheque: opcional, preencha o que quiser.</p>
-            <div class="field"><label for="fce">Nome de quem passou o cheque</label><input type="text" id="fce" maxlength="80" value="${esc(ch.emitente || '')}" placeholder="Ex.: José da Silva"></div>
-            <div class="grid2"><div class="field"><label for="fcb">Banco</label><input type="text" id="fcb" maxlength="40" value="${esc(ch.banco || '')}" placeholder="Ex.: Sicoob"></div><div class="field"><label for="fcn">Número do cheque</label><input type="text" inputmode="numeric" id="fcn" maxlength="20" value="${esc(ch.numero || '')}" placeholder="Ex.: 000123"></div></div>
-            <div class="grid2"><div class="field"><label for="fca">Agência</label><input type="text" inputmode="numeric" id="fca" maxlength="10" value="${esc(ch.agencia || '')}"></div><div class="field"><label for="fcc">Conta</label><input type="text" inputmode="numeric" id="fcc" maxlength="20" value="${esc(ch.conta || '')}"></div></div>`
-          : '<button type="button" class="btn ghost full" id="fcx">+ Dados do cheque (opcional)</button>'}</div>` : ''}
-        ${F.pagamento === 'prazo' ? `<div class="field"><label for="fvc">Vai receber em (opcional)</label><input type="date" id="fvc" value="${esc(F.vence || '')}" max="${maxVence()}"></div>` : ''}`;
+      if (!F.dividir) {
+        const x = F.pags[0] || { forma: '' };
+        return `<div class="field"><span class="lbl">Forma de pagamento</span><div class="chips">${PF().map(p => `<button type="button" class="chip" data-pg="${esc(p.id)}" aria-pressed="${x.forma === p.id}">${esc(p.icone)} ${esc(p.nome)}</button>`).join('')}</div></div>
+          ${x.forma === 'cheque' ? `<div class="chq"><div class="field"><span class="lbl">Quantos cheques?</span><div class="chips">${[1, 2, 3, 4, 5, 6].map(n => `<button type="button" class="chip" data-nch="${n}" aria-pressed="${n === 1}">${n}</button>`).join('')}</div></div>${chequeCampos(x, 0)}</div>` : ''}
+          ${x.forma === 'prazo' ? prazoCampo(x, 0) : ''}
+          <button type="button" class="btn ghost full" id="pdv">Dividir o pagamento (ex.: parte Pix, parte dinheiro, cheques)</button>`;
+      }
+      return `<div class="field"><span class="lbl">Pagamento dividido</span></div>
+        ${F.pags.map((x, i) => `<div class="chq"><div class="between"><b>Parte ${i + 1}</b>${F.pags.length > 1 ? `<button type="button" class="btn sm" data-prm="${i}" aria-label="Tirar a parte ${i + 1}">Tirar</button>` : ''}</div>
+          <div class="chips">${PF().map(p => `<button type="button" class="chip" data-pf="${i}:${esc(p.id)}" aria-pressed="${x.forma === p.id}">${esc(p.icone)} ${esc(p.nome)}</button>`).join('')}</div>
+          <div class="field"><label for="pv${i}">Valor desta parte (R$)</label><input inputmode="decimal" class="money" id="pv${i}" data-pv="${i}" value="${esc(x.valor || '')}" placeholder="0,00"></div>
+          ${x.forma === 'cheque' ? chequeCampos(x, i) : x.forma === 'prazo' ? prazoCampo(x, i) : ''}</div>`).join('')}
+        <p class="note" id="psoma" aria-live="polite">${somaTxt()}</p>
+        <div class="grid2"><button type="button" class="btn" id="pad">+ Outra parte</button><button type="button" class="btn ghost" id="pun">Uma forma só</button></div>`;
+    }
+    const centavos = v => Math.round((toNum(v) || 0) * 100);
+    function somaTxt() {
+      const tot = centavos(F.valor), so = F.pags.reduce((a, x) => a + centavos(x.valor), 0), d = tot - so;
+      return 'Partes: <b>' + money(so / 100) + '</b> de ' + money(tot / 100) + (d === 0 ? ' ✓' : d > 0 ? ' · falta <b>' + money(d / 100) + '</b>' : ' · passou <b>' + money(-d / 100) + '</b>');
+    }
+    /* divide o total em n partes iguais (o último leva os centavos que sobram) */
+    function emPartes(n, forma) {
+      const tot = centavos(F.valor), base = Math.floor(tot / n), velhos = F.pags;
+      F.pags = Array.from({ length: n }, (_, k) => Object.assign({ forma, vence: '', cheque: {}, aberto: false }, velhos[k] && velhos[k].forma === forma ? { vence: velhos[k].vence, cheque: velhos[k].cheque, aberto: velhos[k].aberto } : {}, { forma, valor: tot ? numIn(((k === n - 1 ? tot - base * (n - 1) : base) / 100).toFixed(2)) : '' }));
+      F.dividir = n > 1;
     }
     /* venda corrigida na mesma roça: mostra a divisão gravada (do dia da venda), não a parceria de hoje */
     function vendaNote(r, v) { const ps = edit && F.rocaId === origRoca && Object.keys(origPartes).length ? origPartes : vendaPartes(r); return Object.entries(ps).map(([k, p]) => esc(nomeParte(k)) + ' (' + pctTxt(p) + '): <b>' + money((v || 0) * p / 100) + '</b>').join(' · '); }
@@ -448,14 +482,16 @@
       else if (fv.readOnly) { fv.readOnly = false; fv.value = ''; F.valor = ''; }
       const v = toNum(F.valor), vn = $('#vnote'), r = F.rocaId && roca(F.rocaId);
       if (vn && r) { vn.hidden = !(v > 0); vn.innerHTML = vendaNote(r, v); }
+      const ps = $('#psoma'); if (ps) ps.innerHTML = somaTxt();
       const q = $('#qpv'); if (q && v > 0) q.innerHTML = Object.keys(F.partes || {}).filter(k => F.partes[k] > 0).map(k => esc(nomeParte(k)) + ': ' + money(v * F.partes[k] / 100)).join(' · ');
     }
     function keep() {
       const g = id => { const e = document.getElementById(id); return e ? e.value : undefined; };
       ['fv:valor', 'fd:data', 'fds:descricao', 'fq:qtd', 'fpr:preco', 'fc:comprador', 'fpn:pessoaNome', 'fdi:dias'].forEach(x => { const [id, k] = x.split(':'); const v = g(id); if (v !== undefined) F[k] = v; });
       document.querySelectorAll('[data-pp]').forEach(i => { F.partes = F.partes || {}; F.partes[i.dataset.pp] = toNum(i.value) || 0; });
-      const vc = g('fvc'); if (vc !== undefined) F.vence = vc;
-      if (g('fce') !== undefined) { F.cheque = Object.assign({}, F.cheque); [['fce', 'emitente'], ['fcb', 'banco'], ['fcn', 'numero'], ['fca', 'agencia'], ['fcc', 'conta']].forEach(([id, k]) => { F.cheque[k] = g(id); }); }
+      document.querySelectorAll('#sheet [data-pv]').forEach(e => { const x = F.pags[+e.dataset.pv]; if (x) x.valor = e.value; });
+      document.querySelectorAll('#sheet [data-pvc]').forEach(e => { const x = F.pags[+e.dataset.pvc]; if (x) x.vence = e.value; });
+      document.querySelectorAll('#sheet [data-pc]').forEach(e => { const [i, k] = e.dataset.pc.split(':'), x = F.pags[+i]; if (x) { x.cheque = Object.assign({}, x.cheque); x.cheque[k] = e.value; } });
     }
     function bind(pn) {
       const redraw = () => { const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
@@ -465,8 +501,15 @@
       pn.querySelectorAll('[data-cat]').forEach(b => b.addEventListener('click', () => { keep(); F.categoria = b.dataset.cat; regra(); redraw(); }));
       pn.querySelectorAll('[data-pe]').forEach(b => b.addEventListener('click', () => { keep(); F.pessoaId = b.dataset.pe; redraw(); }));
       pn.querySelectorAll('[data-un]').forEach(b => b.addEventListener('click', () => { keep(); F.unidade = F.unidade === b.dataset.un ? null : b.dataset.un; redraw(); }));
-      pn.querySelectorAll('[data-pg]').forEach(b => b.addEventListener('click', () => { keep(); F.pagamento = F.pagamento === b.dataset.pg ? null : b.dataset.pg; redraw(); }));
-      const fcx = $('#fcx'); if (fcx) fcx.addEventListener('click', () => { keep(); F.chequeAberto = true; redraw(); const e = $('#fce'); if (e) e.focus(); });
+      pn.querySelectorAll('[data-pg]').forEach(b => b.addEventListener('click', () => { keep(); const x = F.pags[0]; if (x && x.forma === b.dataset.pg) F.pags = []; else F.pags = [Object.assign({ vence: '', cheque: {}, aberto: false }, x && x.forma === b.dataset.pg ? x : {}, { forma: b.dataset.pg, valor: '' })]; redraw(); }));
+      pn.querySelectorAll('[data-nch]').forEach(b => b.addEventListener('click', () => { keep(); if (!(toNum(F.valor) > 0) && +b.dataset.nch > 1) { $('#fe').textContent = 'Informe o total da venda antes de dividir.'; return; } emPartes(+b.dataset.nch, 'cheque'); redraw(); }));
+      const pdv = $('#pdv'); if (pdv) pdv.addEventListener('click', () => { keep(); const x = F.pags[0]; F.pags = [Object.assign({ forma: '', vence: '', cheque: {}, aberto: false }, x || {}, { valor: F.valor || '' }), { forma: '', valor: '', vence: '', cheque: {}, aberto: false }]; F.dividir = true; redraw(); });
+      pn.querySelectorAll('[data-pf]').forEach(b => b.addEventListener('click', () => { keep(); const [i, f] = b.dataset.pf.split(':'); F.pags[+i].forma = f; redraw(); }));
+      pn.querySelectorAll('[data-pab]').forEach(b => b.addEventListener('click', () => { keep(); F.pags[+b.dataset.pab].aberto = true; redraw(); }));
+      pn.querySelectorAll('[data-prm]').forEach(b => b.addEventListener('click', () => { keep(); F.pags.splice(+b.dataset.prm, 1); if (F.pags.length < 2) F.dividir = false; if (F.pags.length === 1) F.pags[0].valor = ''; redraw(); }));
+      const pad = $('#pad'); if (pad) pad.addEventListener('click', () => { keep(); const falta = centavos(F.valor) - F.pags.reduce((a, x) => a + centavos(x.valor), 0); const ult = F.pags[F.pags.length - 1]; F.pags.push({ forma: ult && ult.forma === 'cheque' ? 'cheque' : '', valor: falta > 0 ? numIn((falta / 100).toFixed(2)) : '', vence: '', cheque: {}, aberto: false }); redraw(); });
+      const pun = $('#pun'); if (pun) pun.addEventListener('click', () => { keep(); const fs = [...new Set(F.pags.map(x => x.forma).filter(Boolean))]; F.pags = fs.length === 1 ? [Object.assign({}, F.pags.find(x => x.forma === fs[0]), { valor: '' })] : []; F.dividir = false; redraw(); });
+      pn.querySelectorAll('[data-pv]').forEach(e => e.addEventListener('input', upd));
       pn.querySelectorAll('[data-ve]').forEach(b => b.addEventListener('click', () => { keep(); F.veiculoId = F.veiculoId === b.dataset.ve ? null : b.dataset.ve; redraw(); }));
       pn.querySelectorAll('[data-qp]').forEach(b => b.addEventListener('click', () => {
         keep(); const k = b.dataset.qp, r = roca(F.rocaId);
@@ -490,7 +533,6 @@
       if (F.tipo === 'adiantamento' && !F.pessoaId) return err('Escolha o meeiro.');
       if (!(valor > 0)) return err('Informe o valor.');
       if (F.categoria === 'outros' && !String(F.descricao || '').trim()) return err('Em "Outros", escreva o que foi.');
-      if (F.tipo === 'venda' && F.pagamento === 'cheque' && !F.vence) return err('Informe a data de vencimento do cheque.');
       if (F.categoria === 'diarista' && String(F.pessoaNome || '').trim().length < 2) return err('Escreva o nome do diarista.');
       if (F.tipo === 'despesa' && !F.rocaId && !M('r_gerais') && !F.veiculoId && F.categoria !== 'salario') return err('Escolha a roça.');
       let partes;
@@ -500,7 +542,21 @@
         if (soma !== 100) return err('A divisão precisa somar 100% (agora soma ' + pctTxt(soma) + ').');
       }
       const b = { id: F.id || newId('l'), novo: !edit, tipo: F.tipo, rocaId: F.rocaId || null, data: F.data, valor, categoria: F.categoria || null, descricao: F.descricao || '', qtd: toNum(F.qtd), unidade: F.unidade || null, preco: toNum(F.preco), comprador: F.comprador || '', pessoaId: F.pessoaId || null, pessoaNome: F.pessoaNome || '', dias: toNum(F.dias), veiculoId: F.veiculoId || null, partes };
-      if (F.tipo === 'venda') { b.pagamento = F.pagamento || null; b.vence = F.pagamento === 'cheque' || F.pagamento === 'prazo' ? F.vence || null : null; b.cheque = F.pagamento === 'cheque' ? F.cheque || {} : {}; }
+      if (F.tipo === 'venda') {
+        const ps = F.dividir ? F.pags : F.pags.filter(x => x.forma);
+        const lista = [];
+        for (let i = 0; i < ps.length; i++) {
+          const x = ps[i], nm = ps.length > 1 ? 'Parte ' + (i + 1) + ': ' : '';
+          if (!x.forma) return err(nm + 'escolha a forma de pagamento.');
+          const o = { forma: x.forma };
+          if (ps.length > 1) { const v = toNum(x.valor); if (!(v > 0)) return err(nm + 'informe o valor.'); o.valor = r2(v); }
+          if (x.forma === 'cheque') { if (!x.vence) return err(nm + 'informe a data de vencimento do cheque.'); o.vence = x.vence; o.cheque = x.cheque || {}; }
+          if (x.forma === 'prazo' && x.vence) o.vence = x.vence;
+          lista.push(o);
+        }
+        if (lista.length > 1) { const d = Math.round(valor * 100) - lista.reduce((a, o) => a + Math.round(o.valor * 100), 0); if (d) return err(d > 0 ? 'Falta ' + money(d / 100) + ' nas partes do pagamento.' : 'As partes passaram ' + money(-d / 100) + ' do total.'); }
+        b.pagamentos = lista;
+      }
       F.id = b.id; // tocar duas vezes não lança duas vezes
       const bt = $('#fs'); bt.disabled = true;
       try { await api('/api/rural/lanc', b); await reload(); closeSheet(); toast((edit ? 'Correção salva: ' : 'Lançado ✓ ') + money(valor)); render(); }
@@ -736,10 +792,12 @@
   /* cheques que ainda vão vencer (e os vencidos nos últimos 7 dias), do mais perto para o mais longe */
   function chequesHtml() {
     const h = hoje(), d7 = new Date(h + 'T12:00:00Z'); d7.setUTCDate(d7.getUTCDate() - 7); const lim = d7.toISOString().slice(0, 10);
-    const cs = S.lanc.filter(l => l.tipo === 'venda' && l.pagamento === 'cheque' && l.vence && l.vence >= lim).sort((a, b) => a.vence < b.vence ? -1 : a.vence > b.vence ? 1 : 0);
+    const cs = [];
+    S.lanc.forEach(l => { if (l.tipo !== 'venda') return; const ps = pagsDe(l), chs = ps.filter(x => x.forma === 'cheque'); chs.forEach((x, k) => { if (x.vence && x.vence >= lim) cs.push({ l, x, k, n: chs.length }); }); });
+    cs.sort((a, b) => a.x.vence < b.x.vence ? -1 : a.x.vence > b.x.vence ? 1 : 0);
     if (!cs.length) return '';
-    const tot = r2(cs.filter(l => l.vence >= h).reduce((a, l) => a + l.valor, 0));
-    return `<section class="card"><div class="between"><h2>Cheques a vencer</h2><b class="pos">${money(tot)}</b></div><div class="list">${cs.slice(0, 8).map(l => { const venc = l.vence < h, hj = l.vence === h; return `<button type="button" class="it" data-lc="${esc(l.id)}"><span class="ic">🧾</span><span class="tx"><b>${hj ? 'Vence hoje' : (venc ? 'Venceu ' : 'Vence ') + dBR(l.vence)}</b><span>${esc([(l.cheque || {}).emitente || l.comprador, (roca(l.rocaId) || {}).nome, (l.cheque || {}).banco, (l.cheque || {}).numero && 'nº ' + l.cheque.numero].filter(Boolean).join(' · '))}</span></span><span class="vl ${venc ? 'neg' : 'pos'}">${money(l.valor)}</span></button>`; }).join('')}</div>${cs.length > 8 ? `<p class="small muted">E mais ${cs.length - 8} cheque(s).</p>` : ''}</section>`;
+    const tot = r2(cs.filter(c => c.x.vence >= h).reduce((a, c) => a + Number(c.x.valor), 0));
+    return `<section class="card"><div class="between"><h2>Cheques a vencer</h2><b class="pos">${money(tot)}</b></div><div class="list">${cs.slice(0, 8).map(({ l, x, k, n }) => { const venc = x.vence < h, hj = x.vence === h, ch = x.cheque || {}; return `<button type="button" class="it" data-lc="${esc(l.id)}"><span class="ic">🧾</span><span class="tx"><b>${hj ? 'Vence hoje' : (venc ? 'Venceu ' : 'Vence ') + dBR(x.vence)}</b><span>${esc([n > 1 ? 'cheque ' + (k + 1) + ' de ' + n : '', ch.emitente || l.comprador, (roca(l.rocaId) || {}).nome, ch.banco, ch.numero && 'nº ' + ch.numero].filter(Boolean).join(' · '))}</span></span><span class="vl ${venc ? 'neg' : 'pos'}">${money(x.valor)}</span></button>`; }).join('')}</div>${cs.length > 8 ? `<p class="small muted">E mais ${cs.length - 8} cheque(s).</p>` : ''}</section>`;
   }
   function formVeiculo(v0) {
     const v = Object.assign({ id: newId('v'), ativo: true }, v0 || {}), edit = !!v0;
@@ -765,7 +823,7 @@
   /* ---------- relatório ---------- */
   function pagRel(base) {
     const vs = base.filter(l => l.tipo === 'venda'); if (!vs.length) return '';
-    const t = {}; vs.forEach(l => { const k = l.pagamento && pagDe(l.pagamento) ? l.pagamento : ''; t[k] = r2((t[k] || 0) + l.valor); });
+    const t = {}; vs.forEach(l => { const ps = pagsDe(l).filter(x => pagDe(x.forma)); if (!ps.length) { t[''] = r2((t[''] || 0) + l.valor); return; } ps.forEach(x => { t[x.forma] = r2((t[x.forma] || 0) + Number(x.valor)); }); });
     const ks = (S.pagamentos || []).map(p => p.id).filter(k => t[k]).concat(t[''] ? [''] : []);
     if (ks.length === 1 && ks[0] === '') return '';
     const tot = r2(vs.reduce((a, l) => a + l.valor, 0)) || 1;
