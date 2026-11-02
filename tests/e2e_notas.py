@@ -42,7 +42,7 @@ with sync_playwright() as pw:
 
     print('\n== Administrador cadastra o fornecedor')
     adm = device('admin', False); login(adm, '#admin', ('#lu', '#lp', '#lf'), 'eduardo', ADMIN)
-    adm.click('.tabs [data-tab="cadastros"]'); adm.wait_for_timeout(300); adm.click('[data-cadg="fornecedores"]'); adm.wait_for_timeout(300)
+    adm.dispatch_event('.tabs [data-tab="cadastros"]', 'click'); adm.wait_for_timeout(300); adm.click('[data-cadg="fornecedores"]'); adm.wait_for_timeout(300)
     adm.click('#supNew'); adm.fill('#supc', '10'); adm.fill('#supn', 'Distribuidora Teste Ltda'); adm.fill('#supd', '00.000.000/0001-91'); adm.click('#supf button[type=submit]'); wait_sync(adm)
     chk(any(x['name'] == 'Distribuidora Teste Ltda' and x['code'] == '10' for x in server().get('suppliers', [])), 'fornecedor gravado no servidor')
 

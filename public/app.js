@@ -1888,7 +1888,8 @@ function renderTop(bump){
     t.innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name)}</span><small>Conferência${ui.checker?' · '+esc(ui.checker):''}</small></span></div>${ui.checker?'<button class="iconbtn" id="cfOut">Sair</button>':''}`;
     if(ui.checker)$('#cfOut').onclick=srvLogout;
   }else{
-    t.innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name)}</span><small>Painel do administrador${ui.admin&&ui.adminName?' · '+esc(ui.adminName):''}</small></span></div>${ui.admin?'<button class="iconbtn" id="admOut">Sair</button>':''}`;
+    t.innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name)}</span><small>Painel do administrador${ui.admin&&ui.adminName?' · '+esc(ui.adminName):''}</small></span></div>${ui.admin?hdTools()+'<button class="iconbtn" id="admOut">Sair</button>':''}`;
+    if(ui.admin)bindHdTools(t);
     if(ui.admin)$('#admOut').onclick=srvLogout;
   }
   if(SRV.me&&ui.view!=='cliente'){const o=t.querySelector('.iconbtn');if(o){const b=document.createElement('button');b.className='iconbtn';b.textContent='Senha';b.onclick=srvPassScreen;o.before(b)}}
@@ -2960,12 +2961,20 @@ function admConferentes(){
   c.querySelectorAll('[data-ckok]').forEach(b=>b.onclick=()=>{S.checkers=S.checkers.filter(x=>x.id!==b.dataset.ckok);ui.confirmDel=null;save();admConferentes()});
 }
 
+/* celular: barra de navegação embaixo (Início, Pedidos, Produtos, Financeiro e Mais); as abas de cima somem no celular */
+const BN_ICO={'Início':'<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>','Pedidos':'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>','Produtos':'<path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7"/>','Financeiro':'<rect x="2" y="6" width="20" height="13" rx="2"/><circle cx="12" cy="12.5" r="2.5"/>','Mais':'<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'};
+const bnIco=k=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${BN_ICO[k]||BN_ICO['Mais']}</svg>`;
+function bnavHtml(tabs,cnt){const main=['Início','Pedidos','Produtos','Financeiro'],M=tabs.filter(t=>main.includes(t.label)),R=tabs.filter(t=>!main.includes(t.label)),more=R.some(t=>t.sel);
+  const tot=R.reduce((n,t)=>n+(t.b?t.b.n:0),0);
+  return `<nav class="bnav" aria-label="Menu principal" style="--bnn:${M.length+1}">${M.map(t=>`<button type="button" data-tab="${t.k}" ${t.sel?'aria-current="page"':''}>${bnIco(t.label)}<span>${t.label}</span>${cnt(t.b)}</button>`).join('')}
+    <details class="more bnmore"><summary ${more?'aria-current="page"':''}>${bnIco('Mais')}<span>Mais</span>${tot?cnt({n:tot,c:''}):''}</summary><div class="menu">${R.map(t=>`<button type="button" class="mi" data-tab="${t.k}" ${t.sel?'aria-current="page"':''}>${esc(t.label)}${cnt(t.b)}</button>`).join('')}<span class="mi-sep"></span><button type="button" class="mi" id="bnPw">Trocar minha senha</button></div></details></nav>`}
 /* aba -> módulo da Central que precisa estar ligado */
 const TAB_MOD={pdv:'pdv',relatorios:'painel',decisoes:'decisoes',entregas:'entregas',semana:'ofertas',recmerc:'entrada',precnotas:'entrada',receber:['receber','pagar','caixa'],fretes:'frete3'};
 /* abas do Financeiro (Perdas por avaria vem das entregas) */
 const finTabs=()=>['receber','pagar','caixa','perdas'].filter(k=>modOn(k==='perdas'?'entregas':k));
 function renderAdmin(){
   const app=$('#app');
+  document.body.classList.toggle('hasbnav',!!ui.admin);
   if(!ui.admin){app.innerHTML=loginForm(true);bindLogin(true);return}
   pendSweep();if(ui.tab==='analise'||ui.tab==='separacao')ui.tab='decisoes';
   const nprog=S.orders.filter(o=>drvCan(o)&&!(o.deliv&&o.deliv.drv)).length+S.orders.filter(o=>o.occ&&o.occ.reboleto).length;
@@ -2983,7 +2992,8 @@ function renderAdmin(){
   const okFin=finTabs();if(!okFin.includes(ui.finTab))ui.finTab=okFin[0]||'receber';
   const nvP=(S.payables||[]).filter(p=>!p.paidAt&&p.due<today()).length,FIN={receber:['A receber',BD.receber],pagar:['A pagar',nvP?{n:nvP,c:''}:null],caixa:['Caixa da semana',null],perdas:['Perdas',null]};
   const subs=[];grp[1].filter(x=>x[1]).forEach(([k,v])=>{if(k==='receber')okFin.forEach(f=>subs.push([k,FIN[f][0],f,FIN[f][1]]));else subs.push([k,v,'',BD[k]])});
-  app.innerHTML=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" data-tab="${t.k}" aria-selected="${t.sel}">${t.label}${cnt(t.b)}</button>`).join('')}</div>${subs.length>1?`<div class="subnavwrap"><div class="seg repseg subnav" role="group" aria-label="${grp[0]}">${subs.map(([k,v,f,b])=>`<button data-tab="${k}"${f?` data-fin="${f}"`:''} aria-pressed="${ui.tab===k&&(!f||ui.finTab===f)}">${v}${cnt(b)}</button>`).join('')}</div></div>`:''}<div id="tabc"></div>`;
+  app.innerHTML=`<div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" data-tab="${t.k}" aria-selected="${t.sel}">${t.label}${cnt(t.b)}</button>`).join('')}</div>${subs.length>1?`<div class="subnavwrap"><div class="seg repseg subnav" role="group" aria-label="${grp[0]}">${subs.map(([k,v,f,b])=>`<button data-tab="${k}"${f?` data-fin="${f}"`:''} aria-pressed="${ui.tab===k&&(!f||ui.finTab===f)}">${v}${cnt(b)}</button>`).join('')}</div></div>`:''}<div id="tabc"></div>${bnavHtml(tabs,cnt)}`;
+  {const pw=app.querySelector('#bnPw');if(pw)pw.onclick=()=>{const d=pw.closest('details');if(d)d.open=false;if(typeof srvPassScreen==='function')srvPassScreen()}}
   {const at=app.querySelector('.tabs [aria-selected="true"]');if(at&&at.scrollIntoView)try{at.scrollIntoView({block:'nearest',inline:'center'})}catch(e){}}
   {const tb=app.querySelector('.tabs');if(tb){const edge=()=>{tb.classList.toggle('more-r',tb.scrollLeft+tb.clientWidth<tb.scrollWidth-4);tb.classList.toggle('more-l',tb.scrollLeft>4)};tb.addEventListener('scroll',edge,{passive:true});edge()}}
   app.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ui.tab=b.dataset.tab;if(b.dataset.fin)ui.finTab=b.dataset.fin;ui.backWeek=false;ui.romView=false;ui.lanc=null;ui.stBulk=null;ui.stCost=null;ui.combosView=false;ui.comboEdit=null;ui.adj=null;ui.recNew=null;ui.edit=null;ui.bulk=null;ui.confirmDel=null;renderAdmin()});
@@ -3780,6 +3790,50 @@ function admHoje(){
     if(tab==='pedidos')ui.ofilter=f;if(tab==='receber'){ui.finTab='receber';ui.recF=ui.recF||{st:'cobrar',cid:'',q:''};ui.recF.st=f;ui.recF.cid=''}
     if(tab==='produtos')ui.critOnly=true;if(tab==='clientes'){ui.tab='cadastros';ui.cadSub='clientes';ui.cliF=f}renderAdmin();window.scrollTo(0,0)});
 }
+/* ===== cabeçalho do painel: busca geral (atalho "/") e "+ Novo" ===== */
+const GSI='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
+function hdTools(){return `<button type="button" class="hdbtn" id="gsB" aria-label="Buscar cliente, pedido ou produto (atalho /)" title="Buscar (atalho /)">${GSI}<span class="hdl">Buscar</span></button><details class="more hdnew"><summary class="hdbtn" aria-label="Criar novo">+ <span class="hdl">Novo</span></summary><div class="menu"><button type="button" class="mi" data-hn="pedido">Pedido</button><button type="button" class="mi" data-hn="produto">Produto</button><button type="button" class="mi" data-hn="cliente">Cliente</button>${modOn('pagar')?'<button type="button" class="mi" data-hn="pagar">Conta a pagar</button>':''}</div></details>`}
+function hdNew(k){ui.backWeek=false;ui.romView=false;ui.lanc=null;ui.edit=null;ui.confirmDel=null;ui.recNew=null;
+  if(k==='pedido'){ui.tab='pedidos';ui.lanc={cid:'',mode:'retirada',pay:'',cart:{},q:'',addr:'',bairro:'',note:''}}
+  else if(k==='produto'){ui.tab='produtos';ui.pfTab='cad';ui.edit={id:null,code:'',ean:'',name:'',cat:catNames()[0]||'',unit:'',price:'',photo:'',active:true,rules:emptyRules()}}
+  else if(k==='cliente'){ui.tab='cadastros';ui.cadSub='clientes';ui.edit={id:null,name:'',login:'',pass:'',phone:'',address:'',pays:S.payments.slice(),bairro:'',table:'',creditLimit:''}}
+  else if(k==='pagar'){ui.tab='receber';ui.finTab='pagar';ui.payNew={cat:'Fornecedor',due:today()}}
+  renderAdmin();window.scrollTo(0,0)}
+function bindHdTools(t){const b=t.querySelector('#gsB');if(b)b.onclick=gsOpen;t.querySelectorAll('[data-hn]').forEach(x=>x.onclick=()=>{const d=x.closest('details');if(d)d.open=false;hdNew(x.dataset.hn)})}
+function gsFind(q){q=q.trim().toLowerCase();const dq=q.replace(/\D/g,'');if(!q)return {o:[],c:[],p:[]};
+  const isNo=/^(n[º°o.]?\s*)?\d+$/.test(q);const o=S.orders.filter(x=>(isNo&&String(x.no).startsWith(dq))||String(x.customer||'').toLowerCase().includes(q)).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,6);
+  const c=S.customers.filter(x=>[x.name,x.fiscal&&x.fiscal.razao,x.bairro].some(v=>String(v||'').toLowerCase().includes(q))||(dq.length>=3&&[x.doc,String(x.phone||'').replace(/\D/g,'')].some(v=>String(v||'').includes(dq)))).slice(0,6);
+  const p=S.products.filter(x=>String(x.name||'').toLowerCase().includes(q)||(dq.length>=2&&[x.code,x.ean,x.ean2].some(v=>String(v||'').startsWith(dq)))).slice(0,6);
+  return {o,c,p}}
+function gsHtml(q){const R=gsFind(q);if(!q.trim())return '<div class="small muted gsempty">Digite o nome do cliente, o número do pedido ou o nome/código do produto.</div>';
+  const sec=(t,L,f)=>L.length?`<div class="gssec"><span class="lbl">${t}</span>${L.map(f).join('')}</div>`:'';
+  const h=sec('Pedidos',R.o,o=>`<button type="button" class="gsr" data-gs="o:${o.id}"><span><b>nº ${esc(o.no)}</b> · ${esc(o.customer||'')}<span class="small muted"> · ${esc(stShort(o.status,o.mode))}</span></span><b class="num">${brl(o.total)}</b></button>`)
+    +sec('Clientes',R.c,x=>`<div class="gsrow"><button type="button" class="gsr" data-gs="c:${x.id}"><span><b>${esc(x.name)}</b><span class="small muted">${x.phone?' · '+esc(x.phone):''}</span></span></button><button type="button" class="btn dlb" data-gsn="${x.id}">Fazer pedido</button></div>`)
+    +sec('Produtos',R.p,x=>`<button type="button" class="gsr" data-gs="p:${x.id}"><span><b>${esc(x.name)}</b><span class="small muted">${x.code?' · Cód. '+esc(x.code):''}${x.active===false?' · desativado':''}</span></span><b class="num">${brl(x.price)}</b></button>`);
+  return h||'<div class="small muted gsempty">Nada encontrado.</div>'}
+function gsClose(){const o=$('#gsov');if(o)o.remove()}
+function gsGo(k,id){gsClose();ui.romView=false;ui.lanc=null;ui.edit=null;ui.confirmDel=null;
+  if(k==='o'){ui.tab='pedidos';ui.ofilter='todos';if(ui.oF)ui.oF.q='';ui.oOpen=ui.oOpen||{};ui.oOpen[id]=1;renderAdmin();const r=document.querySelector(`[data-oexp="${id}"]`);if(r)r.scrollIntoView({block:'center'});return}
+  if(k==='c'){const x=S.customers.find(y=>y.id===id);if(!x)return;ui.tab='cadastros';ui.cadSub='clientes';ui.edit={...x}}
+  if(k==='p'){const x=S.products.find(y=>y.id===id);if(!x)return;ui.tab='produtos';ui.pfTab='cad';ui.edit=JSON.parse(JSON.stringify(x))}
+  renderAdmin();window.scrollTo(0,0)}
+function gsOpen(){if(!ui.admin||ui.view!=='admin')return;gsClose();const ov=document.createElement('div');ov.id='gsov';ov.className='gsov';
+  ov.innerHTML=`<div class="gsbox" role="dialog" aria-modal="true" aria-label="Buscar"><div class="gshead">${GSI}<input type="search" id="gsq" placeholder="Cliente, nº do pedido ou produto" autocomplete="off" aria-label="Buscar cliente, pedido ou produto"><button type="button" class="btn ghost dlb" id="gsx">Fechar</button></div><div id="gsres">${gsHtml('')}</div></div>`;
+  document.body.appendChild(ov);const q=$('#gsq'),res=$('#gsres');
+  const bind=()=>{res.querySelectorAll('[data-gs]').forEach(b=>b.onclick=()=>{const [k,id]=b.dataset.gs.split(':');gsGo(k,id)});
+    res.querySelectorAll('[data-gsn]').forEach(b=>b.onclick=()=>{const x=S.customers.find(y=>y.id===b.dataset.gsn);if(!x)return;gsClose();ui.tab='pedidos';ui.romView=false;ui.edit=null;ui.lanc=lnStartFor(x);renderAdmin();window.scrollTo(0,0)})};
+  q.oninput=()=>{res.innerHTML=gsHtml(q.value);bind()};
+  q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const f=res.querySelector('[data-gs]');if(f)f.click()}};
+  ov.addEventListener('click',e=>{if(e.target===ov)gsClose()});$('#gsx').onclick=gsClose;bind();q.focus()}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#gsov')){gsClose();return}
+  if(e.key!=='/'||e.ctrlKey||e.metaKey||e.altKey||!ui.admin||ui.view!=='admin'||$('#gsov'))return;const t=e.target;if(t&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;e.preventDefault();gsOpen()});
+/* "Desfazer" logo depois de uma ação (aviso com botão) */
+let undoT=null;
+function toastUndo(msg,fn){let t=$('#toastu');if(!t){t=document.createElement('div');t.id='toastu';t.className='toastu';t.setAttribute('role','status');document.body.appendChild(t)}
+  t.innerHTML=`<span>${esc(msg)}</span><button type="button" id="toastuB">Desfazer</button>`;t.hidden=false;const x=$('#toast');if(x)x.hidden=true;clearTimeout(undoT);undoT=setTimeout(()=>t.hidden=true,6000);
+  $('#toastuB').onclick=()=>{t.hidden=true;clearTimeout(undoT);fn()}}
+/* ajuda recolhida: o texto explicativo aparece só quando a pessoa toca no "?" */
+function helpTip(html,label){return `<details class="helptip"><summary aria-label="${esc(label||'Ajuda')}" title="${esc(label||'Ajuda')}">?</summary><div class="helpbody">${html}</div></details>`}
 /* atalhos no cartão do cliente (painel): fazer pedido já com o cliente escolhido e chamar no WhatsApp */
 function cliQuick(x){return `<button class="btn dlb" data-cnew="${x.id}">Fazer pedido</button>${x.phone?`<a class="btn ghost dlb walink" href="${waLink(x.phone,'Olá, '+x.name+'!')}" target="_blank" rel="noopener" aria-label="Chamar ${esc(x.name)} no WhatsApp" title="WhatsApp">${WAI}</a>`:''}`}
 function lnStartFor(x){return {cid:x.id,_sv:1,mode:'retirada',addr:x.address||'',bairro:x.bairro||'',pay:'',cart:{},q:'',note:'',sel:x.sellerId||'',nf:ieClient(x),nfData:defaultNf(x)}}
@@ -6231,7 +6285,8 @@ function admReceber(){
   c.querySelectorAll('[data-rst]').forEach(b=>b.onclick=()=>{F.st=b.dataset.rst;ui.confirmDel=null;admReceber()});
   $('#rfcli').onchange=e=>{F.cid=e.target.value;admReceber()};
   $('#rq').oninput=e=>{F.q=e.target.value;const pos=e.target.selectionStart;admReceber();const n=$('#rq');n.focus();n.setSelectionRange(pos,pos)};
-  c.querySelectorAll('[data-rpay]').forEach(b=>b.onclick=()=>{const r=all.find(x=>x.id===b.dataset.rpay);r.paidAt=today();save();toast('Parcela '+r.parcel+' de '+r.customer+' marcada como paga');admReceber()});
+  c.querySelectorAll('[data-rpay]').forEach(b=>b.onclick=()=>{const r=all.find(x=>x.id===b.dataset.rpay);r.paidAt=today();save();admReceber();
+    toastUndo('Recebido: '+r.customer+' · '+brl(r.amount),()=>{const x=(S.receivables||[]).find(y=>y.id===r.id);if(x){x.paidAt='';save()}if(ui.tab==='receber'&&ui.finTab==='receber')admReceber();toast('Pagamento desfeito')})});
   c.querySelectorAll('[data-runpay]').forEach(b=>b.onclick=()=>{const r=all.find(x=>x.id===b.dataset.runpay);r.paidAt='';save();toast('Pagamento desfeito');admReceber()});
   c.querySelectorAll('[data-rdel]').forEach(b=>b.onclick=()=>{ui.confirmDel=b.dataset.rdel;admReceber()});
   c.querySelectorAll('[data-rdelok]').forEach(b=>b.onclick=()=>{S.receivables=all.filter(x=>x.id!==b.dataset.rdelok);ui.confirmDel=null;save();toast('Lançamento excluído');admReceber()});

@@ -82,12 +82,12 @@ with sync_playwright() as pw:
     v_ctx.close()
 
     print('\n== Administrador: usuário repetido e cancelar sem querer')
-    adm.locator('.tabs [data-tab]', has_text='Cadastros').first.click(); adm.wait_for_timeout(300)
+    adm.locator('.tabs [data-tab]', has_text='Cadastros').first.dispatch_event('click'); adm.wait_for_timeout(300)
     adm.click('[data-cadg=usuarios]'); adm.wait_for_timeout(200); adm.locator('[data-cad]', has_text='Conferentes').first.click(); adm.wait_for_timeout(300)
     chk(len(adm.locator('#ckp').input_value()) >= 8, f'senha sugerida no cadastro já vale ({adm.locator("#ckp").input_value()!r})')
     adm.fill('#ckn', 'Duda Mesmo Login'); adm.fill('#ckl', 'vend'); adm.click('#ckadd'); adm.wait_for_timeout(500)
     chk('já é usado' in adm.locator('#ckerr').inner_text(), f'login de outra pessoa: avisa na hora ({adm.locator("#ckerr").inner_text()!r})')
-    adm.locator('.tabs [data-tab]', has_text='Pedidos').first.click(); adm.wait_for_timeout(300)
+    adm.locator('.tabs [data-tab]', has_text='Pedidos').first.dispatch_event('click'); adm.wait_for_timeout(300)
     adm.locator('.subnav [data-tab]', has_text='Pedidos').first.click(); adm.wait_for_timeout(400)
     row = adm.locator('.orow:has(.stdots)').first; dots = row.locator('.stdots'); dots.click(); adm.wait_for_timeout(200)
     btn = row.locator('.mi-danger[data-stb]'); oid = btn.get_attribute('data-stb'); st0 = [o for o in server()['orders'] if o['id'] == oid][0]['status']

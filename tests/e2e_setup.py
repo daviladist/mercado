@@ -24,7 +24,7 @@ with sync_playwright() as pw:
     pg.goto(BASE + '/#admin'); pg.wait_for_timeout(600)
     pg.fill('#lu', ADMIN[0]); pg.fill('#lp', ADMIN[1]); pg.click('#lf button[type=submit]'); pg.wait_for_timeout(1200)
     assert pg.locator('#tabc h2').first.inner_text().upper() == 'DASHBOARD'
-    pg.locator('.tabs [data-tab]', has_text='Cadastros').first.click(); pg.wait_for_timeout(300)
+    pg.locator('.tabs [data-tab]', has_text='Cadastros').first.dispatch_event('click'); pg.wait_for_timeout(300)
     # vendedor: usuário + senha provisória definida pelo administrador
     pg.click('[data-cadg=usuarios]'); pg.wait_for_timeout(200)
     pg.locator('[data-cad]', has_text='Vendedores').first.click(); pg.wait_for_timeout(200)
