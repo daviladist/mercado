@@ -227,7 +227,7 @@
         <p class="neg small" id="ste" role="alert" style="font-weight:600"></p>
         ${js.length ? `<div class="list">${js.map(j => `<div class="it"><span class="tx"><b>${j.termos.length} código${j.termos.length === 1 ? '' : 's'} · ${esc(stTxt[j.status] || j.status)}</b><span>${esc(dataHora(j.criadoEm))}${j.status !== 'pendente' ? ' · achou ' + Object.values(j.resultados).filter(Boolean).length : ''}</span></span>
           ${j.status === 'pendente' ? `<button class="btn sm" type="button" data-sx="${esc(j.id)}">Cancelar</button>` : `<button class="btn sm ${j.status === 'pronta' ? 'gold' : ''}" type="button" data-sr="${esc(j.id)}">${j.status === 'pronta' ? 'Revisar e importar' : 'Ver'}</button>`}</div>`).join('')}</div>` : ''}
-        ${js.some(j => j.status === 'pendente') ? '<p class="note">O site não fala direto com o StarIA. Para ele responder, peça no Claude: <b>"processa as consultas do StarIA da loja"</b>. O resultado aparece aqui sozinho.</p>' : ''}</section>`, pn => {
+        ${js.some(j => j.status === 'pendente') ? '<p class="note">O site não fala direto com o StarIA. Para ele responder, peça no Claude: <b>"processa as consultas do StarIA da loja"</b>. Depois toque em Atualizar.</p><button class="btn full" type="button" id="sat">Atualizar</button>' : ''}</section>`, pn => {
       $('#fxl').addEventListener('change', async e => {
         const f = e.target.files[0]; if (!f) return;
         $('#xe').textContent = 'Lendo a planilha…';
@@ -241,6 +241,7 @@
         try { await api('/api/loja/admin/staria/pedir', { id: 's' + hex(6), termos }); await reload(); toast('Pedido enviado ao StarIA'); importarMenu(); }
         catch (e) { bt.disabled = false; if (e.status === 401) return fail(e); $('#ste').textContent = e.message; }
       });
+      const sat = $('#sat'); if (sat) sat.addEventListener('click', async () => { sat.disabled = true; try { await reload(); importarMenu(); } catch (e) { sat.disabled = false; fail(e); } });
       pn.querySelectorAll('[data-sx]').forEach(b => b.addEventListener('click', async () => { b.disabled = true; try { await api('/api/loja/admin/staria/excluir', { id: b.dataset.sx }); await reload(); importarMenu(); } catch (e) { b.disabled = false; fail(e); } }));
       pn.querySelectorAll('[data-sr]').forEach(b => b.addEventListener('click', () => revisarStaria(js.find(j => j.id === b.dataset.sr))));
     });
@@ -254,7 +255,7 @@
       bt.textContent = itens.length > 1000 ? 'Importando ' + Math.min(i + 1000, itens.length) + ' de ' + itens.length + '…' : 'Importando…';
       let r;
       try { r = await api('/api/loja/admin/importar', Object.assign({ itens: itens.slice(i, i + 1000) }, extra)); }
-      catch (e) { if (i) e.message = 'Já entraram as linhas até a ' + i + '. Depois parou: ' + e.message; throw e; }
+      catch (e) { e.feitos = i; if (i) e.message = 'Os primeiros ' + i + ' já entraram. Depois parou: ' + e.message + ' Corrija e importe de novo: só os que faltam vão.'; throw e; }
       criados += r.criados; atualizados += r.atualizados;
     }
     return { criados, atualizados };
@@ -265,23 +266,28 @@
   function revisarStaria(j) {
     if (!j) return;
     const achados = j.termos.filter(t => j.resultados[t]), faltam = j.termos.filter(t => !j.resultados[t]);
-    const R = { m: '30', est: !!M('l_estoque'), cat: '', rows: achados.map(t => { const r = j.resultados[t]; return { termo: t, r, on: true, nome: r.nome, preco: '', manual: false, codigo: r.ean || r.codigo || t }; }) };
-    const precoDe = x => { const m = toNum(R.m); return x.r.custo > 0 && m >= 0 ? numIn(r2(x.r.custo * (1 + m / 100)).toFixed(2)) : ''; };
-    R.rows.forEach(x => { x.preco = precoDe(x); });
+    const temPv = achados.some(t => j.resultados[t].precoVenda > 0);
+    const R = { m: '30', modo: temPv ? 'erp' : 'margem', est: !!M('l_estoque'), cat: '', rows: achados.map(t => { const r = j.resultados[t]; return { termo: t, r, on: true, nome: r.nome, preco: '', manual: false, codigo: r.ean || r.codigo || t }; }) };
+    const precoDe = x => { if (R.modo === 'erp') return x.r.precoVenda > 0 ? numIn(x.r.precoVenda.toFixed(2)) : ''; const m = toNum(R.m); return x.r.custo > 0 && m >= 0 ? numIn(r2(x.r.custo * (1 + m / 100)).toFixed(2)) : ''; };
+    const vistosCod = new Set();
+    R.rows.forEach(x => { x.preco = precoDe(x); const k = String(x.codigo).toLowerCase(); x.dup = vistosCod.has(k); if (x.dup) x.on = false; vistosCod.add(k); });
     openSheet('Importar do StarIA', `
-      ${achados.length ? `<div class="grid2"><div class="field"><label for="smg">Margem sobre o custo (%)</label><input inputmode="decimal" id="smg" value="${esc(R.m)}"></div>
+      ${achados.length && temPv ? `<div class="field"><span class="lbl">Preço na loja</span><div class="chips"><button type="button" class="chip" data-md="erp" aria-pressed="${R.modo === 'erp'}">Mesmo preço de venda do StarIA</button><button type="button" class="chip" data-md="margem" aria-pressed="${R.modo === 'margem'}">Custo + margem</button></div></div>` : ''}
+      ${achados.length ? `<div class="grid2"><div class="field" id="fmg" ${R.modo === 'erp' ? 'hidden' : ''}><label for="smg">Margem sobre o custo (%)</label><input inputmode="decimal" id="smg" value="${esc(R.m)}"></div>
         <div class="field"><label for="sct">Categoria (opcional)</label><input type="text" id="sct" maxlength="40" placeholder="Ex.: Bebidas"></div></div>
         ${M('l_estoque') ? '<label class="row"><input type="checkbox" id="ses" checked style="width:22px;height:22px;accent-color:var(--brand)"> Usar o estoque que está no StarIA</label>' : ''}
-        <p class="small muted">O preço vem do custo da última compra mais a margem. Pode mudar o preço de cada um. Produto com código que já está na loja é atualizado.</p>
-        <div class="list">${R.rows.map((x, i) => `<div class="it" style="flex-wrap:wrap"><input type="checkbox" data-on="${i}" checked aria-label="Importar ${esc(x.nome)}" style="width:24px;height:24px;accent-color:var(--brand)">
-          <span class="tx" style="flex:1 1 180px"><input type="text" data-nm="${i}" maxlength="80" value="${esc(x.nome)}" aria-label="Nome"><span>${esc(['cód. ' + x.codigo, x.r.custo != null ? 'custo ' + money(x.r.custo) : 'sem custo', x.r.estoque != null ? 'estoque ' + x.r.estoque : '', existe(x.codigo) ? 'já está na loja: atualiza' : '', x.r.varios ? 'mais de um cadastro no StarIA' : ''].filter(Boolean).join(' · '))}</span></span>
+        <p class="small muted" id="spx">${temPv ? 'Escolha de onde vem o preço.' : 'O preço vem do custo da última compra mais a margem.'} Pode mudar o preço de cada um. Produto com código que já está na loja é atualizado.</p>
+        <div class="list">${R.rows.map((x, i) => `<div class="it" style="flex-wrap:wrap"><input type="checkbox" data-on="${i}" ${x.on ? 'checked' : ''} ${x.dup ? 'disabled' : ''} aria-label="Importar ${esc(x.nome)}" style="width:24px;height:24px;accent-color:var(--brand)">
+          <span class="tx" style="flex:1 1 180px"><input type="text" data-nm="${i}" maxlength="80" value="${esc(x.nome)}" aria-label="Nome"><span>${esc(['cód. ' + x.codigo, x.r.custo != null ? 'custo ' + money(x.r.custo) : 'sem custo', x.r.precoVenda > 0 ? 'venda no StarIA ' + money(x.r.precoVenda) : '', x.r.estoque != null ? 'estoque ' + x.r.estoque : '', existe(x.codigo) ? 'já está na loja: atualiza' : '', x.r.varios ? 'mais de um cadastro no StarIA' : '', x.dup ? 'repetido (mesmo produto de outro código)' : ''].filter(Boolean).join(' · '))}</span></span>
           <input inputmode="decimal" class="money" data-pc="${i}" value="${esc(x.preco)}" placeholder="Preço" aria-label="Preço de ${esc(x.nome)}" style="max-width:120px"></div>`).join('')}</div>` : '<p class="muted">O StarIA não achou nenhum destes códigos.</p>'}
       ${faltam.length ? `<p class="small muted">Não achados no StarIA: ${esc(faltam.join(', '))}</p>` : ''}
       <p class="neg small" id="sre" role="alert" style="font-weight:600;min-height:16px"></p>
-      ${achados.length ? `<button class="btn pri full" type="button" id="sri">Importar ${R.rows.length} produto${R.rows.length === 1 ? '' : 's'}</button>` : ''}`, pn => {
+      ${achados.length ? `<button class="btn pri full" type="button" id="sri">Importar ${R.rows.filter(x => x.on).length} produto${R.rows.filter(x => x.on).length === 1 ? '' : 's'}</button>` : ''}`, pn => {
       const cont = () => { const n = R.rows.filter(x => x.on).length, b = $('#sri'); if (b) { b.textContent = 'Importar ' + n + ' produto' + (n === 1 ? '' : 's'); b.disabled = !n; } };
+      const recalc = () => R.rows.forEach((x, i) => { if (!x.manual) { x.preco = precoDe(x); pn.querySelector('[data-pc="' + i + '"]').value = x.preco; } });
+      pn.querySelectorAll('[data-md]').forEach(b => b.addEventListener('click', () => { R.modo = b.dataset.md; pn.querySelectorAll('[data-md]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.md === R.modo))); $('#fmg').hidden = R.modo === 'erp'; recalc(); }));
       const smg = $('#smg');
-      if (smg) smg.addEventListener('input', () => { R.m = smg.value; R.rows.forEach((x, i) => { if (!x.manual) { x.preco = precoDe(x); pn.querySelector('[data-pc="' + i + '"]').value = x.preco; } }); });
+      if (smg) smg.addEventListener('input', () => { R.m = smg.value; recalc(); });
       pn.querySelectorAll('[data-pc]').forEach(e => e.addEventListener('input', () => { const x = R.rows[e.dataset.pc]; x.preco = e.value; x.manual = true; }));
       pn.querySelectorAll('[data-nm]').forEach(e => e.addEventListener('input', () => { R.rows[e.dataset.nm].nome = e.value; }));
       pn.querySelectorAll('[data-on]').forEach(e => e.addEventListener('change', () => { R.rows[e.dataset.on].on = e.checked; cont(); }));
@@ -364,10 +370,11 @@
       if (rel) { const tg = rel.getAttribute('Target').replace(/^\//, ''); alvo = tg.startsWith('xl/') ? tg : 'xl/' + tg; }
     } catch (err) { /* usa a primeira planilha */ }
     const sx = await ler(alvo) || await ler(Object.keys(files).filter(n => /^xl\/worksheets\/[^/]+\.xml$/.test(n)).sort()[0] || '');
-    if (!sx) throw new Error('A planilha está vazia.');
+    if (!sx) throw new Error(files['xl/workbook.xml'] ? 'A planilha está vazia.' : 'Não é uma planilha do Excel (.xlsx). No programa da planilha, use "Salvar como" .xlsx ou .csv.');
     const col = ref => { let n = 0; for (const ch of String(ref).replace(/\d+$/, '')) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
-    return tags(xml(sx), 'row').map(r => {
-      const out = [];
+    const linhas = [];
+    tags(xml(sx), 'row').forEach(r => {
+      const out = [], rn = Number(r.getAttribute('r'));
       tags(r, 'c').forEach(c => {
         const t = c.getAttribute('t'), v = tags(c, 'v')[0], val = v ? v.textContent : '';
         let x;
@@ -378,8 +385,11 @@
         const i = c.getAttribute('r') ? col(c.getAttribute('r')) : out.length;
         if (i >= 0 && i < 200) out[i] = x;
       });
-      return out;
+      const idx = Number.isInteger(rn) && rn > 0 && rn <= 200000 ? rn - 1 : linhas.length;
+      if (idx >= linhas.length) linhas[idx] = out;
     });
+    for (let i = 0; i < linhas.length; i++) if (!linhas[i]) linhas[i] = []; // Excel não grava linha vazia: mantém o número da linha
+    return linhas;
   }
   /* reconhece as colunas pelo nome (do jeito que a pessoa escreveu) */
   const norm = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -432,6 +442,7 @@
     openSheet('Importar planilha', `
       <p class="small muted">${esc(nome)} · colunas usadas: ${esc(R.cols.map(k => NOMES[k]).join(', '))}</p>
       <div class="kpis"><div class="k"><span>Novos</span><b class="pos">${nv}</b></div><div class="k"><span>Atualizam</span><b>${at}</b></div><div class="k"><span>Com erro</span><b class="${R.erros.length ? 'neg' : ''}">${R.erros.length}</b></div></div>
+      ${R.cols.includes('estoque') && M('l_estoque') ? '<p class="note">O estoque da planilha substitui o estoque que está na loja hoje.</p>' : ''}
       ${R.erros.length ? `<div class="warn"><b>Linhas que não vão entrar:</b><br>${R.erros.slice(0, 15).map(x => 'Linha ' + x.linha + ': ' + esc(x.erro)).join('<br>')}${R.erros.length > 15 ? '<br>E mais ' + (R.erros.length - 15) + '.' : ''}</div>` : ''}
       ${R.itens.length ? `<div class="scroll"><table><thead><tr><th>Nome</th><th>Código</th><th class="n">Preço</th>${R.cols.includes('estoque') && M('l_estoque') ? '<th class="n">Estoque</th>' : ''}<th></th></tr></thead><tbody>
         ${R.itens.slice(0, 30).map(x => `<tr><td>${esc(x.nome)}</td><td>${esc(x.codigo || '')}</td><td class="n">${money(x.preco)}</td>${R.cols.includes('estoque') && M('l_estoque') ? `<td class="n">${x.estoque == null ? '' : x.estoque}</td>` : ''}<td class="small">${existe(x.codigo) ? 'atualiza' : 'novo'}</td></tr>`).join('')}</tbody></table></div>
@@ -442,7 +453,7 @@
       bt.addEventListener('click', async () => {
         bt.disabled = true;
         try { const r = await enviarImport(R.itens, {}, bt); await reload(); fimImport(r); }
-        catch (e) { bt.disabled = false; bt.textContent = 'Importar ' + R.itens.length + ' produtos'; if (e.status === 401) return fail(e); $('#pie').textContent = e.message; await reload().catch(() => {}); }
+        catch (e) { if (e.feitos) R.itens = R.itens.slice(e.feitos); bt.disabled = false; bt.textContent = 'Importar ' + R.itens.length + ' produto' + (R.itens.length === 1 ? '' : 's'); if (e.status === 401) return fail(e); $('#pie').textContent = e.message; await reload().catch(() => {}); }
       });
     });
   }
@@ -471,11 +482,11 @@
   }
   function formProduto(p0) {
     const edit = !!p0;
-    const F = p0 ? JSON.parse(JSON.stringify(p0)) : { id: 'x' + hex(6), nome: '', descricao: '', categoria: '', preco: '', precoDe: '', unidade: 'un', fotos: [], grupoVar: '', variacoes: [], estoque: '', faixas: [], ativo: true, destaque: false };
+    const F = p0 ? JSON.parse(JSON.stringify(p0)) : { id: 'x' + hex(6), codigo: '', custo: '', nome: '', descricao: '', categoria: '', preco: '', precoDe: '', unidade: 'un', fotos: [], grupoVar: '', variacoes: [], estoque: '', faixas: [], ativo: true, destaque: false };
     // o estoque que estava gravado quando a dona abriu (o servidor só troca o que ela mexeu)
     const vistoProd = edit ? (p0.estoque == null ? null : p0.estoque) : undefined;
     const vistoVar = new Map(edit ? p0.variacoes.map(v => [v.id, v.estoque == null ? null : v.estoque]) : []);
-    if (edit) { F.preco = numIn(F.preco); F.precoDe = numIn(F.precoDe); F.estoque = F.estoque == null ? '' : String(F.estoque); F.variacoes = F.variacoes.map(v => Object.assign({}, v, { estoque: v.estoque == null ? '' : String(v.estoque) })); F.faixas = F.faixas.map(f => ({ min: String(f.min), preco: numIn(f.preco) })); }
+    if (edit) { F.preco = numIn(F.preco); F.precoDe = numIn(F.precoDe); F.custo = numIn(F.custo); F.estoque = F.estoque == null ? '' : String(F.estoque); F.variacoes = F.variacoes.map(v => Object.assign({}, v, { estoque: v.estoque == null ? '' : String(v.estoque) })); F.faixas = F.faixas.map(f => ({ min: String(f.min), preco: numIn(f.preco) })); }
     const cats = [...new Set(S.produtos.map(p => p.categoria).filter(Boolean))].sort();
     const eu = {};
     let enviando = 0;
@@ -490,6 +501,8 @@
           <div class="field"><label for="pd">Preço "de" riscado (opcional)</label><input inputmode="decimal" id="pd" value="${esc(F.precoDe)}" placeholder="Ex.: 199,90"></div></div>
         <div class="field"><label for="pc">Categoria</label><input type="text" id="pc" maxlength="40" value="${esc(F.categoria)}" placeholder="Ex.: Vestidos" list="pcl"><datalist id="pcl">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
           ${cats.length ? `<div class="chips">${cats.slice(0, 12).map(c => `<button type="button" class="chip" data-cat="${esc(c)}" aria-pressed="${F.categoria === c}">${esc(c)}</button>`).join('')}</div>` : ''}</div>
+        <div class="grid2"><div class="field"><label for="pcd">Código / EAN (opcional)</label><input type="text" id="pcd" maxlength="30" value="${esc(F.codigo || '')}" placeholder="Ex.: 7891234567890"></div>
+          <div class="field"><label for="pcu">Custo (só você vê)</label><input inputmode="decimal" id="pcu" value="${esc(F.custo)}" placeholder="Ex.: 45,00"></div></div>
         <div class="field"><label for="pdz">Descrição (opcional)</label><textarea id="pdz" maxlength="1500" placeholder="Tecido, medidas, como usar…">${esc(F.descricao || '')}</textarea></div>
         <div class="field"><span class="lbl">Vende por</span><div class="chips">${S.unidades.map(u => `<button type="button" class="chip" data-un="${u}" aria-pressed="${F.unidade === u}">${({ un: 'unidade', kg: 'kg', pct: 'pacote', cx: 'caixa', par: 'par', kit: 'kit' })[u]}</button>`).join('')}</div></div>
         ${M('l_variacoes') ? `<section class="card"><h3>Tamanhos, cores ou opções</h3>
@@ -514,7 +527,7 @@
     function redesenhar() { if (!aberto()) return; keep(); const pn = $('#sheet .pn'), y = pn ? pn.scrollTop : 0; draw(); const n = $('#sheet .pn'); if (n) n.scrollTop = y; }
     function keep() {
       const g = id => { const e = document.getElementById(id); return e ? e.value : undefined; };
-      [['pn', 'nome'], ['pp', 'preco'], ['pd', 'precoDe'], ['pc', 'categoria'], ['pdz', 'descricao'], ['pg', 'grupoVar'], ['pe', 'estoque']].forEach(([id, k]) => { const v = g(id); if (v !== undefined) F[k] = v; });
+      [['pn', 'nome'], ['pp', 'preco'], ['pd', 'precoDe'], ['pc', 'categoria'], ['pdz', 'descricao'], ['pg', 'grupoVar'], ['pe', 'estoque'], ['pcd', 'codigo'], ['pcu', 'custo']].forEach(([id, k]) => { const v = g(id); if (v !== undefined) F[k] = v; });
       const a = $('#pa'); if (a) F.ativo = a.checked; const z = $('#pz'); if (z) F.destaque = z.checked;
       document.querySelectorAll('#sheet [data-vn]').forEach(i => { F.variacoes[+i.dataset.vn].nome = i.value; });
       document.querySelectorAll('#sheet [data-ve]').forEach(i => { F.variacoes[+i.dataset.ve].estoque = i.value; });
@@ -576,8 +589,10 @@
         fx.push({ min: mi, preco: pr });
       }
       const est = toInt(F.estoque); if (Number.isNaN(est)) return err('Estoque: use só números.');
+      const custo = toNum(F.custo); if (Number.isNaN(custo)) return err('Custo: use só números (ex.: 45,00).');
+      const codigo = String(F.codigo || '').trim().replace(/\s+/g, ''); if (codigo && !/^[A-Za-z0-9._\/-]{1,30}$/.test(codigo)) return err('Código: use só letras, números, ponto ou traço.');
       if (enviando) return err('Espere as fotos terminarem de enviar.');
-      const b = { id: F.id, nome: F.nome, preco, precoDe, categoria: F.categoria, descricao: F.descricao, unidade: F.unidade, fotos: F.fotos.map(f => f.id), grupoVar: comVar ? (F.grupoVar || 'Opção') : '', variacoes: vars, estoque: comVar ? null : est, faixas: fx, ativo: F.ativo, destaque: F.destaque };
+      const b = { id: F.id, nome: F.nome, preco, precoDe, categoria: F.categoria, descricao: F.descricao, unidade: F.unidade, fotos: F.fotos.map(f => f.id), grupoVar: comVar ? (F.grupoVar || 'Opção') : '', variacoes: vars, estoque: comVar ? null : est, faixas: fx, ativo: F.ativo, destaque: F.destaque, codigo, custo: custo == null ? '' : r2(custo) };
       if (edit) b.estoqueVisto = vistoProd;
       const bt = $('#ps'); bt.disabled = true;
       try { await api('/api/loja/admin/produto', b); await reload(); closeSheet(); toast(edit ? 'Produto salvo' : 'Publicado na vitrine ✓'); if (view !== 'produtos') go('produtos'); else render(); }
