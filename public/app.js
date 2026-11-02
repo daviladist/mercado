@@ -252,6 +252,8 @@ async function srvTempPasswords(box){try{const r=await api('/api/temp-passwords'
   box.innerHTML=`<div class="notice"><b>Anote ou imprima agora:</b> estas senhas aparecem só esta vez. Cada pessoa cria a própria senha no primeiro acesso.</div>
     <div class="tablewrap"><table class="btable"><thead><tr><th>Função</th><th>Nome</th><th>Usuário</th><th>Senha provisória</th></tr></thead><tbody>${r.list.map(x=>`<tr><td>${R[x.role]||x.role}</td><td>${esc(x.name||'')}</td><td>${esc(x.login)}</td><td><b class="num">${esc(x.pass)}</b></td></tr>`).join('')}</tbody></table></div>
     <div class="row"><button type="button" class="btn ghost" id="tmpPrint">Imprimir</button></div>`;{const pb=document.getElementById('tmpPrint');if(pb)pb.onclick=()=>window.print()}await loadState()}catch(e){box.innerHTML='<div class="err">'+esc(e.message)+'</div>'}}
+/* linha de acesso do cliente na lista: sem acesso ao app não mostra usuário nem senha */
+function srvCliAccess(x){if(!cliApp(x))return 'Sem acesso ao app';return 'Usuário: '+(x.login?esc(x.login):'o CNPJ/CPF')+' · '+srvPassLabel(x)}
 function srvPassLabel(x){return x.pass?'senha base (salvando…)':x.hasPass?(x.mustReset?'senha base · aguardando 1º acesso':'senha própria definida'):'sem senha'}
 /* primeiro acesso ao sistema novo: criar o administrador (exige o código de instalação) */
 async function srvMaybeSetup(){try{const r=await api('/api/setup-status');if(!r.needsSetup||SRV.me)return}catch(e){return}
@@ -281,7 +283,7 @@ function srvMerge(P){let applied=0,lost=0;
     Object.entries(p.keys).forEach(([k,v])=>{if(v===undefined)delete d[k];else d[k]=v});applied++});
   return {applied,lost}}
 /* administrador: redefinir a senha de alguém (nova senha base; a pessoa cria a dela no próximo acesso) */
-function srvResetBtn(coll,x){return (x&&(x.login||(coll==='customers'&&x.doc)))?`<button type="button" class="btn ghost dlb" data-pwreset="${coll}|${x.id}">${x.hasPass?'Redefinir senha':'Definir senha base'}</button>`:''}
+function srvResetBtn(coll,x){if(coll==='customers'&&!cliApp(x))return '';return (x&&(x.login||(coll==='customers'&&x.doc)))?`<button type="button" class="btn ghost dlb" data-pwreset="${coll}|${x.id}">${x.hasPass?'Redefinir senha':'Definir senha base'}</button>`:''}
 function srvSuggestPass(){const a='abcdefghjkmnpqrstuvwxyz23456789',b=new Uint8Array(8);crypto.getRandomValues(b);let p='';b.forEach(v=>p+=a[v%a.length]);return p.slice(0,4)+'-'+p.slice(4)}
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-pwreset]');if(!b||!SRV.me||SRV.me.role!=='admin')return;e.preventDefault();
   const [coll,id]=b.dataset.pwreset.split('|'),d=(S[coll]||[]).find(x=>x.id===id);if(!d)return;const row=b.closest('.prow')||b.parentElement;
@@ -1255,7 +1257,7 @@ async function pdvAdmin(c){c.innerHTML='<div class="sectionhead"><h2>Caixa (PDV)
      ${R.diferencas.map(d=>`<div class="row" style="justify-content:space-between"><span>Caixa nº ${d.numero} (${esc(d.operador)}) fechou com diferença: ${Object.entries(d.porForma||{}).map(([k,v])=>`${{dinheiro:'dinheiro',pix:'PIX',debito:'débito',credito:'crédito'}[k]||k} <b>${brl(v)}</b>`).join(' · ')||'<b>'+brl(d.diferenca)+'</b>'}</span><span class="row" style="gap:6px"><input id="pj${d.id}" placeholder="Justificativa" style="min-width:200px"><button class="btn ghost" data-pj="${d.id}">Justificar</button></span></div>`).join('')}
      ${R.revisar.map(v=>`<div class="row" style="justify-content:space-between"><span>Venda nº ${v.numero} (${brl(v.total)}) a revisar: ${esc(v.motivo||'')}</span><button class="btn ghost" data-rv="${v.id}">Conferido</button></div>`).join('')}
      ${(R.falhas||[]).map(f=>`<div class="row" style="justify-content:space-between"><span>Venda sem internet de ${esc(f.operador||'')} (${brl(f.total)}) não entrou: ${esc(f.erro)}</span><span class="row" style="gap:6px"><input id="pf${esc(f.id)}" placeholder="O que foi feito" style="min-width:200px"><button class="btn ghost" data-pf="${esc(f.id)}">Resolvido</button><button class="btn ghost" data-pl="${esc(f.id)}">Lançar como venda</button></span></div>`).join('')}</div>`:''}
-   <div class="pnh small muted" style="margin-bottom:6px">Últimos 7 dias (${esc(R.de)} a ${esc(R.ate)})</div>
+   <div class="pnh small muted" style="margin-bottom:6px">Últimos 7 dias (${dBR(R.de)} a ${dBR(R.ate)})</div>
    <div class="dbkpis"><div class="dbk hero"><span class="lbl">Vendas no balcão</span><b>${brl(R.total)}</b><span class="muted small">${R.vendas} vendas</span></div>
      <div class="dbk"><span class="lbl">Margem do balcão</span><b>${R.margem==null?'—':String(R.margem).replace('.',',')+'%'}</b><span class="muted small">só o administrador vê</span></div>
      <div class="dbk"><span class="lbl">Descontos</span><b>${brl(R.desconto)}</b></div><div class="dbk"><span class="lbl">Caixas abertos</span><b>${R.caixasAbertos.length}</b><span class="muted small">${R.caixasAbertos.map(x=>esc(x.operador)).join(', ')}</span></div></div>
@@ -1298,7 +1300,7 @@ async function pdvDashCard(){if(!modOn('pdv')||!SRV.me||SRV.me.role!=='admin'||u
   try{const hj=new Date().toLocaleDateString('sv-SE',{timeZone:'America/Sao_Paulo'});const R=await api('/api/pdv/resumo?de='+hj+'&ate='+hj);if(ui.tab!=='hoje'||!$('#tabc'))return;
     const d=document.createElement('div');d.className='panel';d.id='pdvdash';d.style.cssText='display:grid;gap:6px;margin-bottom:12px;border-left:5px solid #E8A33D';
     d.innerHTML=`<b>Balcão (PDV) hoje</b><div class="row" style="gap:16px;flex-wrap:wrap"><span>Vendas: <b>${R.vendas}</b></span><span>Total: <b>${brl(R.total)}</b></span><span>Margem: <b>${R.margem==null?'—':String(R.margem).replace('.',',')+'%'}</b></span></div>${R.diferencas.length?`<div class="warnc">${R.diferencas.length} caixa(s) com diferença aguardando justificativa</div>`:''}${R.revisar.length?`<div class="warnc">${R.revisar.length} venda(s) do balcão a revisar</div>`:''}${(R.falhas||[]).length?`<div class="warnc">${R.falhas.length} venda(s) sem internet com problema</div>`:''}`;
-    const old=$('#pdvdash');if(old)old.remove();host.prepend(d)}catch(e){}}
+    const old=$('#pdvdash');if(old)old.remove();const g=host.querySelector('.dgrid');if(g){d.style.marginTop='14px';g.after(d)}else host.prepend(d)}catch(e){}}
 /* Financeiro › Caixa da semana: o balcão (PDV) aparece separado, por dia e por forma */
 async function pdvCaixaSemana(){if(!modOn('pdv'))return;const t=today(),W=ui.cxW||0,de=addDays(t,W*7),ate=addDays(de,6);
   try{const R=await api('/api/pdv/resumo?de='+de+'&ate='+ate);const c=$('#tabc');if(!c||ui.finTab!=='caixa')return;const nm={dinheiro:'Dinheiro',pix:'PIX',debito:'Débito',credito:'Crédito',fiado:'Fiado (vai para A receber)'};
@@ -1899,7 +1901,7 @@ function renderCatalog(){
   app.innerHTML=`
     ${(()=>{const ev=unseen(ui.client);return ev.length?`<div class="evbar" role="status"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><div class="evl">${ev.slice(0,3).map(e=>`<span>${esc(e.text)}</span>`).join('')}${ev.length>3?`<span class="small">e mais ${ev.length-3} aviso${ev.length-3===1?'':'s'}</span>`:''}</div><div class="row" style="gap:6px"><button class="btn dlb" id="evSee">Ver meus pedidos</button><button class="btn ghost dlb" id="evOk">Ok, entendi</button></div></div>`:''})()}
     ${ieClient(ui.client)?`<div class="iebar ${ui.nf?'on':''}"><div><b>Sua empresa tem inscrição estadual.</b> ${ui.nf?'Você está vendo os preços <b>com nota fiscal</b>: os produtos marcados já estão mais baratos.':'Comprando <b>com nota fiscal</b>, os produtos marcados saem mais baratos.'}</div><div class="seg" role="group" aria-label="Comprar com nota fiscal"><button data-ienf="1" aria-pressed="${!!ui.nf}">Com nota</button><button data-ienf="0" aria-pressed="${!ui.nf}">Sem nota</button></div></div>`:''}
-    <div class="validity"><h2>Ofertas da semana</h2>${S.store.from?`<span class="pill">Válido de ${fmtDate(S.store.from)} a ${fmtDate(S.store.to)}</span>`:''}<div class="seg viewseg" role="group" aria-label="Forma de exibir os produtos">
+    <div class="validity"><h2>${modOn('ofertas')?'Ofertas da semana':'Nossos produtos'}</h2>${S.store.from?`<span class="pill">Válido de ${fmtDate(S.store.from)} a ${fmtDate(S.store.to)}</span>`:''}<div class="seg viewseg" role="group" aria-label="Forma de exibir os produtos">
         <button data-view="grid" aria-pressed="${ui.pview!=='list'}" title="Ver em janelas"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>Janelas</button>
         <button data-view="list" aria-pressed="${ui.pview==='list'}" title="Ver em lista"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="3" y="4" width="18" height="4" rx="1.5"/><rect x="3" y="10" width="18" height="4" rx="1.5"/><rect x="3" y="16" width="18" height="4" rx="1.5"/></svg>Lista</button>
       </div></div>
@@ -2002,7 +2004,7 @@ function renderCart(){
     <div class="dh"><h2>Seu pedido</h2><button class="btn ghost" id="closeCart" style="min-height:40px;padding:8px 14px">Continuar comprando</button></div>
     <div class="db">
       ${items.length?negBox(items)+items.map(it=>{const {p,q,price,label,ie}=it;return `<div class="ci">
-        <img src="${p.photo}" alt="">
+        <img src="${p.photo||ph(p.name||'',150)}" alt="">
         <div class="t"><b>${esc(p.name)}</b><span class="small muted">${dispPack(p)?`<b style="color:var(--fg)">${uP(price,p)}</b>${price<baseOf(p)?` <s>${uP(baseOf(p),p)}</s>`:''} · ${esc(p.unit)} ${brl(price)} · ${nfmt(q*dispPack(p))} ${isKg(p)?'kg':'un.'}`:`${esc(p.unit)} · ${price<baseOf(p)?`<s>${brl(baseOf(p))}</s> <b style="color:var(--ok)">${brl(price)}</b>`:brl(price)}`}</span>
           ${label?`<span class="rulechip">${esc(label)}</span>`:''}${ie?'<span class="rulechip iechip2">com IE</span>':''}
           <div class="stepper"><button data-cdec="${p.id}" aria-label="Diminuir">−</button><input type="number" inputmode="numeric" min="0" value="${q}" data-cqty="${p.id}" aria-label="Quantidade"><button data-cinc="${p.id}" aria-label="Aumentar" ${q>=maxQty(p)?'disabled':''}>+</button></div>${negItemHtml(it,items)}</div>
@@ -3665,9 +3667,8 @@ function dashHtml(){const P=Number(ui.dbP||'30'),[a,b]=dbRange(P),cur=dbStats(a,
       ${kpi('Vendas',brl(cur.tot),cur.n+' pedido'+(cur.n===1?'':'s'),dbDelta(cur.tot,prev.tot),'hero')}
       ${kpi('Margem real',pctBR1(cur.mg),'lucro '+brl(cur.lucro),dbDelta(cur.mg,prev.mg,true),cur.mg!=null&&cur.mg<10?'alert':'')}
       ${kpi('Ticket médio',brl(cur.tk),'por pedido',dbDelta(cur.tk,prev.tk))}
-      ${kpi('A receber',brl(aRec),atr?'':'nada atrasado','',atr?'alert':'')}
+      ${kpi('A receber',brl(aRec),atr?'':'nada atrasado',atr?`<span class="neg" style="font-weight:700">${brl(atr)} atrasado</span>`:'')}
     </div>
-    ${atr?`<div class="small neg" style="margin:-4px 0 10px">Atrasado: <b>${brl(atr)}</b></div>`:''}
     <div class="dbgrid">
       <section class="panel dbcard wide"><div class="dbt"><b>Vendas por dia</b><span class="small muted">últimos ${Math.min(P,30)} dias</span></div>${dbDaily(Math.min(P,30))}</section>
       <section class="panel dbcard"><div class="dbt"><b>Vendas por categoria</b><span class="small muted">${P} dias</span></div>${dbDonut(cur.cat)}</section>
@@ -3710,13 +3711,12 @@ function admHoje(){
   const recs=(S.receivables||[]).filter(r=>!r.paidAt),recHoje=recs.filter(r=>r.due===t),venc=recs.filter(r=>recStatus(r)==='vencido');
   const crit=S.products.filter(isCritical).length,parados=S.customers.filter(x=>{const d=idleDays(x);return d!=null&&d>=15}).length;
   const tile=(go,lbl,big,small,cls)=>`<button class="tile ${cls||''}" data-go="${go}"><span class="lbl">${lbl}</span><b class="num">${big}</b><span class="small muted">${small}</span></button>`;
-  c.innerHTML=`${vitrineAdmBanner()}<div class="sectionhead"><h2>Dashboard</h2><div class="row" style="gap:6px"><button class="btn ghost" id="hRom" aria-label="Romaneio de entrega em PDF">${PDFI}Romaneio</button><button class="btn" id="hLan">+ Lançar pedido</button></div></div>
-    ${(()=>{const a=backupAge();return a==null||a>=3?`<div class="notice bkwarn"><span>${a==null?'Você ainda não fez backup dos dados.':'Último backup há '+a+' dias.'} Os dados ficam no servidor; o backup é uma cópia extra.</span><button class="btn dlb" id="hBk">Baixar backup agora</button></div>`:''})()}
-    ${dashHtml()}
+  c.innerHTML=`${vitrineAdmBanner()}<div class="sectionhead"><h2>Início</h2><div class="row" style="gap:6px"><button class="btn ghost" id="hRom" aria-label="Romaneio de entrega em PDF">${PDFI}Romaneio</button><button class="btn" id="hLan">+ Lançar pedido</button></div></div>
+    ${(()=>{const a=backupAge();return (a==null||a>=3)&&!ui.bkSnooze?`<div class="notice bkwarn"><span>${a==null?'Você ainda não fez backup dos dados.':'Último backup há '+a+' dias.'} Os dados ficam no servidor; o backup é uma cópia extra.</span><span class="row" style="gap:6px"><button class="btn dlb" id="hBk">Baixar backup agora</button><button class="btn ghost dlb" id="hBkLater">Agora não</button></span></div>`:''})()}
     <h3 class="dech dbsec">Hoje · ${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})}</h3>
     <div class="htiles">
       ${tile('pedidos:ativos','Pedidos novos',novos.length,brl(sum(novos))+' para conferir',novos.length?'t-hot':'')}
-      ${tile('pedidos:ativos','A separar',novos.length+sep.length,sep.length+' já em separação')}
+      ${tile('pedidos:ativos','A separar',novos.length+sep.length,novos.length+' novo'+(novos.length===1?'':'s')+' · '+sep.length+' em separação')}
       ${tile('pedidos:ativos','Entregas do dia',entregas.length,entregas.reduce((s,o)=>s+o.items.reduce((a,i)=>a+i.q,0),0)+' volumes · '+retiradas.length+' retirada'+(retiradas.length===1?'':'s')+' pronta'+(retiradas.length===1?'':'s'))}
       ${tile('pedidos:todos','Vendido hoje',brl(sum(hoje)),hoje.length+' pedido'+(hoje.length===1?'':'s')+' feito'+(hoje.length===1?'':'s')+' hoje')}
       ${tile('receber:aberto','A receber hoje',brl(recHoje.reduce((s,r)=>s+r.amount,0)),recHoje.length+' parcela'+(recHoje.length===1?'':'s'))}
@@ -3725,22 +3725,23 @@ function admHoje(){
       ${tile('clientes:15','Clientes parados',parados,'sem comprar há 15 dias ou mais',parados?'t-warn':'')}
     </div>
     <div class="dgrid" style="margin-top:14px">
-      <section class="panel dcard"><span class="lbl">Pedidos novos</span>${novos.length?`<div class="hlist">${novos.slice(0,8).map(o=>`<div><span><b>nº ${o.no}</b> · ${esc(o.customer)}<span class="small muted"> · ${o.mode==='entrega'?'Entrega':'Retirada'} · ${new Date(o.date).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span></span><b class="num">${brl(o.total)}</b></div>`).join('')}</div>`:'<div class="small muted">Nenhum pedido novo esperando.</div>'}</section>
-      <section class="panel dcard"><span class="lbl">Vencem hoje</span>${recHoje.length?`<div class="hlist">${recHoje.map(r=>`<div><span><b>${esc(r.customer)}</b><span class="small muted"> · ${r.orderNo?'Pedido '+esc(r.orderNo)+' · ':''}${esc(r.parcel)}</span></span><b class="num">${brl(r.amount)}</b></div>`).join('')}</div>`:'<div class="small muted">Nenhuma parcela vencendo hoje.</div>'}</section>
+      <section class="panel dcard"><span class="lbl">Pedidos novos</span>${novos.length?`<div class="hlist">${novos.slice(0,8).map(o=>`<button type="button" class="hrow" data-hopen="${o.id}" aria-label="Abrir pedido nº ${o.no}"><span><b>nº ${o.no}</b> · ${esc(o.customer)}<span class="small muted"> · ${o.mode==='entrega'?'Entrega':'Retirada'} · ${new Date(o.date).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span></span><b class="num">${brl(o.total)}</b></button>`).join('')}</div>`:'<div class="small muted">Nenhum pedido novo esperando.</div>'}</section>
+      <section class="panel dcard"><span class="lbl">Vencem hoje</span>${recHoje.length?`<div class="hlist">${recHoje.map(r=>`<button type="button" class="hrow" data-go="receber:aberto"><span><b>${esc(r.customer)}</b><span class="small muted"> · ${r.orderNo?'Pedido '+esc(r.orderNo)+' · ':''}${esc(r.parcel)}</span></span><b class="num">${brl(r.amount)}</b></button>`).join('')}</div>`:'<div class="small muted">Nenhuma parcela vencendo hoje.</div>'}</section>
     </div>`;
-  {const d=c.querySelector('.dgrid');if(d)d.insertAdjacentHTML('afterend','<div style="margin-top:14px">'+painelSemana()+'</div>')}
+  c.insertAdjacentHTML('beforeend','<h3 class="dech dbsec" style="margin-top:22px">Resultados</h3>'+dashHtml()+'<div style="margin-top:14px">'+painelSemana()+'</div>');
   c.querySelectorAll('[data-dbp]').forEach(b=>b.onclick=()=>{ui.dbP=b.dataset.dbp;const y=window.scrollY;admHoje();window.scrollTo(0,y)});
   $('#hRom').onclick=romaneio;
-  {const hb=$('#hBk');if(hb)hb.onclick=backupNow}
+  {const hb=$('#hBk');if(hb)hb.onclick=backupNow;const hl=$('#hBkLater');if(hl)hl.onclick=()=>{ui.bkSnooze=true;admHoje();pdvDashCard()}}
+  c.querySelectorAll('[data-hopen]').forEach(b=>b.onclick=()=>{ui.tab='pedidos';ui.ofilter='ativos';ui.oOpen=ui.oOpen||{};ui.oOpen[b.dataset.hopen]=1;renderAdmin();window.scrollTo(0,0)});
   $('#hLan').onclick=()=>{ui.tab='pedidos';ui.romView=false;ui.lanc={cid:'',mode:'retirada',pay:'',cart:{},q:'',addr:'',bairro:'',note:''};renderAdmin();window.scrollTo(0,0)};
   {const k=$('#pnK');if(k)k.onchange=()=>{ui.pnK=k.value;const y=window.scrollY;admHoje();window.scrollTo(0,y)}}
   c.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{const [tab,f]=b.dataset.go.split(':');ui.tab=tab;
-    if(tab==='pedidos')ui.ofilter=f;if(tab==='receber'){ui.recF=ui.recF||{st:'aberto',cid:'',q:''};ui.recF.st=f;ui.recF.cid=''}
+    if(tab==='pedidos')ui.ofilter=f;if(tab==='receber'){ui.finTab='receber';ui.recF=ui.recF||{st:'cobrar',cid:'',q:''};ui.recF.st=f;ui.recF.cid=''}
     if(tab==='produtos')ui.critOnly=true;if(tab==='clientes'){ui.tab='cadastros';ui.cadSub='clientes';ui.cliF=f}renderAdmin();window.scrollTo(0,0)});
 }
 function clientExtra(x){const d=idleDays(x),l=lastBuy(x),ci=creditInfo(x,0),bits=[];
   if(x.city&&cityById(x.city))bits.unshift(cityById(x.city).name);
-  if(sellerById(x.sellerId))bits.push('Vendedor '+sellerById(x.sellerId).name);
+  if(sellerById(x.sellerId))bits.push('Vendedor: '+esc(sellerById(x.sellerId).name));
   if(tableOf(x))bits.push('Tabela de preço '+tableOf(x));
   if(ci.limit)bits.push('Limite '+brl(ci.limit)+' · usado '+brl(ci.used));
   if(ci.overdue)bits.push('<b style="color:var(--danger)">Vencido '+brl(ci.overdue)+' · só à vista</b>');
@@ -4292,7 +4293,7 @@ function comboCard(cp){
   const q=ui.cart[cp.id]||0,save=Math.round((cp.listPrice-cp.price)*100)/100,[r,c]=cp.price.toFixed(2).split('.');
   return `<article class="combo ${q?'incart':''}">
     <div class="cbh"><span class="cbtag">COMBO</span>${save>0.004?`<span class="cbsave">Você economiza ${brl(save)}</span>`:''}</div>
-    <div class="cbb"><img src="${cp.photo}" alt="" loading="lazy"><div class="cbt"><b>${esc(cp.name.replace(/^Combo: /,''))}</b>${cp.desc?`<span class="cbd">${esc(cp.desc)}</span>`:''}<span class="cbc">${esc(compLine(cp.components))}</span></div></div>
+    <div class="cbb"><img src="${cp.photo||ph(cp.name||'',150)}" alt="" loading="lazy"><div class="cbt"><b>${esc(cp.name.replace(/^Combo: /,''))}</b>${cp.desc?`<span class="cbd">${esc(cp.desc)}</span>`:''}<span class="cbc">${esc(compLine(cp.components))}</span></div></div>
     <div class="cbf"><div class="num">${save>0.004?`<s class="small muted">${brl(cp.listPrice)} separado</s>`:''}<div class="ptag"><span class="cur">R$</span><span class="val">${Number(r).toLocaleString('pt-BR')},${c}</span></div></div>
       ${q?`<div class="stepper" style="width:140px;margin:0"><button data-dec="${cp.id}" aria-label="Diminuir">−</button><input type="number" inputmode="numeric" min="0" value="${q}" data-qty="${cp.id}" aria-label="Quantidade do combo"><button data-inc="${cp.id}" aria-label="Aumentar">+</button></div>`:`<button class="addbtn" data-add="${cp.id}" style="width:140px;margin:0">Adicionar combo</button>`}</div>
   </article>`;
@@ -5297,7 +5298,7 @@ function admProducts(){
     ${(()=>{const n=S.products.filter(p=>hasStock(p)&&Number(p.stock)<0).length;return n?`<div class="critbar"><span><b>${n} produto${n===1?'':'s'} com estoque negativo</b> · saiu mais do que o sistema tinha: faça uma contagem</span></div>`:''})()}
     ${(()=>{const n=S.products.filter(isCritical).length;return n?`<div class="critbar"><span><b>${n} produto${n===1?'':'s'} em estoque crítico</b> · hora de comprar</span><button class="btn ${ui.critOnly?'':'ghost'} dlb" id="critF">${ui.critOnly?'Mostrar todos':'Ver só esses'}</button></div>`:''})()}
     <div class="list">${PFR.L.map(p=>{const n=['qty','vista','retira','promo','limite'].filter(k=>p.rules[k].on).length;return `<div class="prow ${p.active?'':'off'} ${ui.pbulk?'pbsel':''}">
-      ${ui.pbulk?`<label class="imck"><input type="checkbox" data-psel="${p.id}" ${ui.pbulk.sel[p.id]?'checked':''} aria-label="Marcar ${esc(p.name)}"></label>`:''}<img src="${p.photo}" alt="">
+      ${ui.pbulk?`<label class="imck"><input type="checkbox" data-psel="${p.id}" ${ui.pbulk.sel[p.id]?'checked':''} aria-label="Marcar ${esc(p.name)}"></label>`:''}<img src="${p.photo||ph(p.name||'',150)}" alt="">
       <div class="t"><b>${esc(p.name)}${p.fam?` <span class="varchip" title="Sabor de ${esc(p.fam)}">${esc(p.var||'sabor')}</span>`:''}${(()=>{const b=belowMin(p);return b?` <span class="apchip no" title="No preço de tabela, depois da comissão">abaixo do mínimo: ${String(Math.round(b.mg*10)/10).replace('.',',')}% de ${String(b.min).replace('.',',')}%</span>`:''})()}</b><span class="small muted">${esc(catLabel(p))} · ${codesLine(p.code,p.ean)||'Sem código'}${packOf(p)?' · '+nfmt(packOf(p))+(isKg(p)?' kg · ':' un. · ')+brl(p.price/packOf(p))+'/'+uw(p):''}${p.trib?' · <b>Tributado</b>':''}${['mgmaior','mgmenor'].includes(PFR.F.sort)||PFR.F.x==='lowmg'?(prodMg(p)==null?' · sem custo':` · margem <b class="${prodMg(p)<0?'neg':prodMg(p)<8?'wkwarn':''}">${(Math.round(prodMg(p)*10)/10).toLocaleString('pt-BR')}%</b>`):''}${PFR.sold?` · vendeu <b>${qBR(PFR.sold(p))}</b> em 90 dias`:''}${p.stock!==''&&p.stock!=null?` · <span class="${p.stock<=0?'stk0':''}">Estoque: ${Number(p.stock).toLocaleString('pt-BR')}${hasMin(p)?' (mín. '+Number(p.minStock).toLocaleString('pt-BR')+(p.idealStock!==''&&p.idealStock!=null?' · ideal '+Number(p.idealStock).toLocaleString('pt-BR'):'')+')':''}</span>${isCritical(p)?' <span class="crit">Comprar</span>':''}${Number(p.stock)<0?' <span class="crit" title="Saiu mais do que tinha: confira o estoque (contagem)">Estoque negativo</span>':''}`:''}${(()=>{const l=lossOf(p.id,90);return l>0?` · <span class="wkwarn" title="Avaria na entrega: baixada do estoque como perda">perda por avaria: ${qBR(l)} em 90 dias</span>`:''})()}</span><div class="num" style="font-weight:700">${brl(p.price)}${ieF(p)<1?` <span class="mgchip iechip">com IE ${brl(Number(p.iePrice))}</span>`:''}${hasVal(p.commission)?` <span class="mgchip">comissão ${String(p.commission).replace('.',',')}%</span>`:''}${p.cost>0?` <span class="mgchip ${p.price<p.cost?'neg':''}">custo ${brl(p.cost)} · margem ${(Math.round(mgOf(effCost(p,p.cost,p.price),p.price)*10)/10).toLocaleString('pt-BR')}%${p.trib?' (tributado)':''} · markup ${(Math.round(mkOf(p.cost,p.price)*10)/10).toLocaleString('pt-BR')}%</span>`:''}${Number(p.refCost)>0?` <span class="mgchip" title="A trava do vendedor usa este custo">custo de referência ${brl(Number(p.refCost))}</span>`:''}${n?` <span class="rulechip">${n} condiç${n>1?'ões':'ão'} de preço</span>`:''}${p.active?'':' <span class="small muted">· desativado</span>'}</div></div>
       <div class="row" style="gap:6px"><button class="btn ghost" data-tog="${p.id}" style="min-height:40px;padding:8px 10px">${p.active?'Desativar':'Ativar'}</button><button class="btn ghost" data-ed="${p.id}" style="min-height:40px;padding:8px 10px">Editar</button><button class="btn ghost" data-edp="${p.id}" style="min-height:40px;padding:8px 10px">Precificar</button></div>
     </div>`}).join('')||'<div class="empty">Nenhum produto encontrado.</div>'}</div>`;
@@ -6091,12 +6092,12 @@ function admCaixa(){const c=$('#tabc'),t=today(),W=ui.cxW||0,start=addDays(t,W*7
 }
 
 function admReceber(){
-  const c=$('#tabc'),F=ui.recF||(ui.recF={st:'aberto',cid:'',q:''});
+  const c=$('#tabc'),F=ui.recF||(ui.recF={st:'cobrar',cid:'',q:''});
   if(!S.receivables)S.receivables=[];
   const all=S.receivables;
   const sum=st=>all.filter(r=>recStatus(r)===st&&(!F.cid||r.customerId===F.cid)).reduce((s,r)=>s+r.amount,0);
   const q=F.q.trim().toLowerCase();
-  const list=all.filter(r=>(F.st==='todos'||recStatus(r)===F.st)&&(!F.cid||r.customerId===F.cid)&&(!q||r.customer.toLowerCase().includes(q)||String(r.orderNo||'').includes(q)||(r.desc||'').toLowerCase().includes(q)))
+  const list=all.filter(r=>(F.st==='todos'||recStatus(r)===F.st||(F.st==='cobrar'&&recStatus(r)!=='pago'))&&(!F.cid||r.customerId===F.cid)&&(!q||r.customer.toLowerCase().includes(q)||String(r.orderNo||'').includes(q)||(r.desc||'').toLowerCase().includes(q)))
     .sort((a,b)=>F.st==='pago'?b.paidAt.localeCompare(a.paidAt):a.due.localeCompare(b.due));
   const nVenc=all.filter(r=>recStatus(r)==='vencido').length;
   const tot=list.reduce((s,r)=>s+r.amount,0);
@@ -6107,21 +6108,21 @@ function admReceber(){
         <div class="small">${M.slice(0,12).map(o=>'nº '+esc(o.no)+' ('+esc(o.customer||'')+', '+esc(o.pay||'')+')').join(' · ')}${M.length>12?' · e mais '+(M.length-12):''}</div>
         <div class="small muted">Esse valor não está sendo cobrado. Em Pedidos, abra o pedido e use Mais &gt; Lançar no contas a receber. Se a forma de pagamento é paga na hora (ex.: cartão na entrega), marque-a como À vista em Cadastros &gt; Formas de pagamento.</div></div>`})()}
     <div class="tiles">
-      <button class="tile" data-rst="aberto" aria-pressed="${F.st==='aberto'}"><span class="lbl">Em aberto</span><b class="num">${brl(sum('aberto'))}</b><span class="small muted">ainda no prazo</span></button>
+      <button class="tile" data-rst="aberto" aria-pressed="${F.st==='aberto'}"><span class="lbl">No prazo</span><b class="num">${brl(sum('aberto'))}</b><span class="small muted">a vencer</span></button>
       <button class="tile t-venc" data-rst="vencido" aria-pressed="${F.st==='vencido'}"><span class="lbl">Vencido</span><b class="num">${brl(sum('vencido'))}</b><span class="small muted">${nVenc} título${nVenc===1?'':'s'} sem pagamento</span></button>
       <button class="tile t-pago" data-rst="pago" aria-pressed="${F.st==='pago'}"><span class="lbl">Recebido</span><b class="num">${brl(sum('pago'))}</b><span class="small muted">pagamento concluído</span></button>
     </div>
     <div class="filters" style="align-items:center">
-      ${[['aberto','Em aberto'],['vencido','Vencidos'],['pago','Pagos'],['todos','Todos']].map(([k,v])=>`<button class="chip" data-rst="${k}" aria-pressed="${F.st===k}">${v}</button>`).join('')}
+      ${[['cobrar','A cobrar'],['vencido','Vencidos'],['aberto','No prazo'],['pago','Pagos'],['todos','Todos']].map(([k,v])=>`<button class="chip" data-rst="${k}" aria-pressed="${F.st===k}">${v}</button>`).join('')}
       <select id="rfcli" aria-label="Filtrar por cliente" style="width:auto;min-height:38px;padding:6px 10px"><option value="">Todos os clientes</option>${S.customers.map(x=>`<option value="${x.id}" ${x.id===F.cid?'selected':''}>${esc(x.name)}</option>`).join('')}</select>
-      <input type="text" id="rq" value="${esc(F.q)}" placeholder="Buscar cliente, pedido ou descrição" style="flex:1;min-width:180px;min-height:38px;padding:6px 10px">
+      <input type="text" id="rq" value="${esc(F.q)}" placeholder="Buscar cliente, pedido ou descrição" aria-label="Buscar conta a receber" style="flex:1;min-width:180px;min-height:44px;padding:6px 10px">
     </div>
     ${list.length?`<div class="small muted" style="margin-bottom:8px">${list.length} título${list.length===1?'':'s'} · total <b class="num" style="color:var(--fg)">${brl(tot)}</b></div>
     <div class="list">${list.map(r=>{const st=recStatus(r),late=st==='vencido'?daysBetween(r.due,today()):0,left=st==='aberto'?daysBetween(today(),r.due):0;return `<div class="rec r-${st}">
       <div class="t"><b>${esc(r.customer)}</b><span class="small muted">${r.orderNo?'Pedido nº '+esc(r.orderNo)+' · ':''}Parcela ${esc(r.parcel)}${r.desc?' · '+esc(r.desc):''}</span>
         <span class="small">Vence <b>${dBR(r.due)}</b> · <span class="rst">${st==='pago'?'Pago em '+dBR(r.paidAt):st==='vencido'?'Vencido há '+late+' dia'+(late===1?'':'s'):left===0?'Vence hoje':'Faltam '+left+' dia'+(left===1?'':'s')}</span></span></div>
       <div class="ra"><b class="num">${brl(r.amount)}</b>
-        <div class="row" style="gap:6px;justify-content:flex-end">${st==='pago'?`<button class="btn ghost dlb" data-runpay="${r.id}">Desfazer pagamento</button>`:`<button class="btn dlb" data-rpay="${r.id}">Marcar como pago</button>`}
+        <div class="row" style="gap:6px;justify-content:flex-end">${(()=>{const cu=st==='vencido'&&S.customers.find(x=>x.id===r.customerId);return cu&&cu.phone?`<a class="btn ghost dlb walink" href="${waLink(cu.phone,'Olá, '+r.customer+'! Consta em aberto a parcela '+(r.parcel||'')+(r.orderNo?' do pedido nº '+r.orderNo:'')+', de '+brl(r.amount)+', vencida em '+dBR(r.due)+'. Pode me confirmar o pagamento?')}" target="_blank" rel="noopener" aria-label="Cobrar ${esc(r.customer)} no WhatsApp">${WAI}Cobrar</a>`:''})()}${st==='pago'?`<button class="btn ghost dlb" data-runpay="${r.id}">Desfazer pagamento</button>`:`<button class="btn dlb" data-rpay="${r.id}">Marcar como pago</button>`}
         ${ui.confirmDel===r.id?`<button class="btn danger dlb" data-rdelok="${r.id}">Confirmar exclusão</button>`:`<button class="btn ghost dlb" data-rdel="${r.id}">Excluir</button>`}</div></div>
     </div>`}).join('')}</div>`:`<div class="empty">${all.length?'Nenhum título com esse filtro.':'Nenhum lançamento ainda. Toque em "+ Novo lançamento" ou use "Lançar no contas a receber" em um pedido.'}</div>`}`;
   bindFinSeg(c);
@@ -6137,14 +6138,14 @@ function admReceber(){
     const rows=[['Cliente','CNPJ / CPF','Pedido nº','Parcela','Descrição','Vencimento','Valor (R$)','Situação','Pago em'],...list.map(r=>{const cu=S.customers.find(x=>x.id===r.customerId);return [r.customer,cu&&cu.doc?fmtDoc(cu.doc):'',r.orderNo||'',r.parcel,r.desc||'',dBR(r.due),r.amount,REC_ST[recStatus(r)],r.paidAt?dBR(r.paidAt):'']})];
     const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:28},{wch:20},{wch:10},{wch:9},{wch:24},{wch:12},{wch:13},{wch:11},{wch:12}];fmtCols(ws,[6],1,rows.length-1);
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Contas a receber');
-    offerFile('contas-a-receber-'+({aberto:'em-aberto',vencido:'vencidos',pago:'pagos',todos:'todos'})[F.st]+'-'+stamp()+'.xlsx',XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+    offerFile('contas-a-receber-'+({cobrar:'a-cobrar',aberto:'no-prazo',vencido:'vencidos',pago:'pagos',todos:'todos'})[F.st]+'-'+stamp()+'.xlsx',XLSX.write(wb,{type:'array',bookType:'xlsx'}));
   }catch(e){pdfFail(e,'planilha')}};
-  const rp=$('#rpdf');if(rp)rp.onclick=()=>{const cn=F.cid&&(S.customers.find(x=>x.id===F.cid)||{}).name,stL={aberto:'Em aberto',vencido:'Vencidos',pago:'Pagos',todos:'Todos'}[F.st];
-    finPdf({file:'contas-a-receber-'+({aberto:'em-aberto',vencido:'vencidos',pago:'pagos',todos:'todos'})[F.st]+'-'+stamp(),title:'Contas a receber',
+  const rp=$('#rpdf');if(rp)rp.onclick=()=>{const cn=F.cid&&(S.customers.find(x=>x.id===F.cid)||{}).name,stL={cobrar:'A cobrar (vencidos e no prazo)',aberto:'No prazo',vencido:'Vencidos',pago:'Pagos',todos:'Todos'}[F.st];
+    finPdf({file:'contas-a-receber-'+({cobrar:'a-cobrar',aberto:'no-prazo',vencido:'vencidos',pago:'pagos',todos:'todos'})[F.st]+'-'+stamp(),title:'Contas a receber',
       sub:[stL,cn,F.q.trim()?'busca: '+F.q.trim():''].filter(Boolean).join(' · '),
       tiles:[['Em aberto (no prazo)',brl(sum('aberto'))],['Vencido',brl(sum('vencido')),sum('vencido')>0],['Recebido',brl(sum('pago'))],['Total da lista ('+list.length+')',brl(tot)]],
       sections:[{head:['Cliente','Pedido','Parcela','Descrição','Vencimento','Situação','Valor'],right:[6],
-        body:list.map(r=>{const st=recStatus(r);return [r.customer,r.orderNo?'nº '+r.orderNo:'',r.parcel||'',r.desc||'',dBR(r.due),st==='pago'?'Pago em '+dBR(r.paidAt):st==='vencido'?'Vencido há '+daysBetween(r.due,today())+'d':'Em aberto',brl(r.amount)]}),
+        body:list.map(r=>{const st=recStatus(r);return [r.customer,r.orderNo?'nº '+r.orderNo:'',r.parcel||'',r.desc||'',dBR(r.due),st==='pago'?'Pago em '+dBR(r.paidAt):st==='vencido'?'Vencido há '+daysBetween(r.due,today())+'d':'No prazo',brl(r.amount)]}),
         red:(i,j)=>j===5&&recStatus(list[i])==='vencido',foot:['Total','','','','','',brl(tot)]}]})};
   if(!ui.recNew)return;
   const f=ui.recNew,read=()=>{f.cid=$('#rcli').value;f.value=$('#rval').value;f.prazo=$('#rprazo').value;f.base=$('#rbase').value||today();f.orderNo=$('#rorder').value.trim();f.desc=$('#rdesc').value.trim();const cu=$('#rcustom');if(cu)f.custom=cu.value};
@@ -6220,7 +6221,7 @@ function rkPdvLoad(F,rer){const key=F.from+'|'+F.to,P=ui.rkPdv;if(P&&P.key===key
 const pctBR=v=>v==null?'—':(Math.round(v*10)/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
 function repFilterText(f){return `Período ${dBR(f.from)} a ${dBR(f.to)}${f.pdv?' · com vendas do balcão':''} · ${f.mode==='todos'?'Entrega e retirada':f.mode==='entrega'?'Somente entrega':'Somente retirada'} · ${f.cat==='todas'?'Todas as categorias':'Categoria: '+f.cat} · Ordenado por ${f.sort==='rev'?'faturamento':'quantidade'}`}
 function admRanking(){
-  const c=$('#repc'),F=ui.repF||(ui.repF={...monthRange(),mode:'todos',cat:'todas',sort:'q'});
+  const c=$('#repc'),F=ui.repF||(ui.repF={from:addDays(today(),-29),to:today(),mode:'todos',cat:'todas',sort:'q'});
   const cats=[...new Set([...S.products.map(p=>p.cat),...S.orders.flatMap(o=>o.items.map(itemCat))].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const bad=F.from>F.to;
   const pdvOk=modOn('pdv');if(!pdvOk)F.pdv=false;
@@ -6472,8 +6473,8 @@ function admClients(){
         <div class="field"><label for="cien">Inscrição estadual</label><input type="text" id="cien" value="${esc(cfd.ie||'')}" placeholder="Número ou ISENTO"></div>
       </div>
       <label class="switch iesw"><input type="checkbox" id="cie" ${e.ieOk?'checked':''}> <span><b>Contribuinte de ICMS com inscrição estadual ativa</b><br><span class="small muted">Comprando com nota fiscal, recebe o "Preço com IE" dos produtos. Marque depois de conferir a IE no Sintegra.</span></span></label>
-      <label class="switch"><input type="checkbox" id="cneg" ${e.canNeg?'checked':''}> <span><b>Pode negociar preço no app</b><br><span class="small muted">Libera o botão "Negociar preço" no carrinho deste cliente (vale quando a negociação está em "Só os clientes marcados").</span></span></label>
-      ${modOn('app_cliente')?`<label class="switch"><input type="checkbox" id="capp" ${cliApp(e)?'checked':''}> <span><b>Acesso ao app do cliente</b><br><span class="small muted">Marque para o cliente entrar no app e fazer pedidos sozinho (aí é preciso usuário e senha). Desmarcado, ele compra pelo vendedor ou pela loja.</span></span></label>`:'<div class="small muted">Esta empresa não usa o app do cliente: não é preciso usuário nem senha. Os pedidos dele entram pelo vendedor ou pela loja.</div>'}
+      <label class="switch iesw"><input type="checkbox" id="cneg" ${e.canNeg?'checked':''}> <span><b>Pode negociar preço no app</b><br><span class="small muted">Libera o botão "Negociar preço" no carrinho deste cliente (vale quando a negociação está em "Só os clientes marcados").</span></span></label>
+      ${modOn('app_cliente')?`<label class="switch iesw"><input type="checkbox" id="capp" ${cliApp(e)?'checked':''}> <span><b>Acesso ao app do cliente</b><br><span class="small muted">Marque para o cliente entrar no app e fazer pedidos sozinho (aí é preciso usuário e senha). Desmarcado, ele compra pelo vendedor ou pela loja.</span></span></label>`:'<div class="small muted">Esta empresa não usa o app do cliente: não é preciso usuário nem senha. Os pedidos dele entram pelo vendedor ou pela loja.</div>'}
       <div class="grid2" id="cappbox" ${modOn('app_cliente')&&cliApp(e)?'':'style="display:none"'}>
         <div class="field"><label for="cl">Usuário de acesso</label><input type="text" id="cl" value="${esc(e.login)}" autocapitalize="none" placeholder="Ex.: mercearia.sj"></div>
         <div class="field"><label for="cp">Senha</label><input type="password" id="cp" value="" autocomplete="new-password" placeholder="${e.id&&e.hasPass?'Em branco = manter a senha atual':'Senha base (mín. 8): a pessoa troca no 1º acesso'}"></div>
@@ -6575,7 +6576,7 @@ function admClients(){
     <div class="filters">${[['todos','Todos'],['15','Sem comprar há 15+ dias'],['30','Há 30+ dias'],['nunca','Nunca compraram']].map(([k,v])=>`<button class="chip" data-cf="${k}" aria-pressed="${CF===k}">${v}${k!=='todos'?' ('+withIdle.filter(({d})=>inF(k,d)).length+')':''}</button>`).join('')}</div>
     <div class="small muted pfcount">${cliList.length} de ${S.customers.length} cliente${S.customers.length===1?'':'s'}${cact?` · <button type="button" class="linkbtn" id="coclr">Limpar filtros</button>`:''}</div>
     <div class="list">${cliList.map(x=>`<div class="prow" style="grid-template-columns:1fr auto">
-      <div class="t"><b>${esc(x.name)}</b>${showSt?(()=>{const t=stt.get(x.id);return `<span class="small">${t.n?`Comprou <b>${brl(t.v)}</b> em ${t.n} pedido${t.n>1?'s':''}`:'Sem pedidos'} ${CO.per==='tudo'?'desde o início':'nos últimos '+CO.per+' dias'}</span>`})():''}${x.doc?`<span class="small muted">${x.doc.length===11?'CPF':'CNPJ'} ${esc(fmtDoc(x.doc))}</span>`:''}<span class="small muted">Usuário: ${esc(x.login)} · ${srvPassLabel(x)}${x.phone?' · '+esc(x.phone):''}</span><span class="small muted">Pagamento: ${allowedPays(x).length===S.payments.length?'todas as formas':esc(allowedPays(x).join(', ')||'nenhuma')}</span>${clientExtra(x)}</div>
+      <div class="t"><b>${esc(x.name)}</b>${showSt?(()=>{const t=stt.get(x.id);return `<span class="small">${t.n?`Comprou <b>${brl(t.v)}</b> em ${t.n} pedido${t.n>1?'s':''}`:'Sem pedidos'} ${CO.per==='tudo'?'desde o início':'nos últimos '+CO.per+' dias'}</span>`})():''}${x.doc?`<span class="small muted">${x.doc.length===11?'CPF':'CNPJ'} ${esc(fmtDoc(x.doc))}</span>`:''}<span class="small muted">${srvCliAccess(x)}${x.phone?' · '+esc(x.phone):''}</span><span class="small muted">Pagamento: ${allowedPays(x).length===S.payments.length?'todas as formas':esc(allowedPays(x).join(', ')||'nenhuma')}</span>${clientExtra(x)}</div>
       <div class="row" style="gap:6px;justify-content:flex-end">${srvResetBtn('customers',x)}<button class="btn ghost" data-ce="${x.id}" style="min-height:40px;padding:8px 12px">Editar</button></div></div>`).join('')||(S.customers.length?'<div class="empty">Nenhum cliente nesse filtro.</div>':'<div class="empty">Nenhum cliente cadastrado.</div>')}</div>`;
   c.querySelectorAll('[data-cf]').forEach(b=>b.onclick=()=>{ui.cliF=b.dataset.cf;admClients()});
   {const ci=$('#cq');ci.oninput=()=>{CO.q=ci.value;const pos=ci.selectionStart;admClients();const n=$('#cq');n.focus();n.setSelectionRange(pos,pos)}}

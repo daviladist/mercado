@@ -85,7 +85,7 @@ R("<span class=\"small muted\">Usuário: ${esc(k.login)} · Senha: ${esc(k.pass)
 R("<span class=\"small muted\">Usuário: ${esc(k.login)} · Senha: ${esc(k.pass)}</span></div>\n      ${ui.confirmDel==='fk'+k.id", "<span class=\"small muted\">Usuário: ${esc(k.login)} · ${srvPassLabel(k)}</span></div>\n      ${ui.confirmDel==='fk'+k.id");
 R("${v.login?' · acesso de entregador: '+esc(v.login)+' / '+esc(v.pass):' · sem acesso ao app'}", "${v.login?' · acesso de entregador: '+esc(v.login)+' · '+srvPassLabel(v):' · sem acesso ao app'}");
 R("Acesso: <b>${esc(x.login)}</b> · senha ${esc(x.pass||'')}", "Acesso: <b>${esc(x.login)}</b> · ${srvPassLabel(x)}");
-R("<span class=\"small muted\">Usuário: ${esc(x.login)} · Senha: ${esc(x.pass)}${x.phone?", "<span class=\"small muted\">Usuário: ${esc(x.login)} · ${srvPassLabel(x)}${x.phone?");
+R("<span class=\"small muted\">Usuário: ${esc(x.login)} · Senha: ${esc(x.pass)}${x.phone?", "<span class=\"small muted\">${srvCliAccess(x)}${x.phone?");
 R(`<input type="text" id="cp" value="\${esc(e.pass)}" required>`, `<input type="password" id="cp" value="" autocomplete="new-password" placeholder="\${e.id&&e.hasPass?'Em branco = manter a senha atual':'Senha base (mín. 8): a pessoa troca no 1º acesso'}">`);
 R("pass:Math.floor(1000+Math.random()*9000).toString(),phone:''", "pass:'',phone:''");
 R("const cu={...e,id:e.id||uid(),name,login,pass:$('#cp').value,", "if($('#cp').value&&$('#cp').value.length<8){$('#cerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}\n      const cu={...e,id:e.id||uid(),name,login,pass:$('#cp').value,");
