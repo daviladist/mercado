@@ -3,6 +3,7 @@
 !vercel.json
 !package.json
 *.xlsx
+!public/modelo-produtos-loja.xlsx
 *.csv
 *.pdf
 backup*/

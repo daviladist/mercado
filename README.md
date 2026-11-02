@@ -178,8 +178,12 @@ Para a loja que quer vender pelo celular (loja de roupa, supermercado, bazar…)
 - **Pedido:** carrinho guardado no aparelho do cliente; retirada e/ou entrega com taxa fixa; pedido mínimo; pagamento PIX/dinheiro/cartão **combinado com a loja** (o app não cobra online); o cliente acompanha pelo link do pedido (chave só dele) e avisa a loja pelo WhatsApp.
 - **Painel:** pedidos novos (confere sozinho a cada 30 s), confirmar → pronto → entregue ou cancelar (com motivo; o estoque volta), mensagem pronta para o WhatsApp do cliente, mais vendidos, link da loja para copiar/compartilhar, loja aberta/fechada.
 - **Funções que a Central liga e desliga:** tamanhos e variações, preço por quantidade, controle de estoque, entrega com taxa.
+- **Importar produtos (Produtos → Importar):**
+  - **Planilha** `.xlsx` ou `.csv`, lida no próprio aparelho (o arquivo não é enviado). As colunas são reconhecidas pelo nome (Nome/Produto, Preço/Valor, Código/EAN, Estoque/Qtd, Categoria, Unidade, Descrição, Preço de, Custo). Modelo em `/modelo-produtos-loja.xlsx`. Prévia mostra novos, atualizados e linhas com erro.
+  - **StarIA** (um código ou vários): a loja grava o pedido em `loja_staria`; o site não fala com o StarIA, então o Claude processa ("processa as consultas do StarIA da loja") e devolve em `/api/loja/admin/staria/resultado`; a loja revisa (preço de venda do StarIA ou custo + margem) e importa.
+  - **Código já cadastrado atualiza o produto** (sem diferenciar maiúscula/minúscula); até 1000 por envio, tudo numa transação (o erro diz a linha). O custo e o código ficam só no painel.
 - **Regras no servidor (`lib/loja.js`):** o total é recalculado (preço, faixa, taxa) e, se mudou desde que o cliente viu, o pedido é recusado com o total novo; estoque conferido e baixado na mesma transação, com os produtos travados; o mesmo pedido enviado duas vezes grava uma vez; até 30 pedidos por aparelho/IP e 400 pela loja a cada 15 min; a vitrine mostra só disponível/esgotado (não a quantidade); loja em preparo, suspensa ou fechada não recebe pedido; no banco fica só o SHA-256 da chave do link.
-- **Tabelas:** `loja_config`, `loja_produtos`, `loja_fotos`, `loja_pedidos`, `loja_seq` (todas com `tenant_id`).
+- **Tabelas:** `loja_config`, `loja_produtos`, `loja_fotos`, `loja_pedidos`, `loja_seq`, `loja_staria` (todas com `tenant_id`).
 - **Testes:** `tests/loja.py` (roda no `tests/ci_banco.sh` e no GitHub).
 - **Voltar versão:** **não use "Instant Rollback"** na Vercel: a versão antiga não conhece a loja online e abriria o app de pedidos no endereço dela. Para desfazer, publique uma correção para frente.
 - **Para depois:** pagamento online (PIX automático/cartão), cupom de desconto, aviso automático por WhatsApp.

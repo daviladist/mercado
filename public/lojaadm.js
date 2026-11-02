@@ -199,14 +199,267 @@
   /* ---------- Produtos ---------- */
   function vProdutos() {
     const q = busca.trim().toLowerCase();
-    const L = S.produtos.filter(p => !q || (p.nome + ' ' + (p.categoria || '')).toLowerCase().includes(q));
-    $('#main').innerHTML = `<div class="between"><h1>Produtos</h1><button class="btn gold" type="button" id="np">+ Produto</button></div>
+    const L = S.produtos.filter(p => !q || (p.nome + ' ' + (p.categoria || '') + ' ' + (p.codigo || '')).toLowerCase().includes(q));
+    $('#main').innerHTML = `<div class="between"><h1>Produtos</h1><div class="row"><button class="btn" type="button" id="imp">Importar${stariaProntas() ? ' <span class="badge">' + stariaProntas() + '</span>' : ''}</button><button class="btn gold" type="button" id="np">+ Produto</button></div></div>
       <input type="text" id="bq" placeholder="Buscar produto" value="${esc(busca)}" aria-label="Buscar produto">
-      ${L.length ? `<section class="card"><div class="list">${L.map(p => `<button type="button" class="it" data-pr="${esc(p.id)}"><span class="thumb">${p.fotos[0] ? `<img alt="" src="${esc(p.fotos[0].url)}">` : '🏷️'}</span><span class="tx"><b>${esc(p.nome)}</b><span>${esc([p.categoria, !p.ativo ? 'fora da vitrine' : '', esgotado(p) ? 'esgotado' : '', p.destaque ? '⭐ destaque' : ''].filter(Boolean).join(' · '))}</span></span><span class="vl">${money(p.preco)}${p.faixas.length && M('l_volume') ? '<small>+ preço por qtd</small>' : ''}</span></button>`).join('')}</div></section>` : `<div class="card empty"><div class="big">🏷️</div><p class="muted">${S.produtos.length ? 'Nenhum produto com esse nome.' : 'Nenhum produto ainda.'}</p></div>`}`;
+      ${L.length ? `<section class="card"><div class="list">${L.map(p => `<button type="button" class="it" data-pr="${esc(p.id)}"><span class="thumb">${p.fotos[0] ? `<img alt="" src="${esc(p.fotos[0].url)}">` : '🏷️'}</span><span class="tx"><b>${esc(p.nome)}</b><span>${esc([p.codigo ? 'cód. ' + p.codigo : '', p.categoria, !p.ativo ? 'fora da vitrine' : '', esgotado(p) ? 'esgotado' : '', p.destaque ? '⭐ destaque' : ''].filter(Boolean).join(' · '))}</span></span><span class="vl">${money(p.preco)}${p.faixas.length && M('l_volume') ? '<small>+ preço por qtd</small>' : ''}</span></button>`).join('')}</div></section>` : `<div class="card empty"><div class="big">🏷️</div><p class="muted">${S.produtos.length ? 'Nenhum produto com esse nome.' : 'Nenhum produto ainda.'}</p></div>`}`;
     $('#np').addEventListener('click', () => formProduto(null));
+    $('#imp').addEventListener('click', importarMenu);
     const bq = $('#bq'); bq.addEventListener('input', () => { busca = bq.value; const pos = bq.selectionStart; render(); const n = $('#bq'); n.focus(); n.setSelectionRange(pos, pos); });
     document.querySelectorAll('[data-pr]').forEach(b => b.addEventListener('click', () => formProduto(S.produtos.find(p => p.id === b.dataset.pr))));
   }
+  /* ---------- Importar produtos: planilha do Excel ou StarIA ---------- */
+  const stariaProntas = () => (S.staria || []).filter(j => j.status === 'pronta').length;
+  const MODELO_COLS = ['Código (EAN)', 'Nome', 'Preço', 'Preço de', 'Estoque', 'Categoria', 'Unidade', 'Descrição', 'Custo'];
+  function importarMenu() {
+    const js = S.staria || [];
+    const stTxt = { pendente: 'Esperando o StarIA', pronta: 'Pronta para revisar', importada: 'Importada' };
+    openSheet('Importar produtos', `
+      <section class="card"><h3>📊 Planilha do Excel</h3>
+        <p class="small muted">Uma linha por produto. Precisa das colunas <b>Nome</b> e <b>Preço</b>. Se quiser, também: Código (EAN), Estoque, Categoria, Unidade, Descrição, Preço de e Custo. Código que já está na loja atualiza o produto em vez de criar outro.</p>
+        <div class="grid2"><label class="btn pri" for="fxl" style="text-align:center">Escolher planilha</label><a class="btn" href="/modelo-produtos-loja.xlsx" download>Baixar modelo</a></div>
+        <input type="file" id="fxl" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden>
+        <p class="neg small" id="xe" role="alert" style="font-weight:600"></p></section>
+      <section class="card"><h3>🔎 Do StarIA</h3>
+        <p class="small muted">Escreva um código ou EAN para importar um produto, ou vários (um por linha) para importar em massa.</p>
+        <textarea id="stt" rows="4" placeholder="7891234567890&#10;7899876543210&#10;1234"></textarea>
+        <button class="btn pri full" type="button" id="stp">Pedir ao StarIA</button>
+        <p class="neg small" id="ste" role="alert" style="font-weight:600"></p>
+        ${js.length ? `<div class="list">${js.map(j => `<div class="it"><span class="tx"><b>${j.termos.length} código${j.termos.length === 1 ? '' : 's'} · ${esc(stTxt[j.status] || j.status)}</b><span>${esc(dataHora(j.criadoEm))}${j.status !== 'pendente' ? ' · achou ' + Object.values(j.resultados).filter(Boolean).length : ''}</span></span>
+          ${j.status === 'pendente' ? `<button class="btn sm" type="button" data-sx="${esc(j.id)}">Cancelar</button>` : `<button class="btn sm ${j.status === 'pronta' ? 'gold' : ''}" type="button" data-sr="${esc(j.id)}">${j.status === 'pronta' ? 'Revisar e importar' : 'Ver'}</button>`}</div>`).join('')}</div>` : ''}
+        ${js.some(j => j.status === 'pendente') ? '<p class="note">O site não fala direto com o StarIA. Para ele responder, peça no Claude: <b>"processa as consultas do StarIA da loja"</b>. Depois toque em Atualizar.</p><button class="btn full" type="button" id="sat">Atualizar</button>' : ''}</section>`, pn => {
+      $('#fxl').addEventListener('change', async e => {
+        const f = e.target.files[0]; if (!f) return;
+        $('#xe').textContent = 'Lendo a planilha…';
+        try { const rows = await lerPlanilha(f); const R = montarImport(rows); revisarPlanilha(R, f.name); }
+        catch (err) { $('#xe').textContent = err.message || 'Não consegui ler a planilha.'; e.target.value = ''; }
+      });
+      $('#stp').addEventListener('click', async () => {
+        const termos = [...new Set($('#stt').value.split(/[\s,;]+/).map(x => x.replace(/\D/g, '')).filter(Boolean))];
+        if (!termos.length) { $('#ste').textContent = 'Escreva pelo menos um código ou EAN (só números).'; return; }
+        const bt = $('#stp'); bt.disabled = true;
+        try { await api('/api/loja/admin/staria/pedir', { id: 's' + hex(6), termos }); await reload(); toast('Pedido enviado ao StarIA'); importarMenu(); }
+        catch (e) { bt.disabled = false; if (e.status === 401) return fail(e); $('#ste').textContent = e.message; }
+      });
+      const sat = $('#sat'); if (sat) sat.addEventListener('click', async () => { sat.disabled = true; try { await reload(); importarMenu(); } catch (e) { sat.disabled = false; fail(e); } });
+      pn.querySelectorAll('[data-sx]').forEach(b => b.addEventListener('click', async () => { b.disabled = true; try { await api('/api/loja/admin/staria/excluir', { id: b.dataset.sx }); await reload(); importarMenu(); } catch (e) { b.disabled = false; fail(e); } }));
+      pn.querySelectorAll('[data-sr]').forEach(b => b.addEventListener('click', () => revisarStaria(js.find(j => j.id === b.dataset.sr))));
+    });
+  }
+  const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
+  const existe = cod => cod && S.produtos.find(p => p.codigo && p.codigo.toLowerCase() === String(cod).toLowerCase());
+  /* manda em partes de até 1000; cada parte entra inteira ou não entra */
+  async function enviarImport(itens, extra, bt) {
+    let criados = 0, atualizados = 0;
+    for (let i = 0; i < itens.length; i += 1000) {
+      bt.textContent = itens.length > 1000 ? 'Importando ' + Math.min(i + 1000, itens.length) + ' de ' + itens.length + '…' : 'Importando…';
+      let r;
+      try { r = await api('/api/loja/admin/importar', Object.assign({ itens: itens.slice(i, i + 1000) }, extra)); }
+      catch (e) { e.feitos = i; if (i) e.message = 'Os primeiros ' + i + ' já entraram. Depois parou: ' + e.message + ' Corrija e importe de novo: só os que faltam vão.'; throw e; }
+      criados += r.criados; atualizados += r.atualizados;
+    }
+    return { criados, atualizados };
+  }
+  function fimImport(r) { closeSheet(); toast([r.criados ? r.criados + ' produto' + (r.criados === 1 ? ' novo' : 's novos') : '', r.atualizados ? r.atualizados + ' atualizado' + (r.atualizados === 1 ? '' : 's') : ''].filter(Boolean).join(' · ') || 'Nada mudou'); go('produtos'); }
+
+  /* StarIA: revisa o que achou, põe o preço (custo + margem) e importa */
+  function revisarStaria(j) {
+    if (!j) return;
+    const achados = j.termos.filter(t => j.resultados[t]), faltam = j.termos.filter(t => !j.resultados[t]);
+    const temPv = achados.some(t => j.resultados[t].precoVenda > 0);
+    const R = { m: '30', modo: temPv ? 'erp' : 'margem', est: !!M('l_estoque'), cat: '', rows: achados.map(t => { const r = j.resultados[t]; return { termo: t, r, on: true, nome: r.nome, preco: '', manual: false, codigo: r.ean || r.codigo || t }; }) };
+    const precoDe = x => { if (R.modo === 'erp') return x.r.precoVenda > 0 ? numIn(x.r.precoVenda.toFixed(2)) : ''; const m = toNum(R.m); return x.r.custo > 0 && m >= 0 ? numIn(r2(x.r.custo * (1 + m / 100)).toFixed(2)) : ''; };
+    const vistosCod = new Set();
+    R.rows.forEach(x => { x.preco = precoDe(x); const k = String(x.codigo).toLowerCase(); x.dup = vistosCod.has(k); if (x.dup) x.on = false; vistosCod.add(k); });
+    openSheet('Importar do StarIA', `
+      ${achados.length && temPv ? `<div class="field"><span class="lbl">Preço na loja</span><div class="chips"><button type="button" class="chip" data-md="erp" aria-pressed="${R.modo === 'erp'}">Mesmo preço de venda do StarIA</button><button type="button" class="chip" data-md="margem" aria-pressed="${R.modo === 'margem'}">Custo + margem</button></div></div>` : ''}
+      ${achados.length ? `<div class="grid2"><div class="field" id="fmg" ${R.modo === 'erp' ? 'hidden' : ''}><label for="smg">Margem sobre o custo (%)</label><input inputmode="decimal" id="smg" value="${esc(R.m)}"></div>
+        <div class="field"><label for="sct">Categoria (opcional)</label><input type="text" id="sct" maxlength="40" placeholder="Ex.: Bebidas"></div></div>
+        ${M('l_estoque') ? '<label class="row"><input type="checkbox" id="ses" checked style="width:22px;height:22px;accent-color:var(--brand)"> Usar o estoque que está no StarIA</label>' : ''}
+        <p class="small muted" id="spx">${temPv ? 'Escolha de onde vem o preço.' : 'O preço vem do custo da última compra mais a margem.'} Pode mudar o preço de cada um. Produto com código que já está na loja é atualizado.</p>
+        <div class="list">${R.rows.map((x, i) => `<div class="it" style="flex-wrap:wrap"><input type="checkbox" data-on="${i}" ${x.on ? 'checked' : ''} ${x.dup ? 'disabled' : ''} aria-label="Importar ${esc(x.nome)}" style="width:24px;height:24px;accent-color:var(--brand)">
+          <span class="tx" style="flex:1 1 180px"><input type="text" data-nm="${i}" maxlength="80" value="${esc(x.nome)}" aria-label="Nome"><span>${esc(['cód. ' + x.codigo, x.r.custo != null ? 'custo ' + money(x.r.custo) : 'sem custo', x.r.precoVenda > 0 ? 'venda no StarIA ' + money(x.r.precoVenda) : '', x.r.estoque != null ? 'estoque ' + x.r.estoque : '', existe(x.codigo) ? 'já está na loja: atualiza' : '', x.r.varios ? 'mais de um cadastro no StarIA' : '', x.dup ? 'repetido (mesmo produto de outro código)' : ''].filter(Boolean).join(' · '))}</span></span>
+          <input inputmode="decimal" class="money" data-pc="${i}" value="${esc(x.preco)}" placeholder="Preço" aria-label="Preço de ${esc(x.nome)}" style="max-width:120px"></div>`).join('')}</div>` : '<p class="muted">O StarIA não achou nenhum destes códigos.</p>'}
+      ${faltam.length ? `<p class="small muted">Não achados no StarIA: ${esc(faltam.join(', '))}</p>` : ''}
+      <p class="neg small" id="sre" role="alert" style="font-weight:600;min-height:16px"></p>
+      ${achados.length ? `<button class="btn pri full" type="button" id="sri">Importar ${R.rows.filter(x => x.on).length} produto${R.rows.filter(x => x.on).length === 1 ? '' : 's'}</button>` : ''}`, pn => {
+      const cont = () => { const n = R.rows.filter(x => x.on).length, b = $('#sri'); if (b) { b.textContent = 'Importar ' + n + ' produto' + (n === 1 ? '' : 's'); b.disabled = !n; } };
+      const recalc = () => R.rows.forEach((x, i) => { if (!x.manual) { x.preco = precoDe(x); pn.querySelector('[data-pc="' + i + '"]').value = x.preco; } });
+      pn.querySelectorAll('[data-md]').forEach(b => b.addEventListener('click', () => { R.modo = b.dataset.md; pn.querySelectorAll('[data-md]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.md === R.modo))); $('#fmg').hidden = R.modo === 'erp'; recalc(); }));
+      const smg = $('#smg');
+      if (smg) smg.addEventListener('input', () => { R.m = smg.value; recalc(); });
+      pn.querySelectorAll('[data-pc]').forEach(e => e.addEventListener('input', () => { const x = R.rows[e.dataset.pc]; x.preco = e.value; x.manual = true; }));
+      pn.querySelectorAll('[data-nm]').forEach(e => e.addEventListener('input', () => { R.rows[e.dataset.nm].nome = e.value; }));
+      pn.querySelectorAll('[data-on]').forEach(e => e.addEventListener('change', () => { R.rows[e.dataset.on].on = e.checked; cont(); }));
+      const bt = $('#sri'); if (!bt) return;
+      bt.addEventListener('click', async () => {
+        const err = m => { $('#sre').textContent = m; };
+        const est = $('#ses') ? $('#ses').checked : false, cat = ($('#sct') || {}).value || '';
+        const itens = [];
+        for (const x of R.rows) {
+          if (!x.on) continue;
+          const p = toNum(x.preco);
+          if (String(x.nome).trim().length < 2) return err('Escreva o nome de ' + x.codigo + '.');
+          if (!(p > 0)) return err('Informe o preço de ' + x.nome + '.');
+          const it = { codigo: x.codigo, nome: x.nome, preco: r2(p) };
+          if (x.r.custo != null) it.custo = x.r.custo;
+          if (est && x.r.estoque != null) it.estoque = x.r.estoque;
+          if (cat.trim()) it.categoria = cat.trim();
+          itens.push(it);
+        }
+        if (!itens.length) return err('Marque pelo menos um produto.');
+        bt.disabled = true;
+        try { const r = await enviarImport(itens, { stariaId: j.id }, bt); await reload(); fimImport(r); }
+        catch (e) { bt.disabled = false; cont(); if (e.status === 401) return fail(e); err(e.message); }
+      });
+    });
+  }
+
+  /* ---------- leitura da planilha no aparelho (.xlsx ou .csv), sem enviar o arquivo ---------- */
+  async function lerPlanilha(f) {
+    if (f.size > 15 * 1024 * 1024) throw new Error('Planilha grande demais (máximo 15 MB).');
+    const buf = await f.arrayBuffer(), u8 = new Uint8Array(buf);
+    if (u8[0] === 0x50 && u8[1] === 0x4b) return lerXlsx(buf);
+    if (/\.xls$/i.test(f.name) || (u8[0] === 0xd0 && u8[1] === 0xcf)) throw new Error('Esse é o formato antigo do Excel (.xls). No Excel, use "Salvar como" e escolha "Pasta de Trabalho do Excel (.xlsx)".');
+    let t = new TextDecoder('utf-8').decode(u8);
+    if (t.includes('�')) t = new TextDecoder('windows-1252').decode(u8);
+    return lerCsv(t.replace(/^﻿/, ''));
+  }
+  function lerCsv(t) {
+    const prim = t.split(/\r?\n/)[0] || '', sep = (prim.match(/;/g) || []).length >= (prim.match(/,/g) || []).length ? ';' : ',';
+    const rows = []; let row = [], cel = '', q = false;
+    for (let i = 0; i < t.length; i++) {
+      const c = t[i];
+      if (q) { if (c === '"') { if (t[i + 1] === '"') { cel += '"'; i++; } else q = false; } else cel += c; }
+      else if (c === '"') q = true;
+      else if (c === sep) { row.push(cel); cel = ''; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; row.push(cel); rows.push(row); row = []; cel = ''; }
+      else cel += c;
+    }
+    if (cel || row.length) { row.push(cel); rows.push(row); }
+    return rows;
+  }
+  async function lerXlsx(buf) {
+    const u8 = new Uint8Array(buf), dv = new DataView(buf), dec = new TextDecoder();
+    let e = -1;
+    for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65558); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }
+    if (e < 0) throw new Error('Não consegui abrir: o arquivo não parece uma planilha .xlsx.');
+    const files = {}; let p = dv.getUint32(e + 16, true);
+    for (let k = 0, n = dv.getUint16(e + 10, true); k < n && p + 46 <= u8.length; k++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) break;
+      const nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+      files[dec.decode(u8.subarray(p + 46, p + 46 + nl))] = { met: dv.getUint16(p + 10, true), csize: dv.getUint32(p + 20, true), off: dv.getUint32(p + 42, true) };
+      p += 46 + nl + xl + cl;
+    }
+    const ler = async nome => {
+      const f = files[nome]; if (!f) return null;
+      const st = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true), data = u8.subarray(st, st + f.csize);
+      if (f.met === 0) return dec.decode(data);
+      if (f.met !== 8 || typeof DecompressionStream === 'undefined') throw new Error('Este aparelho não consegue abrir .xlsx. Salve a planilha como CSV e tente de novo.');
+      return new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+    };
+    const xml = t => new DOMParser().parseFromString(t, 'application/xml');
+    const tags = (d, n) => Array.from(d.getElementsByTagNameNS('*', n));
+    const ss = await ler('xl/sharedStrings.xml');
+    const shared = ss ? tags(xml(ss), 'si').map(si => tags(si, 't').map(x => x.textContent).join('')) : [];
+    let alvo = 'xl/worksheets/sheet1.xml';
+    try {
+      const wb = xml(await ler('xl/workbook.xml')), rels = xml(await ler('xl/_rels/workbook.xml.rels'));
+      const sh = tags(wb, 'sheet')[0], rid = sh && (sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id') || sh.getAttribute('r:id'));
+      const rel = tags(rels, 'Relationship').find(r => r.getAttribute('Id') === rid);
+      if (rel) { const tg = rel.getAttribute('Target').replace(/^\//, ''); alvo = tg.startsWith('xl/') ? tg : 'xl/' + tg; }
+    } catch (err) { /* usa a primeira planilha */ }
+    const sx = await ler(alvo) || await ler(Object.keys(files).filter(n => /^xl\/worksheets\/[^/]+\.xml$/.test(n)).sort()[0] || '');
+    if (!sx) throw new Error(files['xl/workbook.xml'] ? 'A planilha está vazia.' : 'Não é uma planilha do Excel (.xlsx). No programa da planilha, use "Salvar como" .xlsx ou .csv.');
+    const col = ref => { let n = 0; for (const ch of String(ref).replace(/\d+$/, '')) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
+    const linhas = [];
+    tags(xml(sx), 'row').forEach(r => {
+      const out = [], rn = Number(r.getAttribute('r'));
+      tags(r, 'c').forEach(c => {
+        const t = c.getAttribute('t'), v = tags(c, 'v')[0], val = v ? v.textContent : '';
+        let x;
+        if (t === 's') x = shared[Number(val)] || '';
+        else if (t === 'inlineStr') x = tags(c, 't').map(y => y.textContent).join('');
+        else if (t === 'str' || t === 'b' || t === 'e') x = val;
+        else x = val === '' ? '' : Number(val);
+        const i = c.getAttribute('r') ? col(c.getAttribute('r')) : out.length;
+        if (i >= 0 && i < 200) out[i] = x;
+      });
+      const idx = Number.isInteger(rn) && rn > 0 && rn <= 200000 ? rn - 1 : linhas.length;
+      if (idx >= linhas.length) linhas[idx] = out;
+    });
+    for (let i = 0; i < linhas.length; i++) if (!linhas[i]) linhas[i] = []; // Excel não grava linha vazia: mantém o número da linha
+    return linhas;
+  }
+  /* reconhece as colunas pelo nome (do jeito que a pessoa escreveu) */
+  const norm = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const SINON = {
+    codigo: ['codigoean', 'codigo', 'cod', 'ean', 'codigodebarras', 'codbarras', 'gtin', 'sku', 'referencia', 'ref', 'codigointerno'],
+    nome: ['nome', 'produto', 'nomedoproduto', 'item', 'mercadoria', 'descricaodoproduto'],
+    preco: ['preco', 'precodevenda', 'precovenda', 'valor', 'valordevenda', 'valorvenda', 'venda', 'precounitario', 'pv'],
+    precoDe: ['precode', 'precoantigo', 'precoriscado', 'de'],
+    estoque: ['estoque', 'quantidade', 'qtd', 'qtde', 'saldo', 'estoqueatual'],
+    categoria: ['categoria', 'grupo', 'secao', 'departamento'],
+    unidade: ['unidade', 'un', 'und', 'medida'],
+    descricao: ['descricao', 'detalhes', 'observacao', 'obs'],
+    custo: ['custo', 'precodecusto', 'precocusto', 'valorcusto', 'custounitario']
+  };
+  function montarImport(rows) {
+    let h = -1, map = null;
+    for (let i = 0, vistas = 0; i < rows.length && vistas < 10 && h < 0; i++) {
+      if (!(rows[i] || []).some(c => c !== '' && c != null)) continue; // linha vazia não conta
+      vistas++;
+      const m = {}; (rows[i] || []).forEach((c, j) => { const n = norm(c); for (const [k, ns] of Object.entries(SINON)) if (m[k] == null && ns.includes(n)) { m[k] = j; break; } });
+      if (m.nome == null && m.descricao != null) { m.nome = m.descricao; delete m.descricao; }
+      if (m.nome != null && m.preco != null) { h = i; map = m; }
+    }
+    if (h < 0) throw new Error('Não achei as colunas "Nome" e "Preço" na primeira linha da planilha. Use o modelo (botão "Baixar modelo").');
+    const txt = v => v == null ? '' : typeof v === 'number' ? (Number.isInteger(v) ? String(v) : String(v)) : String(v).trim();
+    const dinheiro = v => typeof v === 'number' ? r2(v) : toNum(String(v || '').replace(/^R\$\s*/i, ''));
+    const itens = [], erros = [], vistos = new Set();
+    for (let i = h + 1; i < rows.length; i++) {
+      const r = rows[i] || [], g = k => map[k] == null ? '' : r[map[k]];
+      if (!Object.keys(map).some(k => txt(g(k)) !== '')) continue; // linha vazia
+      const linha = i + 1, it = { linha }, prob = m => erros.push({ linha, erro: m });
+      it.nome = txt(g('nome')).replace(/\s+/g, ' ');
+      if (it.nome.length < 2) { prob('sem nome'); continue; }
+      const p = dinheiro(g('preco'));
+      if (!(p > 0)) { prob(it.nome + ': preço vazio ou inválido'); continue; }
+      it.preco = r2(p);
+      const cod = typeof g('codigo') === 'number' ? String(Math.round(g('codigo'))) : txt(g('codigo')).replace(/\s+/g, '');
+      if (cod) { if (!/^[A-Za-z0-9._\/-]{1,30}$/.test(cod)) { prob(it.nome + ': código inválido'); continue; } if (vistos.has(cod.toLowerCase())) { prob(it.nome + ': código ' + cod + ' repetido'); continue; } vistos.add(cod.toLowerCase()); it.codigo = cod; }
+      if (txt(g('precoDe'))) { const d = dinheiro(g('precoDe')); if (!(d > it.preco)) { prob(it.nome + ': "preço de" precisa ser maior que o preço'); continue; } it.precoDe = r2(d); }
+      if (txt(g('custo'))) { const c = dinheiro(g('custo')); if (!(c >= 0)) { prob(it.nome + ': custo inválido'); continue; } it.custo = r2(c); }
+      if (txt(g('estoque')) && M('l_estoque')) { const e = typeof g('estoque') === 'number' ? g('estoque') : toInt(g('estoque')); if (!(Number.isInteger(e) && e >= 0 && e <= 1000000)) { prob(it.nome + ': estoque precisa ser um número inteiro'); continue; } it.estoque = e; }
+      if (txt(g('categoria'))) it.categoria = txt(g('categoria')).slice(0, 40);
+      if (txt(g('descricao'))) it.descricao = txt(g('descricao')).slice(0, 1500);
+      if (txt(g('unidade'))) { const u = txt(g('unidade')).toLowerCase(); if (!(S.unidades || []).includes(u)) { prob(it.nome + ': unidade "' + u + '" (use ' + (S.unidades || []).join(', ') + ')'); continue; } it.unidade = u; }
+      itens.push(it);
+    }
+    return { itens, erros, cols: Object.keys(map) };
+  }
+  function revisarPlanilha(R, nome) {
+    const at = R.itens.filter(x => existe(x.codigo)).length, nv = R.itens.length - at;
+    const NOMES = { codigo: 'Código', nome: 'Nome', preco: 'Preço', precoDe: 'Preço de', estoque: 'Estoque', categoria: 'Categoria', unidade: 'Unidade', descricao: 'Descrição', custo: 'Custo' };
+    openSheet('Importar planilha', `
+      <p class="small muted">${esc(nome)} · colunas usadas: ${esc(R.cols.map(k => NOMES[k]).join(', '))}</p>
+      <div class="kpis"><div class="k"><span>Novos</span><b class="pos">${nv}</b></div><div class="k"><span>Atualizam</span><b>${at}</b></div><div class="k"><span>Com erro</span><b class="${R.erros.length ? 'neg' : ''}">${R.erros.length}</b></div></div>
+      ${R.cols.includes('estoque') && M('l_estoque') ? '<p class="note">O estoque da planilha substitui o estoque que está na loja hoje.</p>' : ''}
+      ${R.erros.length ? `<div class="warn"><b>Linhas que não vão entrar:</b><br>${R.erros.slice(0, 15).map(x => 'Linha ' + x.linha + ': ' + esc(x.erro)).join('<br>')}${R.erros.length > 15 ? '<br>E mais ' + (R.erros.length - 15) + '.' : ''}</div>` : ''}
+      ${R.itens.length ? `<div class="scroll"><table><thead><tr><th>Nome</th><th>Código</th><th class="n">Preço</th>${R.cols.includes('estoque') && M('l_estoque') ? '<th class="n">Estoque</th>' : ''}<th></th></tr></thead><tbody>
+        ${R.itens.slice(0, 30).map(x => `<tr><td>${esc(x.nome)}</td><td>${esc(x.codigo || '')}</td><td class="n">${money(x.preco)}</td>${R.cols.includes('estoque') && M('l_estoque') ? `<td class="n">${x.estoque == null ? '' : x.estoque}</td>` : ''}<td class="small">${existe(x.codigo) ? 'atualiza' : 'novo'}</td></tr>`).join('')}</tbody></table></div>
+        ${R.itens.length > 30 ? `<p class="small muted">Mostrando 30 de ${R.itens.length}.</p>` : ''}` : '<p class="muted">Nenhuma linha boa para importar.</p>'}
+      <p class="neg small" id="pie" role="alert" style="font-weight:600;min-height:16px"></p>
+      ${R.itens.length ? `<button class="btn pri full" type="button" id="pii">Importar ${R.itens.length} produto${R.itens.length === 1 ? '' : 's'}</button>` : ''}`, () => {
+      const bt = $('#pii'); if (!bt) return;
+      bt.addEventListener('click', async () => {
+        bt.disabled = true;
+        try { const r = await enviarImport(R.itens, {}, bt); await reload(); fimImport(r); }
+        catch (e) { if (e.feitos) { R.itens = R.itens.slice(e.feitos); revisarPlanilha(R, nome); $('#pie').textContent = e.message; await reload().catch(() => {}); return; } bt.disabled = false; bt.textContent = 'Importar ' + R.itens.length + ' produto' + (R.itens.length === 1 ? '' : 's'); if (e.status === 401) return fail(e); $('#pie').textContent = e.message; await reload().catch(() => {}); }
+      });
+    });
+  }
+
   const PRESETS = [['Tamanho', ['PP', 'P', 'M', 'G', 'GG']], ['Numeração', ['34', '36', '38', '40', '42', '44']], ['Calçado', ['34', '35', '36', '37', '38', '39', '40']], ['Cor', ['Preto', 'Branco', 'Azul', 'Vermelho']]];
   /* reduz a foto no aparelho antes de enviar (fica leve e sem dado escondido da câmera) */
   function reduzir(f) {
@@ -231,11 +484,11 @@
   }
   function formProduto(p0) {
     const edit = !!p0;
-    const F = p0 ? JSON.parse(JSON.stringify(p0)) : { id: 'x' + hex(6), nome: '', descricao: '', categoria: '', preco: '', precoDe: '', unidade: 'un', fotos: [], grupoVar: '', variacoes: [], estoque: '', faixas: [], ativo: true, destaque: false };
+    const F = p0 ? JSON.parse(JSON.stringify(p0)) : { id: 'x' + hex(6), codigo: '', custo: '', nome: '', descricao: '', categoria: '', preco: '', precoDe: '', unidade: 'un', fotos: [], grupoVar: '', variacoes: [], estoque: '', faixas: [], ativo: true, destaque: false };
     // o estoque que estava gravado quando a dona abriu (o servidor só troca o que ela mexeu)
     const vistoProd = edit ? (p0.estoque == null ? null : p0.estoque) : undefined;
     const vistoVar = new Map(edit ? p0.variacoes.map(v => [v.id, v.estoque == null ? null : v.estoque]) : []);
-    if (edit) { F.preco = numIn(F.preco); F.precoDe = numIn(F.precoDe); F.estoque = F.estoque == null ? '' : String(F.estoque); F.variacoes = F.variacoes.map(v => Object.assign({}, v, { estoque: v.estoque == null ? '' : String(v.estoque) })); F.faixas = F.faixas.map(f => ({ min: String(f.min), preco: numIn(f.preco) })); }
+    if (edit) { F.preco = numIn(F.preco); F.precoDe = numIn(F.precoDe); F.custo = numIn(F.custo); F.estoque = F.estoque == null ? '' : String(F.estoque); F.variacoes = F.variacoes.map(v => Object.assign({}, v, { estoque: v.estoque == null ? '' : String(v.estoque) })); F.faixas = F.faixas.map(f => ({ min: String(f.min), preco: numIn(f.preco) })); }
     const cats = [...new Set(S.produtos.map(p => p.categoria).filter(Boolean))].sort();
     const eu = {};
     let enviando = 0;
@@ -250,6 +503,8 @@
           <div class="field"><label for="pd">Preço "de" riscado (opcional)</label><input inputmode="decimal" id="pd" value="${esc(F.precoDe)}" placeholder="Ex.: 199,90"></div></div>
         <div class="field"><label for="pc">Categoria</label><input type="text" id="pc" maxlength="40" value="${esc(F.categoria)}" placeholder="Ex.: Vestidos" list="pcl"><datalist id="pcl">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
           ${cats.length ? `<div class="chips">${cats.slice(0, 12).map(c => `<button type="button" class="chip" data-cat="${esc(c)}" aria-pressed="${F.categoria === c}">${esc(c)}</button>`).join('')}</div>` : ''}</div>
+        <div class="grid2"><div class="field"><label for="pcd">Código / EAN (opcional)</label><input type="text" id="pcd" maxlength="30" value="${esc(F.codigo || '')}" placeholder="Ex.: 7891234567890"></div>
+          <div class="field"><label for="pcu">Custo (só você vê)</label><input inputmode="decimal" id="pcu" value="${esc(F.custo)}" placeholder="Ex.: 45,00"></div></div>
         <div class="field"><label for="pdz">Descrição (opcional)</label><textarea id="pdz" maxlength="1500" placeholder="Tecido, medidas, como usar…">${esc(F.descricao || '')}</textarea></div>
         <div class="field"><span class="lbl">Vende por</span><div class="chips">${S.unidades.map(u => `<button type="button" class="chip" data-un="${u}" aria-pressed="${F.unidade === u}">${({ un: 'unidade', kg: 'kg', pct: 'pacote', cx: 'caixa', par: 'par', kit: 'kit' })[u]}</button>`).join('')}</div></div>
         ${M('l_variacoes') ? `<section class="card"><h3>Tamanhos, cores ou opções</h3>
@@ -274,7 +529,7 @@
     function redesenhar() { if (!aberto()) return; keep(); const pn = $('#sheet .pn'), y = pn ? pn.scrollTop : 0; draw(); const n = $('#sheet .pn'); if (n) n.scrollTop = y; }
     function keep() {
       const g = id => { const e = document.getElementById(id); return e ? e.value : undefined; };
-      [['pn', 'nome'], ['pp', 'preco'], ['pd', 'precoDe'], ['pc', 'categoria'], ['pdz', 'descricao'], ['pg', 'grupoVar'], ['pe', 'estoque']].forEach(([id, k]) => { const v = g(id); if (v !== undefined) F[k] = v; });
+      [['pn', 'nome'], ['pp', 'preco'], ['pd', 'precoDe'], ['pc', 'categoria'], ['pdz', 'descricao'], ['pg', 'grupoVar'], ['pe', 'estoque'], ['pcd', 'codigo'], ['pcu', 'custo']].forEach(([id, k]) => { const v = g(id); if (v !== undefined) F[k] = v; });
       const a = $('#pa'); if (a) F.ativo = a.checked; const z = $('#pz'); if (z) F.destaque = z.checked;
       document.querySelectorAll('#sheet [data-vn]').forEach(i => { F.variacoes[+i.dataset.vn].nome = i.value; });
       document.querySelectorAll('#sheet [data-ve]').forEach(i => { F.variacoes[+i.dataset.ve].estoque = i.value; });
@@ -336,8 +591,10 @@
         fx.push({ min: mi, preco: pr });
       }
       const est = toInt(F.estoque); if (Number.isNaN(est)) return err('Estoque: use só números.');
+      const custo = toNum(F.custo); if (Number.isNaN(custo)) return err('Custo: use só números (ex.: 45,00).');
+      const codigo = String(F.codigo || '').trim().replace(/\s+/g, ''); if (codigo && !/^[A-Za-z0-9._\/-]{1,30}$/.test(codigo)) return err('Código: use só letras, números, ponto ou traço.');
       if (enviando) return err('Espere as fotos terminarem de enviar.');
-      const b = { id: F.id, nome: F.nome, preco, precoDe, categoria: F.categoria, descricao: F.descricao, unidade: F.unidade, fotos: F.fotos.map(f => f.id), grupoVar: comVar ? (F.grupoVar || 'Opção') : '', variacoes: vars, estoque: comVar ? null : est, faixas: fx, ativo: F.ativo, destaque: F.destaque };
+      const b = { id: F.id, nome: F.nome, preco, precoDe, categoria: F.categoria, descricao: F.descricao, unidade: F.unidade, fotos: F.fotos.map(f => f.id), grupoVar: comVar ? (F.grupoVar || 'Opção') : '', variacoes: vars, estoque: comVar ? null : est, faixas: fx, ativo: F.ativo, destaque: F.destaque, codigo, custo: custo == null ? '' : r2(custo) };
       if (edit) b.estoqueVisto = vistoProd;
       const bt = $('#ps'); bt.disabled = true;
       try { await api('/api/loja/admin/produto', b); await reload(); closeSheet(); toast(edit ? 'Produto salvo' : 'Publicado na vitrine ✓'); if (view !== 'produtos') go('produtos'); else render(); }
