@@ -406,7 +406,9 @@
   };
   function montarImport(rows) {
     let h = -1, map = null;
-    for (let i = 0; i < Math.min(rows.length, 10) && h < 0; i++) {
+    for (let i = 0, vistas = 0; i < rows.length && vistas < 10 && h < 0; i++) {
+      if (!(rows[i] || []).some(c => c !== '' && c != null)) continue; // linha vazia não conta
+      vistas++;
       const m = {}; (rows[i] || []).forEach((c, j) => { const n = norm(c); for (const [k, ns] of Object.entries(SINON)) if (m[k] == null && ns.includes(n)) { m[k] = j; break; } });
       if (m.nome == null && m.descricao != null) { m.nome = m.descricao; delete m.descricao; }
       if (m.nome != null && m.preco != null) { h = i; map = m; }
@@ -453,7 +455,7 @@
       bt.addEventListener('click', async () => {
         bt.disabled = true;
         try { const r = await enviarImport(R.itens, {}, bt); await reload(); fimImport(r); }
-        catch (e) { if (e.feitos) R.itens = R.itens.slice(e.feitos); bt.disabled = false; bt.textContent = 'Importar ' + R.itens.length + ' produto' + (R.itens.length === 1 ? '' : 's'); if (e.status === 401) return fail(e); $('#pie').textContent = e.message; await reload().catch(() => {}); }
+        catch (e) { if (e.feitos) { R.itens = R.itens.slice(e.feitos); revisarPlanilha(R, nome); $('#pie').textContent = e.message; await reload().catch(() => {}); return; } bt.disabled = false; bt.textContent = 'Importar ' + R.itens.length + ' produto' + (R.itens.length === 1 ? '' : 's'); if (e.status === 401) return fail(e); $('#pie').textContent = e.message; await reload().catch(() => {}); }
       });
     });
   }
