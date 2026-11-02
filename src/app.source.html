@@ -5230,11 +5230,11 @@ function productForm(){
     <div class="seg pftabs" role="tablist" aria-label="Partes do produto"><button type="button" role="tab" data-pft="cad" aria-selected="${PT==='cad'}" aria-pressed="${PT==='cad'}">Cadastro</button><button type="button" role="tab" data-pft="prec" aria-selected="${PT==='prec'}" aria-pressed="${PT==='prec'}">Precificação</button></div>
     <div class="psec" data-sec="${e.id?'all':'prec'}"><div class="pfsum"><b>${esc(e.name||'Produto sem nome')}</b><span class="small muted">${[e.unit,e.code?'Cód. '+e.code:'',e.cat].filter(Boolean).map(esc).join(' · ')}</span></div></div>
     <div class="psec" data-sec="cad">${stariaBox()}
-    <div class="photo-pick"><img id="pimg" src="${e.photo||ph(e.name||'Novo Produto',150)}" alt="Foto do produto">
+    <div class="photo-pick"><img id="pimg" src="${e.photo||ph(e.name||'Novo Produto',150)}" alt="Foto do produto"${e.photo?'':' title="Toque para buscar uma imagem na internet" style="cursor:pointer"'}>
       <div class="field"><span class="lbl">Foto do produto</span>
         <div class="pastezone" id="pzone" contenteditable="true" role="textbox" aria-label="Colar imagem do produto" spellcheck="false"><b>Cole ou arraste a imagem aqui</b></div>
         <span class="small muted">Na internet: botão direito na foto › <b>Copiar imagem</b>.</span>
-        <label class="btn ghost dlb filebtn" style="justify-self:start">Escolher foto do aparelho<input type="file" id="pfile" accept="image/*" class="vhide"></label></div></div>
+        <div class="row" style="gap:6px;flex-wrap:wrap"><button type="button" class="btn ghost dlb" id="pgsearch">Buscar imagem na internet</button><label class="btn ghost dlb filebtn" style="justify-self:start">Escolher foto do aparelho<input type="file" id="pfile" accept="image/*" class="vhide"></label></div></div></div>
     <div class="field"><label for="pn">Nome</label><input type="text" id="pn" value="${esc(e.name)}" placeholder="Ex.: Arroz Tipo 1 5kg" required></div>
     <div class="grid2 pquick"><div class="field"><label for="pqp">Preço de venda${RU?' da embalagem':''} (R$)</label><input type="text" inputmode="decimal" id="pqp" value="${money(e.price)}" placeholder="0,00"></div><div class="field"><label for="pqc">Preço de custo${RU?' da embalagem':''} (R$)</label><input type="text" inputmode="decimal" id="pqc" value="${money(e.cost)}" placeholder="0,00"></div><span class="small muted" style="grid-column:1/-1;margin-top:-6px">Margem, comissão e condições: aba <b>Precificação</b>.</span></div>
     <div class="grid2">
@@ -5316,6 +5316,9 @@ function productForm(){
   {const sc=$('#pc'),nc=$('#pcnew');sc.onchange=()=>{nc.hidden=sc.value!=='__new';if(!nc.hidden){nc.focus();return}collect();e.sub='';const y=window.scrollY;productForm();window.scrollTo(0,y);const n=$('#psub');if(n)n.focus()}}
   {const ss=$('#psub'),ns=$('#psubnew');ss.onchange=()=>{ns.hidden=ss.value!=='__new';if(!ns.hidden)ns.focus()}}
   $('#pfile').onchange=ev=>{const f=ev.target.files[0];if(f)setPhoto(f)};
+  {const gs=()=>{const q=(($('#pn')||{}).value||'').trim();if(!q){toast('Digite o nome do produto primeiro');const n=$('#pn');if(n)n.focus();return}
+      window.open('https://www.google.com/search?tbm=isch&q='+encodeURIComponent(q),'_blank','noopener');toast('Achou a imagem? Botão direito › Copiar imagem e cole aqui (Ctrl+V). No celular: salve e use "Escolher foto".')};
+    $('#pgsearch').onclick=gs;const im=$('#pimg');if(im)im.onclick=()=>{if(!ui.edit.photo)gs()}}
   {const bd=$('#peansdel');if(bd)bd.onclick=()=>{ui.edit.eans=[];const bx=$('#peansbox');if(bx)bx.remove()}}
   bindStaria();if(ui.stFocus){ui.stFocus=false;const sq=$('#stq');if(sq){sq.focus();if(ui.stPrefill){sq.value=ui.stPrefill;ui.stPrefill='';const g=$('#stgo');if(g)g.click()}}}
   /* custo, venda, margem e markup ligados: venda muda margem/markup; margem ou markup mudam a venda */
