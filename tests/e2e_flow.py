@@ -48,7 +48,7 @@ with sync_playwright() as pw:
     cli.screenshot(path=f'{OUT}/f01_cliente_enviado.png')
     # ---------- administrador responde a negociação
     adm = device('admin', False); login(adm, '#admin', ('#lu', '#lp', '#lf'), 'eduardo', ADMIN)
-    adm.locator('.tabs [data-tab]', has_text='Pedidos').first.click(); adm.wait_for_timeout(300)
+    adm.locator('.tabs [data-tab]', has_text='Pedidos').first.dispatch_event('click'); adm.wait_for_timeout(300)
     adm.locator('.subnav [data-tab]', has_text='Decisões').first.click(); adm.wait_for_timeout(400)
     adm.locator('[data-anexp]').first.click(); adm.wait_for_timeout(300)
     p = adm.locator('.anit', has_text='CLIENTE PEDIU').locator('[data-anp]').first
@@ -79,7 +79,7 @@ with sync_playwright() as pw:
     wait_sync(ven, 1000); say('vendedor enviou:', toast(ven))
     # ---------- administrador aprova
     adm.reload(); adm.wait_for_timeout(1500)
-    adm.locator('.tabs [data-tab]', has_text='Pedidos').first.click(); adm.wait_for_timeout(300)
+    adm.locator('.tabs [data-tab]', has_text='Pedidos').first.dispatch_event('click'); adm.wait_for_timeout(300)
     adm.locator('.subnav [data-tab]', has_text='Decisões').first.click(); adm.wait_for_timeout(400)
     if adm.locator('[data-anexp]').count(): adm.locator('[data-anexp]').first.click(); adm.wait_for_timeout(300)
     adm.screenshot(path=f'{OUT}/f04_admin_decisao.png')
@@ -105,7 +105,7 @@ with sync_playwright() as pw:
     # ---------- vendedor recebe o aviso da falta
     ven.reload(); ven.wait_for_timeout(1500); say('vendedor aviso falta:', ven.locator('.vsep').count() > 0)
     # ---------- administrador tenta pular o faturamento
-    adm.reload(); adm.wait_for_timeout(1500); adm.locator('.tabs [data-tab]', has_text='Pedidos').first.click(); adm.wait_for_timeout(300)
+    adm.reload(); adm.wait_for_timeout(1500); adm.locator('.tabs [data-tab]', has_text='Pedidos').first.dispatch_event('click'); adm.wait_for_timeout(300)
     adm.locator('.subnav [data-tab]', has_text='Pedidos').first.click(); adm.wait_for_timeout(300)
     row = adm.locator('.orow', has_text='nº 1015').first
     if row.locator('[data-v=pronto]').count(): row.locator('[data-v=pronto]').click(); adm.wait_for_timeout(500)
@@ -120,7 +120,7 @@ with sync_playwright() as pw:
     ft.screenshot(path=f'{OUT}/f06_faturamento.png')
     # ---------- administrador escolhe o motorista
     adm2 = device('admin-celular'); login(adm2, '#admin', ('#lu', '#lp', '#lf'), 'eduardo', ADMIN)
-    adm2.locator('.tabs [data-tab]', has_text='Pedidos').first.click(); adm2.wait_for_timeout(300)
+    adm2.locator('.tabs [data-tab]', has_text='Pedidos').first.dispatch_event('click'); adm2.wait_for_timeout(300)
     adm2.locator('.subnav [data-tab]', has_text='Pedidos').first.click(); adm2.wait_for_timeout(300)
     for k in range(adm2.locator('[data-drvpick]').count()):
         adm2.locator('[data-drvpick]').nth(k).click(); adm2.wait_for_timeout(250); adm2.fill('#drvq', 'ze'); adm2.wait_for_timeout(200); adm2.press('#drvq', 'Enter'); wait_sync(adm2, 600)
@@ -149,7 +149,7 @@ with sync_playwright() as pw:
     ent.reload(); ent.wait_for_timeout(1500); ent.screenshot(path=f'{OUT}/f07_entregador_fim.png')
     say('entregador vê:', ent.locator('#app').inner_text()[:160].replace('\n', ' / '))
     # ---------- administrador: dinheiro do motorista e canhoto
-    adm.reload(); adm.wait_for_timeout(1500); adm.locator('.tabs [data-tab]', has_text='Pedidos').first.click(); adm.wait_for_timeout(300)
+    adm.reload(); adm.wait_for_timeout(1500); adm.locator('.tabs [data-tab]', has_text='Pedidos').first.dispatch_event('click'); adm.wait_for_timeout(300)
     adm.locator('.subnav [data-tab]', has_text='Entregas').first.click(); adm.wait_for_timeout(500)
     say('admin dinheiro:', adm.locator('.entsec').first.inner_text()[:120].replace('\n', ' / '))
     if adm.locator('[data-dvph]').count():

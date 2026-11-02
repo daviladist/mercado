@@ -39,7 +39,7 @@ let SRV_NOCLI=false,SRV_BNAME='';
 async function srvLoadBrand(){try{const b=await api('/api/brand');SRV_NOCLI=!!(b&&b.clientes===false);SRV_BNAME=String(b&&b.name||'');if(b&&!b.primary){TENANT={id:b.id,primary:false,brand:{name:b.name,color:b.color,logo:b.logo},modules:null};{const m=document.querySelector('link[rel=manifest]');if(m)m.href='/api/manifest?t='+encodeURIComponent(TSLUG)+(CLIENT_ONLY?'&k=cliente':'');const ic=document.querySelector('link[rel=apple-touch-icon]');if(ic)ic.href='/icons/tino-180.png';const at=document.querySelector('meta[name=apple-mobile-web-app-title]');if(at)at.content=String(b.name||'Tino').slice(0,30)}S.store.name=String(b.name||'').toUpperCase();document.title=b.name||document.title;srvBrand()}}catch(e){if(e.status===404){document.body.innerHTML='<div style="font-family:sans-serif;padding:40px;text-align:center"><h2>Empresa não encontrada</h2><p>Confira o endereço que a loja te passou.</p></div>';throw e}}}
 function srvBrand(){const c=TENANT&&TENANT.brand&&TENANT.brand.color;if(!c||!/^#[0-9A-Fa-f]{6}$/.test(c))return;
   const n=parseInt(c.slice(1),16),dk=[16,8,0].map(k=>Math.round(((n>>k)&255)*.78).toString(16).padStart(2,'0')).join(''),R=document.documentElement.style;
-  R.setProperty('--brand',c);R.setProperty('--brand-dark','#'+dk);if(TENANT&&TENANT.primary===false){R.setProperty('--accent',c);R.setProperty('--stripe','#'+dk);R.setProperty('--accent-soft',c+'1F')}const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',c)}
+  R.setProperty('--brand',c);R.setProperty('--brand-dark','#'+dk);if(TENANT&&TENANT.primary===false){R.setProperty('--accent',c);R.setProperty('--accent-dark','#'+dk);R.setProperty('--stripe','#'+dk);R.setProperty('--accent-soft',c+'1F')}const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',c)}
 async function loadState(){const r=await api('/api/state');SRV.me=r.me;S=r.S;SRV.V=r.V||{meta:{}};TENANT=r.T||null;srvBrand();try{if(typeof pdfLogo==='function')pdfLogo()}catch(e){}srvFix();srvSnap();
   if(ui.client)ui.client=S.customers.find(c=>c.id===ui.client.id)||null;
   if(SRV.me&&SRV.me.role==='cliente')ui.client=S.customers.find(c=>c.id===SRV.me.refId)||ui.client}
@@ -89,12 +89,25 @@ function srvNetBar(){let b=document.getElementById('srvnet');const n=SRV.nPend;
   if(!b){b=document.createElement('div');b.id='srvnet';b.className='srvnet';b.setAttribute('role','status');document.body.appendChild(b)}
   b.hidden=false;b.textContent='Sem internet: '+n+(n>1?' alterações ainda não foram enviadas':' alteração ainda não foi enviada')+'. O app envia sozinho quando a conexão voltar. Não feche o app.'}
 window.addEventListener('online',()=>{if(SRV.me)srvSync()});
+/* envio grande (ex.: planilha com centenas de produtos): vai em partes, uma depois da outra (o servidor aceita até 500 alterações e 4 MB por vez) */
+const SRV_MAXN=400,SRV_MAXB=2500000,SRV_MAXONE=3500000;
+/* registro grande demais para o servidor (limite de 4 MB por envio): volta como está no servidor e avisa; o resto da fila segue */
+/* volta UM registro para como está no servidor (a alteração dele foi recusada) */
+function srvRevert(x){if(x.c==='meta'){const b=SRV.base.meta[x.id];if(b===undefined)delete S[x.id];else S[x.id]=JSON.parse(b);return}
+  const arr=S[x.c]=S[x.c]||[],k=arr.findIndex(d=>d&&d.id===x.id),b=(SRV.base[x.c]||{})[x.id];if(k>=0){if(b)arr[k]=JSON.parse(b);else arr.splice(k,1)}else if(b)arr.unshift(JSON.parse(b))}
+function srvDropHuge(L){const big=L.filter(x=>x.op==='put'&&JSON.stringify(x).length>SRV_MAXONE);if(!big.length)return L;
+  big.forEach(srvRevert);
+  srvAlert(big.length>1?big.length+' registros grandes demais para enviar (foto muito pesada?). Faça de novo com uma foto menor.':'registro grande demais para enviar (foto muito pesada?). Faça de novo com uma foto menor.');
+  try{srvSoftRender(true)}catch(e){}return L.filter(x=>!big.includes(x))}
+function srvChunk(L){const out=[];let n=0;for(const x of L){const z=JSON.stringify(x).length;if(out.length&&(out.length>=SRV_MAXN||n+z>SRV_MAXB))break;out.push(x);n+=z}return out}
 async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
-  const {ch,order}=srvDiff();SRV.nPend=ch.length;if(SRV.offHit){SRV.offHit=false;srvAlert('Não foi gravado: função desligada para esta empresa.');srvSoftRender(true)}if(!ch.length&&!Object.keys(order).length){srvPersist([]);SRV.offline=false;srvNetBar();return}
-  srvPersist(ch);
+  const d0=srvDiff(),all=srvDropHuge(d0.ch),ord0=d0.order;SRV.nPend=all.length;if(SRV.offHit){SRV.offHit=false;srvAlert('Não foi gravado: função desligada para esta empresa.');srvSoftRender(true)}if(!all.length&&!Object.keys(ord0).length){SRV.solo=false;srvPersist([]);SRV.offline=false;srvNetBar();return}
+  srvPersist(all);
+  // depois de uma recusa geral, manda um registro por vez até achar o que o servidor não aceita (os outros seguem)
+  const ch=SRV.solo?all.slice(0,1):srvChunk(all),last=ch.length===all.length,order=last?ord0:{};
   SRV.busy=true;srvBadge(true);clearTimeout(SRV.retry);
   try{const sent={};ch.forEach(x=>{if(x.op==='put')sent[x.c+':'+x.id]=JSON.stringify(x.doc)});const r=await api('/api/sync',{changes:ch,order});
-    SRV.offline=false;const t=srvApply(r,order,sent);
+    SRV.offline=false;SRV.fails=0;if(!last)SRV.again=true;else SRV.solo=false;const t=srvApply(r,order,sent);
     // recusadas: mostra o motivo e volta aquele registro para como está no servidor (as outras gravações seguem)
     if((r.rejected||[]).length){r.rejected.forEach(x=>{SRV.rej[x.id]=x.error;const arr=S[x.c]||[],k=arr.findIndex(d=>d&&d.id===x.id),b=(SRV.base[x.c]||{})[x.id];
         if(k>=0){if(b)arr[k]=JSON.parse(b);else arr.splice(k,1)}t.add(x.c)});
@@ -104,7 +117,9 @@ async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
   catch(e){if(e.status===401){toast('Sua sessão terminou. Entre de novo.');setTimeout(()=>location.reload(),1200);return}if(srvKicked(e))return;
     if(e.data&&e.data.mustReset){srvResetScreen();return}
     if(e.status===0||e.status>=500&&e.status!==501){/* sem internet ou servidor fora: guarda e tenta de novo sozinho */
-      SRV.offline=e.status===0;srvNetBar();if(ui.view==='cliente'&&ui.cliPage==='ok')try{renderClient()}catch(_){}if(!SRV.offline)toast('O servidor não respondeu. Vamos tentar de novo em instantes.');
+      SRV.offline=e.status===0;srvNetBar();
+      // servidor recusando várias vezes seguidas (não é falta de internet): avisa de forma clara, sem perder nada
+      if(!SRV.offline){SRV.fails=(SRV.fails||0)+1;if(SRV.fails===4)srvAlert('o servidor não conseguiu gravar depois de várias tentativas. O que você fez continua guardado neste aparelho e será enviado sozinho. Se continuar assim, avise a loja ou o suporte.')}if(ui.view==='cliente'&&ui.cliPage==='ok')try{renderClient()}catch(_){}if(!SRV.offline)toast('O servidor não respondeu. Vamos tentar de novo em instantes.');
       SRV.retry=setTimeout(srvSync,SRV.offline?5000:8000);return}
     if(e.status===409){/* alguém gravou o mesmo registro antes: junta as mudanças quando foram em campos diferentes */
       const P=srvPatches(ch);try{await loadState()}catch(_){}
@@ -112,7 +127,12 @@ async function srvSync(){if(!SRV.me)return;if(SRV.busy){SRV.again=true;return}
       if(m.applied)SRV.again=true;
       if(m.lost)srvAlert('Outra pessoa alterou a mesma informação antes de você. A tela foi atualizada: confira e faça de novo.');
       return}
-    srvAlert(e.message||'Não foi possível salvar.');try{await loadState()}catch(_){}srvPersist([]);srvSoftRender(true)}
+    /* recusa do envio inteiro (ex.: envio inválido ou grande demais): NADA é descartado. Com vários registros, tenta um por vez;
+       com um só, aquele registro volta como está no servidor (com aviso) e o resto da fila segue */
+    if(ch.length>1){SRV.solo=true;SRV.again=true;return}
+    if(ch.length===1){const x=ch[0];SRV.rej[x.id]=e.message||'Não foi possível salvar.';srvRevert(x);srvAlert(e.message||'Não foi possível salvar.');SRV.again=true;
+      const left=srvDiff().ch;SRV.nPend=left.length;srvPersist(left);if(!left.length)SRV.solo=false;srvSoftRender(true);return}
+    Object.entries(order||{}).forEach(([c,ids])=>SRV.ord[c]=ids);srvAlert(e.message||'Não foi possível salvar.');srvSoftRender(true)}
   finally{SRV.busy=false;srvBadge(false);srvNetBar();if(SRV.again){SRV.again=false;srvSync()}}}
 /* aviso que fica na tela até a pessoa fechar (erros de gravação não podem passar despercebidos) */
 function srvAlert(msg){let b=document.getElementById('srvalert');if(!b){b=document.createElement('div');b.id='srvalert';b.className='srvalert';b.setAttribute('role','alert');document.body.appendChild(b)}
@@ -189,6 +209,8 @@ async function srvTempPasswords(box){try{const r=await api('/api/temp-passwords'
   box.innerHTML=`<div class="notice"><b>Anote ou imprima agora:</b> estas senhas aparecem só esta vez. Cada pessoa cria a própria senha no primeiro acesso.</div>
     <div class="tablewrap"><table class="btable"><thead><tr><th>Função</th><th>Nome</th><th>Usuário</th><th>Senha provisória</th></tr></thead><tbody>${r.list.map(x=>`<tr><td>${R[x.role]||x.role}</td><td>${esc(x.name||'')}</td><td>${esc(x.login)}</td><td><b class="num">${esc(x.pass)}</b></td></tr>`).join('')}</tbody></table></div>
     <div class="row"><button type="button" class="btn ghost" id="tmpPrint">Imprimir</button></div>`;{const pb=document.getElementById('tmpPrint');if(pb)pb.onclick=()=>window.print()}await loadState()}catch(e){box.innerHTML='<div class="err">'+esc(e.message)+'</div>'}}
+/* linha de acesso do cliente na lista: sem acesso ao app não mostra usuário nem senha */
+function srvCliAccess(x){if(!cliApp(x))return 'Sem acesso ao app';return 'Usuário: '+(x.login?esc(x.login):'o CNPJ/CPF')+' · '+srvPassLabel(x)}
 function srvPassLabel(x){return x.pass?'senha base (salvando…)':x.hasPass?(x.mustReset?'senha base · aguardando 1º acesso':'senha própria definida'):'sem senha'}
 /* primeiro acesso ao sistema novo: criar o administrador (exige o código de instalação) */
 async function srvMaybeSetup(){try{const r=await api('/api/setup-status');if(!r.needsSetup||SRV.me)return}catch(e){return}
@@ -218,7 +240,7 @@ function srvMerge(P){let applied=0,lost=0;
     Object.entries(p.keys).forEach(([k,v])=>{if(v===undefined)delete d[k];else d[k]=v});applied++});
   return {applied,lost}}
 /* administrador: redefinir a senha de alguém (nova senha base; a pessoa cria a dela no próximo acesso) */
-function srvResetBtn(coll,x){return (x&&(x.login||(coll==='customers'&&x.doc)))?`<button type="button" class="btn ghost dlb" data-pwreset="${coll}|${x.id}">${x.hasPass?'Redefinir senha':'Definir senha base'}</button>`:''}
+function srvResetBtn(coll,x){if(coll==='customers'&&!cliApp(x))return '';return (x&&(x.login||(coll==='customers'&&x.doc)))?`<button type="button" class="btn ghost dlb" data-pwreset="${coll}|${x.id}">${x.hasPass?'Redefinir senha':'Definir senha base'}</button>`:''}
 function srvSuggestPass(){const a='abcdefghjkmnpqrstuvwxyz23456789',b=new Uint8Array(8);crypto.getRandomValues(b);let p='';b.forEach(v=>p+=a[v%a.length]);return p.slice(0,4)+'-'+p.slice(4)}
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-pwreset]');if(!b||!SRV.me||SRV.me.role!=='admin')return;e.preventDefault();
   const [coll,id]=b.dataset.pwreset.split('|'),d=(S[coll]||[]).find(x=>x.id===id);if(!d)return;const row=b.closest('.prow')||b.parentElement;

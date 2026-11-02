@@ -215,10 +215,24 @@ with cf.ThreadPoolExecutor(2) as ex: res = list(ex.map(corre, range(2)))
 s, st = A.req('/api/state'); ped = [o for o in st['S']['orders'] if o.get('pdvVenda') == CF]
 check(res.count(200) == 1 and not (res[0] == 200 and ped), 'cancelar e faturar juntos: só um vale (cancelar/faturar = %s, pedidos = %s)' % (res, len(ped)))
 
+print('== última compra conta o balcão')
+s, st = A.req('/api/state'); comPed = {o['customerId'] for o in st['S']['orders']}
+cv = [c for c in st['S']['customers'] if c.get('lastBuyAt') and c['id'] not in comPed]
+check(len(cv) >= 1, 'cliente que só comprou no balcão tem a data da última compra (%s)' % [c['id'] for c in cv])
+print('== ranking: itens vendidos no balcão por produto')
+import datetime as _dt
+HJ = _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=-3))).strftime('%Y-%m-%d'); DE = (_dt.datetime.now(_dt.timezone(_dt.timedelta(hours=-3))) - _dt.timedelta(days=6)).strftime('%Y-%m-%d')
+s, R = A.req('/api/pdv/resumo?de=%s&ate=%s' % (DE, HJ)); s2, I = A.req('/api/pdv/itens?de=%s&ate=%s' % (DE, HJ))
+tot = round(sum(x['t'] for x in I.get('itens', [])), 2)
+check(s2 == 200 and abs(tot - R['total']) < 0.011 and I['vendas'] > 0, 'itens do balcão por produto somam o total vendido no período (%s x %s)' % (tot, R['total']))
+check(all(x['q'] > 0 and x['pid'] for x in I.get('itens', [])), 'cada linha tem produto e quantidade')
+s, _ = op.req('/api/pdv/itens?de=%s&ate=%s' % (DE, HJ)); check(s == 403, 'operador de caixa não vê os itens por produto (custo)')
+s, _ = A.req('/api/pdv/itens?de=2026-12-01&ate=2026-11-01'); check(s == 400, 'período invertido é recusado')
 print('== outra empresa não vê o caixa desta')
 s, r = cen.req('/api/central/tenant', {'name': 'Loja PDV ' + secrets.token_hex(2), 'segment': 'basico', 'status': 'ativa', 'modules': {'pdv': True}}); TB = r['tenant']['id']
 s, r = cen.req('/api/central/tenant-admin', {'id': TB, 'login': 'dono'}); B = C(TB); B.req('/api/login', {'role': 'admin', 'login': 'dono', 'password': r['password']}); NB = pw(); B.req('/api/password', {'current': r['password'], 'next': NB})
 s, RB = B.req('/api/pdv/resumo'); check(s == 200 and RB['vendas'] == 0 and not RB['turnos'], 'empresa B não vê vendas nem caixas da principal')
+s, IB = B.req('/api/pdv/itens?de=%s&ate=%s' % (DE, HJ)); check(s == 200 and IB['vendas'] == 0 and not IB['itens'], 'empresa B não vê os itens do balcão da principal')
 s, r = B.req('/api/pdv/faturar', {'id': FV}); check(s == 404, 'empresa B não fatura venda da principal')
 s, r = B.req('/api/pdv/autorizar', dict(d10, gerente={'login': AL, 'senha': APW})); check(s in (400, 403), 'gerente da principal não autoriza na empresa B')
 

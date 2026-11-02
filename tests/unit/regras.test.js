@@ -276,3 +276,16 @@ test('item do pedido guarda o custo de referência e só a loja vê', () => {
   const o = order(S, { sellerId: 's1', items: [it('p1', 5, 60, { cost: 40, refC: 50 })] });
   for (const role of ['vendedor', 'cliente']) { const x = policy.stripOrder(clone(o), role); assert.equal(x.items[0].refC, undefined, role); }
 });
+
+test('vendedor recebe só a data da última compra do cliente (qualquer canal), nada mais do pedido que não é dele', () => {
+  const S = base();
+  S.orders = [
+    { id: 'oa', no: 1, customerId: 'c1', customer: 'Mercado Fictício', sellerId: '', status: 'concluido', total: 999, date: '2026-10-20T15:00:00.000Z', items: [{ pid: 'p1', name: 'X', q: 1, price: 999 }] },
+    { id: 'ob', no: 2, customerId: 'c1', customer: 'Mercado Fictício', sellerId: '', status: 'cancelado', total: 5, date: '2026-10-30T15:00:00.000Z', items: [] },
+  ];
+  const out = policy.project(S, U.vendedor), c = out.customers.find(x => x.id === 'c1');
+  assert.equal(c.lastBuyAt, '2026-10-20T15:00:00.000Z', 'data da última compra não cancelada');
+  assert.equal(out.orders.length, 0, 'pedido de outro canal continua invisível');
+  assert.equal(JSON.stringify(out).includes('999'), false, 'valor do pedido não vaza');
+  assert.equal(policy.project(S, U.cliente).customers[0].lastBuyAt, undefined, 'cliente não recebe o campo');
+});

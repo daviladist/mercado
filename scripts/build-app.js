@@ -85,7 +85,7 @@ R("<span class=\"small muted\">Usuário: ${esc(k.login)} · Senha: ${esc(k.pass)
 R("<span class=\"small muted\">Usuário: ${esc(k.login)} · Senha: ${esc(k.pass)}</span></div>\n      ${ui.confirmDel==='fk'+k.id", "<span class=\"small muted\">Usuário: ${esc(k.login)} · ${srvPassLabel(k)}</span></div>\n      ${ui.confirmDel==='fk'+k.id");
 R("${v.login?' · acesso de entregador: '+esc(v.login)+' / '+esc(v.pass):' · sem acesso ao app'}", "${v.login?' · acesso de entregador: '+esc(v.login)+' · '+srvPassLabel(v):' · sem acesso ao app'}");
 R("Acesso: <b>${esc(x.login)}</b> · senha ${esc(x.pass||'')}", "Acesso: <b>${esc(x.login)}</b> · ${srvPassLabel(x)}");
-R("<span class=\"small muted\">Usuário: ${esc(x.login)} · Senha: ${esc(x.pass)}${x.phone?", "<span class=\"small muted\">Usuário: ${esc(x.login)} · ${srvPassLabel(x)}${x.phone?");
+R("<span class=\"small muted\">Usuário: ${esc(x.login)} · Senha: ${esc(x.pass)}${x.phone?", "<span class=\"small muted\">${srvCliAccess(x)}${x.phone?");
 R(`<input type="text" id="cp" value="\${esc(e.pass)}" required>`, `<input type="password" id="cp" value="" autocomplete="new-password" placeholder="\${e.id&&e.hasPass?'Em branco = manter a senha atual':'Senha base (mín. 8): a pessoa troca no 1º acesso'}">`);
 R("pass:Math.floor(1000+Math.random()*9000).toString(),phone:''", "pass:'',phone:''");
 R("const cu={...e,id:e.id||uid(),name,login,pass:$('#cp').value,", "if($('#cp').value&&$('#cp').value.length<8){$('#cerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}\n      const cu={...e,id:e.id||uid(),name,login,pass:$('#cp').value,");
@@ -104,7 +104,7 @@ R("      ${ui.confirmDel==='fk'+k.id?", "      <div class=\"row\" style=\"gap:6p
 R("data-vdel=\"${v.id}\">Excluir</button>`}</div>`).join('')", "data-vdel=\"${v.id}\">Excluir</button>`}</div></div>`).join('')");
 R("      ${ui.confirmDel==='veh'+v.id?", "      <div class=\"row\" style=\"gap:6px\">${srvResetBtn('vehicles',v)}${ui.confirmDel==='veh'+v.id?");
 R("data-sle=\"${x.id}\">Editar</button>${ui.confirmDel==='sl'+x.id?", "data-sle=\"${x.id}\">Editar</button>${srvResetBtn('sellers',x)}${ui.confirmDel==='sl'+x.id?");
-R("<button class=\"btn ghost\" data-ce=\"${x.id}\" style=\"min-height:40px;padding:8px 12px\">Editar</button></div>`).join('')", "<div class=\"row\" style=\"gap:6px;justify-content:flex-end\">${srvResetBtn('customers',x)}<button class=\"btn ghost\" data-ce=\"${x.id}\" style=\"min-height:40px;padding:8px 12px\">Editar</button></div></div>`).join('')");
+R("<button class=\"btn ghost\" data-ce=\"${x.id}\" style=\"min-height:40px;padding:8px 12px\">Editar</button></div>`).join('')", "<div class=\"row\" style=\"gap:6px;justify-content:flex-end\">${cliQuick(x)}${srvResetBtn('customers',x)}<button class=\"btn ghost\" data-ce=\"${x.id}\" style=\"min-height:40px;padding:8px 12px\">Editar</button></div></div>`).join('')");
 
 R("<h2>${isAdmin?'Acesso do administrador':'Entrar para fazer pedido'}</h2>", "<h2>${isAdmin?'Acesso do administrador':'Entrar'}</h2>");
 
@@ -119,7 +119,7 @@ R(`    ui.neg=ui.neg||{};ui.neg[id]=pack;ui.negEdit=null;rer();
 
 // ---------- 7b. estoque e contas automáticas dos pedidos: só o servidor faz (o navegador não mexe)
 R("function syncStock(o){\n", "function syncStock(o){if(typeof SRV!=='undefined')return;\n");
-R("function autoReceivables(o,prev){\n", "function autoReceivables(o,prev){if(typeof SRV!=='undefined')return '';\n");
+R("function autoReceivables(o,prev){\n", "function autoReceivables(o,prev){if(typeof SRV!=='undefined')return autoRecWarn(o);\n");
 
 // ---------- 8. backup e restauração pelo servidor; senhas provisórias
 R("function backupNow(){const data=JSON.stringify({app:'pedidos-atacado',version:1,savedAt:new Date().toISOString(),data:S});\n  offerFile('backup-atacado-davila-'+stamp()+'.json',data).then(ok=>{if(ok){S.store.lastBackup=today();save();render()}})}", 'function backupNow(){srvBackup()}');

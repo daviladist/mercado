@@ -12,7 +12,7 @@ with sync_playwright() as pw:
     def login_root(p, u, pw_):
         p.goto(BASE + '/'); p.wait_for_timeout(600); p.fill('#lu', u); p.fill('#lp', pw_); p.click('#lf button[type=submit]'); p.wait_for_timeout(1500)
     adm = page(); login_root(adm, 'eduardo', ADMIN); print('admin entrou pela tela única:', adm.locator('#tabc h2').first.inner_text())
-    adm.locator('.tabs [data-tab]', has_text='Cadastros').first.click(); adm.wait_for_timeout(300)
+    adm.locator('.tabs [data-tab]', has_text='Cadastros').first.dispatch_event('click'); adm.wait_for_timeout(300)
     adm.click('[data-cadg=usuarios]'); adm.wait_for_timeout(200); adm.locator('[data-cad]', has_text='Conferentes').first.click(); adm.wait_for_timeout(300)
     adm.fill('#ckn', 'Maria Conferente'); adm.fill('#ckl', 'maria'); adm.fill('#ckp', 'base-1234'); adm.click('#ckadd'); adm.wait_for_timeout(300); print('logo depois de salvar:', adm.locator('#cadc .prow').last.inner_text().replace('\n',' | ')); adm.wait_for_timeout(3000)
     print('lista:', [x.replace('\n', ' | ') for x in adm.locator('#cadc .prow').all_inner_texts()][-1])
@@ -27,7 +27,7 @@ with sync_playwright() as pw:
     login_root(adm, 'maria', 'base-1234'); print('senha base depois de trocada:', adm.locator('#le').inner_text())
     # administrador redefine
     login_root(adm, 'eduardo', ADMIN)
-    adm.locator('.tabs [data-tab]', has_text='Cadastros').first.click(); adm.wait_for_timeout(300)
+    adm.locator('.tabs [data-tab]', has_text='Cadastros').first.dispatch_event('click'); adm.wait_for_timeout(300)
     adm.click('[data-cadg=usuarios]'); adm.wait_for_timeout(200); adm.locator('[data-cad]', has_text='Conferentes').first.click(); adm.wait_for_timeout(300)
     print('lista após troca:', [x.replace('\n', ' | ') for x in adm.locator('#cadc .prow').all_inner_texts()][-1])
     adm.locator('.prow', has_text='Maria Conferente').locator('[data-pwreset]').click(); adm.wait_for_timeout(300)

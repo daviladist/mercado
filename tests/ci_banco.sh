@@ -14,7 +14,7 @@ gen() { python3 -c "import secrets;print('Tt'+secrets.token_hex(10)+'9a')"; }
 newdb() { psql "$PGURL/postgres" -q -c "drop database if exists $1 with (force)" -c "create database $1"; }
 export CENTRAL_PASSWORD="$(gen)" SETUP_CODE="codigo-$(gen)"
 export CENTRAL_HASH="$(node -e "require('./lib/auth').hashPassword(process.env.CENTRAL_PASSWORD).then(h=>console.log(h))")"
-export DEV_INSECURE_COOKIE=1 PG_INSECURE_TLS=1
+export DEV_INSECURE_COOKIE=1 PG_INSECURE_TLS=1 TINO_TESTE_ERRO=1
 porta() { python3 -c "import socket;s=socket.socket();s.bind(('127.0.0.1',0));print(s.getsockname()[1])"; }
 serve() { # banco -> sobe o servidor deste código numa porta livre e confere que é ELE que responde
   local p; p="$(porta)"
@@ -72,13 +72,25 @@ APW="$(gen)"
 curl -sf -X POST "localhost:$PORTA/api/setup" -H 'Content-Type: application/json' -H 'X-App: 1' \
   -d "{\"code\":\"$SETUP_CODE\",\"name\":\"Dono\",\"login\":\"eduardo\",\"password\":\"$APW\"}" >/dev/null
 BASE=http://localhost:$PORTA ADMIN_LOGIN=eduardo ADMIN_PASSWORD="$APW" python3 tests/vitrine.py
-echo "== 7. Produtor rural (outros segmentos)"
+echo "== 7. Robustez (empresa sem configuração, backup malformado, envio grande, registro com lixo)"
+newdb tino_ci_robustez; serve tino_ci_robustez
+APW="$(gen)"
+curl -sf -X POST "localhost:$PORTA/api/setup" -H 'Content-Type: application/json' -H 'X-App: 1' \
+  -d "{\"code\":\"$SETUP_CODE\",\"name\":\"Dono\",\"login\":\"eduardo\",\"password\":\"$APW\"}" >/dev/null
+BASE=http://localhost:$PORTA ADMIN_LOGIN=eduardo ADMIN_PASSWORD="$APW" DBURL="$PGURL/tino_ci_robustez" python3 tests/robustez.py
+echo "== 8. Dinheiro: pedido a prazo sem prazo identificado continua no limite de crédito"
+newdb tino_ci_dados; serve tino_ci_dados
+APW="$(gen)"
+curl -sf -X POST "localhost:$PORTA/api/setup" -H 'Content-Type: application/json' -H 'X-App: 1' \
+  -d "{\"code\":\"$SETUP_CODE\",\"name\":\"Dono\",\"login\":\"eduardo\",\"password\":\"$APW\"}" >/dev/null
+BASE=http://localhost:$PORTA ADMIN_LOGIN=eduardo ADMIN_PASSWORD="$APW" python3 tests/dados.py
+echo "== 9. Produtor rural (outros segmentos)"
 newdb tino_ci_rural; serve tino_ci_rural
 APW="$(gen)"
 curl -sf -X POST "localhost:$PORTA/api/setup" -H 'Content-Type: application/json' -H 'X-App: 1' \
   -d "{\"code\":\"$SETUP_CODE\",\"name\":\"Dono\",\"login\":\"eduardo\",\"password\":\"$APW\"}" >/dev/null
 BASE=http://localhost:$PORTA ADMIN_LOGIN=eduardo ADMIN_PASSWORD="$APW" python3 tests/rural.py
-echo "== 8. Loja online"
+echo "== 10. Loja online"
 newdb tino_ci_loja; serve tino_ci_loja
 APW="$(gen)"
 curl -sf -X POST "localhost:$PORTA/api/setup" -H 'Content-Type: application/json' -H 'X-App: 1' \

@@ -39,12 +39,29 @@
     catch (er) { $('#lerr').textContent = er.message; $('#lp').value = ''; }
     finally { b.disabled = false; }
   });
+  /* painel de erros do servidor: contador vermelho no topo e lista com "marcar como visto" */
+  function errCount(n) { const b = $('#errN'); n = Number(n) || 0; b.textContent = n > 99 ? '99+' : String(n); b.hidden = !n; $('#errBtn').setAttribute('aria-label', 'Erros do servidor' + (n ? ': ' + n + ' não vistos' : '')); }
+  const dt = s => { try { return new Date(s).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }); } catch (e) { return ''; } };
+  async function renderErrors() {
+    let E; try { E = await api('/api/central/errors'); } catch (e) { toast(e.message); return; }
+    errCount(E.unseen);
+    const tn = id => { const t = D.tenants.find(x => x.id === id); return t ? t.name : (id || 'sem empresa'); };
+    $('#editor').innerHTML = `<section class="card"><div class="top"><div><h1>Erros do servidor</h1><p class="muted small" style="margin:4px 0 0">Erros inesperados (o sistema já recusou ou mostrou "tente de novo"). Sem dados de clientes. Ficam os 500 mais recentes.</p></div>
+      ${E.unseen ? '<button class="btn dark" id="errAll" type="button">Marcar todos como vistos</button>' : ''}</div>
+      <div class="errl">${E.errors.length ? E.errors.map(x => `<div class="erri${x.seen ? '' : ' novo'}"><div style="min-width:0;flex:1"><div class="m">${esc(x.message)}</div>
+        <div class="small muted">${esc(tn(x.tenant_id))} · <code>${esc(x.route)}</code>${x.place ? ' · <code>' + esc(x.place) + '</code>' : ''} · ${esc(dt(x.last_at))}${x.n > 1 ? ' · <b>' + x.n + ' vezes</b> (desde ' + esc(dt(x.at)) + ')' : ''}</div></div>
+        ${x.seen ? '<span class="small muted">visto</span>' : `<button class="btn" type="button" data-eseen="${esc(x.id)}">Marcar como visto</button>`}</div>`).join('') : '<p class="muted">Nenhum erro registrado. Tudo certo.</p>'}</div></section>`;
+    const mark = async b => { try { const r = await api('/api/central/errors-seen', b); errCount(r.unseen); renderErrors(); } catch (e) { toast(e.message); } };
+    document.querySelectorAll('[data-eseen]').forEach(b => b.addEventListener('click', () => mark({ ids: [Number(b.dataset.eseen)] })));
+    const all = $('#errAll'); if (all) all.addEventListener('click', () => mark({ all: true }));
+  }
+  $('#errBtn').addEventListener('click', () => { if (dirty && !confirm('Sair sem salvar as mudanças?')) return; dirty = false; renderErrors(); });
   $('#logout').addEventListener('click', async () => { try { await api('/api/central/logout', {}); } catch (e) { /* segue */ } D = null; showLogin(); });
 
   async function load(keep) {
     try { D = await api('/api/central/state'); }
     catch (e) { if (e.status === 401) return showLogin(); toast(e.message); return; }
-    $('#loginView').hidden = true; $('#appView').hidden = false; $('#who').hidden = false; $('#whoName').textContent = D.me.login;
+    $('#loginView').hidden = true; $('#appView').hidden = false; $('#who').hidden = false; $('#whoName').textContent = D.me.login; errCount(D.errUnseen);
     if (pendingDraft) { const p = pendingDraft; pendingDraft = null; sel = p.sel; pick(sel); draft = p.draft; dirty = true; renderList(); renderEditor(); return; }
     const cur = D.tenants.find(t => t.id === sel);
     if (keep && cur) aba = ramoOf(cur);
@@ -94,16 +111,21 @@
       <div><h2 id="hwho">Quem usa o sistema</h2><p class="muted small" style="margin:4px 0 0">Sem app do cliente, a vitrine e tudo o que é do cliente ficam desligados: os pedidos entram pelos vendedores e pela loja.</p></div>
       <div class="presets"><button type="button" data-who="0" aria-pressed="${!t.modules.app_cliente}">Só a equipe (cliente compra pelo vendedor)</button><button type="button" data-who="1" aria-pressed="${!!t.modules.app_cliente}">Equipe e clientes (app do cliente)</button></div>
     </section>
+    <section class="card" style="display:grid;gap:10px" aria-labelledby="hstk">
+      <div><h2 id="hstk">Venda sem estoque</h2><p class="muted small" style="margin:4px 0 0">Não permitindo, o pedido do cliente ou do vendedor acima do estoque é recusado ("Só temos X un."). A loja sempre pode lançar.</p></div>
+      <div class="presets"><button type="button" data-stk="0" aria-pressed="${!t.modules.trava_estoque}">Permitir venda sem estoque</button><button type="button" data-stk="1" aria-pressed="${!!t.modules.trava_estoque}">Não permitir venda sem estoque</button></div>
+      ${t.modules.trava_estoque ? `<label class="subopt"><input type="checkbox" id="fstkres" ${t.modules.trava_reservado ? 'checked' : ''}><span><b>Descontar o que já está reservado</b><span class="small muted">Compara com o estoque menos o que os outros pedidos em aberto já vão levar.</span></span></label>` : ''}
+    </section>
     ${t.id ? accessCard(t) : '<div class="note">Salve a empresa para gerar o endereço e o acesso do administrador dela.</div>'}
     <section class="card" style="display:grid;gap:16px" aria-labelledby="hid">
       <h2 id="hid">Identidade da marca</h2>
       <div class="grid">
         <div class="field"><label for="fname">Nome exibido no sistema</label><input type="text" id="fname" maxlength="80" value="${esc(t.name)}"></div>
-        <div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Logo</span>
+        <div class="field"><span style="font-size:13px;font-weight:600;color:var(--muted)">Logo</span>
           <div class="logo-row"><div class="logo-box">${t.logo ? `<img src="${esc(t.logo)}" alt="Logo atual">` : 'LOGO'}</div>
           <label class="btn" for="flogo" style="display:inline-flex;align-items:center">Enviar imagem</label><input type="file" id="flogo" accept="image/png,image/jpeg,image/webp" hidden>
           ${t.logo ? '<button class="btn" type="button" id="frmlogo">Tirar</button>' : ''}</div></div>
-        <div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Cor principal</span>
+        <div class="field"><span style="font-size:13px;font-weight:600;color:var(--muted)">Cor principal</span>
           <div class="sw">${SWATCHES.map(([c, n]) => `<button type="button" data-c="${c}" aria-label="${n}" aria-pressed="${(t.color || '').toUpperCase() === c}" style="background:${c}"></button>`).join('')}<input type="color" id="fcolor" aria-label="Outra cor" value="${esc(t.color || '#1F3D2B')}"></div>
           ${t.primary && !t.color ? '<span class="small muted">Sem cor escolhida: o app mantém as cores atuais.</span>' : ''}</div>
       </div>
@@ -115,7 +137,7 @@
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn dark" id="segNew">+ Criar segmento</button><button type="button" class="btn" id="segList">Editar segmentos</button></div>
     </section>
     ${groups.filter(g => g !== 'Acesso').map(g => `<section class="card grp"><h2>${esc(g)}${g === 'Essenciais' ? '<small>Não podem ser desligados</small>' : ''}</h2>
-      ${D.modules.filter(m => m.group === g).map(m => { const blk = m.requires && !t.modules[m.requires]; return `<div class="mod"><div class="t"><div class="n">${esc(m.name)}${blk ? '<span class="tag">precisa do app do cliente</span>' : !m.essential && !m.enforced ? '<span class="tag">efeito na próxima etapa</span>' : m.enforced === 'tela' ? '<span class="tag">só esconde a tela</span>' : ''}</div><div class="d">${esc(m.desc)}</div></div>
+      ${D.modules.filter(m => m.group === g).map(m => { const blk = m.requires && !t.modules[m.requires]; return `<div class="mod"><div class="t"><div class="n">${esc(m.name)}${blk ? `<span class="tag">precisa de "${esc((D.modules.find(x => x.code === m.requires) || {}).name || m.requires)}"</span>` : !m.essential && !m.enforced ? '<span class="tag">efeito na próxima etapa</span>' : m.enforced === 'tela' ? '<span class="tag">só esconde a tela</span>' : ''}</div><div class="d">${esc(m.desc)}</div></div>
         ${m.essential ? '<span class="lock">Sempre ativo</span>' : `<button type="button" class="sw-t" role="switch" data-m="${esc(m.code)}" aria-checked="${!blk && !!t.modules[m.code]}" aria-label="${esc(m.name)}" ${blk ? 'disabled style="opacity:.45;cursor:not-allowed"' : ''}><span></span></button>`}</div>` }).join('')}</section>`).join('')}
     <div class="bar${dirty ? ' dirty' : ''}"><span>${dirty ? 'Há mudanças sem salvar.' : 'Tudo salvo.'}</span><div style="display:flex;gap:8px"><button class="btn ghost-light" type="button" id="undo" ${dirty ? '' : 'disabled'}>Desfazer</button><button class="btn primary" type="button" id="save" ${dirty ? '' : 'disabled'}>Salvar configuração</button></div></div>`;
     bind();
@@ -156,13 +178,15 @@
   /* todos os endereços da empresa, conforme os módulos ligados */
   function accessLinks(t, base) {
     if (ramoOf(t) !== 'atacado') return RAMO_UI[ramoOf(t)].links(base);
-    const m = t.modules || {}, L = [['Painel do administrador', base + '/#admin', 'Dono e gerentes']];
-    L.push(['Vendedores', base + '/#vendedor', 'Lançar pedidos dos clientes']);
-    if (m.app_cliente) L.push(['App dos clientes', base + '/cliente', 'Clientes fazem pedido sozinhos']);
-    if (m.pdv) L.push(['Caixa (PDV)', base + '/pdv', 'Operador de caixa, no computador do balcão']);
-    if (m.conferencia) L.push(['Conferente', base + '/#conferente', 'Separação e conferência']);
-    if (m.faturamento) L.push(['Faturamento', base + '/#faturamento', 'Notas e pedidos para faturar']);
-    if (m.entregas) L.push(['Motoristas', base + '/#entregador', 'Entregas e canhotos']);
+    // "?v=": muda quando a marca muda, e o WhatsApp busca a prévia nova (ele guarda a antiga por dias)
+    const v = t.primary ? '' : '?v=' + (new Date(t.updatedAt || 0).getTime() % 1e8).toString(36);
+    const m = t.modules || {}, L = [['Painel do administrador', base + '/' + v + '#admin', 'Dono e gerentes']];
+    L.push(['Vendedores', base + '/' + v + '#vendedor', 'Lançar pedidos dos clientes']);
+    if (m.app_cliente) L.push(['App dos clientes', base + '/cliente' + v, 'Clientes fazem pedido sozinhos']);
+    if (m.pdv) L.push(['Caixa (PDV)', base + '/pdv' + v, 'Operador de caixa, no computador do balcão']);
+    if (m.conferencia) L.push(['Conferente', base + '/' + v + '#conferente', 'Separação e conferência']);
+    if (m.faturamento) L.push(['Faturamento', base + '/' + v + '#faturamento', 'Notas e pedidos para faturar']);
+    if (m.entregas) L.push(['Motoristas', base + '/' + v + '#entregador', 'Entregas e canhotos']);
     return L;
   }
   /* endereço e acesso do administrador da empresa */
@@ -220,6 +244,8 @@
     E.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { draft.segment = b.dataset.seg; draft.modules = presetMods(b.dataset.seg); touch(); }));
     E.querySelectorAll('[data-m]').forEach(b => b.addEventListener('click', () => { if (b.disabled) return; draft.modules[b.dataset.m] = !draft.modules[b.dataset.m]; touch(); }));
     E.querySelectorAll('[data-who]').forEach(b => b.addEventListener('click', () => { const on = b.dataset.who === '1'; draft.modules.app_cliente = on; if (!on) D.modules.forEach(m => { if (m.requires === 'app_cliente') draft.modules[m.code] = false; }); touch(); }));
+    E.querySelectorAll('[data-stk]').forEach(b => b.addEventListener('click', () => { draft.modules.trava_estoque = b.dataset.stk === '1'; if (!draft.modules.trava_estoque) draft.modules.trava_reservado = false; touch(); }));
+    { const r = $('#fstkres'); if (r) r.addEventListener('change', () => { draft.modules.trava_reservado = r.checked; touch(); }); }
     const rm = $('#frmlogo'); if (rm) rm.addEventListener('click', () => { draft.logo = null; touch(); });
     $('#flogo').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) readLogo(f); });
     $('#undo').addEventListener('click', () => pick(sel));

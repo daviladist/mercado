@@ -19,6 +19,13 @@ button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 [hidden]{display:none!important}
+.errbtn{display:inline-flex;align-items:center;gap:8px}
+.errn{background:var(--danger);color:#fff;border-radius:999px;min-width:22px;height:22px;padding:0 7px;font-size:12px;font-weight:700;display:inline-grid;place-items:center}
+.errl{display:grid;gap:10px;margin-top:12px}
+.erri{border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;gap:12px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}
+.erri.novo{border-left:4px solid var(--danger)}
+.erri code{font-size:12px;background:var(--line-2);padding:1px 6px;border-radius:4px;word-break:break-all}
+.erri .m{font-weight:600;word-break:break-word}
 .spark{display:block}
 header{background:var(--green);color:#fff;border-bottom:4px solid var(--gold)}
 header .in{max-width:1360px;margin:0 auto;padding:12px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
@@ -93,6 +100,27 @@ code.link{display:block;overflow-wrap:anywhere;padding:8px 10px}
 .rtabs small{font-weight:500;opacity:.75}
 .note{background:var(--gold-soft);border-radius:8px;padding:10px 12px;font-size:13px;color:#5C3D00}
 @media (max-width:640px){nav{max-width:none}}
+.subopt{display:flex;gap:12px;align-items:flex-start;margin-top:12px;padding:12px 14px;border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:10px;background:var(--gold-soft);cursor:pointer}
+.subopt input{width:22px;height:22px;flex:none;margin:1px 0 0;accent-color:var(--green)}
+.subopt span{display:grid;gap:2px}
+/* modo escuro da Central */
+@media (prefers-color-scheme:dark){
+  :root{--cream:#0F1712;--surface:#17231C;--line:#2C3D33;--line-2:#22322A;--input:#43584B;--muted:#A9B9AE;--ink:#E7EEE9;--gold-soft:#3A2D12;--off:#4E5E53;--danger:#FF8A80}
+  body{color-scheme:dark}
+  header .wm b,.chip,.bar,.btn.ghost-light{color:#F6F1E7}
+  .slogan{color:#D9D2C2}
+  input[type=text],input[type=password],select,.tn,.logo-box,.presets button,.sw input[type=color]{background:var(--surface);color:var(--ink)}
+  .btn{color:var(--ink)}.btn.primary{color:#1F3D2B}.btn.dark{background:#2E5A40;border-color:#2E5A40}
+  .field label,nav .head h2,.lock{color:var(--muted)}
+  .tag,.note,.st.em_preparo{color:#F2CD86}
+  .st.ativa{background:#1F3A29;color:#9FDDB3}.st.suspensa{background:#3D1A18;color:#FF8A80}
+  .sw-t[aria-checked=true]{background:#3E8E5E}
+  .presets button[aria-pressed=true]{background:#2E5A40;border-color:#3E8E5E;color:#fff}
+  .sw button[aria-pressed=true]{border-color:#E7EEE9}
+  .lk{border-top-color:var(--line)}
+  .bar{background:#1F3D2B}
+  .errn{color:#2A0606}
+}
 </style>
 </head>
 <body>
@@ -101,7 +129,7 @@ code.link{display:block;overflow-wrap:anywhere;padding:8px 10px}
     <div class="ico"><svg class="spark" role="img" aria-label="Ícone do Tino" viewBox="0 0 40 40" width="24" height="24"><path d="M20 0 C22 13 27 18 40 20 C27 22 22 27 20 40 C18 27 13 22 0 20 C13 18 18 13 20 0 Z" fill="#1F3D2B"/></svg></div>
     <div><div class="wm"><b>tino</b><span>Central do sistema</span></div><div class="slogan">Quem tem Tino, <em>vende melhor.</em></div></div>
   </div>
-  <div class="who" id="who" hidden><span class="chip" id="whoName">super_admin</span><button class="btn ghost-light" id="logout" type="button">Sair</button></div>
+  <div class="who" id="who" hidden><button class="btn ghost-light errbtn" id="errBtn" type="button" aria-label="Erros do servidor">Erros do servidor <span class="errn" id="errN" hidden>0</span></button><span class="chip" id="whoName">super_admin</span><button class="btn ghost-light" id="logout" type="button">Sair</button></div>
 </div></header>
 
 <section class="login" id="loginView" hidden>

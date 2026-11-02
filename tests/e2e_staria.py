@@ -40,14 +40,14 @@ with sync_playwright() as pw:
             chk(not errs, 'celular: sem erro de tela: ' + '; '.join(errs[:3]))
             pg.close(); continue
 
-        pg.click('.tabs [data-tab="produtos"]'); pg.wait_for_timeout(400)
+        pg.dispatch_event('.tabs [data-tab="produtos"]', 'click'); pg.wait_for_timeout(400)
         pg.evaluate("()=>document.getElementById('bulkP').click()"); pg.wait_for_timeout(500)
         pg.evaluate("()=>{const b=document.getElementById('bst');b&&b.click()}"); pg.wait_for_timeout(500)
         pg.fill('#sbText', '99001\n99002\n99003\n99004'); pg.click('#sbGo'); pg.wait_for_timeout(1500)
         chk('Aguardando o Claude consultar o StarIA' in pg.locator('#tabc').inner_text(), 'importação vai direto para Precificação, aguardando o Claude')
         IM = imports(); chk(len(IM) == 1 and IM[0]['status'] == 'consultando' and len(IM[0]['terms']) == 4, f'importação gravada no servidor como pendente ({[(x["status"], len(x["terms"])) for x in IM]})')
         # sai da tela antes de o Claude responder: nada se perde
-        pg.click('.tabs [data-tab="pedidos"]'); pg.wait_for_timeout(500)
+        pg.dispatch_event('.tabs [data-tab="pedidos"]', 'click'); pg.wait_for_timeout(500)
         chk(pg.locator('.rcalert [data-ima]').count() == 1, 'aviso fixo com o link da importação aparece em outra tela')
         J = state(); jobs = [j for j in J['S'].get('stariaJobs', []) if j['status'] == 'pendente']
         chk(jobs and set(jobs[0]['terms']) == set(RES), f'pedido ao Claude gravado ({jobs and jobs[0]["terms"]})')
@@ -72,7 +72,7 @@ with sync_playwright() as pw:
         # digita o preço da barra direto na linha e sai da tela no meio
         k3 = pg.locator('.imline').nth(2).get_attribute('data-k')
         pg.fill(f'[data-ip="{k3}"]', '8,99'); pg.wait_for_timeout(200)
-        pg.click('.tabs [data-tab="hoje"]'); pg.wait_for_timeout(2500)
+        pg.dispatch_event('.tabs [data-tab="hoje"]', 'click'); pg.wait_for_timeout(2500)
         it = {i['code']: i for i in imports()[0]['items']}
         chk(it['99003']['price'] == 8.99 and it['99001']['cat'] == 'Suplementos' and it['99001']['fam'] == 'WHEY TESTE 900G' and it['99002']['var'] == 'MORANGO' and it['99001']['trib'] is True, f"tudo salvo no servidor ao sair da tela ({it['99003']['price']}, {it['99001']['cat']}, {it['99002'].get('var')})")
         pg.reload(); pg.wait_for_timeout(2000)
@@ -88,7 +88,7 @@ with sync_playwright() as pw:
         chk(P.get('99003') and P['99003']['price'] == 8.99 and P['99003']['trib'] is False and not P['99003'].get('iePrice'), 'não tributado: só preço sem IE')
         chk(not imports(), 'importação some das pendentes depois de aprovar tudo')
         # lista de produtos: alteração em massa de estrutura
-        pg.click('.tabs [data-tab="produtos"]'); pg.wait_for_timeout(400)
+        pg.dispatch_event('.tabs [data-tab="produtos"]', 'click'); pg.wait_for_timeout(400)
         pg.evaluate("()=>document.getElementById('pbP').click()"); pg.wait_for_timeout(400)
         pg.fill('#aq', 'whey teste'); pg.wait_for_timeout(400)
         dmsg = []; pg.on('dialog', lambda d: dmsg.append(d.message))
