@@ -1122,6 +1122,11 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;text
 .dlmenu .menu{min-width:300px}
 @media (max-width:640px){.orst{width:100%;justify-content:flex-start;padding:0 6px 8px 8px}.stchip{min-width:0}.stnext{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:13px;padding:8px 8px}.stchip{padding:5px 9px;font-size:12.5px}.orx{grid-template-columns:50px minmax(0,1fr) auto 18px!important;gap:8px}.orcli b,.orcli .small{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}}
 @media (max-width:640px){.more[open]>.menu{position:fixed;left:10px;right:10px;top:auto;bottom:calc(10px + env(safe-area-inset-bottom,0px));min-width:0;max-height:72vh;overflow:auto;z-index:60;box-shadow:0 -6px 40px rgba(0,0,0,.35)}}
+.unitpricing[hidden],.varf[hidden]{display:none!important}
+.vhide{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
+.filebtn{position:relative;cursor:pointer}
+#pf[data-mode=prec] .pquick{display:none}
+.pfsave{position:sticky;bottom:0;z-index:5;background:var(--surface);margin:0 -16px -16px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);border-radius:0 0 12px 12px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 
@@ -4872,7 +4877,7 @@ function admProducts(){
     <div class="list">${PFR.L.map(p=>{const n=['qty','vista','retira','promo','limite'].filter(k=>p.rules[k].on).length;return `<div class="prow ${p.active?'':'off'} ${ui.pbulk?'pbsel':''}">
       ${ui.pbulk?`<label class="imck"><input type="checkbox" data-psel="${p.id}" ${ui.pbulk.sel[p.id]?'checked':''} aria-label="Marcar ${esc(p.name)}"></label>`:''}<img src="${p.photo||ph(p.name||'',150)}" alt="">
       <div class="t"><b>${esc(p.name)}${p.fam?` <span class="varchip" title="Sabor de ${esc(p.fam)}">${esc(p.var||'sabor')}</span>`:''}${(()=>{const b=belowMin(p);return b?` <span class="apchip no" title="No preço de tabela, depois da comissão">abaixo do mínimo: ${String(Math.round(b.mg*10)/10).replace('.',',')}% de ${String(b.min).replace('.',',')}%</span>`:''})()}</b><span class="small muted">${esc(catLabel(p))} · ${codesLine(p.code,p.ean)||'Sem código'}${packOf(p)?' · '+nfmt(packOf(p))+(isKg(p)?' kg · ':' un. · ')+brl(p.price/packOf(p))+'/'+uw(p):''}${p.trib?' · <b>Tributado</b>':''}${['mgmaior','mgmenor'].includes(PFR.F.sort)||PFR.F.x==='lowmg'?(prodMg(p)==null?' · sem custo':` · margem <b class="${prodMg(p)<0?'neg':prodMg(p)<8?'wkwarn':''}">${(Math.round(prodMg(p)*10)/10).toLocaleString('pt-BR')}%</b>`):''}${PFR.sold?` · vendeu <b>${qBR(PFR.sold(p))}</b> em 90 dias`:''}${p.stock!==''&&p.stock!=null?` · <span class="${p.stock<=0?'stk0':''}">Estoque: ${Number(p.stock).toLocaleString('pt-BR')}${hasMin(p)?' (mín. '+Number(p.minStock).toLocaleString('pt-BR')+(p.idealStock!==''&&p.idealStock!=null?' · ideal '+Number(p.idealStock).toLocaleString('pt-BR'):'')+')':''}</span>${isCritical(p)?' <span class="crit">Comprar</span>':''}${Number(p.stock)<0?' <span class="crit" title="Saiu mais do que tinha: confira o estoque (contagem)">Estoque negativo</span>':''}`:''}${(()=>{const l=lossOf(p.id,90);return l>0?` · <span class="wkwarn" title="Avaria na entrega: baixada do estoque como perda">perda por avaria: ${qBR(l)} em 90 dias</span>`:''})()}</span><div class="num" style="font-weight:700">${brl(p.price)}${ieF(p)<1?` <span class="mgchip iechip">com IE ${brl(Number(p.iePrice))}</span>`:''}${hasVal(p.commission)?` <span class="mgchip">comissão ${String(p.commission).replace('.',',')}%</span>`:''}${p.cost>0?` <span class="mgchip ${p.price<p.cost?'neg':''}">custo ${brl(p.cost)} · margem ${(Math.round(mgOf(effCost(p,p.cost,p.price),p.price)*10)/10).toLocaleString('pt-BR')}%${p.trib?' (tributado)':''} · markup ${(Math.round(mkOf(p.cost,p.price)*10)/10).toLocaleString('pt-BR')}%</span>`:''}${Number(p.refCost)>0?` <span class="mgchip" title="A trava do vendedor usa este custo">custo de referência ${brl(Number(p.refCost))}</span>`:''}${n?` <span class="rulechip">${n} condiç${n>1?'ões':'ão'} de preço</span>`:''}${p.active?'':' <span class="small muted">· desativado</span>'}</div></div>
-      <div class="row" style="gap:6px"><button class="btn ghost" data-tog="${p.id}" style="min-height:40px;padding:8px 10px">${p.active?'Desativar':'Ativar'}</button><button class="btn ghost" data-ed="${p.id}" style="min-height:40px;padding:8px 10px">Editar</button><button class="btn ghost" data-edp="${p.id}" style="min-height:40px;padding:8px 10px">Precificar</button></div>
+      <div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn ghost" data-ed="${p.id}" style="min-height:44px;padding:8px 12px">Editar</button><button class="btn ghost" data-edp="${p.id}" style="min-height:44px;padding:8px 12px">Precificar</button><details class="more"><summary class="btn ghost stdots" aria-label="Mais opções de ${esc(p.name)}" title="Mais opções">⋯</summary><div class="menu"><button type="button" class="mi" data-tog="${p.id}">${p.active?'Desativar (some para o cliente)':'Ativar (volta a aparecer)'}</button><button type="button" class="mi" data-pdup="${p.id}">Duplicar (criar parecido)</button></div></details></div>
     </div>`}).join('')||'<div class="empty">Nenhum produto encontrado.</div>'}</div>`;
   $('#aq').oninput=e=>{ui.aq=e.target.value;const pos=e.target.selectionStart;admProducts();const n=$('#aq');n.focus();n.setSelectionRange(pos,pos)};
   bindPfBar(()=>{const y=window.scrollY;admProducts();window.scrollTo(0,y)});
@@ -4889,7 +4894,10 @@ function admProducts(){
   $('#newP').onclick=()=>{ui.pfTab='cad';ui.edit={id:null,code:'',ean:'',name:'',cat:cats[0]||'',unit:'',price:'',photo:'',active:true,rules:emptyRules()};renderAdmin()};
   c.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>{ui.pfTab='cad';ui.edit=JSON.parse(JSON.stringify(S.products.find(p=>p.id===b.dataset.ed)));renderAdmin();window.scrollTo(0,0)});
   c.querySelectorAll('[data-edp]').forEach(b=>b.onclick=()=>{ui.pfTab='prec';ui.edit=JSON.parse(JSON.stringify(S.products.find(p=>p.id===b.dataset.edp)));renderAdmin();window.scrollTo(0,0)});
-  c.querySelectorAll('[data-tog]').forEach(b=>b.onclick=()=>{const p=S.products.find(x=>x.id===b.dataset.tog);p.active=!p.active;save();admProducts()});
+  c.querySelectorAll('[data-tog]').forEach(b=>b.onclick=()=>{const p=S.products.find(x=>x.id===b.dataset.tog);p.active=!p.active;save();toast(p.name+(p.active?': ativado':': desativado'));admProducts()});
+  c.querySelectorAll('[data-pdup]').forEach(b=>b.onclick=()=>{const p=S.products.find(x=>x.id===b.dataset.pdup);if(!p)return;const d=JSON.parse(JSON.stringify(p));
+    ['id','code','ean','ean2','eans','stock','famSync'].forEach(k=>delete d[k]);d.id='';d.code='';d.ean='';d.ean2='';d.stock='';d.name=p.name+' (cópia)';if(d.var)d.var='';
+    ui.pfTab='cad';ui.edit=d;renderAdmin();window.scrollTo(0,0);toast('Cópia de '+p.name+': troque o nome e os códigos e salve')});
 }
 const money=v=>v===''||v==null||isNaN(v)?'':Number(v).toFixed(2).replace('.',',');
 /* número digitado: aceita 4,50 · 4.50 · 1.234,56 · 1,234.56 · 1.000 (milhar). Inválido ou negativo = '' */
@@ -5067,8 +5075,9 @@ function productForm(){
       <div class="field"><span class="lbl">Foto do produto</span>
         <div class="pastezone" id="pzone" contenteditable="true" role="textbox" aria-label="Colar imagem do produto" spellcheck="false"><b>Cole a imagem aqui</b> (Ctrl+V, ou toque e segure e escolha Colar no celular). Também pode arrastar a imagem para cá.</div>
         <span class="small muted">Na internet, clique com o botão direito na foto e escolha <b>Copiar imagem</b>. Ou envie um arquivo:</span>
-        <input type="file" id="pfile" accept="image/*"></div></div>
+        <label class="btn ghost dlb filebtn" style="justify-self:start">Escolher foto do aparelho<input type="file" id="pfile" accept="image/*" class="vhide"></label></div></div>
     <div class="field"><label for="pn">Nome</label><input type="text" id="pn" value="${esc(e.name)}" placeholder="Ex.: Arroz Tipo 1 5kg" required></div>
+    <div class="grid2 pquick"><div class="field"><label for="pqp">Preço de venda${RU?' da embalagem':''} (R$)</label><input type="text" inputmode="decimal" id="pqp" value="${money(e.price)}" placeholder="0,00"></div><div class="field"><label for="pqc">Preço de custo${RU?' da embalagem':''} (R$)</label><input type="text" inputmode="decimal" id="pqc" value="${money(e.cost)}" placeholder="0,00"></div><span class="small muted" style="grid-column:1/-1;margin-top:-6px">Margem, comissão e condições de preço ficam em <b>Precificação</b>.</span></div>
     ${varBox(e)}
     <div class="grid2">
       <div class="field"><label for="pcode">Código interno</label><input type="text" id="pcode" value="${esc(e.code)}" placeholder="Ex.: 10234"></div>
@@ -5137,7 +5146,7 @@ function productForm(){
     <div class="psim" id="psim"></div>
     </div>
     <div class="err" id="pe"></div>
-    <div class="row"><button class="btn" type="submit">Salvar produto</button><button class="btn ghost" type="button" id="pcancel">Cancelar</button>
+    <div class="row pfsave"><button class="btn" type="submit">Salvar produto</button><button class="btn ghost" type="button" id="pcancel">Cancelar</button>
       ${e.id?(ui.confirmDel===e.id?`<span class="small">Excluir de vez?</span><button class="btn danger" type="button" id="pdelok">Sim, excluir</button>`:`<button class="btn danger" type="button" id="pdel">Excluir</button>`):''}</div>
   </form>`;
   $('#pf').querySelectorAll('[data-pft]').forEach(b=>b.onclick=()=>{ui.pfTab=b.dataset.pft;$('#pf').dataset.mode=b.dataset.pft;$('#pf').querySelectorAll('[data-pft]').forEach(x=>{x.setAttribute('aria-selected',x===b);x.setAttribute('aria-pressed',x===b)});const h=$('#pfh');if(h&&e.id)h.textContent=b.dataset.pft==='prec'?'Precificar produto':'Editar produto';$('#pe').textContent=''});
@@ -5148,6 +5157,8 @@ function productForm(){
   bindStaria();if(ui.stFocus){ui.stFocus=false;const sq=$('#stq');if(sq){sq.focus();if(ui.stPrefill){sq.value=ui.stPrefill;ui.stPrefill='';const g=$('#stgo');if(g)g.click()}}}
   /* custo, venda, margem e markup ligados: venda muda margem/markup; margem ou markup mudam a venda */
   const iC=$('#pcost'),iP=$('#pp'),iM=$('#pmg'),iK=$('#pmk');
+  {const qP=$('#pqp'),qC=$('#pqc');if(qP&&qC){const to=(q,t)=>q.addEventListener('input',()=>{t.value=q.value;t.dispatchEvent(new Event('input',{bubbles:true}))}),back=()=>{if(document.activeElement!==qP)qP.value=iP.value;if(document.activeElement!==qC)qC.value=iC.value};
+    to(qP,iP);to(qC,iC);$('#pf').addEventListener('input',e=>{if(e.target!==qP&&e.target!==qC)back()});$('#pf').querySelectorAll('[data-pft]').forEach(b=>b.addEventListener('click',back))}}
   const pct=v=>isFinite(v)?(Math.round(v*100)/100).toFixed(2).replace('.',','):'';
   /* custo de referência: mostra até onde o vendedor desce sem aprovação, com e sem a referência */
   const refHint=()=>{const h=$('#prefh');if(!h)return;const c=pnum(iC.value),r=pnum(($('#prefc')||{}).value),TB=!!($('#ptrib')&&$('#ptrib').checked);
