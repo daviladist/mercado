@@ -154,5 +154,63 @@ s, r = B.req('/api/central/errors'); check(s in (401, 403), 'administrador de em
 s, r = cen.req('/api/central/errors-seen', {'ids': [e.get('id')]}); check(s == 200 and r['unseen'] == 0, 'marcar como visto zera o contador')
 s, E = cen.req('/api/central/errors'); check(E['errors'][0]['seen'] is True, 'erro continua na lista, marcado como visto')
 
+print('== 8. pedidos em paralelo: estoque reservado e limite de crédito não furam')
+import concurrent.futures as cf
+s, r = cen.req('/api/central/tenant', {'id': tid, 'modules': {'app_cliente': True, 'trava_estoque': True, 'trava_reservado': True}}); check(s == 200, 'Central liga "não vender sem estoque" + "conta o reservado"')
+CP2 = pw()
+s, r = B.req('/api/sync', {'changes': [{'c': 'meta', 'id': 'payments', 'op': 'put', 'ver': B.req('/api/state')[1]['V']['meta'].get('payments'), 'doc': ['PIX', 'Boleto 28 dias']},
+    {'c': 'meta', 'id': 'cashPays', 'op': 'put', 'ver': B.req('/api/state')[1]['V']['meta'].get('cashPays'), 'doc': ['PIX']},
+    {'c': 'products', 'id': 'pu', 'op': 'put', 'doc': {'id': 'pu', 'name': 'Último fardo', 'price': 30, 'unit': 'UN', 'stock': 1, 'active': True}},
+    {'c': 'products', 'id': 'pc', 'op': 'put', 'doc': {'id': 'pc', 'name': 'Caixa de óleo', 'price': 30, 'unit': 'UN', 'stock': '', 'active': True}},
+    {'c': 'customers', 'id': 'cp', 'op': 'put', 'doc': {'id': 'cp', 'name': 'Cliente Paralelo', 'login': 'cli.par', 'pass': CP2, 'creditLimit': 100, 'pays': ['PIX', 'Boleto 28 dias']}}]})
+check(s == 200 and not r.get('rejected'), 'produto com 1 un. e cliente com limite de R$ 100 gravados: %s' % (r.get('rejected') or r.get('error') or ''))
+cps = [login(tid, 'cliente', 'cli.par', CP2)] + [C(tid) for _ in range(9)]
+for c in cps[1:]: c.req('/api/login', {'role': 'cliente', 'login': 'cli.par', 'password': CP2 + 'N'})
+def manda(k, pid, pay):
+    return cps[k].req('/api/sync', {'changes': [{'c': 'orders', 'id': 'par-%s-%d' % (pid, k), 'op': 'put', 'doc': {'items': [{'pid': pid, 'q': 1}], 'mode': 'retirada', 'pay': pay}}]})
+with cf.ThreadPoolExecutor(10) as ex: R = list(ex.map(lambda k: manda(k, 'pu', 'PIX'), range(10)))
+aceitos = sum(1 for s, r in R if s == 200 and r.get('docs')); recus = [x['error'] for s, r in R for x in (r.get('rejected') or [])]
+check(aceitos == 1 and len(recus) == 9 and all(s == 200 for s, _ in R), '10 pedidos ao mesmo tempo com 1 un. disponível: só 1 aceito, 9 recusados com motivo (%d aceitos; %s)' % (aceitos, recus[:1]))
+with cf.ThreadPoolExecutor(10) as ex: R = list(ex.map(lambda k: manda(k, 'pc', 'Boleto 28 dias'), range(6)))
+aceitos = sum(1 for s, r in R if s == 200 and r.get('docs')); recus = [x['error'] for s, r in R for x in (r.get('rejected') or [])]
+check(aceitos == 3 and len(recus) == 3, '6 pedidos a prazo de R$ 30 ao mesmo tempo com limite de R$ 100: só 3 aceitos (%d; %s)' % (aceitos, recus[:1]))
+
+print('== 9. login: bloqueio sem gravar, cookie estragado, resposta comprimida')
+for i in range(32): s, r = C(tid).req('/api/login', {'role': 'admin', 'login': 'nao-existe', 'password': 'x'})
+check(s == 429, 'muitas tentativas do mesmo lugar: 429 (%s)' % s)
+import subprocess
+def sql(q): return subprocess.run(['psql', os.environ['DBURL'], '-tAc', q], capture_output=True, text=True).stdout.strip() if os.environ.get('DBURL') else None
+n1 = sql("select count(*) from audit where action='login_falhou'")
+for i in range(5): C(tid).req('/api/login', {'role': 'admin', 'login': 'nao-existe', 'password': 'x'})
+n2 = sql("select count(*) from audit where action='login_falhou'")
+if n1 is not None: check(n1 == n2, 'tentativa já bloqueada (429) não grava auditoria nem tentativa (%s → %s)' % (n1, n2))
+if n1 is not None:
+    import datetime as _dt
+    hk = 'central:falhas:' + _dt.datetime.now(_dt.timezone.utc).strftime('%Y-%m-%dT%H')
+    sql("insert into login_attempts(key,n,first_at) values('%s',50,now()) on conflict(key) do update set n=50" % hk)
+    s, r = C(None).req('/api/central/login', {'login': 'super_admin', 'password': CPW}); check(s == 429, 'Central: 50 senhas erradas na última hora (somando todos os lugares) seguram novas tentativas (%s)' % s)
+    sql("delete from login_attempts where key='%s'" % hk)
+    s, r = C(None).req('/api/central/login', {'login': 'super_admin', 'password': CPW}); check(s == 200, 'passado o limite geral, a Central volta a entrar (%s)' % s)
+req = urllib.request.Request(BASE + '/api/me', headers={'X-Tenant': tid, 'Cookie': 'foo=%E0%A4%A; sid=%'})
+try: urllib.request.urlopen(req); code = 200
+except urllib.error.HTTPError as e: code = e.code
+check(code == 401, 'cookie estragado: /api/me responde "entre de novo" (401), sem erro no servidor (%s)' % code)
+import gzip
+big = [{'c': 'orders', 'id': 'gz%d' % i, 'op': 'put', 'doc': {'id': 'gz%d' % i, 'date': '2026-10-01T12:00:00Z', 'customerId': 'cl1', 'customer': 'Cliente B', 'status': 'concluido', 'pay': 'PIX', 'mode': 'retirada',
+       'items': [{'pid': 'pa', 'name': 'Feijão', 'q': 3, 'price': 9, 'base': 9, 'unit': 'UN'}, {'pid': 'pf', 'name': 'Com foto', 'q': 1, 'price': 1, 'base': 1}], 'sub': 28, 'disc': 0, 'total': 28,
+       'events': [{'at': '2026-10-01T12:00:00Z', 'text': 'Pedido recebido e separado pela equipe'}]}} for i in range(4000)]
+for k in range(0, 4000, 400): s, r = B.req('/api/sync', {'changes': big[k:k + 400]})
+check(s == 200, '4.000 pedidos gravados')
+h = {'X-Tenant': tid, 'Accept-Encoding': 'gzip'}
+ck = '; '.join('%s=%s' % (c.name, c.value) for c in B.jar)
+x = urllib.request.urlopen(urllib.request.Request(BASE + '/api/state', headers=dict(h, Cookie=ck))); raw = x.read()
+plain = gzip.decompress(raw) if x.headers.get('Content-Encoding') == 'gzip' else raw
+check(x.headers.get('Content-Encoding') == 'gzip' and 'Accept-Encoding' in (x.headers.get('Vary') or '') and len(raw) < 1500000 and json.loads(plain)['S']['orders'],
+      '/api/state com 4.000 pedidos vai comprimido: %.1f MB → %.2f MB (limite da Vercel 4,5 MB)' % (len(plain) / 1e6, len(raw) / 1e6))
+x = urllib.request.urlopen(urllib.request.Request(BASE + '/api/state', headers={'X-Tenant': tid, 'Cookie': ck})); check(x.headers.get('Content-Encoding') is None, 'sem "Accept-Encoding: gzip", resposta normal')
+s, r = cen.req('/api/central/tenant', {'id': tid, 'logo': FOTO}); check(s == 200 and str(r['tenant'].get('logo', '')).startswith('/api/logo?'), 'logo da empresa gravada (a resposta traz o endereço)')
+s, r = cen.req('/api/central/tenant', {'id': tid, 'name': 'Empresa Robustez', 'logo': r['tenant']['logo']}); check(s == 200 and r['tenant'].get('logo'), 'salvar de novo com o endereço da logo mantém a logo')
+s, cs = cen.req('/api/central/state'); check(any(t['id'] == tid and str(t.get('logo')).startswith('/api/logo?') for t in cs['tenants']) and all(not str(t.get('logo') or '').startswith('data:') for t in cs['tenants']), 'Central: logos vão como endereço, não como imagem dentro da resposta')
+
 print(f'\n{ok} OK, {len(fails)} falha(s)')
 if fails: print('\n'.join(' - ' + f for f in fails)); sys.exit(1)
