@@ -1012,7 +1012,7 @@ a.walink{display:inline-flex;align-items:center;text-decoration:none}
   .lnstep input.lnqty{width:44px!important;min-height:34px;font-size:15px}
   .ltable tr.sel{background:var(--accent-soft);border-radius:8px}
   .ltable tr.sel td{background:transparent}
-  .lnbar{display:flex;position:sticky;bottom:0;z-index:15;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--brand);border-radius:12px 12px 0 0;padding:8px 12px;box-shadow:0 -6px 20px rgba(0,0,0,.1)}
+  .lnbar{display:flex;position:sticky;bottom:var(--bnh,0px);z-index:15;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--brand);border-radius:12px 12px 0 0;padding:8px 12px;box-shadow:0 -6px 20px rgba(0,0,0,.1)}
   .lnbar b{font-size:18px}
 }
 @media (min-width:641px){.lnun{display:none}}
@@ -1168,7 +1168,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;text
   body.hasbnav .toast,body.hasbnav .toastu{bottom:calc(76px + env(safe-area-inset-bottom,0px))}
   body.hasbnav .srvbadge{bottom:calc(72px + env(safe-area-inset-bottom,0px))}
   .hdl{display:none}.hdbtn{padding:6px 9px;min-height:44px;min-width:44px;justify-content:center;font-size:18px}
-  body.hasbnav header.top .iconbtn:not(#admOut){display:none}
+  body.admbn header.top .iconbtn:not(#admOut){display:none}
   .helptip .helpbody{position:fixed;left:12px;right:12px;top:auto;bottom:calc(80px + env(safe-area-inset-bottom,0px));width:auto}
 }
 .pfmore{border:1px solid var(--line);border-radius:12px;background:var(--surface)}
@@ -1184,6 +1184,22 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;text
 .misspanel .prow{background:var(--surface)}
 .misspanel [data-rmok],.misspanel [data-rmdis]{min-height:44px}
 @media (max-width:640px){.misspanel .prow{grid-template-columns:1fr!important}.misspanel .prow .row{justify-content:flex-start!important}.misspanel [data-rmok]{flex:1}}
+body.hasbnav{--bnh:calc(60px + env(safe-area-inset-bottom,0px))}
+.lnbar.lnhide{visibility:hidden}
+@media (max-width:640px){
+  body.hasbnav .repseg[aria-label="Seções"]{display:none}
+  .bnav .bnnew svg{color:var(--accent);width:28px;height:28px}
+  .bnav .bnnew span{color:var(--accent)}
+  .lnbar .btn{min-height:48px;padding:10px 18px;font-size:16px;white-space:nowrap;flex:none}
+  .lnbar>span{min-width:0;line-height:1.25}.lnbar>span .small{display:block}
+}
+/* modo escuro: contadores legíveis, foto provisória sem estourar */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .cnt{color:#1A0505}:root:not([data-theme="light"]) .card .ph.phx img,:root:not([data-theme="light"]) .prow img{filter:brightness(.82) saturate(.9)}}
+:root[data-theme="dark"] .cnt{color:#1A0505}
+.tiles.t4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:900px){.tiles.t4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .bnav [aria-current=page]{color:#FF8A80}:root:not([data-theme="light"]) .bnav [aria-current=page]::before{background:#FF8A80}}
+:root[data-theme="dark"] .bnav [aria-current=page]{color:#FF8A80}:root[data-theme="dark"] .bnav [aria-current=page]::before{background:#FF8A80}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head><body>
@@ -1209,6 +1225,6 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;text
 <script src="/vendor/xlsx-0.18.5.full.min.js"></script>
 <script src="/vendor/jspdf-2.5.1.umd.min.js"></script>
 <script src="/vendor/jspdf-autotable-3.8.2.min.js"></script>
-<script src="/app.js?v=70bc1a03df"></script>
+<script src="/app.js?v=28f5a4cfe2"></script>
 
 </body></html>

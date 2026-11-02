@@ -1010,7 +1010,7 @@ a.walink{display:inline-flex;align-items:center;text-decoration:none}
   .lnstep input.lnqty{width:44px!important;min-height:34px;font-size:15px}
   .ltable tr.sel{background:var(--accent-soft);border-radius:8px}
   .ltable tr.sel td{background:transparent}
-  .lnbar{display:flex;position:sticky;bottom:0;z-index:15;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--brand);border-radius:12px 12px 0 0;padding:8px 12px;box-shadow:0 -6px 20px rgba(0,0,0,.1)}
+  .lnbar{display:flex;position:sticky;bottom:var(--bnh,0px);z-index:15;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--brand);border-radius:12px 12px 0 0;padding:8px 12px;box-shadow:0 -6px 20px rgba(0,0,0,.1)}
   .lnbar b{font-size:18px}
 }
 @media (min-width:641px){.lnun{display:none}}
@@ -1166,7 +1166,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;text
   body.hasbnav .toast,body.hasbnav .toastu{bottom:calc(76px + env(safe-area-inset-bottom,0px))}
   body.hasbnav .srvbadge{bottom:calc(72px + env(safe-area-inset-bottom,0px))}
   .hdl{display:none}.hdbtn{padding:6px 9px;min-height:44px;min-width:44px;justify-content:center;font-size:18px}
-  body.hasbnav header.top .iconbtn:not(#admOut){display:none}
+  body.admbn header.top .iconbtn:not(#admOut){display:none}
   .helptip .helpbody{position:fixed;left:12px;right:12px;top:auto;bottom:calc(80px + env(safe-area-inset-bottom,0px));width:auto}
 }
 .pfmore{border:1px solid var(--line);border-radius:12px;background:var(--surface)}
@@ -1182,6 +1182,22 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;text
 .misspanel .prow{background:var(--surface)}
 .misspanel [data-rmok],.misspanel [data-rmdis]{min-height:44px}
 @media (max-width:640px){.misspanel .prow{grid-template-columns:1fr!important}.misspanel .prow .row{justify-content:flex-start!important}.misspanel [data-rmok]{flex:1}}
+body.hasbnav{--bnh:calc(60px + env(safe-area-inset-bottom,0px))}
+.lnbar.lnhide{visibility:hidden}
+@media (max-width:640px){
+  body.hasbnav .repseg[aria-label="Seções"]{display:none}
+  .bnav .bnnew svg{color:var(--accent);width:28px;height:28px}
+  .bnav .bnnew span{color:var(--accent)}
+  .lnbar .btn{min-height:48px;padding:10px 18px;font-size:16px;white-space:nowrap;flex:none}
+  .lnbar>span{min-width:0;line-height:1.25}.lnbar>span .small{display:block}
+}
+/* modo escuro: contadores legíveis, foto provisória sem estourar */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .cnt{color:#1A0505}:root:not([data-theme="light"]) .card .ph.phx img,:root:not([data-theme="light"]) .prow img{filter:brightness(.82) saturate(.9)}}
+:root[data-theme="dark"] .cnt{color:#1A0505}
+.tiles.t4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:900px){.tiles.t4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .bnav [aria-current=page]{color:#FF8A80}:root:not([data-theme="light"]) .bnav [aria-current=page]::before{background:#FF8A80}}
+:root[data-theme="dark"] .bnav [aria-current=page]{color:#FF8A80}:root[data-theme="dark"] .bnav [aria-current=page]::before{background:#FF8A80}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 
@@ -1466,7 +1482,8 @@ function renderTop(bump){
     $('#openCart').onclick=()=>{ui.cartOpen=true;renderCart()};
     const cn=$('#cnav');cn.innerHTML=clientNav();cn.querySelectorAll('[data-cp]').forEach(b=>b.onclick=()=>{ui.cliPage=b.dataset.cp;ui.cartOpen=false;render()});
   }else if(ui.view==='vend'){
-    const me=SVme();t.innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name)}</span><small>Vendas${me?' · '+esc(me.name):''}</small></span></div>${me?'<button class="iconbtn" id="vdOut">Sair</button>':''}`;
+    const me=SVme();t.innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name)}</span><small>Vendas${me?' · '+esc(me.name):''}</small></span></div>${me?`<button type="button" class="hdbtn" id="vgsB" aria-label="Buscar cliente, pedido ou produto (atalho /)" title="Buscar (atalho /)">${GSI}<span class="hdl">Buscar</span></button>`:''}${me?'<button class="iconbtn" id="vdOut">Sair</button>':''}`;
+    {const g=$('#vgsB');if(g)g.onclick=gsOpen}
     if(me)$('#vdOut').onclick=()=>{ui.seller=null;ui.lanc=null;render()};
   }else if(ui.view==='fat'){
     t.innerHTML=`<div class="brand">${logoImg()}<span class="bt"><span class="bn">${esc(S.store.name)}</span><small>Faturamento${ui.biller?' · '+esc(ui.biller):''}</small></span></div>${ui.biller?'<button class="iconbtn" id="fbOut">Sair</button>':''}`;
@@ -2567,13 +2584,17 @@ function bnavHtml(tabs,cnt){const main=['Início','Pedidos','Produtos','Financei
   const tot=R.reduce((n,t)=>n+(t.b?t.b.n:0),0);
   return `<nav class="bnav" aria-label="Menu principal" style="--bnn:${M.length+1}">${M.map(t=>`<button type="button" data-tab="${t.k}" ${t.sel?'aria-current="page"':''}>${bnIco(t.label)}<span>${t.label}</span>${cnt(t.b)}</button>`).join('')}
     <details class="more bnmore"><summary ${more?'aria-current="page"':''}>${bnIco('Mais')}<span>Mais</span>${tot?cnt({n:tot,c:''}):''}</summary><div class="menu">${R.map(t=>`<button type="button" class="mi" data-tab="${t.k}" ${t.sel?'aria-current="page"':''}>${esc(t.label)}${cnt(t.b)}</button>`).join('')}<span class="mi-sep"></span><button type="button" class="mi" id="bnPw">Trocar minha senha</button></div></details></nav>`}
+/* app do vendedor no celular: mesma barra de baixo do painel (Pedidos, Clientes, Novo, Produtos, Comissão) */
+Object.assign(BN_ICO,{'Clientes':'<circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5"/><path d="M16 5.2a3 3 0 0 1 0 5.6M18 14.6c1.8.7 2.8 2.5 3 5.4"/>','Novo':'<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>','Comissão':'<path d="M12 3v18"/><path d="M16.5 7.5c-.8-1.3-2.4-2-4.5-2-2.7 0-4.5 1.3-4.5 3.2 0 4.3 9 2.3 9 6.6 0 1.9-1.9 3.2-4.6 3.2-2.3 0-4-.8-4.9-2.3"/>'});
+function vbnavHtml(tabs,T){const nm={pedidos:'Pedidos',clientes:'Clientes',produtos:'Produtos',comissao:'Comissão'},b=k=>tabs.some(t=>t[0]===k)?`<button type="button" data-vt="${k}" ${T===k?'aria-current="page"':''}>${bnIco(nm[k])}<span>${nm[k]}</span></button>`:'';
+  const n=tabs.length+1;return `<nav class="bnav" aria-label="Menu do vendedor" style="--bnn:${n}">${b('pedidos')}${b('clientes')}<button type="button" id="vNewB" class="bnnew">${bnIco('Novo')}<span>Novo</span></button>${b('produtos')}${b('comissao')}</nav>`}
 /* aba -> módulo da Central que precisa estar ligado */
 const TAB_MOD={pdv:'pdv',relatorios:'painel',decisoes:'decisoes',entregas:'entregas',semana:'ofertas',recmerc:'entrada',precnotas:'entrada',receber:['receber','pagar','caixa'],fretes:'frete3'};
 /* abas do Financeiro (Perdas por avaria vem das entregas) */
 const finTabs=()=>['receber','pagar','caixa','perdas'].filter(k=>modOn(k==='perdas'?'entregas':k));
 function renderAdmin(){
   const app=$('#app');
-  document.body.classList.toggle('hasbnav',!!ui.admin);
+  document.body.classList.toggle('hasbnav',!!ui.admin);document.body.classList.toggle('admbn',!!ui.admin);
   if(!ui.admin){app.innerHTML=loginForm(true);bindLogin(true);return}
   pendSweep();if(ui.tab==='analise'||ui.tab==='separacao')ui.tab='decisoes';
   const nprog=S.orders.filter(o=>drvCan(o)&&!(o.deliv&&o.deliv.drv)).length+S.orders.filter(o=>o.occ&&o.occ.reboleto).length;
@@ -3046,12 +3067,13 @@ function admLancar0(){
         ${(()=>{const K=SV?lnLock(R2,cli,L):null,red=K&&!K.ok;if(SV)return `<button class="btn block" id="lnSave" ${R2.items.length&&pays.length?'':'disabled'}>Revisar pedido</button>`;return `<button class="btn block" id="lnSave" ${R2.items.length&&pays.length&&!red?'':'disabled'}>${red?'Margem abaixo do permitido':L.editId?(SV?'Salvar e enviar':'Salvar alterações'):SV?'Enviar pedido':'Lançar pedido'}</button>${red&&pays.length?`<button type="button" class="btn ghost block anbtn" id="lnAsk">Enviar para análise da loja</button><div class="small muted" style="text-align:center">Combinou um preço especial com a loja? Envie para análise: o pedido só segue depois da aprovação.</div>`:''}`})()}
       </section>
     </div>
-    ${R2.items.length?`<div class="lnbar"><span>${SV&&lnLock(R2,cli,L)?`<span class="mgdot mg-${lnLock(R2,cli,L).level}"></span> `:''}<b class="num">${brl(R2.total)}</b><span class="small"> · ${R2.items.length} produto${R2.items.length>1?'s':''}, ${R2.count} ${R2.count===1?'item':'itens'}</span></span><button type="button" class="btn dlb" id="lnGoSum">${SV?'Pagamento e revisão ↓':'Fechar pedido ↓'}</button></div>`:''}`;
+    ${R2.items.length?`<div class="lnbar"><span>${SV&&lnLock(R2,cli,L)?`<span class="mgdot mg-${lnLock(R2,cli,L).level}"></span> `:''}<b class="num">${brl(R2.total)}</b><span class="small"> · ${R2.items.length} produto${R2.items.length>1?'s':''}, ${R2.count} ${R2.count===1?'item':'itens'}</span></span><button type="button" class="btn dlb" id="lnGoSum">${SV?'Revisar ↓':'Finalizar ↓'}</button></div>`:''}`;
   $('#lnBack').onclick=()=>{ui.lanc=null;lnExit()};
   {const b=$('#lnChange');if(b)b.onclick=()=>{L.cid='';admLancar()}}
   if($('#lnSheet'))$('#lnSheet').onclick=()=>{try{offerFile('folha-de-pedido-'+cli.name.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'.pdf',makePriceListPdf(cli,ieClient(cli)))}catch(e){pdfFail(e)}};
   c.querySelectorAll('[data-lqi],[data-lqd]').forEach(b=>b.onclick=()=>{const id=b.dataset.lqi||b.dataset.lqd,p=resolveCart(id);if(!p)return;let v=(L.cart[id]||0)+(b.dataset.lqi?1:-1);if(v>maxQty(p)){v=maxQty(p);toast('Limite de '+v+' por pedido neste produto')}if(v>0)L.cart[id]=v;else delete L.cart[id];const y=window.scrollY;admLancar();window.scrollTo(0,y)});
   {const b=$('#lnOnly');if(b)b.onclick=()=>{L.only=!L.only;admLancar()}}
+  {const bar=$('.lnbar'),sv=$('#lnSave');if(bar&&sv&&window.IntersectionObserver){const io=new IntersectionObserver(es=>bar.classList.toggle('lnhide',es[0].isIntersecting),{threshold:.2});io.observe(sv)}}
   {const b=$('#lnGoSum');if(b)b.onclick=()=>{const s2=$('#lnpay')||$('#lnSave');const sec=s2&&s2.closest('section');if(sec)sec.scrollIntoView({behavior:'smooth',block:'start'})}}
   {const so=$('#lnsort');if(so)so.onchange=()=>{L.sort=so.value;const y=window.scrollY;admLancar();window.scrollTo(0,y)}}
   c.querySelectorAll('[data-lcat]').forEach(b=>b.onclick=()=>{L.cat=b.dataset.lcat;L.sub='';const y=window.scrollY;admLancar();window.scrollTo(0,y)});
@@ -3402,10 +3424,13 @@ function hdNew(k){ui.backWeek=false;ui.romView=false;ui.lanc=null;ui.edit=null;u
   else if(k==='pagar'){ui.tab='receber';ui.finTab='pagar';ui.payNew={cat:'Fornecedor',due:today()}}
   renderAdmin();window.scrollTo(0,0)}
 function bindHdTools(t){const b=t.querySelector('#gsB');if(b)b.onclick=gsOpen;t.querySelectorAll('[data-hn]').forEach(x=>x.onclick=()=>{const d=x.closest('details');if(d)d.open=false;hdNew(x.dataset.hn)})}
-function gsFind(q){q=q.trim().toLowerCase();const dq=q.replace(/\D/g,'');if(!q)return {o:[],c:[],p:[]};
-  const isNo=/^(n[º°o.]?\s*)?\d+$/.test(q);const o=S.orders.filter(x=>(isNo&&String(x.no).startsWith(dq))||String(x.customer||'').toLowerCase().includes(q)).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,6);
-  const c=S.customers.filter(x=>[x.name,x.fiscal&&x.fiscal.razao,x.bairro].some(v=>String(v||'').toLowerCase().includes(q))||(dq.length>=3&&[x.doc,String(x.phone||'').replace(/\D/g,'')].some(v=>String(v||'').includes(dq)))).slice(0,6);
-  const p=S.products.filter(x=>String(x.name||'').toLowerCase().includes(q)||(dq.length>=2&&[x.code,x.ean,x.ean2].some(v=>String(v||'').startsWith(dq)))).slice(0,6);
+/* quem pode buscar: o administrador no painel e o vendedor no app dele (só os clientes e pedidos dele) */
+const gsVend=()=>ui.view==='vend'&&!!ui.seller&&!!SVme();
+const gsOk=()=>gsVend()||(ui.admin&&ui.view==='admin');
+function gsFind(q){q=q.trim().toLowerCase();const V=gsVend(),me=V?SVme():null,OS=V?S.orders.filter(o=>o.sellerId===me.id):S.orders,CS=V?lnPool():S.customers,PS=V?S.products.filter(p=>p.active):S.products;const dq=q.replace(/\D/g,'');if(!q)return {o:[],c:[],p:[]};
+  const isNo=/^(n[º°o.]?\s*)?\d+$/.test(q);const o=OS.filter(x=>(isNo&&String(x.no).startsWith(dq))||String(x.customer||'').toLowerCase().includes(q)).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,6);
+  const c=CS.filter(x=>[x.name,x.fiscal&&x.fiscal.razao,x.bairro].some(v=>String(v||'').toLowerCase().includes(q))||(dq.length>=3&&[x.doc,String(x.phone||'').replace(/\D/g,'')].some(v=>String(v||'').includes(dq)))).slice(0,6);
+  const p=PS.filter(x=>String(x.name||'').toLowerCase().includes(q)||(dq.length>=2&&[x.code,x.ean,x.ean2].some(v=>String(v||'').startsWith(dq)))).slice(0,6);
   return {o,c,p}}
 function gsHtml(q){const R=gsFind(q);if(!q.trim())return '<div class="small muted gsempty">Digite o nome do cliente, o número do pedido ou o nome/código do produto.</div>';
   const sec=(t,L,f)=>L.length?`<div class="gssec"><span class="lbl">${t}</span>${L.map(f).join('')}</div>`:'';
@@ -3414,21 +3439,26 @@ function gsHtml(q){const R=gsFind(q);if(!q.trim())return '<div class="small mute
     +sec('Produtos',R.p,x=>`<button type="button" class="gsr" data-gs="p:${x.id}"><span><b>${esc(x.name)}</b><span class="small muted">${x.code?' · Cód. '+esc(x.code):''}${x.active===false?' · desativado':''}</span></span><b class="num">${brl(x.price)}</b></button>`);
   return h||'<div class="small muted gsempty">Nada encontrado.</div>'}
 function gsClose(){const o=$('#gsov');if(o)o.remove()}
-function gsGo(k,id){gsClose();ui.romView=false;ui.lanc=null;ui.edit=null;ui.confirmDel=null;
+function gsGo(k,id){gsClose();
+  if(gsVend()){ui.lanc=null;if(k==='o'){ui.vtab='pedidos';ui.vpf='todos';ui.vop=ui.vop||{};ui.vop[id]=true}
+    if(k==='c'){const x=S.customers.find(y=>y.id===id);ui.vtab='clientes';ui.vcq=x?x.name:''}
+    if(k==='p'){const x=S.products.find(y=>y.id===id);ui.vtab='produtos';ui.vpq=x?x.name:''}
+    renderVend();const r=k==='o'&&document.querySelector(`[data-vop="${id}"]`);if(r)r.scrollIntoView({block:'center'});else window.scrollTo(0,0);return}
+  ui.romView=false;ui.lanc=null;ui.edit=null;ui.confirmDel=null;
   if(k==='o'){ui.tab='pedidos';ui.ofilter='todos';if(ui.oF)ui.oF.q='';ui.oOpen=ui.oOpen||{};ui.oOpen[id]=1;renderAdmin();const r=document.querySelector(`[data-oexp="${id}"]`);if(r)r.scrollIntoView({block:'center'});return}
   if(k==='c'){const x=S.customers.find(y=>y.id===id);if(!x)return;ui.tab='cadastros';ui.cadSub='clientes';ui.edit={...x}}
   if(k==='p'){const x=S.products.find(y=>y.id===id);if(!x)return;ui.tab='produtos';ui.pfTab='cad';ui.edit=JSON.parse(JSON.stringify(x))}
   renderAdmin();window.scrollTo(0,0)}
-function gsOpen(){if(!ui.admin||ui.view!=='admin')return;gsClose();const ov=document.createElement('div');ov.id='gsov';ov.className='gsov';
+function gsOpen(){if(!gsOk())return;gsClose();const ov=document.createElement('div');ov.id='gsov';ov.className='gsov';
   ov.innerHTML=`<div class="gsbox" role="dialog" aria-modal="true" aria-label="Buscar"><div class="gshead">${GSI}<input type="search" id="gsq" placeholder="Cliente, nº do pedido ou produto" autocomplete="off" aria-label="Buscar cliente, pedido ou produto"><button type="button" class="btn ghost dlb" id="gsx">Fechar</button></div><div id="gsres">${gsHtml('')}</div></div>`;
   document.body.appendChild(ov);const q=$('#gsq'),res=$('#gsres');
   const bind=()=>{res.querySelectorAll('[data-gs]').forEach(b=>b.onclick=()=>{const [k,id]=b.dataset.gs.split(':');gsGo(k,id)});
-    res.querySelectorAll('[data-gsn]').forEach(b=>b.onclick=()=>{const x=S.customers.find(y=>y.id===b.dataset.gsn);if(!x)return;gsClose();ui.tab='pedidos';ui.romView=false;ui.edit=null;ui.lanc=lnStartFor(x);renderAdmin();window.scrollTo(0,0)})};
+    res.querySelectorAll('[data-gsn]').forEach(b=>b.onclick=()=>{const x=S.customers.find(y=>y.id===b.dataset.gsn);if(!x)return;gsClose();if(gsVend()){lnStartFor(x);renderVend();window.scrollTo(0,0);return}ui.tab='pedidos';ui.romView=false;ui.edit=null;ui.lanc=lnStartFor(x);renderAdmin();window.scrollTo(0,0)})};
   q.oninput=()=>{res.innerHTML=gsHtml(q.value);bind()};
   q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const f=res.querySelector('[data-gs]');if(f)f.click()}};
   ov.addEventListener('click',e=>{if(e.target===ov)gsClose()});$('#gsx').onclick=gsClose;bind();q.focus()}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#gsov')){gsClose();return}
-  if(e.key!=='/'||e.ctrlKey||e.metaKey||e.altKey||!ui.admin||ui.view!=='admin'||$('#gsov'))return;const t=e.target;if(t&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;e.preventDefault();gsOpen()});
+  if(e.key!=='/'||e.ctrlKey||e.metaKey||e.altKey||!gsOk()||$('#gsov'))return;const t=e.target;if(t&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;e.preventDefault();gsOpen()});
 /* "Desfazer" logo depois de uma ação (aviso com botão) */
 let undoT=null;
 function toastUndo(msg,fn){let t=$('#toastu');if(!t){t=document.createElement('div');t.id='toastu';t.className='toastu';t.setAttribute('role','status');document.body.appendChild(t)}
@@ -3438,7 +3468,6 @@ function toastUndo(msg,fn){let t=$('#toastu');if(!t){t=document.createElement('d
 function helpTip(html,label){return `<details class="helptip"><summary aria-label="${esc(label||'Ajuda')}" title="${esc(label||'Ajuda')}">?</summary><div class="helpbody">${html}</div></details>`}
 /* atalhos no cartão do cliente (painel): fazer pedido já com o cliente escolhido e chamar no WhatsApp */
 function cliQuick(x){return `<button class="btn dlb" data-cnew="${x.id}">Fazer pedido</button>${x.phone?`<a class="btn ghost dlb walink" href="${waLink(x.phone,'Olá, '+x.name+'!')}" target="_blank" rel="noopener" aria-label="Chamar ${esc(x.name)} no WhatsApp" title="WhatsApp">${WAI}</a>`:''}`}
-function lnStartFor(x){return {cid:x.id,_sv:1,mode:'retirada',addr:x.address||'',bairro:x.bairro||'',pay:'',cart:{},q:'',note:'',sel:x.sellerId||'',nf:ieClient(x),nfData:defaultNf(x)}}
 function clientExtra(x){const d=idleDays(x),l=lastBuy(x),ci=creditInfo(x,0),bits=[];
   if(x.city&&cityById(x.city))bits.unshift(cityById(x.city).name);
   if(sellerById(x.sellerId))bits.push('Vendedor: '+esc(sellerById(x.sellerId).name));
@@ -4674,7 +4703,7 @@ const rmCount=o=>{const S1=ui.rmSel&&ui.rmSel[o.id];return S1?Object.keys(S1).fi
 const pctx=v=>String(Math.round(Number(v)*100)/100).replace('.',',')+'%';
 function apprChip(o){return o.appr==='contra'?'<span class="apchip pend">Contraproposta da loja</span>':o.appr==='aceito'?'<span class="apchip ok">Contraproposta aceita</span>':o.appr==='ajustar'?'<span class="apchip no">Devolvido para ajuste</span>':o.appr==='liberado'?'<span class="apchip ok">Ajustado e liberado</span>':o.appr==='pendente'?'<span class="apchip pend">Aguardando aprovação</span>':o.appr==='aprovado'?'<span class="apchip ok">Aprovado pela loja</span>':o.appr==='recusado'?(o.cliRej?'<span class="apchip no">Recusado pelo cliente</span>':'<span class="apchip no">Recusado pela loja</span>'):''}
 function renderVend(){
-  const app=$('#app');
+  const app=$('#app');document.body.classList.toggle('hasbnav',!!(ui.seller&&!ui.lanc));document.body.classList.remove('admbn');
   if(!ui.seller){app.innerHTML=vendLoginForm();$('#vdl').onsubmit=e=>{e.preventDefault();const u=$('#vdlu').value.trim().toLowerCase(),p=$('#vdlp').value;
     const k=(S.sellers||[]).find(x=>x.login&&x.login.toLowerCase()===u&&x.pass===p&&x.active!==false);if(!k){$('#vdle').textContent='Usuário ou senha incorretos, ou acesso desativado.';return}ui.seller=k.id;ui.vtab='pedidos';ui.lanc=null;render()};return}
   const me=SVme();if(!me||me.active===false){ui.seller=null;renderVend();return}
@@ -4730,10 +4759,11 @@ function renderVend(){
         <div class="small muted">Exemplo: com padrão de ${String(Number(me.commission)||0).replace('.',',')}%, um produto com comissão própria de 1% paga 1%; um com 5% paga 5%; os demais pagam ${String(Number(me.commission)||0).replace('.',',')}%. A comissão é sobre o valor vendido do item (já com o desconto de retirada, quando houver). Os produtos com comissão própria aparecem marcados na aba Produtos e no pedido.</div>
         <div class="small muted">${commMode()==='recebimento'?'Ela fica liberada para pagar conforme o cliente paga: à vista, quando o pedido é concluído; a prazo, a cada parcela recebida.':'Ela fica liberada para pagar quando o pedido é concluído.'}</div></div>`}
   app.innerHTML=`<div class="sectionhead"><h2>Olá, ${esc(me.name.split(' ')[0])}</h2><button class="btn" id="vNew">+ Novo pedido</button></div>
-    <div class="commnote"><b>Sua comissão: ${String(Number(me.commission)||0).replace('.',',')}%</b> nos produtos sem comissão própria. Produtos <span class="commchip">com comissão própria</span> pagam a deles, que pode ser maior ou menor. Veja em Produtos.</div>
-    ${vendSepBox(me)}<div class="seg repseg" role="group" aria-label="Seções">${tabs.map(([k,v])=>`<button data-vt="${k}" aria-pressed="${T===k}">${v}</button>`).join('')}</div>${body}`;
+    ${modOn('comissao')?`<div class="commnote"><b>Sua comissão: ${String(Number(me.commission)||0).replace('.',',')}%</b>${helpTip('Vale nos produtos sem comissão própria. Produtos <span class="commchip">com comissão própria</span> pagam a deles, que pode ser maior ou menor. Veja em Produtos.','Como funciona a comissão')}</div>`:''}
+    ${vendSepBox(me)}<div class="seg repseg" role="group" aria-label="Seções">${tabs.map(([k,v])=>`<button data-vt="${k}" aria-pressed="${T===k}">${v}</button>`).join('')}</div>${body}${vbnavHtml(tabs,T)}`;
   const rer=()=>{const y=window.scrollY;renderVend();window.scrollTo(0,y)};
-  app.querySelectorAll('[data-vt]').forEach(b=>b.onclick=()=>{ui.vtab=b.dataset.vt;renderVend()});
+  app.querySelectorAll('[data-vt]').forEach(b=>b.onclick=()=>{ui.vtab=b.dataset.vt;renderVend();window.scrollTo(0,0)});
+  {const nb=$('#vNewB');if(nb)nb.onclick=()=>$('#vNew').click()}
   bindVendSep(app,me,rer);
   app.querySelectorAll('[data-vop]').forEach(b=>b.onclick=()=>{ui.vop=ui.vop||{};const o=S.orders.find(x=>x.id===b.dataset.vop);const cur=!!ui.vop[b.dataset.vop]||(o&&o.appr==='ajustar'&&ui.vop[b.dataset.vop]===undefined);ui.vop[b.dataset.vop]=!cur;rer()});
   app.querySelectorAll('[data-vedit]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.vedit);if(!o)return;const cli=S.customers.find(x=>x.id===o.customerId);if(!cli){toast('Cliente não encontrado.');return}
@@ -5832,10 +5862,10 @@ function admCaixa(){const c=$('#tabc'),t=today(),W=ui.cxW||0,start=addDays(t,W*7
   const R=days.reduce((s,x)=>s+x.r,0),P=days.reduce((s,x)=>s+x.p,0),PL=Math.round(days.reduce((s,x)=>s+x.l,0)*100)/100;let acc=0;
   const wd=d=>['dom','seg','ter','qua','qui','sex','sáb'][new Date(d+'T12:00:00').getDay()];
   c.innerHTML=`${finSeg()}<div class="sectionhead"><h2>Caixa da semana</h2><div class="row" style="gap:6px"><button class="btn ghost dlb" data-cxw="-1" aria-label="Semana anterior">←</button><span class="small"><b>${dBR(start)} a ${dBR(end)}</b></span><button class="btn ghost dlb" data-cxw="1" aria-label="Próxima semana">→</button><button class="btn ghost dlb" id="cxpdf">Baixar PDF</button></div></div>
-    <div class="tiles"><div class="tile"><span class="lbl">Entra (a receber)</span><b class="num mgok">${brl(R)}</b></div><div class="tile"><span class="lbl">Sai (a pagar)</span><b class="num neg">${brl(P)}</b></div><div class="tile"><span class="lbl">Saldo da semana</span><b class="num ${R-P<0?'neg':'mgok'}">${brl(R-P)}</b></div>${PL>0?`<div class="tile"><span class="lbl">Perdas por avaria</span><b class="num neg">${brl(PL)}</b><span class="small muted">mercadoria, a custo: não sai do caixa · resultado ${brl(R-P-PL)}</span></div>`:''}</div>
+    <div class="tiles ${PL>0?'t4':''}"><div class="tile"><span class="lbl">Entra (a receber)</span><b class="num mgok">${brl(R)}</b></div><div class="tile"><span class="lbl">Sai (a pagar)</span><b class="num neg">${brl(P)}</b></div><div class="tile"><span class="lbl">Saldo da semana</span><b class="num ${R-P<0?'neg':'mgok'}">${brl(R-P)}</b></div>${PL>0?`<div class="tile"><span class="lbl">Perdas por avaria</span><b class="num neg">${brl(PL)}</b><span class="small muted">a custo · resultado ${brl(R-P-PL)}</span></div>`:''}</div>
     ${W===0&&(atrR||atrP)?`<div class="notice" style="margin:10px 0">Atrasados: <b>${brl(atrR)}</b> para receber de clientes · <b>${brl(atrP)}</b> de contas vencidas para pagar.</div>`:''}
     <div class="tablewrap"><table class="btable cxtable"><thead><tr><th>Dia</th><th class="r">Entra</th><th class="r">Sai</th>${PL>0?'<th class="r">Perdas</th>':''}<th class="r">Saldo do dia</th><th class="r">Acumulado</th></tr></thead><tbody>${days.map(x=>{acc+=x.r-x.p;return `<tr class="${x.d===t?'cxhoje':''}"><td>${wd(x.d)} ${dBR(x.d).slice(0,5)}</td><td class="r num">${x.r?brl(x.r):'—'}</td><td class="r num">${x.p?brl(x.p):'—'}</td>${PL>0?`<td class="r num ${x.l?'neg':''}">${x.l?brl(x.l):'—'}</td>`:''}<td class="r num ${x.r-x.p<0?'neg':''}">${x.r||x.p?brl(x.r-x.p):'—'}</td><td class="r num ${acc<0?'neg':''}"><b>${brl(acc)}</b></td></tr>`}).join('')}</tbody></table></div>
-    <div class="small muted" style="margin-top:10px">Entra = contas a receber; sai = contas a pagar.${PL>0?' Perdas = mercadoria avariada na entrega (a custo, no dia da conclusão): entra no resultado, não no saldo do caixa.':''}${helpTip('"Entra" é o que os clientes devem pagar em cada dia (contas a receber em aberto). "Sai" é o que você lançou em Contas a pagar. Não conta o dinheiro que já está no caixa nem as vendas à vista do dia.','Como ler o caixa da semana')}</div>`;
+    <div class="small muted" style="margin-top:10px">Entra = contas a receber; sai = contas a pagar${PL>0?'; perdas = avaria a custo':''}.${helpTip('"Entra" é o que os clientes devem pagar em cada dia (contas a receber em aberto). "Sai" é o que você lançou em Contas a pagar. Não conta o dinheiro que já está no caixa nem as vendas à vista do dia.'+(PL>0?' "Perdas" é a mercadoria avariada na entrega, a preço de custo, no dia da conclusão: entra no resultado, mas não mexe no saldo do caixa.':''),'Como ler o caixa da semana')}</div>`;
   bindFinSeg(c);c.querySelectorAll('[data-cxw]').forEach(b=>b.onclick=()=>{ui.cxW=(ui.cxW||0)+Number(b.dataset.cxw);admCaixa()});
   $('#cxpdf').onclick=()=>{let ac=0;const inW=x=>x.due>=start&&x.due<=end,byD=(a,b)=>String(a.due).localeCompare(String(b.due));
     const eR=rec.filter(inW).sort(byD),eP=pay.filter(inW).sort(byD);
