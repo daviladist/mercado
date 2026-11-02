@@ -463,3 +463,20 @@ alter table rural_rocas add column if not exists icone text;
 alter table rural_lanc add column if not exists pagamento text;
 alter table rural_lanc add column if not exists vence date;
 alter table rural_lanc add column if not exists cheque jsonb not null default '{}'::jsonb;
+-- loja: código do produto (EAN ou código do ERP, para importar e atualizar sem duplicar) e custo (só o painel vê)
+alter table loja_produtos add column if not exists codigo text;
+alter table loja_produtos add column if not exists custo numeric(12,2);
+create unique index if not exists loja_produtos_codigo on loja_produtos(tenant_id, lower(codigo)) where codigo is not null;
+-- pedidos de consulta ao StarIA feitos pela loja (o Claude consulta e devolve o resultado; a loja revisa e importa)
+create table if not exists loja_staria (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  termos jsonb not null,
+  status text not null default 'pendente' check (status in ('pendente','pronta','importada')),
+  resultados jsonb not null default '{}'::jsonb,
+  criado_por text,
+  feito_por text,
+  feito_em timestamptz,
+  created_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
