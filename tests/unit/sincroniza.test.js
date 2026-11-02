@@ -123,13 +123,13 @@ test('painel de erros: mensagem sem CPF/CNPJ, e-mail nem texto longo', () => {
   assert.ok(!/12\.345|joao@|aaaa|linha 2/.test(c), c);
 });
 
-test('na Vercel, chaves só de teste ficam desligadas (cookie sem Secure, banco sem conferir certificado, rota de erro)', () => {
+test('na Vercel, chaves só de teste ficam desligadas (cookie sem Secure, rota de erro); banco sem certificado só avisa', () => {
   const { guard } = require('../../lib/envguard');
   const err = console.error; console.error = () => {};
   try {
     const env = { VERCEL: '1', DEV_INSECURE_COOKIE: '1', PG_INSECURE_TLS: '1', TINO_TESTE_ERRO: '1', DATABASE_URL: 'x' };
     assert.deepStrictEqual(guard(env).sort(), ['DEV_INSECURE_COOKIE', 'PG_INSECURE_TLS', 'TINO_TESTE_ERRO']);
-    assert.deepStrictEqual(Object.keys(env).sort(), ['DATABASE_URL', 'VERCEL']);
+    assert.deepStrictEqual(Object.keys(env).sort(), ['DATABASE_URL', 'PG_INSECURE_TLS', 'VERCEL']);
     const local = { DEV_INSECURE_COOKIE: '1' }; assert.deepStrictEqual(guard(local), []); assert.strictEqual(local.DEV_INSECURE_COOKIE, '1');
   } finally { console.error = err; }
 });
