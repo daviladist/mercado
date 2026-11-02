@@ -144,3 +144,40 @@ test('ranking: vendas do balcão somam no mesmo produto; venda enviada para a no
   assert.equal(Math.round(com.rows[0].profit * 100) / 100, 290 - 80 - 120);
   assert.equal(C.buildRanking(Object.assign({}, f, { pdv: true, mode: 'entrega' }), pdv).rows[0].q, 2); // balcão é retirada
 });
+
+test('"Descontar o reservado": compara com estoque − outros pedidos em aberto (o próprio pedido não conta)', () => {
+  const S = base(); Object.defineProperty(S, '__mods', { value: { trava_estoque: true, trava_reservado: true }, configurable: true });
+  S.orders.push({ id: 'r1', status: 'separando', items: [{ pid: 'p1', name: 'Cerveja Lata', q: 6, price: 60 }] });
+  S.orders.push({ id: 'r2', status: 'concluido', items: [{ pid: 'p1', q: 50 }] });                       // já baixou: não reserva
+  S.orders.push({ id: 'r3', status: 'separado', pdvVenda: 'v1', items: [{ pid: 'p1', q: 50 }] });       // balcão: já baixou
+  assert.throws(() => novo(S, U.cliente, { items: [{ pid: 'p1', q: 5 }], mode: 'retirada', pay: 'Pix' }), /Só temos 4 un\. de Cerveja Lata disponíveis \(6 un\. já reservados/);
+  assert.equal(novo(S, U.cliente, { items: [{ pid: 'p1', q: 4 }], mode: 'retirada', pay: 'Pix' }, 'n2').writes.length, 1);
+  // sem a sub-opção: só o estoque físico (10)
+  const S2 = base(); S2.orders.push({ id: 'r1', status: 'novo', items: [{ pid: 'p1', q: 6, price: 60 }] });
+  assert.equal(novo(S2, U.cliente, { items: [{ pid: 'p1', q: 9 }], mode: 'retirada', pay: 'Pix' }).writes.length, 1);
+  // vendedor alterando o PRÓPRIO pedido: a reserva dele não conta contra ele
+  const S3 = base(); Object.defineProperty(S3, '__mods', { value: { trava_estoque: true, trava_reservado: true }, configurable: true });
+  const o = { id: 'o1', no: 1001, date: iso, customerId: 'c1', customer: 'Mercado', sellerId: 's1', sellerRate: 2, mode: 'retirada', pay: 'Pix', status: 'novo', items: [{ pid: 'p1', name: 'Cerveja Lata', q: 8, price: 60, perPack: 12 }], sub: 480, disc: 0, total: 480, events: [] };
+  S3.orders.push(o); const n = clone(o); n.items[0].q = 10;
+  assert.equal(policy.checkOrderUpdate(S3, U.vendedor, o, n).items[0].q, 10);
+});
+
+test('última compra: o balcão conta (vendedor recebe só a data; admin também vê)', () => {
+  const S = base(); S.orders.push({ id: 'o1', customerId: 'c1', status: 'concluido', date: '2026-10-01T12:00:00.000Z', items: [] });
+  Object.defineProperty(S, '__pdvLast', { value: new Map([['c1', '2026-10-20T15:00:00.000Z']]) });
+  const V = policy.project(S, { role: 'vendedor', ref_id: 's1' });
+  assert.equal(V.customers.find(c => c.id === 'c1').lastBuyAt, '2026-10-20T15:00:00.000Z');
+  assert.equal(policy.project(S, { role: 'admin', ref_id: 'a' }).customers[0].lastBuyAt, '2026-10-20T15:00:00.000Z');
+  // o administrador gravando o cliente não guarda a data calculada
+  const r = policy.applySync(S, { customers: { c1: 1 }, meta: {} }, U.admin, [{ c: 'customers', id: 'c1', op: 'put', ver: 1, doc: Object.assign({}, S.customers[0], { lastBuyAt: '2026-10-20T15:00:00.000Z' }) }]);
+  assert.equal(r.writes[0].doc.lastBuyAt, undefined);
+});
+
+test('resultados do período: lucro já sem as perdas por avaria; venda do balcão enviada para a nota não conta 2×', () => {
+  const S = base('manter'); const { C } = policy.coreFor(S, 'x');
+  S.orders.push({ id: 'a', status: 'concluido', date: '2026-11-02T15:00:00.000Z', doneAt: '2026-11-02T15:00:00.000Z', customer: 'X', total: 600, loss: { p1: 1 }, items: [{ pid: 'p1', name: 'Cerveja Lata', q: 10, price: 60, cost: 40 }] });
+  S.orders.push({ id: 'b', status: 'separado', pdvVenda: 'v1', date: '2026-11-02T15:00:00.000Z', customer: 'X', total: 999, items: [{ pid: 'p1', q: 1, price: 999, cost: 40 }] });
+  const st = C.dbStats('2026-11-01', '2026-11-30');
+  assert.equal(st.tot, 600); assert.equal(st.n, 1);
+  assert.equal(st.perdas, 40); assert.equal(Math.round(st.lucro * 100) / 100, 600 - 400 - 40);
+});

@@ -205,6 +205,10 @@ with sync_playwright() as pw:
     with pg.expect_download(timeout=20000) as dl: pg.click('#rxl')
     check(dl.value.suggested_filename.endswith('.xlsx'), 'arquivo Excel com nome .xlsx (%s)' % dl.value.suggested_filename); wb = openpyxl.load_workbook(io.BytesIO(open(dl.value.path(), 'rb').read())); ws = wb.active; rows = [[c.value for c in r] for r in ws.iter_rows()]
     check(rows and rows[0][0] == 'Cliente' and any(r[0] == 'Mercado Um' and r[6] == 50 for r in rows[1:]), 'Excel do contas a receber gerado e legível (%d linhas)' % len(rows))
+    pg.locator('[data-fin="caixa"]').first.click(); pg.wait_for_timeout(500)
+    t = pg.inner_text('#tabc'); check('perdas por avaria' in t.lower() and '40,00' in t, 'Caixa da semana: perdas por avaria (R$ 40,00) no dia da conclusão')
+    pg.locator('[data-tab="hoje"]').first.click(); pg.wait_for_timeout(800)
+    t = pg.inner_text('#tabc'); check('de perdas' in t.lower(), 'Visão geral: lucro já sem as perdas')
     check(not E, 'financeiro sem erro de JavaScript: %s' % E[:2]); b.close()
 
     print('== fila do app: recusa do envio inteiro não perde nada')

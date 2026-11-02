@@ -88,8 +88,13 @@ s, r = cli.req('/api/sync', {'changes': [{'c': 'orders', 'id': 'od7', 'op': 'put
 check(s == 200 and not r.get('rejected'), 'não permitindo: o estoque exato passa')
 ao = {'id': 'od8', 'date': now, 'customerId': 'cd1', 'customer': 'Mercado Dados', 'status': 'novo', 'pay': 'PIX', 'mode': 'retirada', 'items': [{'pid': 'pf', 'name': 'Feijão', 'q': est + 50, 'price': 10}], 'sub': 0, 'disc': 0, 'total': 10}
 s, r = A.req('/api/sync', {'changes': [{'c': 'orders', 'id': 'od8', 'op': 'put', 'doc': ao}]}); check(s == 200 and not r.get('rejected'), 'a loja (administrador) sempre pode lançar acima do estoque')
-s, r = creq('/api/central/tenant', {'id': TP['id'], 'modules': {'trava_estoque': False}}); check(s == 200, 'Central volta para "Permitir venda sem estoque"')
-s, r = acima('od9'); check(s == 200 and not r.get('rejected'), 'permitindo de novo: aceita (%s)' % rej(r))
+um = lambda oid: cli.req('/api/sync', {'changes': [{'c': 'orders', 'id': oid, 'op': 'put', 'doc': dict(ped, pay='PIX', items=[{'pid': 'pf', 'q': 1, 'price': 10}])}]})
+s, r = creq('/api/central/tenant', {'id': TP['id'], 'modules': {'trava_reservado': True}}); check(s == 200, 'Central liga "Descontar o que já está reservado em pedidos em aberto"')
+s, r = um('od10'); check(s == 200 and len(rej(r)) == 1 and 'reservado' in (rej(r)[0] or ''), 'com o reservado: todo o estoque já está em pedidos em aberto, 1 un. é recusada (%s)' % rej(r))
+s, r = creq('/api/central/tenant', {'id': TP['id'], 'modules': {'trava_reservado': False}}); check(s == 200, 'Central desliga o "descontar reservado"')
+s, r = um('od11'); check(s == 200 and not r.get('rejected'), 'sem descontar o reservado: compara só com o estoque físico, passa (%s)' % rej(r))
+s, r = creq('/api/central/tenant', {'id': TP['id'], 'modules': {'trava_estoque': False, 'trava_reservado': True}}); check(s == 200, 'Central volta para "Permitir venda sem estoque"')
+s, r = acima('od9'); check(s == 200 and not r.get('rejected'), 'permitindo de novo: aceita, mesmo com a sub-opção marcada (ela só vale com "não permitir") (%s)' % rej(r))
 
 print('\n%d verificações OK, %d falhas' % (ok, len(fails)))
 if fails:

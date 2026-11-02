@@ -215,6 +215,10 @@ with cf.ThreadPoolExecutor(2) as ex: res = list(ex.map(corre, range(2)))
 s, st = A.req('/api/state'); ped = [o for o in st['S']['orders'] if o.get('pdvVenda') == CF]
 check(res.count(200) == 1 and not (res[0] == 200 and ped), 'cancelar e faturar juntos: só um vale (cancelar/faturar = %s, pedidos = %s)' % (res, len(ped)))
 
+print('== última compra conta o balcão')
+s, st = A.req('/api/state'); comPed = {o['customerId'] for o in st['S']['orders']}
+cv = [c for c in st['S']['customers'] if c.get('lastBuyAt') and c['id'] not in comPed]
+check(len(cv) >= 1, 'cliente que só comprou no balcão tem a data da última compra (%s)' % [c['id'] for c in cv])
 print('== ranking: itens vendidos no balcão por produto')
 import datetime as _dt
 HJ = _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=-3))).strftime('%Y-%m-%d'); DE = (_dt.datetime.now(_dt.timezone(_dt.timedelta(hours=-3))) - _dt.timedelta(days=6)).strftime('%Y-%m-%d')

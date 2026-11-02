@@ -3679,18 +3679,21 @@ function orderBairro(o){if(o.bairro)return o.bairro;const c=S.customers.find(x=>
 /* ================= DASHBOARD: números e gráficos do período ================= */
 const DB_P=[['7','7 dias'],['30','30 dias'],['90','90 dias']];
 function dbRange(n){const t=today();return [addDays(t,-(n-1)),t]}
-function dbStats(a,b){const os=S.orders.filter(o=>o.status!=='cancelado'&&orderDay(o)>=a&&orderDay(o)<=b);let T=0,C=0,CM=0,tot=0;
+/* pedidos que entram nos resultados: venda do balcão enviada para a nota fica de fora (o balcão tem o quadro dele; senão contaria 2×) */
+const salesOrder=o=>o.status!=='cancelado'&&!o.pdvVenda;
+function dbStats(a,b){const os=S.orders.filter(o=>salesOrder(o)&&orderDay(o)>=a&&orderDay(o)<=b);let T=0,C=0,CM=0,tot=0;
   const cat=new Map(),prod=new Map(),cli=new Map();
   os.forEach(o=>{tot+=o.total;cli.set(o.customer,(cli.get(o.customer)||0)+o.total);
     o.items.filter(i=>i.q>0).forEach(i=>{const x=anItemCalc(o,i,itemCommRate(o,i));const k=itemCat(i)||'Outros';cat.set(k,(cat.get(k)||0)+x.net);prod.set(i.name,(prod.get(i.name)||0)+x.net);if(!x.noCost){T+=x.net;C+=x.cost;CM+=x.comm}})});
-  return {os,tot,n:os.length,tk:os.length?tot/os.length:0,mg:T>0?(T-C-CM)/T*100:null,lucro:T-C-CM,cat,prod,cli}}
+  const L=lossSum(lossRows(a,b)).total;   // perdas por avaria (a custo) saem do lucro do período
+  return {os,tot,n:os.length,tk:os.length?tot/os.length:0,mg:T>0?(T-C-CM-L)/T*100:null,lucro:T-C-CM-L,perdas:L,cat,prod,cli}}
 const pctBR1=v=>v==null?'—':(Math.round(v*10)/10).toLocaleString('pt-BR')+'%';
 function dbDelta(cur,prev,isPts){if(prev==null||cur==null)return '';if(!isPts&&!(prev>0))return '';
   const d=isPts?cur-prev:(cur-prev)/prev*100,up=d>=0,txt=(up?'▲ ':'▼ ')+(Math.round(Math.abs(d)*10)/10).toLocaleString('pt-BR')+(isPts?' pts':'%');
   return `<span class="dbdelta ${up?'up':'down'}">${txt}</span>`}
 /* barras por dia (uma série: altura = valor; dica com o valor exato) */
 function dbDaily(n){const t=today(),days=Array.from({length:n},(_,k)=>addDays(t,-(n-1-k)));
-  const v=days.map(d=>S.orders.filter(o=>o.status!=='cancelado'&&orderDay(o)===d).reduce((s,o)=>s+o.total,0)),mx=Math.max(...v,1),wd=d=>['D','S','T','Q','Q','S','S'][new Date(d+'T12:00:00').getDay()];
+  const v=days.map(d=>S.orders.filter(o=>salesOrder(o)&&orderDay(o)===d).reduce((s,o)=>s+o.total,0)),mx=Math.max(...v,1),wd=d=>['D','S','T','Q','Q','S','S'][new Date(d+'T12:00:00').getDay()];
   const step=n>14?Math.ceil(n/10):1;
   return `<div class="dbbars" role="img" aria-label="Vendas por dia nos últimos ${n} dias">${days.map((d,k)=>`<div class="dbbar ${d===t?'hoje':''}" data-tip="${dBR(d).slice(0,5)} · ${brl(v[k])}" tabindex="0"><span style="height:${v[k]?Math.max(3,v[k]/mx*100):0}%"></span><i>${k%step===0||d===t?(n<=14?wd(d)+'<br>':'')+dBR(d).slice(0,2):''}</i></div>`).join('')}</div>
     <div class="dbaxis"><span>máx. ${brl(mx)}</span><span>total ${brl(v.reduce((s,x)=>s+x,0))}</span></div>`}
@@ -3715,7 +3718,7 @@ function dashHtml(){const P=Number(ui.dbP||'30'),[a,b]=dbRange(P),cur=dbStats(a,
   return `<div class="dbhead"><div class="seg" role="group" aria-label="Período">${DB_P.map(([k,v])=>`<button data-dbp="${k}" aria-pressed="${String(P)===k}">${v}</button>`).join('')}</div><span class="small muted">${dBR(a)} a ${dBR(b)} · comparado com os ${P} dias anteriores</span></div>
     <div class="dbkpis">
       ${kpi('Vendas',brl(cur.tot),cur.n+' pedido'+(cur.n===1?'':'s'),dbDelta(cur.tot,prev.tot),'hero')}
-      ${kpi('Margem real',pctBR1(cur.mg),'lucro '+brl(cur.lucro),dbDelta(cur.mg,prev.mg,true),cur.mg!=null&&cur.mg<10?'alert':'')}
+      ${kpi('Margem real',pctBR1(cur.mg),'lucro '+brl(cur.lucro)+(cur.perdas>0.004?' · já sem '+brl(cur.perdas)+' de perdas':''),dbDelta(cur.mg,prev.mg,true),cur.mg!=null&&cur.mg<10?'alert':'')}
       ${kpi('Ticket médio',brl(cur.tk),'por pedido',dbDelta(cur.tk,prev.tk))}
       ${kpi('A receber',brl(aRec),atr?'':'nada atrasado',atr?`<span class="neg" style="font-weight:700">${brl(atr)} atrasado</span>`:'')}
     </div>
@@ -3731,9 +3734,9 @@ function dashHtml(){const P=Number(ui.dbP||'30'),[a,b]=dbRange(P),cur=dbStats(a,
 function weekRange(k){const t=today(),dw=(new Date(t+'T12:00:00').getDay()+6)%7,mon=addDays(t,-dw);
   if(k==='esta')return [mon,t,'Esta semana (desde segunda)'];if(k==='7')return [addDays(t,-6),t,'Últimos 7 dias'];return [addDays(mon,-7),addDays(mon,-1),'Semana passada (seg a dom)']}
 function painelSemana(){const K=ui.pnK||'passada',[a,b,lbl]=weekRange(K),inR=d=>d>=a&&d<=b;
-  const os=S.orders.filter(o=>o.status!=='cancelado'&&inR(orderDay(o)));const tot=os.reduce((s,o)=>s+o.total,0);
+  const os=S.orders.filter(o=>salesOrder(o)&&inR(orderDay(o)));const tot=os.reduce((s,o)=>s+o.total,0);
   let T=0,C=0,CM=0,miss=0,desc=0;os.forEach(o=>{o.items.filter(i=>i.q>0).forEach(i=>{const x=anItemCalc(o,i,itemCommRate(o,i));if(x.noCost){miss++;return}T+=x.net;C+=x.cost;CM+=x.comm;if(i.base>i.price)desc+=(i.base-i.price)*i.q});desc+=Number(o.disc)||0});
-  const mg=T>0?(T-C-CM)/T*100:null,tk=os.length?tot/os.length:0;
+  const LS=lossSum(lossRows(a,b)).total,mg=T>0?(T-C-CM-LS)/T*100:null,tk=os.length?tot/os.length:0;
   const recs=(S.receivables||[]).filter(r=>!r.paidAt),aRec=recs.reduce((s,r)=>s+r.amount,0),atr=recs.filter(r=>recStatus(r)==='vencido').reduce((s,r)=>s+r.amount,0);
   const faltas=[];S.orders.forEach(o=>(o.sugs||[]).forEach(s=>{if(s.type==='qtd'&&s.status==='aprovada'&&inR(String(s.doneAt||s.at).slice(0,10))){const it=o.items.find(i=>ikey(i)===s.fromKey);faltas.push({name:s.fromName,q:(s.qFrom||0)-(s.q||0),v:it?((s.qFrom||0)-(s.q||0))*it.price:0})}}));
   const fm=new Map();faltas.forEach(f=>{const r=fm.get(f.name)||{name:f.name,q:0,v:0};r.q+=f.q;r.v+=f.v;fm.set(f.name,r)});const fl=[...fm.values()].sort((x,y)=>y.v-x.v),perd=fl.reduce((s,f)=>s+f.v,0);
@@ -3743,7 +3746,7 @@ function painelSemana(){const K=ui.pnK||'passada',[a,b,lbl]=weekRange(K),inR=d=>
   return `<section class="panel painel"><div class="pnh"><b>Como foi a semana</b><select id="pnK" aria-label="Período">${[['passada','Semana passada (seg a dom)'],['esta','Esta semana'],['7','Últimos 7 dias']].map(([k,v])=>`<option value="${k}" ${K===k?'selected':''}>${v}</option>`).join('')}</select><span class="small muted">${dBR(a)} a ${dBR(b)}</span></div>
     <div class="pngrid">
       <div class="pnt"><span class="lbl">Vendeu</span><b class="num">${brl(tot)}</b><span class="small muted">${os.length} pedido${os.length===1?'':'s'}</span></div>
-      <div class="pnt"><span class="lbl">Margem real</span><b class="num ${mg!=null&&mg<10?'neg':''}">${pc(mg)}</b><span class="small muted">lucro ${brl(T-C-CM)} · já tirando comissão${miss?` · ${miss} item(ns) sem custo fora da conta`:''}</span></div>
+      <div class="pnt"><span class="lbl">Margem real</span><b class="num ${mg!=null&&mg<10?'neg':''}">${pc(mg)}</b><span class="small muted">lucro ${brl(T-C-CM-LS)} · já tirando comissão${LS>0.004?' e '+brl(LS)+' de perdas':''}${miss?` · ${miss} item(ns) sem custo fora da conta`:''}</span></div>
       <div class="pnt"><span class="lbl">Ticket médio</span><b class="num">${brl(tk)}</b><span class="small muted">descontos dados: ${brl(desc)}</span></div>
       <div class="pnt"><span class="lbl">A receber</span><b class="num">${brl(aRec)}</b><span class="small ${atr?'neg':'muted'}">${atr?'atrasado '+brl(atr):'nada atrasado'}</span></div>
       <div class="pnt"><span class="lbl">Faltou (venda perdida)</span><b class="num ${perd?'neg':''}">${brl(perd)}</b><span class="small muted">${fl.length?fl.slice(0,3).map(f=>esc(f.name.slice(0,22))+' ('+f.q+')').join(' · '):'nenhuma falta'}</span></div>
@@ -6223,24 +6226,26 @@ function admPagar(){const c=$('#tabc');S.payables=S.payables||[];const F=ui.payF
 function admCaixa(){const c=$('#tabc'),t=today(),W=ui.cxW||0,start=addDays(t,W*7),end=addDays(start,6);
   const rec=(S.receivables||[]).filter(r=>!r.paidAt),pay=(S.payables||[]).filter(p=>!p.paidAt);
   const atrR=rec.filter(r=>r.due<t).reduce((s,r)=>s+r.amount,0),atrP=pay.filter(p=>p.due<t).reduce((s,p)=>s+p.amount,0);
-  const days=Array.from({length:7},(_,k)=>addDays(start,k)).map(d=>({d,r:rec.filter(x=>x.due===d).reduce((s,x)=>s+x.amount,0),p:pay.filter(x=>x.due===d).reduce((s,x)=>s+x.amount,0)}));
-  const R=days.reduce((s,x)=>s+x.r,0),P=days.reduce((s,x)=>s+x.p,0);let acc=0;
+  const LR=lossRows(start,end);
+  const days=Array.from({length:7},(_,k)=>addDays(start,k)).map(d=>({d,r:rec.filter(x=>x.due===d).reduce((s,x)=>s+x.amount,0),p:pay.filter(x=>x.due===d).reduce((s,x)=>s+x.amount,0),l:LR.filter(x=>x.d===d).reduce((s,x)=>s+(x.value||0),0)}));
+  const R=days.reduce((s,x)=>s+x.r,0),P=days.reduce((s,x)=>s+x.p,0),PL=Math.round(days.reduce((s,x)=>s+x.l,0)*100)/100;let acc=0;
   const wd=d=>['dom','seg','ter','qua','qui','sex','sáb'][new Date(d+'T12:00:00').getDay()];
   c.innerHTML=`${finSeg()}<div class="sectionhead"><h2>Caixa da semana</h2><div class="row" style="gap:6px"><button class="btn ghost dlb" data-cxw="-1" aria-label="Semana anterior">←</button><span class="small"><b>${dBR(start)} a ${dBR(end)}</b></span><button class="btn ghost dlb" data-cxw="1" aria-label="Próxima semana">→</button><button class="btn ghost dlb" id="cxpdf">Baixar PDF</button></div></div>
-    <div class="tiles"><div class="tile"><span class="lbl">Entra (a receber)</span><b class="num mgok">${brl(R)}</b></div><div class="tile"><span class="lbl">Sai (a pagar)</span><b class="num neg">${brl(P)}</b></div><div class="tile"><span class="lbl">Saldo da semana</span><b class="num ${R-P<0?'neg':'mgok'}">${brl(R-P)}</b></div></div>
+    <div class="tiles"><div class="tile"><span class="lbl">Entra (a receber)</span><b class="num mgok">${brl(R)}</b></div><div class="tile"><span class="lbl">Sai (a pagar)</span><b class="num neg">${brl(P)}</b></div><div class="tile"><span class="lbl">Saldo da semana</span><b class="num ${R-P<0?'neg':'mgok'}">${brl(R-P)}</b></div>${PL>0?`<div class="tile"><span class="lbl">Perdas por avaria</span><b class="num neg">${brl(PL)}</b><span class="small muted">mercadoria, a custo: não sai do caixa · resultado ${brl(R-P-PL)}</span></div>`:''}</div>
     ${W===0&&(atrR||atrP)?`<div class="notice" style="margin:10px 0">Atrasados: <b>${brl(atrR)}</b> para receber de clientes · <b>${brl(atrP)}</b> de contas vencidas para pagar.</div>`:''}
-    <div class="tablewrap"><table class="btable cxtable"><thead><tr><th>Dia</th><th class="r">Entra</th><th class="r">Sai</th><th class="r">Saldo do dia</th><th class="r">Acumulado</th></tr></thead><tbody>${days.map(x=>{acc+=x.r-x.p;return `<tr class="${x.d===t?'cxhoje':''}"><td>${wd(x.d)} ${dBR(x.d).slice(0,5)}</td><td class="r num">${x.r?brl(x.r):'—'}</td><td class="r num">${x.p?brl(x.p):'—'}</td><td class="r num ${x.r-x.p<0?'neg':''}">${x.r||x.p?brl(x.r-x.p):'—'}</td><td class="r num ${acc<0?'neg':''}"><b>${brl(acc)}</b></td></tr>`}).join('')}</tbody></table></div>
-    <div class="small muted" style="margin-top:10px">Entra = contas a receber; sai = contas a pagar.${helpTip('"Entra" é o que os clientes devem pagar em cada dia (contas a receber em aberto). "Sai" é o que você lançou em Contas a pagar. Não conta o dinheiro que já está no caixa nem as vendas à vista do dia.','Como ler o caixa da semana')}</div>`;
+    <div class="tablewrap"><table class="btable cxtable"><thead><tr><th>Dia</th><th class="r">Entra</th><th class="r">Sai</th>${PL>0?'<th class="r">Perdas</th>':''}<th class="r">Saldo do dia</th><th class="r">Acumulado</th></tr></thead><tbody>${days.map(x=>{acc+=x.r-x.p;return `<tr class="${x.d===t?'cxhoje':''}"><td>${wd(x.d)} ${dBR(x.d).slice(0,5)}</td><td class="r num">${x.r?brl(x.r):'—'}</td><td class="r num">${x.p?brl(x.p):'—'}</td>${PL>0?`<td class="r num ${x.l?'neg':''}">${x.l?brl(x.l):'—'}</td>`:''}<td class="r num ${x.r-x.p<0?'neg':''}">${x.r||x.p?brl(x.r-x.p):'—'}</td><td class="r num ${acc<0?'neg':''}"><b>${brl(acc)}</b></td></tr>`}).join('')}</tbody></table></div>
+    <div class="small muted" style="margin-top:10px">Entra = contas a receber; sai = contas a pagar.${PL>0?' Perdas = mercadoria avariada na entrega (a custo, no dia da conclusão): entra no resultado, não no saldo do caixa.':''}${helpTip('"Entra" é o que os clientes devem pagar em cada dia (contas a receber em aberto). "Sai" é o que você lançou em Contas a pagar. Não conta o dinheiro que já está no caixa nem as vendas à vista do dia.','Como ler o caixa da semana')}</div>`;
   bindFinSeg(c);c.querySelectorAll('[data-cxw]').forEach(b=>b.onclick=()=>{ui.cxW=(ui.cxW||0)+Number(b.dataset.cxw);admCaixa()});
   $('#cxpdf').onclick=()=>{let ac=0;const inW=x=>x.due>=start&&x.due<=end,byD=(a,b)=>String(a.due).localeCompare(String(b.due));
     const eR=rec.filter(inW).sort(byD),eP=pay.filter(inW).sort(byD);
     finPdf({file:'caixa-da-semana-'+start+'-a-'+end,title:'Caixa da semana',sub:dBR(start)+' a '+dBR(end),
-      tiles:[['Entra (a receber)',brl(R)],['Sai (a pagar)',brl(P)],['Saldo da semana',brl(R-P),R-P<0]].concat(W===0&&(atrR||atrP)?[['Atrasados: receber / pagar',brl(atrR)+' / '+brl(atrP)]]:[]),
+      tiles:[['Entra (a receber)',brl(R)],['Sai (a pagar)',brl(P)],['Saldo da semana',brl(R-P),R-P<0]].concat(PL>0?[['Perdas por avaria (a custo)',brl(PL),true]]:[]).concat(W===0&&(atrR||atrP)?[['Atrasados: receber / pagar',brl(atrR)+' / '+brl(atrP)]]:[]),
       sections:[{title:'Dia a dia',head:['Dia','Entra','Sai','Saldo do dia','Acumulado'],right:[1,2,3,4],
           body:days.map(x=>{ac+=x.r-x.p;return [wd(x.d)+' '+dBR(x.d),x.r?brl(x.r):'—',x.p?brl(x.p):'—',x.r||x.p?brl(x.r-x.p):'—',brl(ac)]}),foot:['Semana',brl(R),brl(P),brl(R-P),'']},
         {title:'O que entra (contas a receber)',head:['Vencimento','Cliente','Pedido','Parcela','Valor'],right:[4],body:eR.map(r=>[dBR(r.due),r.customer,r.orderNo?'nº '+r.orderNo:'',r.parcel||'',brl(r.amount)]),foot:eR.length?['Total','','','',brl(R)]:null,empty:'Nada a receber nessa semana.'},
-        {title:'O que sai (contas a pagar)',head:['Vencimento','Descrição','Tipo','Parcela','Valor'],right:[4],body:eP.map(p=>[dBR(p.due),p.desc,p.cat||'',p.parcel||'',brl(p.amount)]),foot:eP.length?['Total','','','',brl(P)]:null,empty:'Nada a pagar nessa semana.'}],
-      note:'Entra = contas a receber em aberto com vencimento no dia. Sai = contas a pagar lançadas. Não inclui o dinheiro em caixa nem vendas à vista.'})};
+        {title:'O que sai (contas a pagar)',head:['Vencimento','Descrição','Tipo','Parcela','Valor'],right:[4],body:eP.map(p=>[dBR(p.due),p.desc,p.cat||'',p.parcel||'',brl(p.amount)]),foot:eP.length?['Total','','','',brl(P)]:null,empty:'Nada a pagar nessa semana.'}]
+        .concat(LR.length?[{title:'Perdas por avaria (a custo)',head:['Dia','Pedido','Produto','Qtd','Valor'],right:[3,4],body:LR.map(r=>[dBR(r.d),'nº '+r.o.no,r.name,String(r.q).replace('.',','),r.value==null?'sem custo':brl(r.value)]),foot:['Total','','','',brl(PL)]}]:[]),
+      note:'Entra = contas a receber em aberto com vencimento no dia. Sai = contas a pagar lançadas. Não inclui o dinheiro em caixa nem vendas à vista.'+(PL>0?' Perdas = mercadoria avariada (a custo): entra no resultado, não no saldo do caixa.':'')})};
 }
 
 function admReceber(){
@@ -6257,10 +6262,11 @@ function admReceber(){
     ${ui.recNew?recForm():''}
     ${(()=>{const M=S.orders.filter(recMissing).filter(o=>!F.cid||o.customerId===F.cid);if(!M.length)return '';const t=M.reduce((s,o)=>s+(Number(o.total)||0),0);
       return `<div class="panel misspanel"><b class="misst">${M.length} pedido${M.length===1?'':'s'} a prazo concluído${M.length===1?'':'s'} sem conta a receber · ${brl(t)}</b>
-        <div class="small">Esse valor não está sendo cobrado. <b>Lançar</b> cria as parcelas; <b>Dispensar</b> se o cliente já pagou.${helpTip('Os vencimentos são contados a partir de hoje, no prazo escolhido. Forma paga na hora (ex.: cartão na entrega)? Marque-a como À vista em Cadastros › Pagamento e ela deixa de aparecer aqui.','Lançar ou dispensar')}</div>
+        <div class="small">Esse valor não está sendo cobrado. <b>Lançar</b> cria as parcelas; <b>Dispensar</b> se o cliente já pagou.${helpTip('Os vencimentos são contados a partir de hoje, no prazo escolhido (ou da data da conclusão, se você escolher: aí a parcela pode já nascer vencida e travar o crédito do cliente). Forma paga na hora (ex.: cartão na entrega)? Marque-a como À vista em Cadastros › Pagamento e ela deixa de aparecer aqui.','Lançar ou dispensar')}</div>
         <div class="list" style="margin-top:8px">${M.slice(0,30).map(o=>{const d=daysFromPay(o.pay).replace('outro:',''),k=PRAZOS.some(p=>p[0]===d&&d!=='0')?d:'28';
           return `<div class="prow" style="grid-template-columns:minmax(0,1fr) auto;align-items:center"><div class="t"><b>nº ${esc(o.no)} · ${esc(o.customer||'')}</b><span class="small muted">${esc(o.pay||'')} · concluído em ${dBR(isoDay(o.doneAt||o.date))} · <b>${brl(o.total)}</b></span></div>
             <div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end"><select data-rmpz="${o.id}" aria-label="Prazo do pedido nº ${esc(o.no)}" style="width:auto;min-height:44px">${PRAZOS.filter(p=>p[0]!=='0'&&p[0]!=='outro').map(p=>`<option value="${p[0]}" ${p[0]===k?'selected':''}>${p[1]}</option>`).join('')}</select>
+            <select data-rmbase="${o.id}" aria-label="Contar os vencimentos do pedido nº ${esc(o.no)} a partir de" style="width:auto;min-height:38px"><option value="hoje">contar de hoje</option><option value="done">contar da conclusão (${dBR(isoDay(o.doneAt||o.date)).slice(0,5)})</option></select>
             <button type="button" class="btn dlb" data-rmok="${o.id}">Lançar</button><button type="button" class="btn ghost dlb" data-rmdis="${o.id}">Dispensar</button></div></div>`}).join('')}${M.length>30?`<div class="small muted">e mais ${M.length-30} pedido(s): resolva estes primeiro.</div>`:''}</div></div>`})()}
     <div class="tiles">
       <button class="tile" data-rst="aberto" aria-pressed="${F.st==='aberto'}"><span class="lbl">No prazo</span><b class="num">${brl(sum('aberto'))}</b><span class="small muted">a vencer</span></button>
@@ -6281,8 +6287,8 @@ function admReceber(){
         ${ui.confirmDel===r.id?`<button class="btn danger dlb" data-rdelok="${r.id}">Confirmar exclusão</button>`:`<button class="btn ghost dlb" data-rdel="${r.id}">Excluir</button>`}</div></div>
     </div>`}).join('')}</div>`:`<div class="empty">${all.length?'Nenhum título com esse filtro.':'Nenhum lançamento ainda. Toque em "+ Novo lançamento" ou use "Lançar no contas a receber" em um pedido.'}</div>`}`;
   bindFinSeg(c);
-  c.querySelectorAll('[data-rmok]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.rmok);if(!o||!recMissing(o))return;const sel=c.querySelector(`[data-rmpz="${o.id}"]`),days=parseDays(sel?sel.value:'28');if(!days.length)return;
-    const parts=recLaunch(o,days,today());save();toast('Pedido nº '+o.no+': '+parts.length+' parcela'+(parts.length===1?'':'s')+' lançada'+(parts.length===1?'':'s')+' no contas a receber');admReceber()});
+  c.querySelectorAll('[data-rmok]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.rmok);if(!o||!recMissing(o))return;const sel=c.querySelector(`[data-rmpz="${o.id}"]`),bs=c.querySelector(`[data-rmbase="${o.id}"]`),days=parseDays(sel?sel.value:'28');if(!days.length)return;const base=bs&&bs.value==='done'?isoDay(o.doneAt||o.date):today();
+    const parts=recLaunch(o,days,base);save();toast('Pedido nº '+o.no+': '+parts.length+' parcela'+(parts.length===1?'':'s')+' lançada'+(parts.length===1?'':'s')+' no contas a receber');admReceber()});
   c.querySelectorAll('[data-rmdis]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.rmdis);if(!o)return;if(!confirm('Dispensar a cobrança do pedido nº '+o.no+' ('+brl(o.total)+')? Use quando o cliente já pagou ou foi à vista. Fica registrado quem dispensou e quando.'))return;
     o.recDismiss={at:new Date().toISOString(),by:ui.adminName||'Loja',why:'Já recebido / à vista'};save();toast('Pedido nº '+o.no+': cobrança dispensada');admReceber()});
   $('#rnew').onclick=()=>{ui.recNew={cid:S.customers[0]?.id||'',value:'',prazo:'7,14,21',custom:'',base:today(),orderNo:'',desc:''};admReceber()};

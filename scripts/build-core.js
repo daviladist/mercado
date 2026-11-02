@@ -21,7 +21,7 @@ effCost itemProduct itemCost orderIeSale syncStock autoReceivables addEvent stat
 tableOf packOf isKg baseOf resolveCart comboAsProduct withOner withIe withClient noDisc ieClient ieF needsBill billGate
 sellerById cityById OPEN origQ today recStatus splitParcels parseDays daysFromPay addDays setOrderStatus itemNet orderComm pickAmt
 setV hasVal ownComm brl onerOn
-recMissing autoRecWarn parcelComm qtyIn pnum cfgNum bnum payNoTerm isoDay reservedMap buildPurchase lossOf buildRanking recLaunch lossRows lossSum`.split(/\s+/).filter(Boolean);
+recMissing autoRecWarn parcelComm qtyIn pnum cfgNum bnum payNoTerm isoDay reservedMap buildPurchase lossOf buildRanking recLaunch lossRows lossSum dbStats`.split(/\s+/).filter(Boolean);
 // nomes que o servidor fornece (não copiar)
 const PROVIDED = new Set(['S', 'ui', 'uid']);
 

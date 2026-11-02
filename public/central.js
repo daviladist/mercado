@@ -83,6 +83,7 @@
     <section class="card" style="display:grid;gap:10px" aria-labelledby="hstk">
       <div><h2 id="hstk">Venda sem estoque</h2><p class="muted small" style="margin:4px 0 0">O sistema não é fiscal e o estoque nem sempre está completo. Não permitindo, o pedido do cliente ou do vendedor acima do estoque é recusado ("Só temos X un."); a loja sempre pode lançar.</p></div>
       <div class="presets"><button type="button" data-stk="0" aria-pressed="${!t.modules.trava_estoque}">Permitir venda sem estoque</button><button type="button" data-stk="1" aria-pressed="${!!t.modules.trava_estoque}">Não permitir venda sem estoque</button></div>
+      ${t.modules.trava_estoque ? `<label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="fstkres" ${t.modules.trava_reservado ? 'checked' : ''}> Descontar o que já está reservado em pedidos em aberto (compara com estoque − reservado)</label>` : ''}
     </section>
     ${t.id ? accessCard(t) : '<div class="note">Salve a empresa para gerar o endereço e o acesso do administrador dela.</div>'}
     <section class="card" style="display:grid;gap:16px" aria-labelledby="hid">
@@ -165,7 +166,8 @@
     E.querySelectorAll('[data-seg]').forEach(b => b.addEventListener('click', () => { draft.segment = b.dataset.seg; draft.modules = presetMods(b.dataset.seg); touch(); }));
     E.querySelectorAll('[data-m]').forEach(b => b.addEventListener('click', () => { if (b.disabled) return; draft.modules[b.dataset.m] = !draft.modules[b.dataset.m]; touch(); }));
     E.querySelectorAll('[data-who]').forEach(b => b.addEventListener('click', () => { const on = b.dataset.who === '1'; draft.modules.app_cliente = on; if (!on) D.modules.forEach(m => { if (m.requires === 'app_cliente') draft.modules[m.code] = false; }); touch(); }));
-    E.querySelectorAll('[data-stk]').forEach(b => b.addEventListener('click', () => { draft.modules.trava_estoque = b.dataset.stk === '1'; touch(); }));
+    E.querySelectorAll('[data-stk]').forEach(b => b.addEventListener('click', () => { draft.modules.trava_estoque = b.dataset.stk === '1'; if (!draft.modules.trava_estoque) draft.modules.trava_reservado = false; touch(); }));
+    { const r = $('#fstkres'); if (r) r.addEventListener('change', () => { draft.modules.trava_reservado = r.checked; touch(); }); }
     const rm = $('#frmlogo'); if (rm) rm.addEventListener('click', () => { draft.logo = null; touch(); });
     $('#flogo').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) readLogo(f); });
     $('#undo').addEventListener('click', () => pick(sel));

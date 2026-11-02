@@ -59,3 +59,9 @@ test('venda sem estoque: PERMITIDA por padrão em todas as empresas (principal, 
   assert.strictEqual(M.resolve({ modules: { trava_estoque: true } }).trava_estoque, true);
   for (const k of Object.keys(M.SEGMENTS)) assert.strictEqual(M.presetFor(k).trava_estoque, false, k);
 });
+test('"descontar o reservado": desligado por padrão e só vale com "não permitir venda sem estoque"', () => {
+  assert.strictEqual(M.resolve({ default_on: true, modules: {} }).trava_reservado, false);
+  assert.strictEqual(M.resolve({ modules: { trava_reservado: true } }).trava_reservado, false);
+  assert.strictEqual(M.resolve({ modules: { trava_reservado: true, trava_estoque: true } }).trava_reservado, true);
+  for (const k of Object.keys(M.SEGMENTS)) assert.strictEqual(M.presetFor(k).trava_reservado, false, k);
+});
