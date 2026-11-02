@@ -3196,7 +3196,7 @@ function waLink(phone,text){let d=String(phone||'').replace(/\D/g,'');if(!d)retu
 function myProductIds(c){const cnt=new Map();S.orders.filter(o=>o.customerId===c.id&&o.status!=='cancelado').forEach(o=>o.items.forEach(i=>{const p=itemProduct(i);if(p)cnt.set(p.id,(cnt.get(p.id)||0)+1)}));return cnt}
 
 /* ---------- clientes parados ---------- */
-function lastBuy(c){const ds=S.orders.filter(o=>o.customerId===c.id&&o.status!=='cancelado').map(orderDay).sort();return ds.length?ds[ds.length-1]:''}
+function lastBuy(c){const ds=S.orders.filter(o=>o.customerId===c.id&&o.status!=='cancelado').map(orderDay);if(c.lastBuyAt)ds.push(orderDay({date:c.lastBuyAt}));ds.sort();return ds.length?ds[ds.length-1]:''}
 function idleDays(c){const l=lastBuy(c);return l?daysBetween(l,today()):null}
 
 /* ---------- romaneio de entrega ---------- */
@@ -3315,6 +3315,9 @@ function admHoje(){
     if(tab==='pedidos')ui.ofilter=f;if(tab==='receber'){ui.finTab='receber';ui.recF=ui.recF||{st:'cobrar',cid:'',q:''};ui.recF.st=f;ui.recF.cid=''}
     if(tab==='produtos')ui.critOnly=true;if(tab==='clientes'){ui.tab='cadastros';ui.cadSub='clientes';ui.cliF=f}renderAdmin();window.scrollTo(0,0)});
 }
+/* atalhos no cartão do cliente (painel): fazer pedido já com o cliente escolhido e chamar no WhatsApp */
+function cliQuick(x){return `<button class="btn dlb" data-cnew="${x.id}">Fazer pedido</button>${x.phone?`<a class="btn ghost dlb walink" href="${waLink(x.phone,'Olá, '+x.name+'!')}" target="_blank" rel="noopener" aria-label="Chamar ${esc(x.name)} no WhatsApp" title="WhatsApp">${WAI}</a>`:''}`}
+function lnStartFor(x){return {cid:x.id,_sv:1,mode:'retirada',addr:x.address||'',bairro:x.bairro||'',pay:'',cart:{},q:'',note:'',sel:x.sellerId||'',nf:ieClient(x),nfData:defaultNf(x)}}
 function clientExtra(x){const d=idleDays(x),l=lastBuy(x),ci=creditInfo(x,0),bits=[];
   if(x.city&&cityById(x.city))bits.unshift(cityById(x.city).name);
   if(sellerById(x.sellerId))bits.push('Vendedor: '+esc(sellerById(x.sellerId).name));
@@ -6166,6 +6169,7 @@ function admClients(){
   {const b=$('#coclr');if(b)b.onclick=()=>{ui.co=null;ui.cliF='todos';admClients()}}
   $('#newC').onclick=()=>{ui.edit={id:null,name:'',login:'',pass:Math.floor(1000+Math.random()*9000).toString(),phone:'',address:'',pays:S.payments.slice(),bairro:'',table:'',creditLimit:''};renderAdmin()};
   c.querySelectorAll('[data-ce]').forEach(b=>b.onclick=()=>{ui.edit={...S.customers.find(x=>x.id===b.dataset.ce)};renderAdmin()});
+  c.querySelectorAll('[data-cnew]').forEach(b=>b.onclick=()=>{const x=S.customers.find(y=>y.id===b.dataset.cnew);if(!x)return;ui.tab='pedidos';ui.romView=false;ui.edit=null;ui.lanc=lnStartFor(x);renderAdmin();window.scrollTo(0,0)});
 }
 /* ---------- BACKUP: baixar e restaurar todos os dados ---------- */
 function backupNow(){const data=JSON.stringify({app:'pedidos-atacado',version:1,savedAt:new Date().toISOString(),data:S});

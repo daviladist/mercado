@@ -3628,7 +3628,7 @@ function waLink(phone,text){let d=String(phone||'').replace(/\D/g,'');if(!d)retu
 function myProductIds(c){const cnt=new Map();S.orders.filter(o=>o.customerId===c.id&&o.status!=='cancelado').forEach(o=>o.items.forEach(i=>{const p=itemProduct(i);if(p)cnt.set(p.id,(cnt.get(p.id)||0)+1)}));return cnt}
 
 /* ---------- clientes parados ---------- */
-function lastBuy(c){const ds=S.orders.filter(o=>o.customerId===c.id&&o.status!=='cancelado').map(orderDay).sort();return ds.length?ds[ds.length-1]:''}
+function lastBuy(c){const ds=S.orders.filter(o=>o.customerId===c.id&&o.status!=='cancelado').map(orderDay);if(c.lastBuyAt)ds.push(orderDay({date:c.lastBuyAt}));ds.sort();return ds.length?ds[ds.length-1]:''}
 function idleDays(c){const l=lastBuy(c);return l?daysBetween(l,today()):null}
 
 /* ---------- romaneio de entrega ---------- */
@@ -3747,6 +3747,9 @@ function admHoje(){
     if(tab==='pedidos')ui.ofilter=f;if(tab==='receber'){ui.finTab='receber';ui.recF=ui.recF||{st:'cobrar',cid:'',q:''};ui.recF.st=f;ui.recF.cid=''}
     if(tab==='produtos')ui.critOnly=true;if(tab==='clientes'){ui.tab='cadastros';ui.cadSub='clientes';ui.cliF=f}renderAdmin();window.scrollTo(0,0)});
 }
+/* atalhos no cartão do cliente (painel): fazer pedido já com o cliente escolhido e chamar no WhatsApp */
+function cliQuick(x){return `<button class="btn dlb" data-cnew="${x.id}">Fazer pedido</button>${x.phone?`<a class="btn ghost dlb walink" href="${waLink(x.phone,'Olá, '+x.name+'!')}" target="_blank" rel="noopener" aria-label="Chamar ${esc(x.name)} no WhatsApp" title="WhatsApp">${WAI}</a>`:''}`}
+function lnStartFor(x){return {cid:x.id,_sv:1,mode:'retirada',addr:x.address||'',bairro:x.bairro||'',pay:'',cart:{},q:'',note:'',sel:x.sellerId||'',nf:ieClient(x),nfData:defaultNf(x)}}
 function clientExtra(x){const d=idleDays(x),l=lastBuy(x),ci=creditInfo(x,0),bits=[];
   if(x.city&&cityById(x.city))bits.unshift(cityById(x.city).name);
   if(sellerById(x.sellerId))bits.push('Vendedor: '+esc(sellerById(x.sellerId).name));
@@ -6590,13 +6593,14 @@ function admClients(){
     <div class="small muted pfcount">${cliList.length} de ${S.customers.length} cliente${S.customers.length===1?'':'s'}${cact?` · <button type="button" class="linkbtn" id="coclr">Limpar filtros</button>`:''}</div>
     <div class="list">${cliList.map(x=>`<div class="prow" style="grid-template-columns:1fr auto">
       <div class="t"><b>${esc(x.name)}</b>${showSt?(()=>{const t=stt.get(x.id);return `<span class="small">${t.n?`Comprou <b>${brl(t.v)}</b> em ${t.n} pedido${t.n>1?'s':''}`:'Sem pedidos'} ${CO.per==='tudo'?'desde o início':'nos últimos '+CO.per+' dias'}</span>`})():''}${x.doc?`<span class="small muted">${x.doc.length===11?'CPF':'CNPJ'} ${esc(fmtDoc(x.doc))}</span>`:''}<span class="small muted">${srvCliAccess(x)}${x.phone?' · '+esc(x.phone):''}</span><span class="small muted">Pagamento: ${allowedPays(x).length===S.payments.length?'todas as formas':esc(allowedPays(x).join(', ')||'nenhuma')}</span>${clientExtra(x)}</div>
-      <div class="row" style="gap:6px;justify-content:flex-end">${srvResetBtn('customers',x)}<button class="btn ghost" data-ce="${x.id}" style="min-height:40px;padding:8px 12px">Editar</button></div></div>`).join('')||(S.customers.length?'<div class="empty">Nenhum cliente nesse filtro.</div>':'<div class="empty">Nenhum cliente cadastrado.</div>')}</div>`;
+      <div class="row" style="gap:6px;justify-content:flex-end">${cliQuick(x)}${srvResetBtn('customers',x)}<button class="btn ghost" data-ce="${x.id}" style="min-height:40px;padding:8px 12px">Editar</button></div></div>`).join('')||(S.customers.length?'<div class="empty">Nenhum cliente nesse filtro.</div>':'<div class="empty">Nenhum cliente cadastrado.</div>')}</div>`;
   c.querySelectorAll('[data-cf]').forEach(b=>b.onclick=()=>{ui.cliF=b.dataset.cf;admClients()});
   {const ci=$('#cq');ci.oninput=()=>{CO.q=ci.value;const pos=ci.selectionStart;admClients();const n=$('#cq');n.focus();n.setSelectionRange(pos,pos)}}
   [['cosort','sort'],['coper','per'],['cocity','city'],['cosel','sel'],['coie','ie'],['covenc','venc']].forEach(([id,k])=>{const el=$('#'+id);if(el)el.onchange=()=>{CO[k]=el.value;const y=window.scrollY;admClients();window.scrollTo(0,y)}});
   {const b=$('#coclr');if(b)b.onclick=()=>{ui.co=null;ui.cliF='todos';admClients()}}
   $('#newC').onclick=()=>{ui.edit={id:null,name:'',login:'',pass:'',phone:'',address:'',pays:S.payments.slice(),bairro:'',table:'',creditLimit:''};renderAdmin()};
   c.querySelectorAll('[data-ce]').forEach(b=>b.onclick=()=>{ui.edit={...S.customers.find(x=>x.id===b.dataset.ce)};renderAdmin()});
+  c.querySelectorAll('[data-cnew]').forEach(b=>b.onclick=()=>{const x=S.customers.find(y=>y.id===b.dataset.cnew);if(!x)return;ui.tab='pedidos';ui.romView=false;ui.edit=null;ui.lanc=lnStartFor(x);renderAdmin();window.scrollTo(0,0)});
 }
 /* ---------- BACKUP: baixar e restaurar todos os dados ---------- */
 function backupNow(){srvBackup()}

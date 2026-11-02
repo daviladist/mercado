@@ -104,7 +104,7 @@ R("      ${ui.confirmDel==='fk'+k.id?", "      <div class=\"row\" style=\"gap:6p
 R("data-vdel=\"${v.id}\">Excluir</button>`}</div>`).join('')", "data-vdel=\"${v.id}\">Excluir</button>`}</div></div>`).join('')");
 R("      ${ui.confirmDel==='veh'+v.id?", "      <div class=\"row\" style=\"gap:6px\">${srvResetBtn('vehicles',v)}${ui.confirmDel==='veh'+v.id?");
 R("data-sle=\"${x.id}\">Editar</button>${ui.confirmDel==='sl'+x.id?", "data-sle=\"${x.id}\">Editar</button>${srvResetBtn('sellers',x)}${ui.confirmDel==='sl'+x.id?");
-R("<button class=\"btn ghost\" data-ce=\"${x.id}\" style=\"min-height:40px;padding:8px 12px\">Editar</button></div>`).join('')", "<div class=\"row\" style=\"gap:6px;justify-content:flex-end\">${srvResetBtn('customers',x)}<button class=\"btn ghost\" data-ce=\"${x.id}\" style=\"min-height:40px;padding:8px 12px\">Editar</button></div></div>`).join('')");
+R("<button class=\"btn ghost\" data-ce=\"${x.id}\" style=\"min-height:40px;padding:8px 12px\">Editar</button></div>`).join('')", "<div class=\"row\" style=\"gap:6px;justify-content:flex-end\">${cliQuick(x)}${srvResetBtn('customers',x)}<button class=\"btn ghost\" data-ce=\"${x.id}\" style=\"min-height:40px;padding:8px 12px\">Editar</button></div></div>`).join('')");
 
 R("<h2>${isAdmin?'Acesso do administrador':'Entrar para fazer pedido'}</h2>", "<h2>${isAdmin?'Acesso do administrador':'Entrar'}</h2>");
 
