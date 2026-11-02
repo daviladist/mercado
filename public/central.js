@@ -81,20 +81,20 @@
       <div class="presets"><button type="button" data-who="0" aria-pressed="${!t.modules.app_cliente}">Só a equipe (cliente compra pelo vendedor)</button><button type="button" data-who="1" aria-pressed="${!!t.modules.app_cliente}">Equipe e clientes (app do cliente)</button></div>
     </section>
     <section class="card" style="display:grid;gap:10px" aria-labelledby="hstk">
-      <div><h2 id="hstk">Venda sem estoque</h2><p class="muted small" style="margin:4px 0 0">O sistema não é fiscal e o estoque nem sempre está completo. Não permitindo, o pedido do cliente ou do vendedor acima do estoque é recusado ("Só temos X un."); a loja sempre pode lançar.</p></div>
+      <div><h2 id="hstk">Venda sem estoque</h2><p class="muted small" style="margin:4px 0 0">Não permitindo, o pedido do cliente ou do vendedor acima do estoque é recusado ("Só temos X un."). A loja sempre pode lançar.</p></div>
       <div class="presets"><button type="button" data-stk="0" aria-pressed="${!t.modules.trava_estoque}">Permitir venda sem estoque</button><button type="button" data-stk="1" aria-pressed="${!!t.modules.trava_estoque}">Não permitir venda sem estoque</button></div>
-      ${t.modules.trava_estoque ? `<label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="fstkres" ${t.modules.trava_reservado ? 'checked' : ''}> Descontar o que já está reservado em pedidos em aberto (compara com estoque − reservado)</label>` : ''}
+      ${t.modules.trava_estoque ? `<label class="subopt"><input type="checkbox" id="fstkres" ${t.modules.trava_reservado ? 'checked' : ''}><span><b>Descontar o que já está reservado</b><span class="small muted">Compara com o estoque menos o que os outros pedidos em aberto já vão levar.</span></span></label>` : ''}
     </section>
     ${t.id ? accessCard(t) : '<div class="note">Salve a empresa para gerar o endereço e o acesso do administrador dela.</div>'}
     <section class="card" style="display:grid;gap:16px" aria-labelledby="hid">
       <h2 id="hid">Identidade da marca</h2>
       <div class="grid">
         <div class="field"><label for="fname">Nome exibido no sistema</label><input type="text" id="fname" maxlength="80" value="${esc(t.name)}"></div>
-        <div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Logo</span>
+        <div class="field"><span style="font-size:13px;font-weight:600;color:var(--muted)">Logo</span>
           <div class="logo-row"><div class="logo-box">${t.logo ? `<img src="${esc(t.logo)}" alt="Logo atual">` : 'LOGO'}</div>
           <label class="btn" for="flogo" style="display:inline-flex;align-items:center">Enviar imagem</label><input type="file" id="flogo" accept="image/png,image/jpeg,image/webp" hidden>
           ${t.logo ? '<button class="btn" type="button" id="frmlogo">Tirar</button>' : ''}</div></div>
-        <div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Cor principal</span>
+        <div class="field"><span style="font-size:13px;font-weight:600;color:var(--muted)">Cor principal</span>
           <div class="sw">${SWATCHES.map(([c, n]) => `<button type="button" data-c="${c}" aria-label="${n}" aria-pressed="${(t.color || '').toUpperCase() === c}" style="background:${c}"></button>`).join('')}<input type="color" id="fcolor" aria-label="Outra cor" value="${esc(t.color || '#1F3D2B')}"></div>
           ${t.primary && !t.color ? '<span class="small muted">Sem cor escolhida: o app mantém as cores atuais.</span>' : ''}</div>
       </div>
@@ -106,7 +106,7 @@
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn dark" id="segNew">+ Criar segmento</button><button type="button" class="btn" id="segList">Editar segmentos</button></div>
     </section>
     ${groups.filter(g => g !== 'Acesso').map(g => `<section class="card grp"><h2>${esc(g)}${g === 'Essenciais' ? '<small>Não podem ser desligados</small>' : ''}</h2>
-      ${D.modules.filter(m => m.group === g).map(m => { const blk = m.requires && !t.modules[m.requires]; return `<div class="mod"><div class="t"><div class="n">${esc(m.name)}${blk ? '<span class="tag">precisa do app do cliente</span>' : !m.essential && !m.enforced ? '<span class="tag">efeito na próxima etapa</span>' : m.enforced === 'tela' ? '<span class="tag">só esconde a tela</span>' : ''}</div><div class="d">${esc(m.desc)}</div></div>
+      ${D.modules.filter(m => m.group === g).map(m => { const blk = m.requires && !t.modules[m.requires]; return `<div class="mod"><div class="t"><div class="n">${esc(m.name)}${blk ? `<span class="tag">precisa de "${esc((D.modules.find(x => x.code === m.requires) || {}).name || m.requires)}"</span>` : !m.essential && !m.enforced ? '<span class="tag">efeito na próxima etapa</span>' : m.enforced === 'tela' ? '<span class="tag">só esconde a tela</span>' : ''}</div><div class="d">${esc(m.desc)}</div></div>
         ${m.essential ? '<span class="lock">Sempre ativo</span>' : `<button type="button" class="sw-t" role="switch" data-m="${esc(m.code)}" aria-checked="${!blk && !!t.modules[m.code]}" aria-label="${esc(m.name)}" ${blk ? 'disabled style="opacity:.45;cursor:not-allowed"' : ''}><span></span></button>`}</div>` }).join('')}</section>`).join('')}
     <div class="bar${dirty ? ' dirty' : ''}"><span>${dirty ? 'Há mudanças sem salvar.' : 'Tudo salvo.'}</span><div style="display:flex;gap:8px"><button class="btn ghost-light" type="button" id="undo" ${dirty ? '' : 'disabled'}>Desfazer</button><button class="btn primary" type="button" id="save" ${dirty ? '' : 'disabled'}>Salvar configuração</button></div></div>`;
     bind();

@@ -96,6 +96,27 @@ code.link{display:block;overflow-wrap:anywhere;padding:8px 10px}
 @media (max-width:720px){.lk{grid-template-columns:1fr}}
 .note{background:var(--gold-soft);border-radius:8px;padding:10px 12px;font-size:13px;color:#5C3D00}
 @media (max-width:640px){nav{max-width:none}}
+.subopt{display:flex;gap:12px;align-items:flex-start;margin-top:12px;padding:12px 14px;border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:10px;background:var(--gold-soft);cursor:pointer}
+.subopt input{width:22px;height:22px;flex:none;margin:1px 0 0;accent-color:var(--green)}
+.subopt span{display:grid;gap:2px}
+/* modo escuro da Central */
+@media (prefers-color-scheme:dark){
+  :root{--cream:#0F1712;--surface:#17231C;--line:#2C3D33;--line-2:#22322A;--input:#43584B;--muted:#A9B9AE;--ink:#E7EEE9;--gold-soft:#3A2D12;--off:#4E5E53;--danger:#FF8A80}
+  body{color-scheme:dark}
+  header .wm b,.chip,.bar,.btn.ghost-light{color:#F6F1E7}
+  .slogan{color:#D9D2C2}
+  input[type=text],input[type=password],select,.tn,.logo-box,.presets button,.sw input[type=color]{background:var(--surface);color:var(--ink)}
+  .btn{color:var(--ink)}.btn.primary{color:#1F3D2B}.btn.dark{background:#2E5A40;border-color:#2E5A40}
+  .field label,nav .head h2,.lock{color:var(--muted)}
+  .tag,.note,.st.em_preparo{color:#F2CD86}
+  .st.ativa{background:#1F3A29;color:#9FDDB3}.st.suspensa{background:#3D1A18;color:#FF8A80}
+  .sw-t[aria-checked=true]{background:#3E8E5E}
+  .presets button[aria-pressed=true]{background:#2E5A40;border-color:#3E8E5E;color:#fff}
+  .sw button[aria-pressed=true]{border-color:#E7EEE9}
+  .lk{border-top-color:var(--line)}
+  .bar{background:#1F3D2B}
+  .errn{color:#2A0606}
+}
 </style>
 </head>
 <body>
