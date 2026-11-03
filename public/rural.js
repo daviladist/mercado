@@ -375,7 +375,7 @@
     function pcts() { const r0 = I.rocaId ? roca(I.rocaId) : null; I.metas.forEach(m => { const atual = r0 && m.pid && (r0.parceria || {})[m.pid]; m.pctUse = atual ? Number(atual) : m.pct != null ? m.pct : 50; }); }
     function plano() {
       const tipoNome = t => (I.tipos.find(x => x.orig === t) || { nome: t }).nome;
-      const avisos = [], vendas = new Map(), adi = [], desp = [];
+      const avisos = [], vendas = new Map(), adi = [], desp = [], vezes = {};
       I.metas.filter(m => m.on).forEach(m => {
         if (m.semDataVenda.length) avisos.push(m.nome + ': ' + m.semDataVenda.length + ' linha(s) com caixas e sem data (ficam de fora): linha ' + m.semDataVenda.join(', ') + '.');
         m.linhas.forEach(l => {
@@ -384,15 +384,17 @@
           if (semPreco.length) { avisos.push(m.nome + ', ' + dBR(l.data) + ': ' + semPreco.map(q => tipoNome(q.tipo)).join(', ') + ' sem preço (fica de fora).'); }
           const qs = l.qs.filter(q => q.qtd > 0 && q.preco > 0); if (!qs.length) return;
           // mesma data e mesmos preços = uma venda só, com as caixas de cada meeiro
-          const chave = l.data + '|' + qs.map(q => q.tipo + '@' + q.preco).sort().join(',');
+          const chave = l.data + '|' + qs.map(q => q.tipo + '@' + r2(q.preco)).sort().join(',');
           const v = vendas.get(chave) || { data: l.data, itens: {} }; vendas.set(chave, v);
           qs.forEach(q => { const it = v.itens[q.tipo] || (v.itens[q.tipo] = { orig: q.tipo, nome: tipoNome(q.tipo), preco: r2(q.preco), origem: [] }); const o = it.origem.find(x => x.m.pid ? x.m.pid === m.pid : x.m === m); if (o) o.qtd = r6(o.qtd + q.qtd); else it.origem.push({ m, qtd: q.qtd }); });
         });
         m.despesas.forEach(d => {
           if (!(d.valor > 0)) { avisos.push(m.nome + ': "' + d.desc + '" sem valor (fica de fora).'); return; }
           const data = d.data || I.semData;
+          if (data < '1990-01-01') { avisos.push(m.nome + ': "' + d.desc + '" com data ' + dBR(data) + ' fora do normal (fica de fora).'); return; }
           if (data > hoje()) { avisos.push(m.nome + ': "' + d.desc + '" com data ' + dBR(data) + ', no futuro (fica de fora; lance à mão com a data certa).'); return; }
-          (/^adiantamento/i.test(d.desc) ? adi : desp).push({ m, rn: d.rn, data, desc: d.desc, valor: d.valor, semData: !d.data });
+          const base = data + '|' + normNome(d.desc) + '|' + d.valor; vezes[m.aba + base] = (vezes[m.aba + base] || 0) + 1; // o mesmo item repetido conta separado
+          (/^adiantamento/i.test(d.desc) ? adi : desp).push({ m, chave: base + '|' + vezes[m.aba + base], data, desc: d.desc, valor: d.valor, semData: !d.data });
         });
       });
       return { vendas: [...vendas.values()].sort((a, b) => a.data < b.data ? -1 : 1), adi, desp, avisos };
@@ -409,7 +411,7 @@
           ${I.metas.map((m, i) => { const a = r2(P.adi.filter(x => x.m === m).reduce((s, x) => s + x.valor, 0)), d = r2(P.desp.filter(x => x.m === m).reduce((s, x) => s + x.valor, 0)); return `<tr><td><input type="checkbox" data-ion="${i}" ${m.on ? 'checked' : ''} aria-label="Importar ${esc(m.nome)}" style="width:22px;height:22px;accent-color:var(--brand)"></td><td>${esc(m.nome)}<span class="small muted"> · ${m.pid ? 'já cadastrado' : 'novo'}</span></td><td class="n"><input inputmode="decimal" data-ipc="${i}" value="${esc(numIn(m.pctUse))}" style="width:58px;text-align:right" aria-label="Porcentagem de ${esc(m.nome)}"></td>${I.tipos.map(t => `<td class="n">${numIn(r6(m.linhas.reduce((s, l) => s + (l.qs.find(q => q.tipo === t.orig) || { qtd: 0 }).qtd, 0)))}</td>`).join('')}<td class="n">${money(a)}</td><td class="n">${money(d)}</td></tr>`; }).join('')}
           </tbody></table></div></div>
         <div class="kpis"><div class="k"><span>Vendas</span><b>${P.vendas.length}</b></div><div class="k"><span>Caixas</span><b>${I.tipos.map(t => numIn(cx(t.orig))).join(' + ')}</b></div><div class="k"><span>Valor</span><b class="pos">${money(val)}</b></div></div>
-        <p class="note">A planilha tem o preço que vale para o meeiro. As vendas entram com esse preço também como valor vendido (só as caixas dos meeiros). Depois dá para abrir cada venda e corrigir o valor vendido e a parte de ${esc(DONO())}.</p>
+        <p class="note">Use a importação para começar no Tino: daqui para frente, lance no app. Importar de novo a mesma planilha não duplica. A planilha tem o preço que vale para o meeiro. As vendas entram com esse preço também como valor vendido (só as caixas dos meeiros). Depois dá para abrir cada venda e corrigir o valor vendido e a parte de ${esc(DONO())}.</p>
         ${P.adi.length || P.desp.length ? `<p class="small">${P.adi.length} adiantamento(s) (${money(r2(P.adi.reduce((s, x) => s + x.valor, 0)))}) e ${P.desp.length} despesa(s) por conta dos meeiros (${money(r2(P.desp.reduce((s, x) => s + x.valor, 0)))}).</p>` : ''}
         ${P.adi.concat(P.desp).some(x => x.semData) ? `<div class="field"><label for="isd">Despesas sem data na planilha entram no dia</label><input type="date" id="isd" value="${esc(I.semData)}" max="${hoje()}"></div>` : ''}
         ${P.avisos.length ? `<div class="warn"><b>Ficam de fora:</b><br>${P.avisos.slice(0, 20).map(esc).join('<br>')}${P.avisos.length > 20 ? '<br>E mais ' + (P.avisos.length - 20) + '.' : ''}</div>` : ''}
@@ -445,10 +447,10 @@
         // 3) vendas, adiantamentos e despesas (o mesmo item da planilha nunca entra duas vezes)
         const tot = P.vendas.length + P.adi.length + P.desp.length; let n = 0, rep = 0;
         const manda = async (chave, b) => { n++; msg('Gravando ' + n + ' de ' + tot + '…'); const r = await api('/api/rural/lanc', Object.assign({ id: await idDe(rid + '|' + chave), novo: true, rocaId: rid }, b)); if (r && r.repetido) rep++; };
-        for (const v of P.vendas) await manda('v|' + v.data + '|' + Object.values(v.itens).map(it => it.orig + '@' + it.preco).sort().join(',') + '|' + [...new Set(Object.values(v.itens).flatMap(it => it.origem.map(o => o.m.aba)))].sort().join(','), { tipo: 'venda', data: v.data, unidade: 'caixa', descricao: 'Importado da planilha', pagamentos: [],
+        for (const v of P.vendas) await manda('v|' + v.data + '|' + Object.values(v.itens).map(it => it.orig + '@' + it.preco).sort().join(','), { tipo: 'venda', data: v.data, unidade: 'caixa', descricao: 'Importado da planilha', pagamentos: [],
           itens: Object.values(v.itens).map(it => ({ nome: it.nome, qtd: r6(it.origem.reduce((s, o) => s + o.qtd, 0)), preco: it.preco, precoMeeiro: it.preco, origem: it.origem.map(o => ({ de: o.m.pid, qtd: o.qtd })) })) });
-        for (const a of P.adi) await manda('a|' + a.m.aba + '|' + a.rn, { tipo: 'adiantamento', pessoaId: a.m.pid, data: a.data, valor: a.valor, descricao: a.desc });
-        for (const d of P.desp) await manda('d|' + d.m.aba + '|' + d.rn, { tipo: 'despesa', categoria: 'outros', descricao: d.desc, data: d.data, valor: d.valor, partes: { [d.m.pid]: 100 } });
+        for (const a of P.adi) await manda('a|' + a.m.aba + '|' + a.chave, { tipo: 'adiantamento', pessoaId: a.m.pid, data: a.data, valor: a.valor, descricao: a.desc });
+        for (const d of P.desp) await manda('d|' + d.m.aba + '|' + d.chave, { tipo: 'despesa', categoria: 'outros', descricao: d.desc, data: d.data, valor: d.valor, partes: { [d.m.pid]: 100 } });
         await reload(); closeSheet();
         toast('Planilha importada: ' + (n - rep) + ' lançamento(s)' + (rep ? ' (' + rep + ' já estavam)' : ''));
         rocaTab = 'resumo'; go('roca', rid);
@@ -912,7 +914,7 @@
       if (F.tipo === 'despesa' && !F.categoria) return err('Escolha o tipo da despesa.');
       if (F.tipo === 'adiantamento' && !F.pessoaId) return err('Escolha o meeiro.');
       // venda da colheita: confere os tipos e as caixas de cada um
-      let itens = null, novosTipos = [];
+      let itens = null;
       if (F.colheita) {
         const r = roca(F.rocaId), quem = quemColh(), vistos = new Set();
         itens = [];
@@ -934,7 +936,6 @@
             if (Math.abs(so - qt) > 0.0005) return err(nome + ': as ' + (F.unidade || 'caixa') + 's de cada um somam ' + numIn(so) + ' e o total é ' + numIn(qt) + '.');
           }
           itens.push(o);
-          if (!(r.produtos || []).some(x => x.toLowerCase() === nome.toLowerCase())) novosTipos.push(nome);
         }
         if (!itens.length) return err('Coloque pelo menos um tipo com as ' + (F.unidade || 'caixa') + 's e o preço.');
         valor = colhConta().vend; F.valor = numIn(valor);
