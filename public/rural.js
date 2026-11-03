@@ -264,7 +264,7 @@
     } else if (rocaTab === 'meeiros') {
       const ps = new Set(meeiros); all.forEach(l => { Object.keys(partesDe(l)).forEach(k => { if (k !== 'dono') ps.add(k); }); if (l.tipo === 'adiantamento') ps.add(l.pessoaId); });
       body = [...ps].map(pid => { const p = pendente(r.id, pid), hist = S.acertos.filter(a => a.rocaId === r.id && a.pessoaId === pid);
-        return `<section class="card"><div class="between"><div><h3>${esc(nomeParte(pid))}</h3><p class="small muted">${r.parceria[pid] ? pctTxt(r.parceria[pid]) + ' do valor vendido' : 'não está mais na parceria'}${(pessoa(pid) || {}).telefone ? ' · ' + esc(pessoa(pid).telefone) : ''}</p></div>
+        return `<section class="card"><div class="between"><div><h3>${esc(nomeParte(pid))}</h3><p class="small muted">${r.parceria[pid] ? pctTxt(r.parceria[pid]) + ' do valor vendido (já tirados frete, caixa e outros descontos da venda)' : 'não está mais na parceria'}${(pessoa(pid) || {}).telefone ? ' · ' + esc(pessoa(pid).telefone) : ''}</p></div>
           ${r.parceria[pid] ? `<button class="btn sm" type="button" data-adi="${esc(pid)}">+ Adiantamento</button>` : ''}</div>
           <div class="kpis"><div class="k"><span>Parte nas vendas</span><b class="pos">${money(p.parte)}</b></div><div class="k"><span>Despesas dele</span><b class="neg">${money(p.desp)}</b></div><div class="k"><span>Adiantamentos</span><b class="inf">${money(p.adi)}</b></div></div>
           ${p.n ? `<div class="saldo ${p.saldo > 0 ? 'p' : p.saldo < 0 ? 'n' : 'z'}"><span class="small">Em aberto hoje</span><b>${money(Math.abs(p.saldo))}</b><span class="small">${p.saldo > 0 ? esc(DONO()) + ' paga para ' + esc(nomeParte(pid)) : p.saldo < 0 ? esc(nomeParte(pid)) + ' deve para ' + esc(DONO()) : 'Zerado'}</span></div>
@@ -276,7 +276,7 @@
         ${func.length ? `<div class="list">${func.map(p => `<button type="button" class="it" data-pes="${esc(p.id)}"><span class="ic">👷</span><span class="tx"><b>${esc(p.nome)}</b><span>${esc(p.telefone || '')}</span></span><span class="vl">${p.salario ? money(p.salario) + '<small>por mês</small>' : ''}</span></button>`).join('')}</div>` : '<p class="muted small">Nenhum funcionário fixo nesta roça.</p>'}
         ${func.length ? '<button class="btn full" type="button" id="sal">Pagar salários do mês</button>' : ''}</section>`;
     } else {
-      body = `<section class="card"><h3>Como a roça é tocada</h3><p>${esc(modoTxt(r.modo))}</p>${meeiros.length ? splitBar(r) + '<p class="small muted">A porcentagem é sobre o valor vendido (bruto).</p>' : ''}</section>
+      body = `<section class="card"><h3>Como a roça é tocada</h3><p>${esc(modoTxt(r.modo))}</p>${meeiros.length ? splitBar(r) + '<p class="small muted">A porcentagem é sobre o valor vendido, depois de tirar os descontos da venda (frete, caixa…).</p>' : ''}</section>
         ${meeiros.length ? `<section class="card"><h3>Quem paga cada despesa</h3><div class="list">${S.cats.map(c => { const p = r.regras[c.id] || { dono: 100 }; return `<div class="it"><span class="ic">${c.icone}</span><span class="tx"><b>${esc(c.nome)}</b><span>${esc(regraTxt(r, p))}</span></span></div>`; }).join('')}</div></section>` : ''}
         <section class="card"><h3>Dados</h3><p class="small">${esc([r.cultura && 'Cultura: ' + r.cultura, r.local && 'Local: ' + r.local, r.area && 'Área: ' + r.area, r.inicio && 'Início: ' + dBR(r.inicio)].filter(Boolean).join(' · ') || 'Sem detalhes.')}</p>${r.obs ? `<p class="small muted">${esc(r.obs)}</p>` : ''}</section>
         <button class="btn pri full" type="button" id="ed">Editar a roça</button>
@@ -385,14 +385,17 @@
   function formLanc(src) {
     const edit = !!(src && src.id && S.lanc.some(l => l.id === src.id));
     const F = Object.assign({ tipo: 'despesa', data: hoje(), valor: '', rocaId: null }, JSON.parse(JSON.stringify(src || {})));
-    if (edit || !Array.isArray(F.descs)) F.descs = (edit && Array.isArray(src.descontos) ? src.descontos : []).map(d => ({ tipo: d.tipo, valor: numIn(d.valor), obs: d.obs || '' }));
-    if (edit && F.descs.length && src.bruto != null) F.valor = src.bruto;
-    if (edit) { F.valor = numIn(F.valor); F.qtd = numIn(F.qtd); F.preco = numIn(F.preco); F.dias = numIn(F.dias); }
+    // reabrir = abrir um lançamento gravado; voltando do login (retomar), o que a pessoa digitou fica como estava
+    const reabrir = edit && !src._retomar; delete F._retomar;
+    const gravado = edit ? S.lanc.find(l => l.id === src.id) : null;
+    if (reabrir || !Array.isArray(F.descs)) F.descs = (reabrir && Array.isArray(src.descontos) ? src.descontos : []).map(d => ({ tipo: d.tipo, valor: numIn(d.valor), obs: d.obs || '' }));
+    if (reabrir && F.descs.length && src.bruto != null) F.valor = src.bruto;
+    if (reabrir) { F.valor = numIn(F.valor); F.qtd = numIn(F.qtd); F.preco = numIn(F.preco); F.dias = numIn(F.dias); }
     const travado = edit && Object.keys(F.acertos || {}).length > 0;
     // pagamento: lista de partes {forma, valor, vence, cheque, aberto}; uma parte só = a venda toda
-    if (edit || !Array.isArray(F.pags)) F.pags = (edit ? pagsDe(src) : []).map(x => ({ forma: x.forma, valor: numIn(x.valor), vence: x.vence || '', cheque: Object.assign({}, x.cheque || {}), aberto: !!Object.keys(x.cheque || {}).length }));
-    if (edit || F.dividir == null) F.dividir = F.pags.length > 1;
-    const origRoca = edit ? F.rocaId : null, origPartes = edit ? JSON.parse(JSON.stringify(F.partes || {})) : null;
+    if (reabrir || !Array.isArray(F.pags)) F.pags = (reabrir ? pagsDe(src) : []).map(x => ({ forma: x.forma, valor: numIn(x.valor), vence: x.vence || '', cheque: Object.assign({}, x.cheque || {}), aberto: !!Object.keys(x.cheque || {}).length }));
+    if (reabrir || F.dividir == null) F.dividir = F.pags.length > 1;
+    const origRoca = gravado ? gravado.rocaId : null, origPartes = gravado ? JSON.parse(JSON.stringify(gravado.partes || {})) : null;
     const ativas = S.rocas.filter(r => r.ativa || r.id === F.rocaId);
     if (!F.rocaId && F.tipo !== 'despesa' && ativas.length === 1) F.rocaId = ativas[0].id;
     if (edit && F.tipo === 'despesa') F.geral = !F.rocaId;
@@ -476,7 +479,7 @@
             <div class="drow"><div class="field"><label for="dv${i}">Valor (R$)</label><input inputmode="decimal" id="dv${i}" data-dv="${i}" value="${esc(d.valor || '')}" placeholder="0,00"></div>
             <div class="field"><label for="do${i}">${d.tipo === 'outro' ? 'O que foi' : 'Obs. (opcional)'}</label><input type="text" id="do${i}" data-do="${i}" maxlength="60" value="${esc(d.obs || '')}" placeholder="${d.tipo === 'outro' ? 'Ex.: pedágio' : ''}"></div></div></div>`; }).join('')}
           <div class="chips">${DS().map(t => `<button type="button" class="chip" data-dadd="${esc(t.id)}">+ ${esc(t.icone)} ${esc(t.nome)}</button>`).join('')}</div></div>
-        <div class="liq" id="liqbox" ${ds.length ? '' : 'hidden'}><span>Recebe de fato</span><b id="liqv">${money(liq())}</b><small id="liqs">Vendido ${money(centavos(F.valor) / 100)} − descontos ${money(somaDesc() / 100)}</small></div>`;
+        <div class="liq${liqC() <= 0 ? ' neg' : ''}" id="liqbox" ${ds.length ? '' : 'hidden'}><span>Recebe de fato</span><b id="liqv">${money(liq())}</b><small id="liqs">Vendido ${money(centavos(F.valor) / 100)} − descontos ${money(somaDesc() / 100)}</small></div>`;
     }
     function somaTxt() {
       const tot = liqC(), so = F.pags.reduce((a, x) => a + centavos(x.valor), 0), d = tot - so;
@@ -595,7 +598,7 @@
       F.id = b.id; // tocar duas vezes não lança duas vezes
       const bt = $('#fs'); bt.disabled = true;
       try { await api('/api/rural/lanc', b); await reload(); closeSheet(); toast((edit ? 'Correção salva: ' : 'Lançado ✓ ') + money(valor)); render(); }
-      catch (e) { bt.disabled = false; if (e.status === 401 || e.login) { const keepF = Object.assign({}, F, { valor: numIn(vendido != null ? vendido : valor) }); retomar = () => formLanc(keepF); return fail(e); } err(e.message); }
+      catch (e) { bt.disabled = false; if (e.status === 401 || e.login) { const keepF = Object.assign({}, F, { valor: numIn(vendido != null ? vendido : valor), _retomar: true }); retomar = () => formLanc(keepF); return fail(e); } err(e.message); }
     }
     draw();
   }
@@ -636,13 +639,13 @@
     if (view !== 'acerto') return;
     const t = P.totais, nm = P.pessoaNome;
     const grp = (tipo, tit) => { const it = P.itens.filter(i => i.tipo === tipo); return it.length ? `<section class="card"><h3>${tit}</h3><div class="scroll"><table><thead><tr><th>Data</th><th>O quê</th>${tipo !== 'adiantamento' ? '<th class="n">Total</th><th class="n">%</th>' : ''}<th class="n">${esc(nm)}</th></tr></thead><tbody>
-      ${it.map(i => `<tr><td>${dBR(i.data)}</td><td>${esc(i.tipo === 'venda' ? [i.qtd ? numIn(i.qtd) + ' ' + (i.unidade || '') : '', i.comprador].filter(Boolean).join(' · ') || 'Venda' : i.tipo === 'despesa' ? cat(i.categoria).nome + (i.descricao ? ' · ' + i.descricao : '') : i.descricao || 'Adiantamento')}</td>${tipo !== 'adiantamento' ? `<td class="n">${money(i.valor)}</td><td class="n">${pctTxt(i.pct)}</td>` : ''}<td class="n">${money(i.valorPessoa)}</td></tr>`).join('')}
+      ${it.map(i => `<tr><td>${dBR(i.data)}</td><td>${esc(i.tipo === 'venda' ? [i.qtd ? numIn(i.qtd) + ' ' + (i.unidade || '') : '', i.comprador, (i.descontos || []).length ? 'vendido ' + money(i.bruto) + ' − ' + i.descontos.map(d => (((S.descontos || []).find(x => x.id === d.tipo) || { nome: d.tipo }).nome.toLowerCase()) + ' ' + money(d.valor)).join(', ') : ''].filter(Boolean).join(' · ') || 'Venda' : i.tipo === 'despesa' ? cat(i.categoria).nome + (i.descricao ? ' · ' + i.descricao : '') : i.descricao || 'Adiantamento')}</td>${tipo !== 'adiantamento' ? `<td class="n">${money(i.valor)}</td><td class="n">${pctTxt(i.pct)}</td>` : ''}<td class="n">${money(i.valorPessoa)}</td></tr>`).join('')}
       </tbody></table></div></section>` : ''; };
     $('#main').innerHTML = `<div class="row noprint"><button class="btn sm" type="button" id="bk">← ${esc(r.nome)}</button></div>
       <div><h1>Acerto com ${esc(nm)}</h1><p class="muted small">${esc(r.nome)} · tudo o que ainda não foi acertado · ${dBR(hoje())}</p></div>
       ${P.itens.length ? `
       <section class="card"><table><tbody>
-        <tr><td>Vendas da roça no período do acerto</td><td class="n">${money(t.vendas)}</td></tr>
+        <tr><td>Vendas da roça no período do acerto (já sem frete, caixa e outros descontos)</td><td class="n">${money(t.vendas)}</td></tr>
         <tr><td><b>Parte de ${esc(nm)} nas vendas</b></td><td class="n pos"><b>+ ${money(t.parte)}</b></td></tr>
         <tr><td>Despesas por conta de ${esc(nm)}</td><td class="n neg">− ${money(t.despesas)}</td></tr>
         <tr><td>Adiantamentos já recebidos</td><td class="n neg">− ${money(t.adiantamentos)}</td></tr>
@@ -693,7 +696,7 @@
       if (k === 'meeiros') {
         const lista = S.pessoas.filter(p => p.tipo === 'meeiro' && (p.ativo || W.parceria[p.id])).concat(W.novos);
         const d = r2(100 - soma());
-        h += `<p>Marque os meeiros desta roça e arraste a barrinha com a porcentagem de cada um <b>sobre o valor vendido</b>.</p>
+        h += `<p>Marque os meeiros desta roça e arraste a barrinha com a porcentagem de cada um <b>sobre o valor vendido</b> (depois dos descontos da venda, como frete e caixa).</p>
           <div class="chips">${lista.map(p => `<button type="button" class="chip" data-me="${esc(p.id)}" aria-pressed="${W.parceria[p.id] != null}">${esc(p.nome)}</button>`).join('')}</div>
           <div class="row"><input type="text" id="wmn" maxlength="80" placeholder="Nome do meeiro novo" style="flex:1 1 180px"><input type="tel" id="wmt" maxlength="30" placeholder="Telefone (opcional)" style="flex:1 1 140px"><button class="btn" type="button" id="wma">+ Adicionar</button></div>
           ${Object.keys(W.parceria).map(pid => `<div class="card" style="padding:12px;gap:6px"><b>${esc(meeiroNome(pid))}</b><div class="pct"><input type="range" min="1" max="100" step="1" value="${Number(W.parceria[pid])}" data-sl="${esc(pid)}" aria-label="Porcentagem de ${esc(meeiroNome(pid))}"><div class="n"><input inputmode="decimal" data-pn="${esc(pid)}" value="${numIn(W.parceria[pid])}" aria-label="Porcentagem de ${esc(meeiroNome(pid))}"></div></div></div>`).join('')}
