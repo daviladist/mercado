@@ -524,7 +524,7 @@
           <button type="button" class="chip" data-og="um:dono" aria-pressed="${O.modo === 'um' && O.de === 'dono'}">Parte de ${esc(DONO())}</button>
           <button type="button" class="chip" data-og="mix" aria-pressed="${O.modo === 'mix'}">Misturado (de vários)</button></div>
         ${O.modo === 'mix' ? `<div class="chq"><p class="small muted" id="ohint" style="margin:0">${esc(origHint())}</p>
-          ${quem.map(k => `<div class="pct"><span>${esc(k === 'dono' ? 'Parte de ' + DONO() : nomeParte(k))}</span><div class="n" style="width:120px"><input inputmode="decimal" data-oq="${esc(k)}" value="${esc((O.v || {})[k] || '')}" aria-label="Quanto foi de ${esc(nomeParte(k))}"></div></div>`).join('')}
+          ${quem.map(k => `<div class="orow"><span>${esc(k === 'dono' ? 'Parte de ' + DONO() : nomeParte(k))}</span><input inputmode="decimal" data-oq="${esc(k)}" value="${esc((O.v || {})[k] || '')}" aria-label="Quanto foi de ${esc(nomeParte(k))}"></div>`).join('')}
           <p class="note" id="osoma" aria-live="polite">${origSoma()}</p></div>` : ''}</div>`;
     }
     const origHint = () => toNum(F.qtd) > 0 ? 'Quanto foi de cada um (' + (F.unidade || 'quantidade') + '). Deixe em branco quem não entrou.' : 'Quanto foi de cada um em R$ (do vendido). Deixe em branco quem não entrou. Dica: com a quantidade preenchida, dá para dividir por caixas.';
@@ -548,7 +548,21 @@
       return it.map(([de, x]) => ({ de, valor: r2(x) }));
     }
     /* venda corrigida na mesma roça: mostra a divisão gravada (do dia da venda), não a parceria de hoje */
-    function vendaNote(r, v) { const og = origemPayload(); const ps = edit && F.rocaId === origRoca && Object.keys(origPartes).length && (legado && !F.orig || Array.isArray(og) && JSON.stringify(og) === origOriginal) ? origPartes : Array.isArray(og) ? partesDaOrigem(r, og) : null; if (!ps) return 'Escolha de quem é a venda para ver a parte de cada um.'; const vend = toNum(F.valor) || 0; let soma = 0; const ks = Object.keys(ps).filter(x => x !== 'dono'); const linhas = ks.map(x => { const m = r2(v * ps[x] / 100); soma += m; return esc(nomeParte(x)) + ' (' + pctTxt(ps[x]) + ' de ' + money(v) + '): <b>' + money(m) + '</b>'; }); if (vend > 0) linhas.push(esc(DONO()) + ': <b>' + money(r2(vend - soma)) + '</b>'); return linhas.join(' · '); }
+    function vendaNote(r, v) {
+      const og = origemPayload();
+      const manter = edit && F.rocaId === origRoca && Object.keys(origPartes).length && (legado && !F.orig || Array.isArray(og) && JSON.stringify(og) === origOriginal);
+      const ps = manter ? origPartes : Array.isArray(og) ? partesDaOrigem(r, og) : null;
+      if (!ps) return 'Escolha de quem é a venda para ver a parte de cada um.';
+      const vend = toNum(F.valor) || 0, w = Array.isArray(og) && og.length > 1 ? og.map(o => Number(o.qtd != null ? o.qtd : o.valor)) : null, tot = w ? w.reduce((a, b) => a + b, 0) : 1;
+      let soma = 0;
+      const linhas = Object.keys(ps).filter(x => x !== 'dono').map(x => {
+        const m = r2(v * ps[x] / 100); soma += m;
+        const i = w ? og.findIndex(o => o.de === x) : -1, frac = i >= 0 && tot ? w[i] / tot : 1;
+        return esc(nomeParte(x)) + ' (' + pctTxt(r6(ps[x] / frac)) + ' de ' + money(r2(v * frac)) + '): <b>' + money(m) + '</b>';
+      });
+      if (vend > 0) linhas.push(esc(DONO()) + ': <b>' + money(r2(vend - soma)) + '</b>');
+      return linhas.join(' · ');
+    }
     /* atualiza totais e prévias sem redesenhar (o campo que a pessoa tocou continua com o foco) */
     function upd() {
       keep();
@@ -736,6 +750,7 @@
     const steps = () => ['dados', 'modo'].concat(temMeeiro() ? ['meeiros', 'regras'] : []).concat(temFunc() ? ['equipe'] : []).concat(['revisar']);
     const meeiroNome = k => (W.novos.find(n => n.id === k) || pessoa(k) || {}).nome || 'Meeiro';
     const nomeK = k => k === 'dono' ? DONO() : meeiroNome(k);
+    const dicaW = k => 'Da venda da parte de ' + meeiroNome(k) + ': ele ' + pctTxt(W.parceria[k]) + ', ' + DONO() + ' ' + pctTxt(r2(100 - Number(W.parceria[k]))) + '.';
     const meaW = k => { const p = Number(W.parceria[k]) || 0, o = { [k]: p }; if (p < 100) o.dono = r2(100 - p); return o; };
     function draw() {
       const st = steps(), k = st[W.step];
@@ -756,7 +771,7 @@
           <div class="chips">${lista.map(p => `<button type="button" class="chip" data-me="${esc(p.id)}" aria-pressed="${W.parceria[p.id] != null}">${esc(p.nome)}</button>`).join('')}</div>
           <div class="row"><input type="text" id="wmn" maxlength="80" placeholder="Nome do meeiro novo" style="flex:1 1 180px"><input type="tel" id="wmt" maxlength="30" placeholder="Telefone (opcional)" style="flex:1 1 140px"><button class="btn" type="button" id="wma">+ Adicionar</button></div>
           ${Object.keys(W.parceria).map(pid => `<div class="card" style="padding:12px;gap:6px"><b>${esc(meeiroNome(pid))}</b><div class="pct"><input type="range" min="1" max="100" step="1" value="${Number(W.parceria[pid])}" data-sl="${esc(pid)}" aria-label="Porcentagem de ${esc(meeiroNome(pid))}"><div class="n"><input inputmode="decimal" data-pn="${esc(pid)}" value="${numIn(W.parceria[pid])}" aria-label="Porcentagem de ${esc(meeiroNome(pid))}"></div></div>
-            <div class="drow"><div class="field"><label for="wz${esc(pid)}">Pés (opcional)</label><input inputmode="numeric" id="wz${esc(pid)}" data-pz="${esc(pid)}" value="${W.pes[pid] ? esc(W.pes[pid]) : ''}" placeholder="Ex.: 3000"></div><p class="small muted" style="align-self:end;margin:0 0 10px">Da venda da parte de ${esc(meeiroNome(pid))}: ele ${pctTxt(W.parceria[pid])}, ${esc(DONO())} ${pctTxt(r2(100 - Number(W.parceria[pid])))}.</p></div></div>`).join('')}`;
+            <div class="drow"><div class="field"><label for="wz${esc(pid)}">Pés (opcional)</label><input inputmode="numeric" id="wz${esc(pid)}" data-pz="${esc(pid)}" value="${W.pes[pid] ? esc(W.pes[pid]) : ''}" placeholder="Ex.: 3000"></div><p class="small muted" data-wh="${esc(pid)}" style="align-self:end;margin:0 0 10px">${esc(dicaW(pid))}</p></div></div>`).join('')}`;
       }
       if (k === 'regras') {
         const msW = Object.keys(W.parceria), ks = ['dono'].concat(msW);
@@ -803,8 +818,8 @@
       const wc = $('#wc'); if (wc) wc.addEventListener('change', () => { keep(); redraw(); });
       pn.querySelectorAll('[data-mo]').forEach(b => b.addEventListener('click', () => { keep(); W.modo = b.dataset.mo; if (W.modo === 'funcionarios') { W.parceria = {}; W.regras = {}; } redraw(); }));
       pn.querySelectorAll('[data-me]').forEach(b => b.addEventListener('click', () => { keep(); const k = b.dataset.me; if (W.parceria[k] != null) { delete W.parceria[k]; delete W.pes[k]; } else W.parceria[k] = 50; redraw(); }));
-      pn.querySelectorAll('[data-sl]').forEach(s => { s.addEventListener('input', () => { W.parceria[s.dataset.sl] = Number(s.value); const n = pn.querySelector('[data-pn="' + s.dataset.sl + '"]'); if (n) n.value = s.value; }); s.addEventListener('change', () => { keep(); redraw(); }); });
-      pn.querySelectorAll('[data-pn]').forEach(i => i.addEventListener('input', () => { const n = toNum(i.value); if (n > 0) { W.parceria[i.dataset.pn] = Math.min(100, n); const sl = pn.querySelector('[data-sl="' + i.dataset.pn + '"]'); if (sl) sl.value = W.parceria[i.dataset.pn]; } }));
+      pn.querySelectorAll('[data-sl]').forEach(s => { s.addEventListener('input', () => { W.parceria[s.dataset.sl] = Number(s.value); const n = pn.querySelector('[data-pn="' + s.dataset.sl + '"]'); if (n) n.value = s.value; const h = pn.querySelector('[data-wh="' + s.dataset.sl + '"]'); if (h) h.textContent = dicaW(s.dataset.sl); }); s.addEventListener('change', () => { keep(); redraw(); }); });
+      pn.querySelectorAll('[data-pn]').forEach(i => i.addEventListener('input', () => { const n = toNum(i.value); if (n > 0) { W.parceria[i.dataset.pn] = Math.min(100, n); const sl = pn.querySelector('[data-sl="' + i.dataset.pn + '"]'); if (sl) sl.value = W.parceria[i.dataset.pn]; const h = pn.querySelector('[data-wh="' + i.dataset.pn + '"]'); if (h) h.textContent = dicaW(i.dataset.pn); } }));
       pn.querySelectorAll('[data-pn]').forEach(i => i.addEventListener('blur', () => setTimeout(() => { if (document.body.contains(i) && (!pn.contains(document.activeElement) || !document.activeElement.matches('input'))) { keep(); redraw(); } }, 150)));
       const wma = $('#wma'); if (wma) wma.addEventListener('click', () => { keep(); const n = $('#wmn').value.trim(); if (n.length < 2) return err('Escreva o nome do meeiro.'); const id = newId('p'); W.novos.push({ id, nome: n, telefone: $('#wmt').value.trim() }); W.parceria[id] = 50; redraw(); });
       pn.querySelectorAll('[data-rg]').forEach(b => b.addEventListener('click', () => {
