@@ -503,10 +503,12 @@ alter table loja_pedidos add column if not exists avaliacao_comentario text;
 alter table loja_pedidos add column if not exists avaliacao_em timestamptz;
 
 -- ===== Tino Controle de caixa (ramo 'caixa'): saldo esperado em dinheiro, sangrias/depósitos e conferência com o StarIA =====
--- novo papel de login: só este app, sem custo nem margem (não existe nada disso aqui)
+-- novos papéis de login: só este app, sem custo nem margem (não existe nada disso aqui).
+-- 'caixista' guarda o dinheiro e lança sangria; 'financeiro' só aprova/rejeita o recebimento de crediário do StarIA
+-- (não lança sangria, não cancela nada: cancelar/excluir é só pelo usuário do admin, o dono).
 alter table users_t drop constraint if exists users_role_check;
 alter table users_t drop constraint if exists users_t_role_check;
-alter table users_t add constraint users_role_check check (role in ('admin','cliente','vendedor','conferente','faturamento','entregador','operador_caixa','caixista'));
+alter table users_t add constraint users_role_check check (role in ('admin','cliente','vendedor','conferente','faturamento','entregador','operador_caixa','caixista','financeiro'));
 -- saldo de partida (contagem física no dia em que começou a usar o controle): tudo depois disso é lançamento
 create table if not exists caixa_cfg (
   tenant_id text primary key references tenants(id),
@@ -515,20 +517,26 @@ create table if not exists caixa_cfg (
   updated_at timestamptz not null default now()
 );
 -- lançamentos do caixa consolidado (o dinheiro de todas as filiais converge fisicamente na matriz):
--- 'venda_staria' = vendas em dinheiro + recebimento de crediário em dinheiro do período, gravado pelo servidor
---   a partir de uma consulta pronta do StarIA (nunca editado à mão, nunca duplicado no mesmo período);
+-- 'venda_staria' = vendas em dinheiro do período (StarIA), já conferido pela sacola; entra direto no saldo;
+-- 'crediario_staria' = recebimento de crediário em dinheiro do período (StarIA): às vezes é recebido num caixa
+--   separado, no retaguarda, que não passa pela conferência normal do PDV, então só entra no saldo depois de
+--   alguém aprovar (status 'pendente' -> 'aprovado' conta no saldo; 'rejeitado' nunca conta);
+-- ambos gravados pelo servidor a partir de uma consulta pronta do StarIA (nunca editados à mão, nunca duplicados
+--   no mesmo período, nunca excluídos: só mudam de status);
 -- 'sangria' = saída do caixa para o banco (depositado_em marca quando de fato chegou lá; pode ficar em aberto);
 -- 'ajuste' = correção manual (valor pode ser negativo), só o admin lança
 create table if not exists caixa_mov (
   tenant_id text not null references tenants(id),
   id text not null,
-  tipo text not null check (tipo in ('venda_staria','sangria','ajuste')),
+  tipo text not null check (tipo in ('venda_staria','crediario_staria','sangria','ajuste')),
   valor numeric(14,2) not null,
   data date not null,
   periodo_ini date,
   periodo_fim date,
   detalhe jsonb not null default '{}'::jsonb,
   motivo text,
+  status text check (status in ('pendente','aprovado','rejeitado')),
+  decidido_por text,
   depositado_em date,
   criado_por text,
   criado_por_role text,

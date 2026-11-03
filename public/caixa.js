@@ -38,6 +38,8 @@
     if (cor && /^#[0-9a-f]{6}$/i.test(cor)) document.documentElement.style.setProperty('--brand', cor);
   }
   const isAdmin = () => !!(S && S.me.role === 'admin');
+  const isFinanceiro = () => !!(S && S.me.role === 'financeiro');
+  const podeDecidirCrediario = () => isAdmin() || isFinanceiro();
 
   /* ---------- entrar ---------- */
   function showLogin(msg) {
@@ -84,14 +86,21 @@
   }
 
   /* ---------- ícone e texto de cada lançamento ---------- */
-  function movIcon(m) { return m.tipo === 'venda_staria' ? '🔄' : m.tipo === 'sangria' ? '💵' : m.valor >= 0 ? '➕' : '➖'; }
+  function movIcon(m) { return m.tipo === 'venda_staria' ? '🔄' : m.tipo === 'crediario_staria' ? '💳' : m.tipo === 'sangria' ? '💵' : m.valor >= 0 ? '➕' : '➖'; }
   function movTitulo(m) {
-    if (m.tipo === 'venda_staria') return 'Vendas e crediário em dinheiro';
+    if (m.tipo === 'venda_staria') return 'Vendas em dinheiro';
+    if (m.tipo === 'crediario_staria') return 'Recebimento de crediário';
     if (m.tipo === 'sangria') return 'Sangria';
     return 'Ajuste';
   }
+  function crediarioBadge(m) {
+    if (m.status === 'aprovado') return '<span class="pill ok">Aprovado' + (m.decididoPor ? ' · ' + esc(m.decididoPor) : '') + '</span>';
+    if (m.status === 'rejeitado') return '<span class="pill" style="background:var(--red-bg);color:var(--red)">Rejeitado · não entra no saldo</span>';
+    return '<span class="pill wa">Aguardando aprovação</span>';
+  }
   function movSub(m) {
     if (m.tipo === 'venda_staria') return 'StarIA · ' + dBR(m.periodoIni) + ' a ' + dBR(m.periodoFim);
+    if (m.tipo === 'crediario_staria') return 'StarIA · ' + dBR(m.periodoIni) + ' a ' + dBR(m.periodoFim) + ' · ' + crediarioBadge(m);
     const dep = m.tipo === 'sangria' ? (m.depositadoEm ? ' · depositado em ' + dBR(m.depositadoEm) : ' · ainda não foi ao banco') : '';
     return esc(m.motivo || '') + dep + ' · ' + esc(m.criadoPor || '');
   }
@@ -119,19 +128,23 @@
       ${isAdmin() ? '<div class="row"><button class="btn sm" type="button" id="btnAjuste">✏️ Lançar ajuste</button></div>' : ''}
       <section class="card">
         <h2>Lançamentos</h2>
-        ${lista.length ? `<div class="list">${lista.map(m => `<div class="it">
+        ${lista.length ? `<div class="list">${lista.map(m => { const naoConta = m.tipo === 'crediario_staria' && m.status !== 'aprovado'; return `<div class="it">
             <div class="ic">${movIcon(m)}</div>
             <div class="tx"><b>${esc(movTitulo(m))}</b><span>${movSub(m)}</span></div>
-            <div class="vl"><span class="${m.tipo === 'sangria' || m.valor < 0 ? 'neg' : 'pos'}">${m.tipo === 'sangria' ? '−' : m.valor < 0 ? '−' : '+'}${money(Math.abs(m.valor))}</span>
+            <div class="vl"><span class="${m.tipo === 'sangria' || m.valor < 0 ? 'neg' : 'pos'}" style="${naoConta ? 'opacity:.55' + (m.status === 'rejeitado' ? ';text-decoration:line-through' : '') : ''}">${m.tipo === 'sangria' ? '−' : m.valor < 0 ? '−' : '+'}${money(Math.abs(m.valor))}</span>
               <br><small class="muted">${dBR(m.data)}</small>
               ${m.tipo === 'sangria' && !m.depositadoEm ? `<br><button class="btn sm" type="button" data-dep="${esc(m.id)}" style="margin-top:4px">Marcar depositado</button>` : ''}
-              ${isAdmin() && m.tipo !== 'venda_staria' ? `<br><button class="btn sm dan" type="button" data-delmov="${esc(m.id)}" style="margin-top:4px">Apagar</button>` : ''}
-            </div></div>`).join('')}</div>` : '<p class="muted">Nenhum lançamento ainda.</p>'}
+              ${m.tipo === 'crediario_staria' && m.status === 'pendente' && podeDecidirCrediario() ? `<br><button class="btn sm pri" type="button" data-aprovar="${esc(m.id)}" style="margin-top:4px">Aprovar</button>
+                <button class="btn sm dan" type="button" data-rejeitar="${esc(m.id)}" style="margin-top:4px">Rejeitar</button>` : ''}
+              ${isAdmin() && (m.tipo === 'sangria' || m.tipo === 'ajuste') ? `<br><button class="btn sm dan" type="button" data-delmov="${esc(m.id)}" style="margin-top:4px">Apagar</button>` : ''}
+            </div></div>`; }).join('')}</div>` : '<p class="muted">Nenhum lançamento ainda.</p>'}
       </section>`;
     const vc = $('#verCfg'); if (vc) vc.addEventListener('click', e => { e.preventDefault(); sheetCfg(); });
     const ba = $('#btnAjuste'); if (ba) ba.addEventListener('click', sheetAjuste);
     document.querySelectorAll('[data-dep]').forEach(b => b.addEventListener('click', () => post('/api/caixa/depositado', { id: b.dataset.dep, depositadoEm: hoje() }, 'Marcado como depositado')));
     document.querySelectorAll('[data-delmov]').forEach(b => b.addEventListener('click', () => { if (confirm('Apagar este lançamento?')) post('/api/caixa/mov/excluir', { id: b.dataset.delmov }, 'Lançamento apagado'); }));
+    document.querySelectorAll('[data-aprovar]').forEach(b => b.addEventListener('click', () => post('/api/caixa/crediario/decidir', { id: b.dataset.aprovar, acao: 'aprovar' }, 'Crediário aprovado: entrou no saldo')));
+    document.querySelectorAll('[data-rejeitar]').forEach(b => b.addEventListener('click', () => { if (confirm('Rejeitar este recebimento de crediário? Ele não vai entrar no saldo.')) post('/api/caixa/crediario/decidir', { id: b.dataset.rejeitar, acao: 'rejeitar' }, 'Crediário rejeitado'); }));
   }
   function sheetCfg() {
     openSheet(`<div class="tt"><h2>Editar saldo inicial</h2><button class="x" type="button" id="shxb">✕</button></div>
@@ -158,6 +171,7 @@
 
   /* ---------- Sangria ---------- */
   function renderSangria() {
+    if (isFinanceiro()) { view = 'inicio'; return render(); }
     $('#main').innerHTML = `<section class="card">
       <h1>Nova sangria</h1>
       <p class="muted small">Dinheiro que saiu do caixa para ir ao banco. Pode ficar guardado alguns dias até o depósito; marque "depositado" quando chegar lá.</p>
@@ -204,27 +218,31 @@
           </div>`).join('') : '<p class="muted">Nenhuma consulta ainda.</p>'}
       </section>`;
     $('#fst').addEventListener('submit', e => { e.preventDefault(); post('/api/caixa/staria/pedir', { periodoIni: $('#stIni').value, periodoFim: $('#stFim').value }, 'Consulta pedida. Peça ao Claude para processar as consultas do StarIA.'); });
-    document.querySelectorAll('[data-aplicar]').forEach(b => b.addEventListener('click', () => { if (confirm('Aplicar este resultado ao caixa? Depois de aplicado não pode ser desfeito (lance um ajuste se precisar corrigir).')) post('/api/caixa/staria/aplicar', { id: b.dataset.aplicar }, 'Aplicado ao caixa'); }));
+    document.querySelectorAll('[data-aplicar]').forEach(b => b.addEventListener('click', () => { if (confirm('Aplicar este resultado ao caixa? As vendas em dinheiro entram direto no saldo; o recebimento de crediário entra como pendente, aguardando aprovação. Depois de aplicado não pode ser desfeito (lance um ajuste se precisar corrigir).')) post('/api/caixa/staria/aplicar', { id: b.dataset.aplicar }, 'Aplicado: vendas no saldo, crediário aguardando aprovação'); }));
   }
 
-  /* ---------- Acessos (admin): quem guarda e confere o caixa ---------- */
+  /* ---------- Acessos (admin): quem guarda o caixa (caixista) e quem aprova o crediário (financeiro) ---------- */
+  const papelLabel = p => p === 'financeiro' ? 'Financeiro · aprova o crediário' : 'Caixista · guarda o dinheiro';
   function renderAcessos() {
     if (!isAdmin()) { view = 'inicio'; return render(); }
     $('#main').innerHTML = `<section class="card">
       <h1>Acessos</h1>
-      <p class="muted small">Quem pode entrar neste controle de caixa. A pessoa lança sangria e vê o saldo; não vê nada de custo ou margem (não existe nada disso aqui).</p>
+      <p class="muted small">Quem pode entrar neste controle de caixa. Nenhum dos dois vê custo ou margem (não existe nada disso aqui), e nenhum dos dois apaga ou cancela nada — isso é só pelo seu usuário.</p>
       ${S.pessoas.length ? `<div class="list">${S.pessoas.map(p => `<div class="it">
-          <div class="ic">👤</div><div class="tx"><b>${esc(p.nome)}</b><span>${esc(p.login)}${p.ativo ? '' : ' · inativo'}${p.trocarSenha ? ' · ainda não trocou a senha provisória' : ''}</span></div>
+          <div class="ic">${p.papel === 'financeiro' ? '✅' : '👤'}</div><div class="tx"><b>${esc(p.nome)}</b><span>${esc(p.login)} · ${papelLabel(p.papel)}${p.ativo ? '' : ' · inativo'}${p.trocarSenha ? ' · ainda não trocou a senha provisória' : ''}</span></div>
           <div class="vl"><button class="btn sm" type="button" data-editp="${esc(p.login)}">Editar</button></div>
         </div>`).join('')}</div>` : '<p class="muted">Nenhum acesso criado ainda.</p>'}
-      <button class="btn pri full" type="button" id="btnNovaP">+ Nova pessoa</button>
+      <div class="row"><button class="btn pri" type="button" id="btnNovaCaixista">+ Nova pessoa do caixa</button><button class="btn pri" type="button" id="btnNovoFinanceiro">+ Novo aprovador (financeiro)</button></div>
     </section>
     <div id="pOut"></div>`;
-    $('#btnNovaP').addEventListener('click', () => sheetPessoa(null));
+    $('#btnNovaCaixista').addEventListener('click', () => sheetPessoa(null, 'caixista'));
+    $('#btnNovoFinanceiro').addEventListener('click', () => sheetPessoa(null, 'financeiro'));
     document.querySelectorAll('[data-editp]').forEach(b => b.addEventListener('click', () => sheetPessoa(S.pessoas.find(p => p.login === b.dataset.editp))));
   }
-  function sheetPessoa(p) {
-    openSheet(`<div class="tt"><h2>${p ? 'Editar acesso' : 'Nova pessoa'}</h2><button class="x" type="button" id="shxb">✕</button></div>
+  function sheetPessoa(p, papelNovo) {
+    const papel = p ? p.papel : papelNovo;
+    openSheet(`<div class="tt"><h2>${p ? 'Editar acesso' : (papel === 'financeiro' ? 'Novo aprovador (financeiro)' : 'Nova pessoa do caixa')}</h2><button class="x" type="button" id="shxb">✕</button></div>
+      <p class="muted small">${papel === 'financeiro' ? 'Só aprova ou rejeita o recebimento de crediário do StarIA; não lança sangria nem vê os acessos.' : 'Lança sangria, vê o saldo e marca quando um valor foi ao banco.'}</p>
       <form id="fp">
         <div class="field"><label for="pLogin">Usuário</label><input type="text" id="pLogin" value="${esc((p || {}).login || '')}" autocapitalize="off" spellcheck="false" ${p ? 'readonly' : ''} required></div>
         <div class="field"><label for="pNome">Nome</label><input type="text" id="pNome" value="${esc((p || {}).nome || '')}" required></div>
@@ -236,7 +254,7 @@
       $('#fp').addEventListener('submit', async e => {
         e.preventDefault(); const b = e.target.querySelector('button'); b.disabled = true;
         try {
-          const r = await api('/api/caixa/pessoa', { login: $('#pLogin').value.trim().toLowerCase(), nome: $('#pNome').value, ativo: p ? $('#pAtivo').checked : true, novaSenha: p ? $('#pNova').checked : true });
+          const r = await api('/api/caixa/pessoa', { login: $('#pLogin').value.trim().toLowerCase(), nome: $('#pNome').value, papel, ativo: p ? $('#pAtivo').checked : true, novaSenha: p ? $('#pNova').checked : true });
           await reload();
           if (r.password) $('#pOutS').innerHTML = `<div class="note" style="display:grid;gap:6px"><b>Anote agora: esta senha aparece só uma vez.</b>
             <span>Usuário: <code>${esc(r.login)}</code></span><span>Senha provisória: <code style="font-size:17px">${esc(r.password)}</code></span>
@@ -250,7 +268,7 @@
   /* ---------- navegação ---------- */
   function render() {
     $('#bn').hidden = false; $('#sair').hidden = false;
-    $('#navStaria').hidden = !isAdmin(); $('#navAcessos').hidden = !isAdmin();
+    $('#navSangria').hidden = isFinanceiro(); $('#navStaria').hidden = !isAdmin(); $('#navAcessos').hidden = !isAdmin();
     document.querySelectorAll('#bn [data-go]').forEach(b => b.setAttribute('aria-current', b.dataset.go === view));
     if (view === 'sangria') return renderSangria();
     if (view === 'staria') return renderStaria();
