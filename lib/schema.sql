@@ -497,3 +497,7 @@ alter table sessions add column if not exists suporte boolean not null default f
 -- loja: cupom de desconto usado no pedido (código) e o desconto aplicado (o total já vem com ele)
 alter table loja_pedidos add column if not exists cupom text;
 alter table loja_pedidos add column if not exists desconto numeric(12,2) not null default 0;
+-- avaliação do cliente (nota 1-5 e comentário opcional), só depois que o pedido chega "entregue"
+alter table loja_pedidos add column if not exists avaliacao_nota smallint check (avaliacao_nota is null or avaliacao_nota between 1 and 5);
+alter table loja_pedidos add column if not exists avaliacao_comentario text;
+alter table loja_pedidos add column if not exists avaliacao_em timestamptz;

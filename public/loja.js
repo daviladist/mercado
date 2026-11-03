@@ -164,6 +164,10 @@
     if (C.pedidoMinimo) L.push('Mín. ' + moneyC(C.pedidoMinimo));
     return L;
   }
+  function rolarProdutos() {
+    const alvo = document.getElementById('prat0') || document.getElementById('prodGrid');
+    if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   function vitrine() {
     const C = V.config, cli = mem.get('tino-cliente', {});
     const cats = [...new Set(V.produtos.map(p => p.categoria).filter(Boolean))].sort();
@@ -178,15 +182,18 @@
     $('#main').innerHTML = `
       ${!C.aberta ? '<p class="warn">A loja está fechada para pedidos no momento. Você pode olhar os produtos e voltar mais tarde.</p>' : ''}
       ${abandonado && nCart ? `<button type="button" class="aband" id="abd">🛒 Você deixou ${nCart} ${nCart === 1 ? 'item' : 'itens'} no carrinho <b>Continuar pedido ›</b></button>` : ''}
-      <section class="hero"><p class="bv">${primeiroNome ? `<span class="oi">Oi, ${esc(primeiroNome)} 👋</span> ` : ''}${esc(C.boasVindas || 'Bem-vindo! Escolha, coloque no carrinho e envie o pedido.')}</p>
-        ${condicoes(C).length ? `<div class="cond">${condicoes(C).map(x => `<span>${esc(x)}</span>`).join('')}</div>` : ''}
+      <section class="hero hero-banner"><h1 class="htit">${esc(V.loja.nome)}</h1>
+        <p class="bv">${primeiroNome ? `<span class="oi">Oi, ${esc(primeiroNome)} 👋</span> ` : ''}${esc(C.boasVindas || 'Bem-vindo! Escolha, coloque no carrinho e envie o pedido.')}</p>
+        ${condicoes(C).length ? `<div class="cond">${condicoes(C).map(x => `<span>${esc(x)}</span>`).join('')}${V.avaliacoes && V.avaliacoes.total ? `<span class="nota">⭐ ${V.avaliacoes.media.toFixed(1).replace('.', ',')} (${V.avaliacoes.total})</span>` : ''}</div>` : ''}
+        ${(L.length || prateleiras.length) && C.aberta ? `<button type="button" class="btn pri cta" id="heroCta">🛍️ Ver produtos</button>` : ''}
         <div class="toprow"><button class="btn sm" type="button" id="sobre">ℹ️ Sobre a loja</button>${meus.length ? `<button class="btn sm" type="button" id="mp">📦 Meus pedidos (${meus.length})</button>` : ''}<span class="selo">💬 Pedido direto no WhatsApp da loja</span></div></section>
       <div class="search"><input type="text" id="bq" placeholder="Buscar produto" value="${esc(busca)}" aria-label="Buscar produto" autocomplete="off"><select id="ord" aria-label="Ordenar">${[['rel', 'Relevância'], ['menor', 'Menor preço'], ['maior', 'Maior preço'], ['vend', 'Mais vendidos']].map(([k, n]) => `<option value="${k}" ${ordem === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
       ${toks.length && sug.length ? `<div class="sug" role="listbox" aria-label="Sugestões">${sug.map(p => `<button type="button" role="option" data-s="${esc(p.id)}"><span>${esc(p.nome)}</span><b>${money(p.preco)}</b></button>`).join('')}</div>` : ''}
       ${cats.length > 1 ? `<div class="cats-row" role="group" aria-label="Categorias"><button type="button" class="chip" data-c="" aria-pressed="${!filtroCat}">Tudo</button>${cats.map(c => `<button type="button" class="chip" data-c="${esc(c)}" aria-pressed="${filtroCat === c}">${esc(c)}</button>`).join('')}</div>` : ''}
-      ${prateleiras.map(s => `<section class="shelf"><h2>${s.titulo}</h2><div class="rail">${s.itens.map(card).join('')}</div></section>`).join('')}
+      ${prateleiras.map((s, k) => `<section class="shelf"${k === 0 ? ' id="prat0"' : ''}><h2>${s.titulo}</h2><div class="rail">${s.itens.map(card).join('')}</div></section>`).join('')}
       ${prateleiras.length && L.length ? '<h2 class="sec">Todos os produtos</h2>' : ''}
-      ${L.length ? `<div class="grid">${L.map(card).join('')}</div>` : `<div class="card empty"><div class="big">🛍️</div><p class="muted">${V.produtos.length ? 'Nada encontrado com "' + esc(busca.trim()) + '". Tente outra palavra.' : 'A loja ainda está colocando os produtos. Volte em breve!'}</p></div>`}
+      ${L.length ? `<div class="grid" id="prodGrid">${L.map(card).join('')}</div>` : `<div class="card empty" id="prodGrid"><div class="big">🛍️</div><p class="muted">${V.produtos.length ? 'Nada encontrado com "' + esc(busca.trim()) + '". Tente outra palavra.' : 'A loja ainda está colocando os produtos. Volte em breve!'}</p></div>`}
+      ${avaliacoesCard()}
       <section class="card"><h3>${esc(V.loja.nome)}</h3>${C.endereco ? `<p class="small">📍 ${esc(C.endereco)}</p>` : ''}${C.horario ? `<p class="small">🕘 ${esc(C.horario)}</p>` : ''}${C.whatsapp ? `<a class="btn full" href="https://wa.me/${esc(zap(C.whatsapp))}" target="_blank" rel="noopener">💬 Falar com a loja no WhatsApp</a>` : ''}</section>
       <p class="tino">Loja feita com <b>Tino</b></p>`;
     bindCartoes($('#main'));
@@ -195,6 +202,7 @@
     const bq = $('#bq'); bq.addEventListener('input', () => { busca = bq.value; const pos = bq.selectionStart; vitrine(); const n = $('#bq'); n.focus(); n.setSelectionRange(pos, pos); });
     $('#ord').addEventListener('change', e => { ordem = e.target.value; vitrine(); });
     const mp = $('#mp'); if (mp) mp.addEventListener('click', meusPedidos);
+    const hc = $('#heroCta'); if (hc) hc.addEventListener('click', rolarProdutos);
     $('#sobre').addEventListener('click', sobreLoja);
     const abd = $('#abd'); if (abd) abd.addEventListener('click', () => { abandonado = false; carrinho(); });
     barra();
@@ -213,6 +221,13 @@
     return out;
   }
   const zap = tel => { const d = String(tel || '').replace(/\D/g, ''); return d.length <= 11 ? '55' + d : d; };
+  const estrelas = n => '★'.repeat(Math.max(0, Math.min(5, n))) + '☆'.repeat(5 - Math.max(0, Math.min(5, n)));
+  function avaliacoesCard() {
+    const A = V.avaliacoes; if (!A || !A.total) return '';
+    const dep = A.depoimentos || [];
+    return `<section class="card aval-card"><h3>⭐ ${A.media.toFixed(1).replace('.', ',')} <span class="small muted">(${A.total} ${A.total === 1 ? 'avaliação' : 'avaliações'})</span></h3>
+      ${dep.length ? dep.map(d => `<div class="depo"><span class="estr">${estrelas(d.nota)}</span><p>“${esc(d.comentario)}”</p><span class="small muted">— ${esc(d.nome)}</span></div>`).join('') : ''}</section>`;
+  }
   function rodapeCartao(p) {
     if (!disponivel(p)) return '<span class="esg">Esgotado</span>';
     if (!V.config.aberta) return '<span class="esg">Loja fechada</span>';
@@ -466,19 +481,50 @@
     closeSheet(); if (location.hash.startsWith('#pedido')) { history.pushState(null, '', location.pathname); vitrine(); }
     carrinho();
   }
+  function avalHtml(p, st) {
+    if (p.avaliacaoNota) return `<section class="card"><h3>Sua avaliação</h3><p class="estr" style="font-size:22px">${estrelas(p.avaliacaoNota)}</p>${p.avaliacaoComentario ? `<p>${esc(p.avaliacaoComentario)}</p>` : ''}</section>`;
+    if (!p.podeAvaliar) return '';
+    return `<section class="card" id="avalBox"><h3>⭐ Avalie seu pedido</h3>
+      <div class="estrelas" role="group" aria-label="Nota">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" aria-label="${n} estrela${n > 1 ? 's' : ''}" aria-pressed="${st.nota === n}">${n <= st.nota ? '★' : '☆'}</button>`).join('')}</div>
+      <textarea id="avalTx" maxlength="300" placeholder="Conte como foi (opcional)">${esc(st.comentario)}</textarea>
+      <p class="neg small" id="avalErr" role="alert" style="font-weight:600;min-height:16px"></p>
+      <button class="btn pri full" type="button" id="avalOk" ${st.enviando ? 'disabled' : ''}>${st.enviando ? 'Enviando…' : 'Enviar avaliação'}</button></section>`;
+  }
   async function acompanhar(chave) {
     $('#cartbar').hidden = true;
     $('#main').innerHTML = '<p class="muted">Buscando o pedido…</p>';
     let r; try { r = await api('/api/loja/acompanhar?c=' + encodeURIComponent(chave)); } catch (e) { $('#main').innerHTML = `<div class="card"><p class="warn">${esc(e.message)}</p><button class="btn" type="button" id="vt">Voltar para a loja</button></div>`; $('#vt').addEventListener('click', () => { history.pushState(null, '', location.pathname); vitrine(); }); return; }
     const p = r.pedido, ordem_ = ['novo', 'confirmado', 'pronto', 'entregue'], at = ordem_.indexOf(p.status), prev = previsao();
+    const st = { nota: 0, comentario: '', enviando: false };
+    function redrawAval() { const old = document.getElementById('avalBox'); if (!old) return; old.outerHTML = avalHtml(p, st); bindAval(); }
+    function bindAval() {
+      const box = document.getElementById('avalBox'); if (!box) return;
+      box.querySelectorAll('[data-n]').forEach(b => b.addEventListener('click', () => { st.nota = +b.dataset.n; st.comentario = (document.getElementById('avalTx') || {}).value || st.comentario; redrawAval(); }));
+      const tx = document.getElementById('avalTx'); if (tx) tx.addEventListener('input', () => { st.comentario = tx.value; });
+      const ok = document.getElementById('avalOk'); if (ok) ok.addEventListener('click', enviarAval);
+    }
+    async function enviarAval() {
+      const tx = document.getElementById('avalTx'); if (tx) st.comentario = tx.value;
+      const err = document.getElementById('avalErr');
+      if (!st.nota) { if (err) err.textContent = 'Escolha de 1 a 5 estrelas.'; return; }
+      st.enviando = true; redrawAval();
+      try {
+        await api('/api/loja/avaliar', { chave, nota: st.nota, comentario: st.comentario });
+        p.avaliacaoNota = st.nota; p.avaliacaoComentario = st.comentario || null; p.podeAvaliar = false;
+        const old = document.getElementById('avalBox'); if (old) old.outerHTML = avalHtml(p, st);
+        toast('Avaliação enviada. Obrigado! ✓');
+      } catch (e) { st.enviando = false; redrawAval(); const e2 = document.getElementById('avalErr'); if (e2) e2.textContent = e.message; }
+    }
     $('#main').innerHTML = `<div class="row"><button class="btn sm" type="button" id="vt">← Loja</button></div>
       <h1>Pedido nº ${p.numero}</h1><p class="muted small">${dataHora(p.criadoEm)}</p>
       ${p.status === 'cancelado' ? '<p class="warn">Este pedido foi cancelado pela loja.' + (p.historico.slice(-1)[0] && p.historico.slice(-1)[0].motivo ? ' Motivo: ' + esc(p.historico.slice(-1)[0].motivo) : '') + '</p>' : `<section class="card">${ordem_.map((s, k) => `<div class="passo ${k < at ? 'on' : k === at ? 'agora' : ''}"><i>${k < at ? '✓' : k + 1}</i><span>${esc(s === 'pronto' ? (p.entrega === 'entrega' ? 'Saiu para entrega' : 'Pronto para retirar') : ST[s])}</span></div>`).join('')}${prev && at < 2 ? `<p class="small muted">⏱️ ${esc(prev)}</p>` : ''}</section>`}
       <section class="card">${p.itens.map(i => `<div class="between"><span>${i.qtd}x ${esc(i.nome)}${i.variacao ? ' (' + esc(i.variacao) + ')' : ''}</span><span>${money(i.total)}</span></div>`).join('')}
         ${p.desconto ? `<div class="between pos"><span>Cupom ${esc(p.cupom || '')}</span><span>−${money(p.desconto)}</span></div>` : ''}${p.taxaEntrega ? `<div class="between"><span>Entrega</span><span>${money(p.taxaEntrega)}</span></div>` : ''}<div class="between"><b>Total</b><b>${money(p.total)}</b></div>
         <p class="small muted">${p.entrega === 'entrega' ? 'Entrega' : 'Retirada na loja'} · ${esc(V.pagamentosNomes[p.pagamento] || p.pagamento)}</p></section>
+      ${avalHtml(p, st)}
       ${V.config.aberta ? '<button class="btn pri full" type="button" id="again">🔁 Pedir de novo</button>' : ''}
       <button class="btn full" type="button" id="at">Atualizar</button>`;
+    bindAval();
     $('#vt').addEventListener('click', () => { history.pushState(null, '', location.pathname); vitrine(); });
     $('#at').addEventListener('click', () => acompanhar(chave));
     const ag = $('#again'); if (ag) ag.addEventListener('click', () => pedirDeNovo(p.itens));
