@@ -485,3 +485,6 @@ alter table rural_lanc add column if not exists pagamentos jsonb not null defaul
 -- descontos da venda (frete, caixa, comissão…): bruto = vendido; valor = líquido (o que entra; o meeiro ganha sobre ele)
 alter table rural_lanc add column if not exists bruto numeric(12,2);
 alter table rural_lanc add column if not exists descontos jsonb not null default '[]'::jsonb;
+-- cada meeiro tem a parte dele na roça: pés (opcional) e a % dele sobre a venda da parte dele; a venda guarda de quem foi (origem)
+alter table rural_rocas add column if not exists pes jsonb not null default '{}'::jsonb;
+alter table rural_lanc add column if not exists origem jsonb not null default '[]'::jsonb;

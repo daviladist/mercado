@@ -8,6 +8,7 @@
   const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
   const pctTxt = v => (Math.round((Number(v) || 0) * 100) / 100).toLocaleString('pt-BR') + '%';
   /* número do jeito brasileiro: "1.500" = mil e quinhentos, "1.500,50", "25,5"; "1.5" (sem milhar) continua 1,5 */
+  const toInt = v => { const t = String(v == null ? '' : v).trim().replace(/\.(?=\d{3}(\D|$))/g, ''); return /^\d+$/.test(t) ? Number(t) : null; };
   const toNum = v => {
     let s = String(v == null ? '' : v).trim().replace(/^R\$\s*/i, '').replace(/\s/g, '');
     if (!s) return null;
@@ -107,8 +108,16 @@
   const cat = id => S.cats.find(c => c.id === id) || { id, nome: id || 'Outros', icone: '➕' };
   const nomeParte = k => k === 'dono' ? DONO() : (pessoa(k) || {}).nome || 'Meeiro';
   const meeirosDe = r => r && M('r_meeiros') ? Object.keys(r.parceria || {}).filter(pessoa) : [];
-  const donoPct = r => r2(100 - Object.values((r && r.parceria) || {}).reduce((a, b) => a + Number(b || 0), 0));
-  const vendaPartes = r => { const o = {}; meeirosDe(r).forEach(k => { o[k] = Number(r.parceria[k]); }); const d = donoPct(r); if (d > 0) o.dono = d; return Object.keys(o).length ? o : { dono: 100 }; };
+  /* cada meeiro tem a parte dele: ganha a % dele sobre a venda da parte dele; o patrão fica com o resto daquela venda */
+  const meacaoDe = (r, pid) => { const p = Number((r.parceria || {})[pid]) || 0, o = { [pid]: p }; if (p < 100) o.dono = r2(100 - p); return o; };
+  const r6 = n => Math.round(n * 1e6) / 1e6;
+  /* divisão de uma venda pela origem: [{de, qtd?|valor?}] (igual ao servidor) */
+  const partesDaOrigem = (r, origem) => {
+    const w = origem.map(o => o.qtd != null ? Number(o.qtd) : o.valor != null ? Number(o.valor) : 1), tot = w.reduce((a, b) => a + b, 0) || 1;
+    const out = {}; let soma = 0;
+    origem.forEach((o, i) => { if (o.de === 'dono') return; const pct = r6(Number((r.parceria || {})[o.de]) * w[i] / tot); if (pct > 0) { out[o.de] = pct; soma += pct; } });
+    const d = r6(100 - soma); if (d > 0) out.dono = d; return out;
+  };
   const partesDe = l => (l.partes && Object.keys(l.partes).length ? l.partes : { dono: 100 });
   /* parte de cada um em reais: cada meeiro arredonda os centavos dele e o dono fica com o resto (a soma sempre fecha com o valor) */
   const parte = (l, k) => {
@@ -169,9 +178,11 @@
     return { icone: c.icone, cor: /^#[0-9a-f]{6}$/i.test(c.cor) ? c.cor : '#2C5139' };
   }
   const tile = (x, big) => { const v = visual(x); return `<span class="ctile${big ? ' big' : ''}" style="background:${v.cor}22;border-color:${v.cor}66" aria-hidden="true">${v.icone}</span>`; };
+  /* meeiros da roça: cada um com a % dele (sobre a venda da parte dele) e os pés */
   const splitBar = r => {
-    const ps = vendaPartes(r), keys = Object.keys(ps).sort((a, b) => (a === 'dono' ? -1 : b === 'dono' ? 1 : 0));
-    return `<div class="split" role="img" aria-label="${esc(keys.map(k => nomeParte(k) + ' ' + pctTxt(ps[k])).join(', '))}">${keys.map(k => `<div style="flex:${ps[k]}">${esc(nomeParte(k))} ${pctTxt(ps[k])}</div>`).join('')}</div>`;
+    const ms = meeirosDe(r); if (!ms.length) return '';
+    if (ms.length === 1) { const ps = meacaoDe(r, ms[0]), keys = Object.keys(ps).sort(a => (a === 'dono' ? -1 : 1)); return `<div class="split" role="img" aria-label="${esc(keys.map(k => nomeParte(k) + ' ' + pctTxt(ps[k])).join(', '))}">${keys.map(k => `<div style="flex:${ps[k]}">${esc(nomeParte(k))} ${pctTxt(ps[k])}</div>`).join('')}</div>${(r.pes || {})[ms[0]] ? `<p class="small muted">${esc(nomeParte(ms[0]))}: ${numIn((r.pes || {})[ms[0]])} pés</p>` : ''}`; }
+    return `<div class="parc">${ms.map(k => `<span class="pp"><b>${esc(nomeParte(k))}</b> ${pctTxt(r.parceria[k])}${(r.pes || {})[k] ? ' · ' + numIn(r.pes[k]) + ' pés' : ''}</span>`).join('')}</div>`;
   };
   const modoTxt = m => ({ funcionarios: 'Só funcionários', meeiro: 'Meeiro', misto: 'Meeiro e funcionários' }[m] || '');
   const perChips = () => `<div class="chips noprint" role="group" aria-label="Período">${[['mes', 'Este mês'], ['ano', 'Este ano'], ['passado', 'Ano passado'], ['tudo', 'Tudo']].map(([k, n]) => `<button type="button" class="chip" data-per="${k}" aria-pressed="${per === k}">${n}</button>`).join('')}</div>`;
@@ -264,7 +275,7 @@
     } else if (rocaTab === 'meeiros') {
       const ps = new Set(meeiros); all.forEach(l => { Object.keys(partesDe(l)).forEach(k => { if (k !== 'dono') ps.add(k); }); if (l.tipo === 'adiantamento') ps.add(l.pessoaId); });
       body = [...ps].map(pid => { const p = pendente(r.id, pid), hist = S.acertos.filter(a => a.rocaId === r.id && a.pessoaId === pid);
-        return `<section class="card"><div class="between"><div><h3>${esc(nomeParte(pid))}</h3><p class="small muted">${r.parceria[pid] ? pctTxt(r.parceria[pid]) + ' do valor vendido (já tirados frete, caixa e outros descontos da venda)' : 'não está mais na parceria'}${(pessoa(pid) || {}).telefone ? ' · ' + esc(pessoa(pid).telefone) : ''}</p></div>
+        return `<section class="card"><div class="between"><div><h3>${esc(nomeParte(pid))}</h3><p class="small muted">${r.parceria[pid] ? pctTxt(r.parceria[pid]) + ' da venda da parte dele (já tirados frete, caixa e outros descontos)' + ((r.pes || {})[pid] ? ' · ' + numIn(r.pes[pid]) + ' pés' : '') : 'não está mais na parceria'}${(pessoa(pid) || {}).telefone ? ' · ' + esc(pessoa(pid).telefone) : ''}</p></div>
           ${r.parceria[pid] ? `<button class="btn sm" type="button" data-adi="${esc(pid)}">+ Adiantamento</button>` : ''}</div>
           <div class="kpis"><div class="k"><span>Parte nas vendas</span><b class="pos">${money(p.parte)}</b></div><div class="k"><span>Despesas dele</span><b class="neg">${money(p.desp)}</b></div><div class="k"><span>Adiantamentos</span><b class="inf">${money(p.adi)}</b></div></div>
           ${p.n ? `<div class="saldo ${p.saldo > 0 ? 'p' : p.saldo < 0 ? 'n' : 'z'}"><span class="small">Em aberto hoje</span><b>${money(Math.abs(p.saldo))}</b><span class="small">${p.saldo > 0 ? esc(DONO()) + ' paga para ' + esc(nomeParte(pid)) : p.saldo < 0 ? esc(nomeParte(pid)) + ' deve para ' + esc(DONO()) : 'Zerado'}</span></div>
@@ -276,7 +287,7 @@
         ${func.length ? `<div class="list">${func.map(p => `<button type="button" class="it" data-pes="${esc(p.id)}"><span class="ic">👷</span><span class="tx"><b>${esc(p.nome)}</b><span>${esc(p.telefone || '')}</span></span><span class="vl">${p.salario ? money(p.salario) + '<small>por mês</small>' : ''}</span></button>`).join('')}</div>` : '<p class="muted small">Nenhum funcionário fixo nesta roça.</p>'}
         ${func.length ? '<button class="btn full" type="button" id="sal">Pagar salários do mês</button>' : ''}</section>`;
     } else {
-      body = `<section class="card"><h3>Como a roça é tocada</h3><p>${esc(modoTxt(r.modo))}</p>${meeiros.length ? splitBar(r) + '<p class="small muted">A porcentagem é sobre o valor vendido, depois de tirar os descontos da venda (frete, caixa…).</p>' : ''}</section>
+      body = `<section class="card"><h3>Como a roça é tocada</h3><p>${esc(modoTxt(r.modo))}</p>${meeiros.length ? splitBar(r) + '<p class="small muted">Cada meeiro ganha a porcentagem dele sobre a venda da parte dele, depois de tirar os descontos da venda (frete, caixa…). Na venda você diz de quem foi.</p>' : ''}</section>
         ${meeiros.length ? `<section class="card"><h3>Quem paga cada despesa</h3><div class="list">${S.cats.map(c => { const p = r.regras[c.id] || { dono: 100 }; return `<div class="it"><span class="ic">${c.icone}</span><span class="tx"><b>${esc(c.nome)}</b><span>${esc(regraTxt(r, p))}</span></span></div>`; }).join('')}</div></section>` : ''}
         <section class="card"><h3>Dados</h3><p class="small">${esc([r.cultura && 'Cultura: ' + r.cultura, r.local && 'Local: ' + r.local, r.area && 'Área: ' + r.area, r.inicio && 'Início: ' + dBR(r.inicio)].filter(Boolean).join(' · ') || 'Sem detalhes.')}</p>${r.obs ? `<p class="small muted">${esc(r.obs)}</p>` : ''}</section>
         <button class="btn pri full" type="button" id="ed">Editar a roça</button>
@@ -310,8 +321,8 @@
   function regraTxt(r, p) {
     const ks = Object.keys(p).filter(k => p[k] > 0);
     if (ks.length === 1) return nomeParte(ks[0]) + ' paga tudo';
-    const vp = vendaPartes(r);
-    if (ks.length === Object.keys(vp).length && ks.every(k => Math.abs((vp[k] || 0) - p[k]) < 0.01)) return 'Dividido igual à meação (' + ks.map(k => nomeParte(k) + ' ' + pctTxt(p[k])).join(' · ') + ')';
+    const mk = ks.find(k => k !== 'dono'), vp = mk ? meacaoDe(r, mk) : {};
+    if (mk && ks.length === Object.keys(vp).length && ks.every(k => Math.abs((vp[k] || 0) - p[k]) < 0.01)) return 'Dividido com ' + nomeParte(mk) + ' na meação dele (' + ks.map(k => nomeParte(k) + ' ' + pctTxt(p[k])).join(' · ') + ')';
     return ks.map(k => nomeParte(k) + ' ' + pctTxt(p[k])).join(' · ');
   }
 
@@ -369,14 +380,14 @@
   function quemPagaHtml(F) {
     const r = F.rocaId ? roca(F.rocaId) : null, ms = meeirosDe(r);
     if (F.tipo !== 'despesa' || !ms.length) return '';
-    const ks = ['dono'].concat(ms), p = F.partes || { dono: 100 }, vp = vendaPartes(r);
+    const ks = ['dono'].concat(ms), p = F.partes || { dono: 100 };
     const sel = Object.keys(p).filter(k => p[k] > 0);
-    const isMea = sel.length === Object.keys(vp).length && sel.every(k => Math.abs((vp[k] || 0) - p[k]) < 0.01);
-    const modo = F.qpOutra ? 'outra' : sel.length === 1 ? sel[0] : isMea ? 'meacao' : 'outra';
+    const mea = ms.find(m => { const vp = meacaoDe(r, m); return sel.length === Object.keys(vp).length && sel.every(k => Math.abs((vp[k] || 0) - p[k]) < 0.01); });
+    const modo = F.qpOutra ? 'outra' : sel.length === 1 ? sel[0] : mea ? 'mea:' + mea : 'outra';
     const v = toNum(F.valor);
     return `<div class="field"><span class="lbl">Quem paga esta despesa?</span><div class="chips" id="qp">
       ${ks.map(k => `<button type="button" class="chip" data-qp="${esc(k)}" aria-pressed="${modo === k}">${esc(nomeParte(k))}</button>`).join('')}
-      <button type="button" class="chip" data-qp="meacao" aria-pressed="${modo === 'meacao'}">Dividir igual à meação</button>
+      ${ms.map(m => `<button type="button" class="chip" data-qp="mea:${esc(m)}" aria-pressed="${modo === 'mea:' + m}">${ms.length === 1 ? 'Dividir igual à meação' : 'Dividir com ' + esc(nomeParte(m)) + ' (' + pctTxt(r.parceria[m]) + ')'}</button>`).join('')}
       <button type="button" class="chip" data-qp="outra" aria-pressed="${modo === 'outra'}">Outra divisão</button></div>
       ${modo === 'outra' ? `<div style="display:grid;gap:8px">${ks.map(k => `<div class="pct"><span>${esc(nomeParte(k))}</span><div class="n"><input inputmode="decimal" data-pp="${esc(k)}" value="${numIn(p[k] || 0)}" aria-label="Porcentagem de ${esc(nomeParte(k))}"></div></div>`).join('')}</div>` : ''}
       <p class="small muted" id="qpv">${v > 0 ? ks.filter(k => p[k] > 0).map(k => esc(nomeParte(k)) + ': ' + money(v * p[k] / 100)).join(' · ') : 'A regra desta roça já vem marcada; mude se esta compra for diferente.'}</p></div>`;
@@ -395,6 +406,19 @@
     // pagamento: lista de partes {forma, valor, vence, cheque, aberto}; uma parte só = a venda toda
     if (reabrir || !Array.isArray(F.pags)) F.pags = (reabrir ? pagsDe(src) : []).map(x => ({ forma: x.forma, valor: numIn(x.valor), vence: x.vence || '', cheque: Object.assign({}, x.cheque || {}), aberto: !!Object.keys(x.cheque || {}).length }));
     if (reabrir || F.dividir == null) F.dividir = F.pags.length > 1;
+    // de quem é a venda: {modo:'um', de} ou {modo:'mix', v:{quem: quantidade ou valor}}; null = ainda não escolheu
+    // (venda antiga de antes desta tela, com mais de um meeiro: legado = mantém a divisão do dia)
+    let legado = false;
+    if (reabrir || F.orig === undefined) {
+      F.orig = null;
+      if (reabrir && F.tipo === 'venda') {
+        const og = Array.isArray(src.origem) ? src.origem : [];
+        if (og.length === 1) F.orig = { modo: 'um', de: og[0].de };
+        else if (og.length > 1) F.orig = { modo: 'mix', v: Object.fromEntries(og.map(o => [o.de, numIn(o.qtd != null ? o.qtd : o.valor)])) };
+        else { const ks = Object.keys(src.partes || {}).filter(k => k !== 'dono'); if (ks.length === 1) F.orig = { modo: 'um', de: ks[0] }; else if (!ks.length) F.orig = { modo: 'um', de: 'dono' }; else legado = true; }
+      }
+    }
+    const origOriginal = reabrir ? JSON.stringify(src.origem || []) : null;
     const origRoca = gravado ? gravado.rocaId : null, origPartes = gravado ? JSON.parse(JSON.stringify(gravado.partes || {})) : null;
     const ativas = S.rocas.filter(r => r.ativa || r.id === F.rocaId);
     if (!F.rocaId && F.tipo !== 'despesa' && ativas.length === 1) F.rocaId = ativas[0].id;
@@ -424,6 +448,7 @@
           <div class="field"><span class="lbl">Unidade</span><div class="chips">${S.unidades.map(u => `<button type="button" class="chip" data-un="${u}" aria-pressed="${(F.unidade || '') === u}">${u}</button>`).join('')}</div></div>` : ''}
         <div class="field"><label for="fv">${F.tipo === 'venda' ? ((F.descs || []).length ? 'Vendido (R$)' : 'Total da venda (R$)') : 'Valor (R$)'}</label><input inputmode="decimal" class="money" id="fv" value="${esc(F.valor || '')}" placeholder="0,00" ${vtotal != null ? 'readonly' : ''}>${vtotal != null ? '<span class="small muted">Calculado: ' + (F.tipo === 'venda' ? 'quantidade × preço' : 'dias × valor do dia') + '.</span>' : ''}</div>
         ${F.tipo === 'venda' ? descHtml() : ''}
+        ${F.tipo === 'venda' ? origHtml() : ''}
         ${F.tipo === 'venda' && r && meeirosDe(r).length ? `<p class="note" id="vnote" ${liq() > 0 ? '' : 'hidden'}>${vendaNote(r, liq())}</p>` : ''}
         ${quemPagaHtml(F)}
         ${F.tipo === 'despesa' && M('r_veiculos') && S.veiculos.some(v => v.ativo) ? `<div class="field"><span class="lbl">É de algum veículo ou máquina? (opcional)</span><div class="chips">${S.veiculos.filter(v => v.ativo || v.id === F.veiculoId).map(v => `<button type="button" class="chip" data-ve="${esc(v.id)}" aria-pressed="${F.veiculoId === v.id}">🚜 ${esc(v.nome)}</button>`).join('')}</div></div>` : ''}
@@ -491,8 +516,43 @@
       F.pags = Array.from({ length: n }, (_, k) => Object.assign({ forma, vence: '', cheque: {}, aberto: false }, velhos[k] && velhos[k].forma === forma ? { vence: velhos[k].vence, cheque: velhos[k].cheque, aberto: velhos[k].aberto } : {}, { forma, valor: tot ? numIn(((k === n - 1 ? tot - base * (n - 1) : base) / 100).toFixed(2)) : '' }));
       F.dividir = n > 1;
     }
+    /* de quem é a venda: um meeiro, a parte do patrão ou misturado (quanto de cada um) */
+    function origHtml() {
+      const r = F.rocaId ? roca(F.rocaId) : null, ms = meeirosDe(r);
+      if (F.tipo !== 'venda' || !ms.length) return '';
+      if (!F.orig && !legado && !edit && ms.length === 1) F.orig = { modo: 'um', de: ms[0] };
+      const O = F.orig || {}, quem = ms.concat(['dono']), porQtd = toNum(F.qtd) > 0;
+      return `<div class="field"><span class="lbl">De quem é esta venda?</span>
+        ${legado && !F.orig ? '<p class="small muted">Venda lançada antes da divisão por meeiro: a divisão do dia fica como está. Toque abaixo só se quiser refazer.</p>' : ''}
+        <div class="chips">${ms.map(k => `<button type="button" class="chip" data-og="um:${esc(k)}" aria-pressed="${O.modo === 'um' && O.de === k}">🤝 ${esc(nomeParte(k))}</button>`).join('')}
+          <button type="button" class="chip" data-og="um:dono" aria-pressed="${O.modo === 'um' && O.de === 'dono'}">Parte de ${esc(DONO())}</button>
+          <button type="button" class="chip" data-og="mix" aria-pressed="${O.modo === 'mix'}">Misturado (de vários)</button></div>
+        ${O.modo === 'mix' ? `<div class="chq"><p class="small muted" id="ohint" style="margin:0">${esc(origHint())}</p>
+          ${quem.map(k => `<div class="pct"><span>${esc(k === 'dono' ? 'Parte de ' + DONO() : nomeParte(k))}</span><div class="n" style="width:120px"><input inputmode="decimal" data-oq="${esc(k)}" value="${esc((O.v || {})[k] || '')}" aria-label="Quanto foi de ${esc(nomeParte(k))}"></div></div>`).join('')}
+          <p class="note" id="osoma" aria-live="polite">${origSoma()}</p></div>` : ''}</div>`;
+    }
+    const origHint = () => toNum(F.qtd) > 0 ? 'Quanto foi de cada um (' + (F.unidade || 'quantidade') + '). Deixe em branco quem não entrou.' : 'Quanto foi de cada um em R$ (do vendido). Deixe em branco quem não entrou. Dica: com a quantidade preenchida, dá para dividir por caixas.';
+    function origSoma() {
+      const O = F.orig; if (!O || O.modo !== 'mix') return '';
+      const porQtd = toNum(F.qtd) > 0, vs = Object.values(O.v || {}).map(x => toNum(x) || 0);
+      if (porQtd) { const so = r6(vs.reduce((a, b) => a + b, 0)), alvo = toNum(F.qtd), d = r6(alvo - so); return 'Soma: <b>' + numIn(so) + '</b> de ' + numIn(alvo) + (Math.abs(d) < 0.0005 ? ' ✓' : d > 0 ? ' · falta <b>' + numIn(d) + '</b>' : ' · passou <b>' + numIn(-d) + '</b>'); }
+      const so = vs.reduce((a, b) => a + Math.round(b * 100), 0), alvo = centavos(F.valor), d = alvo - so;
+      return 'Soma: <b>' + money(so / 100) + '</b> de ' + money(alvo / 100) + (d === 0 ? ' ✓' : d > 0 ? ' · falta <b>' + money(d / 100) + '</b>' : ' · passou <b>' + money(-d / 100) + '</b>');
+    }
+    /* origem para mandar ao servidor (ou um texto de erro) */
+    function origemPayload() {
+      const O = F.orig; if (!O) return null;
+      if (O.modo === 'um') return [{ de: O.de }];
+      const porQtd = toNum(F.qtd) > 0, it = Object.entries(O.v || {}).map(([de, x]) => [de, toNum(x)]).filter(([, x]) => x > 0);
+      if (Object.values(O.v || {}).some(x => String(x).trim() && !(toNum(x) >= 0))) return 'Venda misturada: use só números.';
+      if (!it.length) return 'Venda misturada: diga quanto foi de cada um.';
+      if (it.length === 1) return [{ de: it[0][0] }];
+      if (porQtd) { const so = it.reduce((a, [, x]) => a + x, 0); if (Math.abs(so - toNum(F.qtd)) > 0.0005) return 'Venda misturada: as quantidades de cada um não fecham com a venda (' + numIn(r6(so)) + ' de ' + numIn(toNum(F.qtd)) + ').'; return it.map(([de, x]) => ({ de, qtd: x })); }
+      const so = it.reduce((a, [, x]) => a + Math.round(x * 100), 0); if (so !== centavos(F.valor)) return 'Venda misturada: os valores de cada um não fecham com o vendido (' + money(so / 100) + ' de ' + money(centavos(F.valor) / 100) + ').';
+      return it.map(([de, x]) => ({ de, valor: r2(x) }));
+    }
     /* venda corrigida na mesma roça: mostra a divisão gravada (do dia da venda), não a parceria de hoje */
-    function vendaNote(r, v) { const ps = edit && F.rocaId === origRoca && Object.keys(origPartes).length ? origPartes : vendaPartes(r); return Object.entries(ps).map(([k, p]) => esc(nomeParte(k)) + ' (' + pctTxt(p) + '): <b>' + money((v || 0) * p / 100) + '</b>').join(' · '); }
+    function vendaNote(r, v) { const og = origemPayload(); const ps = edit && F.rocaId === origRoca && Object.keys(origPartes).length && (legado && !F.orig || Array.isArray(og) && JSON.stringify(og) === origOriginal) ? origPartes : Array.isArray(og) ? partesDaOrigem(r, og) : null; if (!ps) return 'Escolha de quem é a venda para ver a parte de cada um.'; return Object.entries(ps).map(([k, p]) => esc(nomeParte(k)) + ' (' + pctTxt(p) + '): <b>' + money((v || 0) * p / 100) + '</b>').join(' · '); }
     /* atualiza totais e prévias sem redesenhar (o campo que a pessoa tocou continua com o foco) */
     function upd() {
       keep();
@@ -504,12 +564,14 @@
       const lv = $('#liqv'); if (lv) { lv.textContent = money(liq()); $('#liqs').textContent = 'Vendido ' + money(centavos(F.valor) / 100) + ' − descontos ' + money(somaDesc() / 100); $('#liqbox').classList.toggle('neg', liqC() <= 0); }
       if (vn && r) { vn.hidden = !(v > 0); vn.innerHTML = vendaNote(r, v); }
       const ps = $('#psoma'); if (ps) ps.innerHTML = somaTxt();
+      const os = $('#osoma'); if (os) { os.innerHTML = origSoma(); $('#ohint').textContent = origHint(); }
       const q = $('#qpv'); if (q && v > 0) q.innerHTML = Object.keys(F.partes || {}).filter(k => F.partes[k] > 0).map(k => esc(nomeParte(k)) + ': ' + money(v * F.partes[k] / 100)).join(' · ');
     }
     function keep() {
       const g = id => { const e = document.getElementById(id); return e ? e.value : undefined; };
       ['fv:valor', 'fd:data', 'fds:descricao', 'fq:qtd', 'fpr:preco', 'fc:comprador', 'fpn:pessoaNome', 'fdi:dias'].forEach(x => { const [id, k] = x.split(':'); const v = g(id); if (v !== undefined) F[k] = v; });
       document.querySelectorAll('[data-pp]').forEach(i => { F.partes = F.partes || {}; F.partes[i.dataset.pp] = toNum(i.value) || 0; });
+      document.querySelectorAll('#sheet [data-oq]').forEach(e => { if (F.orig && F.orig.modo === 'mix') { F.orig.v = F.orig.v || {}; F.orig.v[e.dataset.oq] = e.value; } });
       document.querySelectorAll('#sheet [data-dv]').forEach(e => { const d = (F.descs || [])[+e.dataset.dv]; if (d) d.valor = e.value; });
       document.querySelectorAll('#sheet [data-do]').forEach(e => { const d = (F.descs || [])[+e.dataset.do]; if (d) d.obs = e.value; });
       document.querySelectorAll('#sheet [data-pv]').forEach(e => { const x = F.pags[+e.dataset.pv]; if (x) x.valor = e.value; });
@@ -520,7 +582,7 @@
       const redraw = () => { const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
       pn.querySelectorAll('[data-r]').forEach(b => b.addEventListener('click', () => {
         if (edit && F.tipo === 'venda' && origRoca && (b.dataset.r || null) !== F.rocaId && !confirm('Mudar a roça desta venda refaz a divisão com a parceria de hoje da outra roça (a divisão do dia da venda se perde). Continuar?')) return;
-        keep(); F.rocaId = b.dataset.r || null; F.geral = !F.rocaId; if (F.tipo === 'despesa') regra(); if (F.tipo === 'adiantamento') { const ms = meeirosDe(roca(F.rocaId)); F.pessoaId = ms.length === 1 ? ms[0] : null; } redraw(); }));
+        keep(); if (F.rocaId !== (b.dataset.r || null)) { F.orig = null; legado = false; } F.rocaId = b.dataset.r || null; F.geral = !F.rocaId; if (F.tipo === 'despesa') regra(); if (F.tipo === 'adiantamento') { const ms = meeirosDe(roca(F.rocaId)); F.pessoaId = ms.length === 1 ? ms[0] : null; } redraw(); }));
       pn.querySelectorAll('[data-cat]').forEach(b => b.addEventListener('click', () => { keep(); F.categoria = b.dataset.cat; regra(); redraw(); }));
       pn.querySelectorAll('[data-pe]').forEach(b => b.addEventListener('click', () => { keep(); F.pessoaId = b.dataset.pe; redraw(); }));
       pn.querySelectorAll('[data-un]').forEach(b => b.addEventListener('click', () => { keep(); F.unidade = F.unidade === b.dataset.un ? null : b.dataset.un; redraw(); }));
@@ -534,12 +596,14 @@
       const pun = $('#pun'); if (pun) pun.addEventListener('click', () => { keep(); if (F.pags.filter(x => x.forma || toNum(x.valor) > 0).length > 1 && !confirm('Voltar para uma forma só apaga as partes (valores e vencimentos). Continuar?')) return; const fs = [...new Set(F.pags.map(x => x.forma).filter(Boolean))]; F.pags = fs.length === 1 ? [Object.assign({}, F.pags.find(x => x.forma === fs[0]), { valor: '' })] : []; F.dividir = false; redraw(); });
       pn.querySelectorAll('[data-pv]').forEach(e => e.addEventListener('input', upd));
       pn.querySelectorAll('[data-dv]').forEach(e => e.addEventListener('input', upd));
+      pn.querySelectorAll('[data-oq]').forEach(e => e.addEventListener('input', upd));
+      pn.querySelectorAll('[data-og]').forEach(b => b.addEventListener('click', () => { keep(); const g = b.dataset.og; F.orig = g === 'mix' ? { modo: 'mix', v: F.orig && F.orig.modo === 'mix' ? F.orig.v : {} } : { modo: 'um', de: g.slice(3) }; redraw(); }));
       pn.querySelectorAll('[data-dadd]').forEach(b => b.addEventListener('click', () => { keep(); F.descs = (F.descs || []).concat([{ tipo: b.dataset.dadd, valor: '', obs: '' }]); redraw(); const n = F.descs.length - 1, e = $('#dv' + n); if (e) e.focus(); }));
       pn.querySelectorAll('[data-drm]').forEach(b => b.addEventListener('click', () => { keep(); F.descs.splice(+b.dataset.drm, 1); redraw(); }));
       pn.querySelectorAll('[data-ve]').forEach(b => b.addEventListener('click', () => { keep(); F.veiculoId = F.veiculoId === b.dataset.ve ? null : b.dataset.ve; redraw(); }));
       pn.querySelectorAll('[data-qp]').forEach(b => b.addEventListener('click', () => {
         keep(); const k = b.dataset.qp, r = roca(F.rocaId);
-        if (k === 'meacao') { F.partes = vendaPartes(r); F.qpOutra = false; }
+        if (k.startsWith('mea:')) { F.partes = meacaoDe(r, k.slice(4)); F.qpOutra = false; }
         else if (k === 'outra') { F.qpOutra = true; }
         else { F.partes = { [k]: 100 }; F.qpOutra = false; }
         redraw();
@@ -581,6 +645,11 @@
       const b = { id: F.id || newId('l'), novo: !edit, tipo: F.tipo, rocaId: F.rocaId || null, data: F.data, valor, categoria: F.categoria || null, descricao: F.descricao || '', qtd: toNum(F.qtd), unidade: F.unidade || null, preco: toNum(F.preco), comprador: F.comprador || '', pessoaId: F.pessoaId || null, pessoaNome: F.pessoaNome || '', dias: toNum(F.dias), veiculoId: F.veiculoId || null, partes };
       if (F.tipo === 'venda') {
         b.descontos = descontos; if (vendido != null) b.bruto = vendido;
+        if (F.rocaId && meeirosDe(roca(F.rocaId)).length) {
+          const og = origemPayload();
+          if (typeof og === 'string') return err(og);
+          if (og) b.origem = og; else if (!legado) return err('Escolha de quem é esta venda (de qual meeiro, da parte de ' + DONO() + ' ou misturado).');
+        }
         const ps = F.dividir ? F.pags : F.pags.filter(x => x.forma);
         const lista = [];
         for (let i = 0; i < ps.length; i++) {
@@ -670,16 +739,15 @@
 
   /* ---------- nova roça / editar (passo a passo) ---------- */
   function wizard(r0) {
-    const W = r0 ? { id: r0.id, nome: r0.nome, icone: r0.icone || '', iconeMao: !!r0.icone, cultura: r0.cultura || '', local: r0.local || '', area: r0.area || '', inicio: r0.inicio || '', modo: r0.modo, parceria: Object.assign({}, r0.parceria), regras: JSON.parse(JSON.stringify(r0.regras || {})), obs: r0.obs || '', ativa: r0.ativa, novos: [], func: S.pessoas.filter(p => p.tipo === 'funcionario' && p.rocaId === r0.id).map(p => p.id), novosF: [], step: 0 }
-      : { id: newId('r'), nome: '', icone: '', cultura: '', local: '', area: '', inicio: hoje(), modo: M('r_meeiros') ? '' : 'funcionarios', parceria: {}, regras: {}, obs: '', ativa: true, novos: [], func: [], novosF: [], step: 0 };
+    const W = r0 ? { id: r0.id, nome: r0.nome, icone: r0.icone || '', iconeMao: !!r0.icone, cultura: r0.cultura || '', local: r0.local || '', area: r0.area || '', inicio: r0.inicio || '', modo: r0.modo, parceria: Object.assign({}, r0.parceria), pes: Object.assign({}, r0.pes || {}), regras: JSON.parse(JSON.stringify(r0.regras || {})), obs: r0.obs || '', ativa: r0.ativa, novos: [], func: S.pessoas.filter(p => p.tipo === 'funcionario' && p.rocaId === r0.id).map(p => p.id), novosF: [], step: 0 }
+      : { id: newId('r'), nome: '', icone: '', cultura: '', local: '', area: '', inicio: hoje(), modo: M('r_meeiros') ? '' : 'funcionarios', parceria: {}, pes: {}, regras: {}, obs: '', ativa: true, novos: [], func: [], novosF: [], step: 0 };
     const CULT = (S.culturas || []).filter(c => c.nome !== 'Outra');
     const temMeeiro = () => W.modo === 'meeiro' || W.modo === 'misto';
     const temFunc = () => (W.modo === 'funcionarios' || W.modo === 'misto') && M('r_funcionarios');
     const steps = () => ['dados', 'modo'].concat(temMeeiro() ? ['meeiros', 'regras'] : []).concat(temFunc() ? ['equipe'] : []).concat(['revisar']);
     const meeiroNome = k => (W.novos.find(n => n.id === k) || pessoa(k) || {}).nome || 'Meeiro';
-    const soma = () => r2(Object.values(W.parceria).reduce((a, b) => a + Number(b || 0), 0));
     const nomeK = k => k === 'dono' ? DONO() : meeiroNome(k);
-    const vpW = () => { const o = {}; Object.keys(W.parceria).forEach(k => { o[k] = Number(W.parceria[k]); }); const d = r2(100 - soma()); if (d > 0) o.dono = d; return o; };
+    const meaW = k => { const p = Number(W.parceria[k]) || 0, o = { [k]: p }; if (p < 100) o.dono = r2(100 - p); return o; };
     function draw() {
       const st = steps(), k = st[W.step];
       let h = `<div class="steps" aria-label="Passo ${W.step + 1} de ${st.length}">${st.map((_, i) => `<i class="${i <= W.step ? 'on' : ''}"></i>`).join('')}</div>`;
@@ -695,20 +763,18 @@
         ${M('r_meeiros') ? `<button type="button" data-mo="misto" aria-pressed="${W.modo === 'misto'}"><i>🤝👷</i><span><b>Meeiro e funcionários</b><span>Tem parceiro e também funcionário fixo</span></span></button>` : ''}</div>`;
       if (k === 'meeiros') {
         const lista = S.pessoas.filter(p => p.tipo === 'meeiro' && (p.ativo || W.parceria[p.id])).concat(W.novos);
-        const d = r2(100 - soma());
-        h += `<p>Marque os meeiros desta roça e arraste a barrinha com a porcentagem de cada um <b>sobre o valor vendido</b> (depois dos descontos da venda, como frete e caixa).</p>
+        h += `<p>Marque os meeiros desta roça. Cada um cuida da <b>parte dele</b> e ganha a porcentagem dele <b>sobre a venda da parte dele</b> (depois dos descontos da venda, como frete e caixa). As porcentagens não somam entre si.</p>
           <div class="chips">${lista.map(p => `<button type="button" class="chip" data-me="${esc(p.id)}" aria-pressed="${W.parceria[p.id] != null}">${esc(p.nome)}</button>`).join('')}</div>
           <div class="row"><input type="text" id="wmn" maxlength="80" placeholder="Nome do meeiro novo" style="flex:1 1 180px"><input type="tel" id="wmt" maxlength="30" placeholder="Telefone (opcional)" style="flex:1 1 140px"><button class="btn" type="button" id="wma">+ Adicionar</button></div>
-          ${Object.keys(W.parceria).map(pid => `<div class="card" style="padding:12px;gap:6px"><b>${esc(meeiroNome(pid))}</b><div class="pct"><input type="range" min="1" max="100" step="1" value="${Number(W.parceria[pid])}" data-sl="${esc(pid)}" aria-label="Porcentagem de ${esc(meeiroNome(pid))}"><div class="n"><input inputmode="decimal" data-pn="${esc(pid)}" value="${numIn(W.parceria[pid])}" aria-label="Porcentagem de ${esc(meeiroNome(pid))}"></div></div></div>`).join('')}
-          ${Object.keys(W.parceria).length ? `<div class="split">${[['dono', d]].concat(Object.entries(W.parceria)).filter(x => x[1] > 0).map(([kk, v]) => `<div style="flex:${v}">${esc(nomeK(kk))} ${pctTxt(v)}</div>`).join('')}</div>
-            ${d < 0 ? '<p class="warn">Os meeiros passam de 100%. Diminua alguma porcentagem.</p>' : `<p class="small muted">${esc(DONO())} fica com ${pctTxt(d)} do valor vendido.</p>`}` : ''}`;
+          ${Object.keys(W.parceria).map(pid => `<div class="card" style="padding:12px;gap:6px"><b>${esc(meeiroNome(pid))}</b><div class="pct"><input type="range" min="1" max="100" step="1" value="${Number(W.parceria[pid])}" data-sl="${esc(pid)}" aria-label="Porcentagem de ${esc(meeiroNome(pid))}"><div class="n"><input inputmode="decimal" data-pn="${esc(pid)}" value="${numIn(W.parceria[pid])}" aria-label="Porcentagem de ${esc(meeiroNome(pid))}"></div></div>
+            <div class="drow"><div class="field"><label for="wz${esc(pid)}">Pés (opcional)</label><input inputmode="numeric" id="wz${esc(pid)}" data-pz="${esc(pid)}" value="${W.pes[pid] ? esc(W.pes[pid]) : ''}" placeholder="Ex.: 3000"></div><p class="small muted" style="align-self:end;margin:0 0 10px">Da venda da parte de ${esc(meeiroNome(pid))}: ele ${pctTxt(W.parceria[pid])}, ${esc(DONO())} ${pctTxt(r2(100 - Number(W.parceria[pid])))}.</p></div></div>`).join('')}`;
       }
       if (k === 'regras') {
-        const ks = ['dono'].concat(Object.keys(W.parceria)), vp = vpW();
-        const modoR = c => { const p = W.regras[c] || { dono: 100 }, sel = Object.keys(p).filter(x => p[x] > 0); if (W['outra_' + c]) return 'outra'; if (sel.length === 1) return sel[0]; if (sel.length === Object.keys(vp).length && sel.every(x => Math.abs((vp[x] || 0) - p[x]) < 0.01)) return 'meacao'; return 'outra'; };
-        h += `<p>Quem paga cada tipo de despesa nesta roça? Isso já vem marcado na hora de lançar (dá para mudar em cada compra).</p>
-          <div class="chips"><button type="button" class="btn sm" id="wtd">Tudo por conta de ${esc(DONO())}</button><button type="button" class="btn sm" id="wtm">Tudo dividido igual à meação</button></div>
-          <div class="card" style="gap:0">${S.cats.map(c => { const m = modoR(c.id), p = W.regras[c.id] || { dono: 100 }; return `<div class="rule"><b>${c.icone} ${esc(c.nome)}</b><div class="chips">${ks.map(x => `<button type="button" class="chip" data-rg="${c.id}|${esc(x)}" aria-pressed="${m === x}">${esc(nomeK(x))}</button>`).join('')}<button type="button" class="chip" data-rg="${c.id}|meacao" aria-pressed="${m === 'meacao'}">Meação</button><button type="button" class="chip" data-rg="${c.id}|outra" aria-pressed="${m === 'outra'}">Outra</button></div>
+        const msW = Object.keys(W.parceria), ks = ['dono'].concat(msW);
+        const modoR = c => { const p = W.regras[c] || { dono: 100 }, sel = Object.keys(p).filter(x => p[x] > 0); if (W['outra_' + c]) return 'outra'; if (sel.length === 1) return sel[0]; const mk = msW.find(m => { const vp = meaW(m); return sel.length === Object.keys(vp).length && sel.every(x => Math.abs((vp[x] || 0) - p[x]) < 0.01); }); return mk ? 'mea:' + mk : 'outra'; };
+        h += `<p>Quem paga cada tipo de despesa nesta roça? O normal é ${esc(DONO())} pagar tudo; marque outra coisa só se for combinado. Isso já vem marcado na hora de lançar (dá para mudar em cada compra).</p>
+          <div class="chips"><button type="button" class="btn sm" id="wtd">Tudo por conta de ${esc(DONO())}</button>${msW.length === 1 ? '<button type="button" class="btn sm" id="wtm">Tudo dividido igual à meação</button>' : ''}</div>
+          <div class="card" style="gap:0">${S.cats.map(c => { const m = modoR(c.id), p = W.regras[c.id] || { dono: 100 }; return `<div class="rule"><b>${c.icone} ${esc(c.nome)}</b><div class="chips">${ks.map(x => `<button type="button" class="chip" data-rg="${c.id}|${esc(x)}" aria-pressed="${m === x}">${esc(nomeK(x))}</button>`).join('')}${msW.map(x => `<button type="button" class="chip" data-rg="${c.id}|mea:${esc(x)}" aria-pressed="${m === 'mea:' + x}">${msW.length === 1 ? 'Meação' : 'Meação c/ ' + esc(nomeK(x))}</button>`).join('')}<button type="button" class="chip" data-rg="${c.id}|outra" aria-pressed="${m === 'outra'}">Outra</button></div>
             ${m === 'outra' ? `<div style="display:grid;gap:6px">${ks.map(x => `<div class="pct"><span>${esc(nomeK(x))}</span><div class="n"><input inputmode="decimal" data-rp="${c.id}|${esc(x)}" value="${numIn(p[x] || 0)}"></div></div>`).join('')}</div>` : ''}</div>`; }).join('')}</div>`;
       }
       if (k === 'equipe') {
@@ -721,7 +787,7 @@
       if (k === 'revisar') {
         const ms = Object.keys(W.parceria);
         h += `<section class="card"><div class="row" style="flex-wrap:nowrap">${tile(W, true)}<h2>${esc(W.nome)}</h2></div><p class="small muted">${esc([W.cultura, W.local, W.area].filter(Boolean).join(' · '))}</p><p>${esc(modoTxt(W.modo))}</p>
-          ${ms.length ? `<div class="split">${Object.entries(vpW()).sort((a) => (a[0] === 'dono' ? -1 : 1)).map(([kk, v]) => `<div style="flex:${v}">${esc(nomeK(kk))} ${pctTxt(v)}</div>`).join('')}</div>` : ''}
+          ${ms.length ? `<div class="parc">${ms.map(k => `<span class="pp"><b>${esc(nomeK(k))}</b> ${pctTxt(W.parceria[k])}${W.pes[k] ? ' · ' + numIn(W.pes[k]) + ' pés' : ''}</span>`).join('')}</div><p class="small muted">Cada um ganha a % dele sobre a venda da parte dele.</p>` : ''}
           ${temFunc() ? `<p class="small">Funcionários: ${esc(W.func.map(id => (pessoa(id) || {}).nome).concat(W.novosF.map(f => f.nome)).filter(Boolean).join(', ') || 'nenhum por enquanto')}</p>` : ''}</section>
           <div class="field"><label for="wo">Observação (opcional)</label><input type="text" id="wo" maxlength="300" value="${esc(W.obs)}"></div>`;
       }
@@ -737,6 +803,7 @@
       if (v('wi') !== undefined) W.inicio = v('wi');
       if (v('wo') !== undefined) W.obs = v('wo');
       document.querySelectorAll('[data-pn]').forEach(i => { const n = toNum(i.value); if (n > 0) W.parceria[i.dataset.pn] = Math.min(100, n); });
+      document.querySelectorAll('[data-pz]').forEach(i => { const n = toInt(i.value); if (n > 0) W.pes[i.dataset.pz] = n; else delete W.pes[i.dataset.pz]; });
       document.querySelectorAll('[data-rp]').forEach(i => { const [c, kk] = i.dataset.rp.split('|'); W.regras[c] = W.regras[c] || {}; W.regras[c][kk] = toNum(i.value) || 0; });
     }
     function bind(pn) {
@@ -746,19 +813,19 @@
       pn.querySelectorAll('[data-ic]').forEach(b => b.addEventListener('click', () => { keep(); W.icone = b.dataset.ic; W.iconeMao = true; redraw(); }));
       const wc = $('#wc'); if (wc) wc.addEventListener('change', () => { keep(); redraw(); });
       pn.querySelectorAll('[data-mo]').forEach(b => b.addEventListener('click', () => { keep(); W.modo = b.dataset.mo; if (W.modo === 'funcionarios') { W.parceria = {}; W.regras = {}; } redraw(); }));
-      pn.querySelectorAll('[data-me]').forEach(b => b.addEventListener('click', () => { keep(); const k = b.dataset.me; if (W.parceria[k] != null) delete W.parceria[k]; else W.parceria[k] = Math.max(1, Math.min(50, r2(100 - soma()))); redraw(); }));
+      pn.querySelectorAll('[data-me]').forEach(b => b.addEventListener('click', () => { keep(); const k = b.dataset.me; if (W.parceria[k] != null) { delete W.parceria[k]; delete W.pes[k]; } else W.parceria[k] = 50; redraw(); }));
       pn.querySelectorAll('[data-sl]').forEach(s => { s.addEventListener('input', () => { W.parceria[s.dataset.sl] = Number(s.value); const n = pn.querySelector('[data-pn="' + s.dataset.sl + '"]'); if (n) n.value = s.value; }); s.addEventListener('change', () => { keep(); redraw(); }); });
       pn.querySelectorAll('[data-pn]').forEach(i => i.addEventListener('input', () => { const n = toNum(i.value); if (n > 0) { W.parceria[i.dataset.pn] = Math.min(100, n); const sl = pn.querySelector('[data-sl="' + i.dataset.pn + '"]'); if (sl) sl.value = W.parceria[i.dataset.pn]; } }));
       pn.querySelectorAll('[data-pn]').forEach(i => i.addEventListener('blur', () => setTimeout(() => { if (document.body.contains(i) && (!pn.contains(document.activeElement) || !document.activeElement.matches('input'))) { keep(); redraw(); } }, 150)));
-      const wma = $('#wma'); if (wma) wma.addEventListener('click', () => { keep(); const n = $('#wmn').value.trim(); if (n.length < 2) return err('Escreva o nome do meeiro.'); const id = newId('p'); W.novos.push({ id, nome: n, telefone: $('#wmt').value.trim() }); W.parceria[id] = Math.max(1, Math.min(50, r2(100 - soma()))); redraw(); });
+      const wma = $('#wma'); if (wma) wma.addEventListener('click', () => { keep(); const n = $('#wmn').value.trim(); if (n.length < 2) return err('Escreva o nome do meeiro.'); const id = newId('p'); W.novos.push({ id, nome: n, telefone: $('#wmt').value.trim() }); W.parceria[id] = 50; redraw(); });
       pn.querySelectorAll('[data-rg]').forEach(b => b.addEventListener('click', () => {
         keep(); const [c, m] = b.dataset.rg.split('|'); delete W['outra_' + c];
-        if (m === 'meacao') W.regras[c] = vpW(); else if (m === 'outra') { W['outra_' + c] = true; W.regras[c] = W.regras[c] || { dono: 100 }; } else W.regras[c] = { [m]: 100 };
+        if (m.startsWith('mea:')) W.regras[c] = meaW(m.slice(4)); else if (m === 'outra') { W['outra_' + c] = true; W.regras[c] = W.regras[c] || { dono: 100 }; } else W.regras[c] = { [m]: 100 };
         redraw();
       }));
       pn.querySelectorAll('[data-rp]').forEach(i => i.addEventListener('input', keep));
       const wtd = $('#wtd'); if (wtd) wtd.addEventListener('click', () => { keep(); S.cats.forEach(c => { W.regras[c.id] = { dono: 100 }; delete W['outra_' + c.id]; }); redraw(); });
-      const wtm = $('#wtm'); if (wtm) wtm.addEventListener('click', () => { keep(); S.cats.forEach(c => { W.regras[c.id] = vpW(); delete W['outra_' + c.id]; }); redraw(); });
+      const wtm = $('#wtm'); if (wtm) wtm.addEventListener('click', () => { keep(); const m0 = Object.keys(W.parceria)[0]; S.cats.forEach(c => { W.regras[c.id] = meaW(m0); delete W['outra_' + c.id]; }); redraw(); });
       pn.querySelectorAll('[data-fu]').forEach(b => b.addEventListener('click', () => { keep(); const k = b.dataset.fu; W.func = W.func.includes(k) ? W.func.filter(x => x !== k) : W.func.concat(k); redraw(); }));
       const wfa = $('#wfa'); if (wfa) wfa.addEventListener('click', () => { keep(); const n = $('#wfn').value.trim(); if (n.length < 2) return err('Escreva o nome do funcionário.'); W.novosF.push({ id: newId('p'), nome: n, salario: toNum($('#wfs').value) || null }); redraw(); });
       const wb = $('#wb'); if (wb) wb.addEventListener('click', () => { keep(); W.step--; draw(); });
@@ -766,7 +833,7 @@
         keep(); const st = steps(), k = st[W.step];
         if (k === 'dados' && W.nome.trim().length < 2) return err('Dê um nome para a roça.');
         if (k === 'modo' && !W.modo) return err('Escolha quem toca a roça.');
-        if (k === 'meeiros') { if (!Object.keys(W.parceria).length) return err('Marque pelo menos um meeiro.'); if (soma() > 100) return err('Os meeiros passam de 100%.'); }
+        if (k === 'meeiros') { if (!Object.keys(W.parceria).length) return err('Marque pelo menos um meeiro.'); }
         if (k === 'regras') { for (const c of S.cats) { const p = W.regras[c.id]; if (!p) continue; const s = Object.values(p).reduce((a, b) => a + Math.round(Number(b || 0) * 100), 0); if (s !== 10000) return err(c.nome + ': a divisão precisa somar 100%.'); } }
         if (k !== 'revisar') { W.step++; return draw(); }
         // grava: meeiros e funcionários novos, a roça e quem é da equipe
@@ -774,7 +841,7 @@
         try {
           for (const n of W.novos) if (W.parceria[n.id] != null) await api('/api/rural/pessoa', { id: n.id, tipo: 'meeiro', nome: n.nome, telefone: n.telefone });
           const regras = {}; if (temMeeiro()) Object.entries(W.regras).forEach(([c, p]) => { const o = {}; Object.entries(p).forEach(([kk, v]) => { if (Number(v) > 0 && (kk === 'dono' || W.parceria[kk] != null)) o[kk] = Number(v); }); if (Object.keys(o).length) regras[c] = o; });
-          await api('/api/rural/roca', { id: W.id, nome: W.nome, icone: W.iconeMao ? W.icone : (visual(W).icone || null), cultura: W.cultura, local: W.local, area: W.area, inicio: W.inicio || null, modo: W.modo, parceria: temMeeiro() ? W.parceria : {}, regras, obs: W.obs, ativa: W.ativa });
+          await api('/api/rural/roca', { id: W.id, nome: W.nome, icone: W.iconeMao ? W.icone : (visual(W).icone || null), cultura: W.cultura, local: W.local, area: W.area, inicio: W.inicio || null, modo: W.modo, parceria: temMeeiro() ? W.parceria : {}, pes: temMeeiro() ? Object.fromEntries(Object.entries(W.pes).filter(([k, n]) => W.parceria[k] != null && n > 0)) : {}, regras, obs: W.obs, ativa: W.ativa });
           if (temFunc()) {
             for (const f of W.novosF) await api('/api/rural/pessoa', { id: f.id, tipo: 'funcionario', nome: f.nome, salario: f.salario, rocaId: W.id });
             for (const p of S.pessoas.filter(x => x.tipo === 'funcionario')) {
