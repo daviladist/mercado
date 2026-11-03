@@ -494,3 +494,6 @@ alter table rural_rocas add column if not exists produtos jsonb not null default
 alter table rural_lanc add column if not exists itens jsonb not null default '[]'::jsonb;
 -- sessão aberta pela Central ("Entrar como esta empresa"): curta, marcada como suporte
 alter table sessions add column if not exists suporte boolean not null default false;
+-- loja: cupom de desconto usado no pedido (código) e o desconto aplicado (o total já vem com ele)
+alter table loja_pedidos add column if not exists cupom text;
+alter table loja_pedidos add column if not exists desconto numeric(12,2) not null default 0;

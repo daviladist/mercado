@@ -283,6 +283,77 @@ cen.req('/api/central/tenant', {'id': TID, 'status': 'ativa'})
 s, st = cen.req('/api/central/state'); tm = next(t for t in st['tenants'] if t['id'] == TID); check(tm['stats']['lojaProdutos'] == 12 and tm['stats']['lojaPedidos'] == 4, 'Central mostra produtos e pedidos da loja (%s)' % tm['stats'])
 
 s, img, h = C(None).req('/api/loja/foto/%E0%A4%A?t=' + TID, raw=True, headers={}); check(s == 404, 'endereço de foto malformado dá 404 (não erro do servidor)')
+
+print('== conversão: entrega grátis a partir de X, cupons, "Peça junto", escassez (loja nova "Doce Lar")')
+s, r = cen.req('/api/central/tenant', {'name': 'Doce Lar', 'ramo': 'loja'}); TD = r['tenant']['id']; cen.req('/api/central/tenant', {'id': TD, 'status': 'ativa'})
+s, r = cen.req('/api/central/tenant-admin', {'id': TD, 'login': 'doce'}); D0 = r['password']
+DA = C(TD); DA.req('/api/login', {'role': 'admin', 'login': 'doce', 'password': D0}); DP = pw(); DA.req('/api/password', {'current': D0, 'next': DP})
+s, st = DA.req('/api/loja/admin/state'); check(s == 200 and st['config']['entregaGratisDe'] == 0 and st['config']['cupons'] == [] and st['config']['tempoPreparo'] == 0, 'loja nova: sem entrega grátis, sem cupom, sem previsão (padrões)')
+CUPONS = [{'codigo': 'dez', 'tipo': 'pct', 'valor': 10, 'minimo': 50}, {'codigo': 'CINCO', 'tipo': 'reais', 'valor': 5}, {'codigo': 'VENCIDO', 'tipo': 'pct', 'valor': 10, 'validade': '2020-01-01'},
+          {'codigo': 'PRIMEIRA', 'tipo': 'reais', 'valor': 10, 'primeiraCompra': True}, {'codigo': 'PAUSA', 'tipo': 'pct', 'valor': 50, 'ativo': False}]
+CFG = {'whatsapp': '27 98888-0000', 'pagamentos': ['pix', 'dinheiro'], 'retirada': True, 'entrega': True, 'taxaEntrega': 8, 'entregaGratisDe': '80,00', 'tempoPreparo': '40', 'entregaHoje': 'Entrega hoje até 18h', 'cupons': CUPONS}
+s, r = DA.req('/api/loja/admin/config', dict(CFG, cupons=[{'codigo': 'A-B!', 'tipo': 'pct', 'valor': 10}])); check(s == 400, 'cupom com símbolo no código é recusado')
+s, r = DA.req('/api/loja/admin/config', dict(CFG, cupons=[{'codigo': 'X1', 'tipo': 'pct', 'valor': 150}])); check(s == 400, 'cupom de 150% é recusado')
+s, r = DA.req('/api/loja/admin/config', dict(CFG, cupons=[{'codigo': 'X1', 'tipo': 'pct', 'valor': 10}, {'codigo': 'x1', 'tipo': 'reais', 'valor': 1}])); check(s == 400, 'dois cupons com o mesmo código são recusados')
+s, r = DA.req('/api/loja/admin/config', dict(CFG, tempoPreparo='abc')); check(s == 400, 'tempo de preparo que não é número é recusado')
+s, r = DA.req('/api/loja/admin/config', CFG); check(s == 200, 'configura entrega R$ 8 grátis a partir de R$ 80, previsão e 5 cupons')
+s, st = DA.req('/api/loja/admin/state'); cc = st['config']
+check(cc['entregaGratisDe'] == 80 and cc['tempoPreparo'] == 40 and cc['entregaHoje'] == 'Entrega hoje até 18h' and [c['codigo'] for c in cc['cupons']] == ['DEZ', 'CINCO', 'VENCIDO', 'PRIMEIRA', 'PAUSA'] and cc['cupons'][0]['minimo'] == 50 and cc['cupons'][4]['ativo'] is False, 'painel vê a configuração (código do cupom vira maiúsculo)')
+s, r = DA.req('/api/loja/admin/config', {'whatsapp': '27 98888-0000', 'pagamentos': ['pix', 'dinheiro'], 'retirada': True, 'entrega': True, 'taxaEntrega': 8})
+s, st = DA.req('/api/loja/admin/state'); cc = st['config']
+check(cc['entregaGratisDe'] == 80 and len(cc['cupons']) == 5 and cc['tempoPreparo'] == 40, 'tela antiga (sem os campos novos) salva sem apagar entrega grátis, cupons e previsão')
+BOLO, TORTA, COOKIE, BRIG, ESG, VAR, VV1, VV2 = xid(), xid(), xid(), xid(), xid(), xid(), vid(), vid()
+for pid, nome, preco, cat, extra in [(BOLO, 'Bolo de cenoura', 40, 'Bolos', {'estoque': 5}), (TORTA, 'Torta de limão', 42, 'Bolos', {}), (COOKIE, 'Cookie', 6, 'Doces', {}), (BRIG, 'Brigadeiro', 24, 'Doces', {}), (ESG, 'Pavê esgotado', 10, 'Doces', {'estoque': 0}),
+                                     (VAR, 'Bolo no pote', 12, 'Bolos', {'grupoVar': 'Sabor', 'variacoes': [{'id': VV1, 'nome': 'Ninho', 'estoque': 2}, {'id': VV2, 'nome': 'Limão', 'estoque': 0}]})]:
+    DA.req('/api/loja/admin/produto', dict({'id': pid, 'nome': nome, 'preco': preco, 'categoria': cat}, **extra))
+DV = C(TD)
+s, vt = DV.req('/api/loja/vitrine'); vc = vt['config']; P = {p['id']: p for p in vt['produtos']}
+check(vc['entregaGratisDe'] == 80 and vc['tempoPreparo'] == 40 and vc['entregaHoje'] == 'Entrega hoje até 18h' and vc['temCupom'] is True and 'cupons' not in vc, 'vitrine mostra entrega grátis a partir de R$ 80, previsão e que existe cupom (sem os códigos)')
+check(P[BOLO]['restam'] == 5 and P[TORTA]['restam'] is None and P[BOLO]['vendidos'] == 0 and 'estoque' not in P[BOLO] and P[ESG]['disponivel'] is False, 'cliente vê "restam 5" (escassez verdadeira) e vendidos, mas não o estoque; esgotado marcado')
+check([v['restam'] for v in P[VAR]['variacoes']] == [2, None] and [v['disponivel'] for v in P[VAR]['variacoes']] == [True, False], 'sabor com 2 unidades mostra "só 2"; sabor esgotado não mostra')
+check(TORTA in P[BOLO]['junto'] and BOLO not in P[BOLO]['junto'] and ESG not in P[BOLO]['junto'] and all(ESG not in p['junto'] and p['id'] not in p['junto'] for p in vt['produtos']), 'sem pedidos ainda, "Peça junto" cai na mesma categoria: nunca o próprio, nunca esgotado')
+s, r = DV.req('/api/loja/cupom?c=dez'); check(s == 200 and r['cupom']['codigo'] == 'DEZ' and r['cupom']['tipo'] == 'pct' and r['cupom']['valor'] == 10 and r['cupom']['minimo'] == 50, 'cliente confere o cupom DEZ (minúsculo vale)')
+s, r = DV.req('/api/loja/cupom?c=VENCIDO'); check(s == 410 and 'venceu' in r.get('error', ''), 'cupom vencido: avisa que venceu')
+s, r = DV.req('/api/loja/cupom?c=PAUSA'); check(s == 410, 'cupom desativado não vale')
+s, r = DV.req('/api/loja/cupom?c=NADA'); check(s == 404, 'cupom que não existe: não encontrado')
+s, r = DV.req('/api/loja/cupom?c='); check(s == 400, 'cupom em branco: pede o código')
+bd = {'cliente': {'nome': 'Bia Lima', 'telefone': '(27) 97777-0001'}, 'entrega': 'entrega', 'endereco': 'Rua B, 2 - Centro', 'pagamento': 'pix'}
+def limpa():  # confirma os pedidos novos (o limite de 5 pedidos esperando por aparelho não atrapalha o teste)
+    s, st = DA.req('/api/loja/admin/state')
+    for p in st['pedidos']:
+        if p['status'] == 'novo': DA.req('/api/loja/admin/pedido/status', {'id': p['id'], 'status': 'confirmado'})
+s, r = DV.req('/api/loja/pedido', dict(bd, id=oid(), chave=chave(), itens=[{'produtoId': BOLO, 'qtd': 1}], totalVisto=48)); check(s == 200 and r['taxaEntrega'] == 8 and r['total'] == 48, 'R$ 40 de produtos: paga a entrega (R$ 8)')
+s, r = DV.req('/api/loja/pedido', dict(bd, id=oid(), chave=chave(), itens=[{'produtoId': TORTA, 'qtd': 2}], totalVisto=92)); check(s == 409 and 'R$ 84,00' in r.get('error', ''), 'R$ 84 de produtos com a taxa somada: o servidor recusa e diz o total certo (sem taxa)')
+s, r = DV.req('/api/loja/pedido', dict(bd, id=oid(), chave=chave(), itens=[{'produtoId': TORTA, 'qtd': 2}], totalVisto=84)); check(s == 200 and r['taxaEntrega'] == 0 and r['total'] == 84, 'R$ 84 de produtos: entrega grátis no servidor')
+s, r = DV.req('/api/loja/pedido', dict(bd, id=oid(), chave=chave(), itens=[{'produtoId': COOKIE, 'qtd': 1}], entrega='retirada', cupom='DEZ', totalVisto=5.4)); check(s == 400 and 'R$ 50,00' in r.get('error', ''), 'cupom DEZ num pedido de R$ 6: abaixo do mínimo de R$ 50')
+s, r = DV.req('/api/loja/pedido', dict(bd, id=oid(), chave=chave(), itens=[{'produtoId': TORTA, 'qtd': 2}], entrega='retirada', cupom='dez', totalVisto=84)); check(s == 409 and 'R$ 75,60' in r.get('error', ''), 'com cupom, o total visto sem o desconto é recusado (diz R$ 75,60)')
+K2 = chave(); s, r = DV.req('/api/loja/pedido', dict(bd, id=oid(), chave=K2, itens=[{'produtoId': TORTA, 'qtd': 2}], entrega='retirada', cupom='dez', totalVisto=75.6)); check(s == 200 and r['desconto'] == 8.4 and r['cupom'] == 'DEZ' and r['total'] == 75.6, 'cupom DEZ (10%) em R$ 84: desconto R$ 8,40, total R$ 75,60')
+s, r = DV.req('/api/loja/acompanhar?c=' + K2); check(s == 200 and r['pedido']['cupom'] == 'DEZ' and r['pedido']['desconto'] == 8.4, 'cliente vê o cupom e o desconto no acompanhamento')
+limpa()
+s, r = DV.req('/api/loja/pedido', dict(bd, id=oid(), chave=chave(), itens=[{'produtoId': COOKIE, 'qtd': 1}], entrega='retirada', cupom='VENCIDO', totalVisto=5.4)); check(s == 410, 'cupom vencido não entra no pedido')
+s, r = DV.req('/api/loja/pedido', dict(bd, id=oid(), chave=chave(), itens=[{'produtoId': COOKIE, 'qtd': 1}], entrega='retirada', cupom='PAUSA', totalVisto=3)); check(s == 410, 'cupom desativado não entra no pedido')
+s, r = DV.req('/api/loja/pedido', dict(bd, id=oid(), chave=chave(), itens=[{'produtoId': COOKIE, 'qtd': 1}], entrega='retirada', cupom='NADA', totalVisto=6)); check(s == 404, 'cupom inexistente não entra no pedido')
+s, r = DV.req('/api/loja/pedido', dict(bd, id=oid(), chave=chave(), itens=[{'produtoId': COOKIE, 'qtd': 1}], entrega='entrega', cupom='CINCO', totalVisto=9)); check(s == 200 and r['desconto'] == 5 and r['total'] == 9, 'cupom CINCO (R$ 5) no cookie de R$ 6 com entrega: 6 − 5 + 8 = R$ 9')
+s, r = DV.req('/api/loja/pedido', dict(bd, id=oid(), chave=chave(), itens=[{'produtoId': COOKIE, 'qtd': 1}], entrega='retirada', cupom='PRIMEIRA', totalVisto=0)); check(s == 400 and 'primeira compra' in r.get('error', ''), 'cupom "só primeira compra": WhatsApp que já pediu é recusado')
+nova = dict(bd, cliente={'nome': 'Caio Novo', 'telefone': '27 96666-0002'})
+s, r = DV.req('/api/loja/pedido', dict(nova, id=oid(), chave=chave(), itens=[{'produtoId': BRIG, 'qtd': 1}], entrega='retirada', cupom='primeira', totalVisto=14)); check(s == 200 and r['desconto'] == 10 and r['total'] == 14, 'cupom "só primeira compra": WhatsApp novo usa (R$ 24 − 10)')
+s, r = DV.req('/api/loja/pedido', dict(nova, id=oid(), chave=chave(), itens=[{'produtoId': BRIG, 'qtd': 1}], entrega='retirada', cupom='PRIMEIRA', totalVisto=14)); check(s == 400, 'o mesmo WhatsApp não usa o cupom de primeira compra de novo')
+limpa()
+# "Peça junto": bolo e cookie saem juntos em dois pedidos; o pavê esgotado nunca aparece
+for _ in range(2):
+    s, r = DV.req('/api/loja/pedido', dict(bd, id=oid(), chave=chave(), itens=[{'produtoId': BOLO, 'qtd': 1}, {'produtoId': COOKIE, 'qtd': 2}, {'produtoId': BRIG, 'qtd': 1}], entrega='retirada', totalVisto=76))
+    check(s == 200, 'pedido com bolo + cookie + brigadeiro (%s)' % r.get('error', ''))
+s, r = DV.req('/api/loja/pedido', dict(bd, id=oid(), chave=chave(), itens=[{'produtoId': BOLO, 'qtd': 1}, {'produtoId': COOKIE, 'qtd': 1}], entrega='retirada', totalVisto=46)); check(s == 200, 'pedido com bolo + cookie')
+s, vt = DV.req('/api/loja/vitrine'); P = {p['id']: p for p in vt['produtos']}
+check(P[BOLO]['junto'][0] == COOKIE and P[BOLO]['junto'][1] == BRIG and BOLO not in P[BOLO]['junto'] and ESG not in P[BOLO]['junto'] and len(P[BOLO]['junto']) <= 3, '"Peça junto" do bolo: cookie (3 pedidos juntos) e depois brigadeiro (2); nunca o próprio nem esgotado (%s)' % [P[BOLO]['junto']])
+check(P[COOKIE]['junto'][0] == BOLO and ESG not in P[COOKIE]['junto'], '"Peça junto" do cookie começa pelo bolo')
+check(all(p['id'] not in p['junto'] and ESG not in p['junto'] for p in vt['produtos']), 'nenhum produto sugere ele mesmo nem o esgotado')
+check(P[BOLO]['vendidos'] == 4 and P[BOLO]['restam'] == 1 and P[COOKIE]['vendidos'] == 6, 'vitrine: bolo vendeu 4 e restam só 1; cookie vendeu 6')
+s, st = DA.req('/api/loja/admin/state'); uso = st.get('cuponsUso', {})
+check(uso.get('DEZ') == 1 and uso.get('CINCO') == 1 and uso.get('PRIMEIRA') == 1 and 'VENCIDO' not in uso, 'painel conta quantas vezes cada cupom foi usado (%s)' % uso)
+pc = next(p for p in st['pedidos'] if p.get('cupom') == 'DEZ'); check(pc['desconto'] == 8.4 and pc['total'] == 75.6, 'painel vê o cupom e o desconto no pedido')
+s, html, h = C(None).req('/t/' + TD + '/loja', raw=True); js = C(None).req('/loja.js', raw=True, headers={})[1]
+check(s == 200 and b'#p/' in js and b'/api/loja/cupom' in js and 'Peça junto'.encode() in js, 'vitrine do cliente tem a rota #p/<id>, o cupom e o "Peça junto"')
 print('== limite de pedidos por aparelho (por último)')
 codes = [V.req('/api/loja/pedido', dict(base, id=oid(), chave=chave(), itens=[{'produtoId': BLU, 'qtd': 1}], entrega='retirada', totalVisto=49.9))[0] for _ in range(30)]
 check(429 in codes and codes.count(200) <= 5, 'muitos pedidos seguidos do mesmo aparelho/telefone são barrados, e ninguém segura estoque com mais de 5 pedidos esperando (%s)' % codes)
