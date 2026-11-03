@@ -39,7 +39,9 @@ check([r['id'] for r in st['ramos']] == ['atacado', 'rural', 'loja'] and [r['nam
 check(len(st.get('lojaModules', [])) >= 5, 'Central conhece as funções da Loja online')
 s, r = cen.req('/api/central/tenant', {'name': 'Ateliê Maria', 'ramo': 'loja', 'modules': {'pagar': True}}); check(s == 400, 'módulo do atacado é recusado na loja online')
 s, r = cen.req('/api/central/tenant', {'name': 'Ateliê Maria', 'ramo': 'loja', 'color': '#B4410F'}); T = r.get('tenant', {}); TID = T.get('id')
-check(s == 200 and T.get('ramo') == 'loja' and T['status'] == 'em_preparo' and all(T['modules'].values()), 'cria a loja online "Ateliê Maria", em preparo, com todas as funções')
+STARIA_MODS = ('l_staria_imp', 'l_staria_preco')
+check(s == 200 and T.get('ramo') == 'loja' and T['status'] == 'em_preparo' and all(v for k, v in T['modules'].items() if k not in STARIA_MODS), 'cria a loja online "Ateliê Maria", em preparo, com todas as funções')
+check(all(T['modules'].get(k) is False for k in STARIA_MODS), 'opções do StarIA (importação e atualização de preço) começam desmarcadas')
 s, r = cen.req('/api/central/tenant', {'name': 'Mercado do Zé', 'ramo': 'loja'}); TX = r['tenant']['id']
 s, r = cen.req('/api/central/tenant', {'id': TID, 'ramo': 'rural'}); check(r['tenant']['ramo'] == 'loja', 'o segmento não muda depois de criado')
 s, r = cen.req('/api/central/tenant-admin', {'id': TID, 'login': 'maria'}); P0 = r.get('password'); check(s == 200 and P0, 'acesso da dona da loja criado')
@@ -184,6 +186,9 @@ s, r = A.req('/api/loja/admin/importar', {'itens': [{'codigo': '7891000100103', 
 s2, st = A.req('/api/loja/admin/state'); leite = next(p for p in st['produtos'] if p.get('codigo') == '7891000100103')
 check(s == 200 and leite['preco'] == 9.5 and leite['precoDe'] is None and leite['estoque'] == 48 and leite['categoria'] == 'Mercearia', 'preço novo acima do "de" apaga o riscado; estoque e categoria ficam')
 print('-- StarIA')
+s, r = A.req('/api/loja/admin/staria/pedir', {'id': 's' + hx(6), 'termos': ['1']}); check(s == 403, 'sem a opção "Importação pelo StarIA" marcada na Central, não pede')
+s, r = A.req('/api/loja/admin/staria/pedir', {'id': 's' + hx(6), 'tipo': 'precos'}); check(s == 403, 'sem a opção "Atualização de preço pelo StarIA", não pede preços')
+s, r = cen.req('/api/central/tenant', {'id': TID, 'modules': {'l_staria_imp': True}}); check(s == 200 and r['tenant']['modules']['l_staria_imp'] is True, 'Central marca "Importação pelo StarIA"')
 SJ = 's' + hx(6)
 s, r = A.req('/api/loja/admin/staria/pedir', {'id': SJ, 'termos': ''}); check(s == 400, 'pedido ao StarIA sem código recusado')
 s, r = A.req('/api/loja/admin/staria/pedir', {'id': SJ, 'termos': ['123456789012345']}); check(s == 400, 'código com mais de 14 números recusado')
@@ -219,6 +224,36 @@ check(s == 200 and p9['codigo'] == 'CT-1' and p9['custo'] == 15.5, 'tela antiga 
 S2 = 's' + hx(6); A.req('/api/loja/admin/staria/pedir', {'id': S2, 'termos': ['42']}); s, _ = A.req('/api/loja/admin/staria/excluir', {'id': S2})
 s, st = A.req('/api/loja/admin/state'); check(not any(x['id'] == S2 for x in st['staria']), 'cancela uma consulta pendente')
 s, r = C(TID).req('/api/loja/admin/staria/pedir', {'id': 's' + hx(6), 'termos': ['1']}); check(s == 401, 'sem login não pede ao StarIA')
+print('-- Atualização de preço pelo StarIA')
+cen.req('/api/central/tenant', {'id': TID, 'modules': {'l_staria_preco': True}})
+SP = 's' + hx(6)
+s, r = A.req('/api/loja/admin/staria/pedir', {'id': SP, 'tipo': 'precos', 'termos': ['999']}); check(s == 200 and r['tipo'] == 'precos', 'pede atualização de preço (o servidor junta os códigos)')
+s, r = A.req('/api/loja/admin/staria/pedir', {'id': 's' + hx(6), 'tipo': 'precos'}); check(s == 409, 'só uma atualização de preço esperando por vez')
+s, st = A.req('/api/loja/admin/state'); jp = next(x for x in st['staria'] if x['id'] == SP)
+cods = [p['codigo'] for p in st['produtos'] if p.get('codigo') and p['codigo'].isdigit()]
+check(sorted(jp['termos']) == sorted(set(cods)) and '999' not in jp['termos'] and jp['tipo'] == 'precos', 'os códigos são os dos produtos da loja (ignora o que veio do navegador)')
+s, r = A.req('/api/loja/admin/staria/aplicar-precos', {'id': SP}); check(s == 409, 'não aplica antes do StarIA responder')
+s, r = A.req('/api/loja/admin/importar', {'stariaId': SP, 'itens': [{'nome': 'Item que não pode entrar', 'preco': 1}]}); print('   importar com pedido de preços ->', s, r.get('error'))
+s2, st = A.req('/api/loja/admin/state'); check(s != 200 and not any(p['nome'] == 'Item que não pode entrar' for p in st['produtos']), 'atualização de preço não serve para importar')
+LE, CO = '7891000100103', '7894900011517'
+res = {c: None for c in jp['termos']}
+res[LE] = {'nome': 'LEITE COND', 'precoVenda': 7.49}
+res[CO] = {'nome': 'COCA 2L', 'precoVenda': 9.99, 'precoPromo': 8.49, 'promoAte': '2026-11-30'}
+bad = dict(res); bad[LE] = {'nome': 'X', 'precoVenda': 0}
+s, r = A.req('/api/loja/admin/staria/resultado', {'id': SP, 'resultados': bad}); check(s == 400, 'preço de venda zero recusado')
+s, r = A.req('/api/loja/admin/staria/resultado', {'id': SP, 'resultados': res}); check(s == 200, 'StarIA devolve os preços')
+s, r = A.req('/api/loja/admin/staria/aplicar-precos', {'id': SP}); check(s == 200 and r['atualizados'] >= 2, 'aplica os preços: %s' % r)
+s, st = A.req('/api/loja/admin/state'); pl = next(p for p in st['produtos'] if p.get('codigo') == LE); pc = next(p for p in st['produtos'] if p.get('codigo') == CO)
+check(pl['preco'] == 7.49 and pl['precoDe'] is None, 'sem promoção: entra o preço de venda normal')
+check(pc['preco'] == 8.49 and pc['precoDe'] == 9.99, 'em promoção: entra o preço da promoção e o normal fica riscado')
+s, r = A.req('/api/loja/admin/staria/aplicar-precos', {'id': SP}); check(s == 409, 'não aplica a mesma atualização duas vezes')
+SP2 = 's' + hx(6); A.req('/api/loja/admin/staria/pedir', {'id': SP2, 'tipo': 'precos'}); s, st = A.req('/api/loja/admin/state'); jp2 = next(x for x in st['staria'] if x['id'] == SP2)
+res2 = {c: None for c in jp2['termos']}; res2[CO] = {'nome': 'COCA 2L', 'precoVenda': 9.99, 'precoPromo': 9.99}
+A.req('/api/loja/admin/staria/resultado', {'id': SP2, 'resultados': res2}); s, r = A.req('/api/loja/admin/staria/aplicar-precos', {'id': SP2})
+s, st = A.req('/api/loja/admin/state'); pc = next(p for p in st['produtos'] if p.get('codigo') == CO); pl = next(p for p in st['produtos'] if p.get('codigo') == LE)
+check(pc['preco'] == 9.99 and pc['precoDe'] is None, 'promoção acabou: volta o preço normal e sai o riscado')
+check(pl['preco'] == 7.49, 'produto que o StarIA não achou fica como está')
+s, r = C(TID).req('/api/loja/admin/staria/aplicar-precos', {'id': SP2}); check(s == 401, 'sem login não aplica preços')
 s, r = C(TID).req('/api/loja/admin/importar', {'itens': [{'nome': 'Hack', 'preco': 1}]}); check(s == 401, 'sem login não importa')
 print('== funções desligadas, loja fechada e separação')
 cen.req('/api/central/tenant', {'id': TID, 'modules': {'l_volume': False, 'l_entrega': False}})

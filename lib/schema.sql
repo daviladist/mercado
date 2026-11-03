@@ -480,6 +480,8 @@ create table if not exists loja_staria (
   created_at timestamptz not null default now(),
   primary key (tenant_id, id)
 );
+-- tipo da consulta: 'importar' (produtos novos) ou 'precos' (atualização de preço: venda do momento, ou a promoção em vigor)
+alter table loja_staria add column if not exists tipo text not null default 'importar';
 -- pagamento da venda dividido em partes: [{forma, valor, vence, cheque}] (a soma fecha com o valor da venda)
 alter table rural_lanc add column if not exists pagamentos jsonb not null default '[]'::jsonb;
 -- valor para o meeiro (opcional): o patrão vende por valor (relatórios) e o meeiro ganha a % dele sobre base
