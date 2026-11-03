@@ -175,7 +175,8 @@
       <section class="card"><div class="scroll"><table><thead><tr><th>Item</th><th class="n">Qtd</th><th class="n">Preço</th><th class="n">Total</th></tr></thead><tbody>
         ${p.itens.map(i => `<tr><td>${esc(i.nome)}${i.variacao ? ' · ' + esc((i.grupoVar ? i.grupoVar + ' ' : '') + i.variacao) : ''}${i.precoUnit < i.precoTabela ? '<br><span class="small pos">preço por quantidade</span>' : ''}</td><td class="n">${i.qtd}</td><td class="n">${money(i.precoUnit)}</td><td class="n">${money(i.total)}</td></tr>`).join('')}
         <tr><td colspan="3">Subtotal</td><td class="n">${money(p.subtotal)}</td></tr>
-        ${p.taxaEntrega ? `<tr><td colspan="3">Entrega</td><td class="n">${money(p.taxaEntrega)}</td></tr>` : ''}
+        ${p.desconto ? `<tr><td colspan="3">Cupom ${esc(p.cupom || '')}</td><td class="n pos">−${money(p.desconto)}</td></tr>` : ''}
+        ${p.taxaEntrega ? `<tr><td colspan="3">Entrega</td><td class="n">${money(p.taxaEntrega)}</td></tr>` : p.entrega === 'entrega' ? '<tr><td colspan="3">Entrega</td><td class="n pos">grátis</td></tr>' : ''}
         <tr class="tot"><td colspan="3">Total</td><td class="n">${money(p.total)}</td></tr></tbody></table></div></section>
       ${acoes.map(([st, lb]) => `<button class="btn pri full" type="button" data-st="${st}">${lb}</button>`).join('')}
       ${['novo', 'confirmado', 'pronto'].includes(p.status) ? '<button class="btn dan full" type="button" data-st="cancelado">Cancelar pedido</button>' : ''}
@@ -680,24 +681,63 @@
         ${M('l_entrega') ? `<label class="row"><input type="checkbox" id="cr" ${C.retirada ? 'checked' : ''} style="width:24px;height:24px;accent-color:var(--brand)"> Cliente retira na loja</label>
           <label class="row"><input type="checkbox" id="cen" ${C.entrega ? 'checked' : ''} style="width:24px;height:24px;accent-color:var(--brand)"> Faço entrega</label>
           <div class="grid2"><div class="field"><label for="ct">Taxa de entrega (R$)</label><input inputmode="decimal" id="ct" value="${esc(numIn(C.taxaEntrega || ''))}" placeholder="0,00"></div>
-          <div class="field"><label for="co">Onde entrega</label><input type="text" id="co" maxlength="200" value="${esc(C.entregaObs)}" placeholder="Centro e bairros próximos"></div></div>` : '<p class="small muted">Só retirada na loja (entrega desligada na Central).</p>'}
+          <div class="field"><label for="cg">Entrega grátis a partir de (R$, opcional)</label><input inputmode="decimal" id="cg" value="${esc(numIn(C.entregaGratisDe || ''))}" placeholder="Ex.: 80,00"></div></div>
+          <div class="field"><label for="co">Onde entrega</label><input type="text" id="co" maxlength="200" value="${esc(C.entregaObs)}" placeholder="Centro e bairros próximos"></div>
+          <p class="small muted">Com um valor em "Entrega grátis a partir de", o cliente vê na vitrine e no carrinho quanto falta para ganhar a entrega.</p>` : '<p class="small muted">Só retirada na loja (entrega desligada na Central).</p>'}
         <div class="field"><label for="cm">Pedido mínimo (R$, opcional)</label><input inputmode="decimal" id="cm" value="${esc(numIn(C.pedidoMinimo || ''))}" placeholder="0,00"></div></section>
+      <section class="card"><h2>Previsão para o cliente</h2><p class="small muted">Aparece ao fechar o pedido e na confirmação. Deixe em branco o que não usar.</p>
+        <div class="grid2"><div class="field"><label for="ctp">Tempo de preparo (min)</label><input inputmode="numeric" id="ctp" value="${esc(C.tempoPreparo ? String(C.tempoPreparo) : '')}" placeholder="Ex.: 40"></div>
+        <div class="field"><label for="ceh">Entrega hoje até</label><input type="text" id="ceh" maxlength="40" value="${esc(C.entregaHoje || '')}" placeholder="Ex.: Entrega hoje até 18h"></div></div></section>
+      <section class="card"><div class="between"><h2>Cupons de desconto</h2><button class="btn sm gold" type="button" id="ncp">+ Cupom</button></div>
+        ${(C.cupons || []).length ? `<div class="list">${C.cupons.map((c, i) => `<div class="it cup"><span class="ic">🎟️</span><span class="tx"><b>${esc(c.codigo)} <span class="small muted">· ${c.tipo === 'pct' ? c.valor + '% de desconto' : money(c.valor) + ' de desconto'}</span></b><span>${esc([c.minimo ? 'mínimo ' + money(c.minimo) : '', c.validade ? 'até ' + c.validade.split('-').reverse().join('/') : '', c.primeiraCompra ? 'só 1ª compra' : '', c.ativo === false ? '⏸️ desativado' : 'ativo', 'usado ' + ((S.cuponsUso || {})[c.codigo] || 0) + 'x'].filter(Boolean).join(' · '))}</span></span><button class="btn sm" type="button" data-cpt="${i}">${c.ativo === false ? 'Ativar' : 'Desativar'}</button></div>`).join('')}</div>` : '<p class="small muted">Nenhum cupom. Crie um código (ex.: BEMVINDO10) para o cliente digitar no carrinho.</p>'}</section>
       <p class="neg small" id="cerr" role="alert" style="font-weight:600;min-height:16px"></p>
       <button class="btn pri full" type="button" id="cs">Salvar</button>`;
     $('#cp').addEventListener('click', copiarLink);
     $('#ab').addEventListener('click', () => { C.aberta = !C.aberta; const b = $('#ab'); b.setAttribute('aria-pressed', String(C.aberta)); b.textContent = C.aberta ? '🟢 Aberta' : '🔴 Fechada'; });
     document.querySelectorAll('[data-pg]').forEach(b => b.addEventListener('click', () => { const k = b.dataset.pg; C.pagamentos = C.pagamentos.includes(k) ? C.pagamentos.filter(x => x !== k) : C.pagamentos.concat(k); b.setAttribute('aria-pressed', String(C.pagamentos.includes(k))); }));
-    $('#cs').addEventListener('click', async () => {
-      const err = m => { $('#cerr').textContent = m; };
+    /* o que está nos campos agora (para salvar junto com um cupom novo sem perder o que a dona digitou) */
+    function montarConfig(err) {
       const v = id => { const e = document.getElementById(id); return e ? e.value : ''; };
-      const taxa = toNum(v('ct')), min = toNum(v('cm'));
-      if (Number.isNaN(taxa) || Number.isNaN(min)) return err('Valores: use só números (ex.: 10,00).');
+      const taxa = toNum(v('ct')), min = toNum(v('cm')), gratis = toNum(v('cg')), prep = toInt(v('ctp'));
+      if (Number.isNaN(taxa) || Number.isNaN(min) || Number.isNaN(gratis)) return err('Valores: use só números (ex.: 10,00).');
+      if (Number.isNaN(prep) || prep > 1440) return err('Tempo de preparo: só o número de minutos (até 1440).');
       if (!C.pagamentos.length) return err('Marque pelo menos uma forma de pagamento.');
-      const b = { aberta: C.aberta, whatsapp: v('cw'), endereco: v('ce'), horario: v('ch'), boasVindas: v('cb'), pagamentos: C.pagamentos, pixChave: v('cx'), retirada: $('#cr') ? $('#cr').checked : true, entrega: $('#cen') ? $('#cen').checked : false, taxaEntrega: taxa || 0, entregaObs: v('co'), pedidoMinimo: min || 0 };
+      const b = { aberta: C.aberta, whatsapp: v('cw'), endereco: v('ce'), horario: v('ch'), boasVindas: v('cb'), pagamentos: C.pagamentos, pixChave: v('cx'), retirada: $('#cr') ? $('#cr').checked : true, entrega: $('#cen') ? $('#cen').checked : false, taxaEntrega: taxa || 0, entregaObs: v('co'), pedidoMinimo: min || 0,
+        entregaGratisDe: gratis || 0, tempoPreparo: prep || 0, entregaHoje: v('ceh'), cupons: C.cupons || [] };
       if (M('l_entrega') && !b.retirada && !b.entrega) return err('Marque retirada, entrega ou as duas.');
-      const bt = $('#cs'); bt.disabled = true;
-      try { await api('/api/loja/admin/config', b); await reload(); toast('Loja salva'); render(); }
+      return b;
+    }
+    async function salvarConfig(bt, err, ok) {
+      const b = montarConfig(err); if (!b) return;
+      bt.disabled = true;
+      try { await api('/api/loja/admin/config', b); await reload(); toast(ok || 'Loja salva'); closeSheet(); render(); }
       catch (e) { bt.disabled = false; if (e.status === 401 || e.login) { retomar = () => { go('loja'); toast('A sessão tinha terminado antes de salvar: confira a loja e salve de novo.', true); return true; }; return fail(e); } err(e.message); }
+    }
+    $('#cs').addEventListener('click', () => salvarConfig($('#cs'), m => { $('#cerr').textContent = m; }));
+    document.querySelectorAll('[data-cpt]').forEach(b => b.addEventListener('click', () => { const c = C.cupons[+b.dataset.cpt]; c.ativo = c.ativo === false; salvarConfig(b, m => { $('#cerr').textContent = m; }, 'Cupom ' + c.codigo + (c.ativo ? ' ativado' : ' desativado')); }));
+    $('#ncp').addEventListener('click', () => {
+      const N = { tipo: 'pct', primeiraCompra: false };
+      openSheet('Novo cupom', `
+        <div class="field"><label for="kc">Código (o cliente digita no carrinho)</label><input type="text" id="kc" maxlength="20" autocapitalize="characters" placeholder="Ex.: BEMVINDO10" style="text-transform:uppercase"></div>
+        <div class="field"><span class="lbl">Desconto</span><div class="chips"><button type="button" class="chip" data-kt="pct" aria-pressed="true">% do pedido</button><button type="button" class="chip" data-kt="reais" aria-pressed="false">R$ fixo</button></div></div>
+        <div class="grid2"><div class="field"><label for="kv">Valor do desconto</label><input inputmode="decimal" id="kv" placeholder="Ex.: 10"></div>
+        <div class="field"><label for="km">Pedido mínimo (R$, opcional)</label><input inputmode="decimal" id="km" placeholder="Ex.: 50,00"></div></div>
+        <div class="field"><label for="kd">Vale até (opcional)</label><input type="date" id="kd"></div>
+        <label class="row"><input type="checkbox" id="kp" style="width:24px;height:24px;accent-color:var(--brand)"> Só na primeira compra (WhatsApp sem pedido anterior)</label>
+        <p class="neg small" id="ke" role="alert" style="font-weight:600;min-height:16px"></p>
+        <button class="btn pri full" type="button" id="ks">Salvar cupom</button>`, pn => {
+        pn.querySelectorAll('[data-kt]').forEach(b => b.addEventListener('click', () => { N.tipo = b.dataset.kt; pn.querySelectorAll('[data-kt]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.kt === N.tipo))); }));
+        $('#ks').addEventListener('click', () => {
+          const err = m => { $('#ke').textContent = m; };
+          const codigo = $('#kc').value.trim().toUpperCase().replace(/\s+/g, ''), valor = toNum($('#kv').value), minimo = toNum($('#km').value);
+          if (!/^[A-Z0-9]{2,20}$/.test(codigo)) return err('Código: só letras e números, de 2 a 20, sem espaço.');
+          if ((C.cupons || []).some(c => c.codigo === codigo)) return err('Já existe um cupom ' + codigo + '.');
+          if (!(valor > 0) || (N.tipo === 'pct' && valor > 100)) return err(N.tipo === 'pct' ? 'Desconto em %: de 1 a 100.' : 'Informe o valor do desconto.');
+          if (Number.isNaN(minimo)) return err('Pedido mínimo: use só números.');
+          C.cupons = (C.cupons || []).concat([{ codigo, tipo: N.tipo, valor: r2(valor), minimo: minimo || 0, validade: $('#kd').value || '', primeiraCompra: $('#kp').checked, ativo: true }]);
+          salvarConfig($('#ks'), err, 'Cupom ' + codigo + ' criado');
+        });
+      });
     });
   }
 
