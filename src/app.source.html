@@ -1661,7 +1661,7 @@ function renderCart(){
       <div class="field"><label for="pay">Condição de pagamento</label><select id="pay" ${ap.length?'':'disabled'}>${ap.map(p=>`<option value="${esc(p)}" ${p===ui.pay?'selected':''}>${esc(p)}${(S.cashPays||[]).includes(p)?' (à vista)':''}</option>`).join('')}</select>${po.ci.blocked?`<div class="notice">${po.ci.reason} Neste pedido ficam liberadas só as formas à vista. Fale com a loja para regularizar.</div>`:''}${!ap.length?'<div class="err">Nenhuma forma de pagamento disponível para este pedido. Fale com a loja.</div>':''}</div>
       <div class="field"><label for="note">Observação (opcional)</label><textarea id="note" placeholder="Ex.: entregar depois das 14h">${esc(ui.note)}</textarea></div>
       <div class="field"><span class="lbl">Nota fiscal</span><div class="opts"><button class="opt" data-nfo="0" aria-pressed="${!ui.nf}">Não preciso</button><button class="opt" data-nfo="1" aria-pressed="${!!ui.nf}">Quero nota fiscal<span>${ieClient(ui.client)?'preço com inscrição estadual':'confira os dados da nota'}</span></button></div></div>
-      ${ui.nf?`<div class="nfbox open"><div class="small muted">Campos com <span class="req">*</span> são obrigatórios para a nota.</div>${nfFieldsHtml('nfc',ui.nfData,true)}</div>`:''}`:''}
+      ${ui.nf?`<div class="nfbox open"><div class="small muted">Preencha se quiser guardar os dados aqui — não é obrigatório para fechar o pedido.</div>${nfFieldsHtml('nfc',ui.nfData,false)}</div>`:''}`:''}
     </div>
     ${items.length?`<div class="df">
       <div class="sum"><span>Produtos (${cartCount()} ${cartCount()===1?'item':'itens'})</span><span class="num">${brl(sub)}</span></div>
@@ -3051,8 +3051,8 @@ function admLancar0(){
         <div class="field"><label for="lnpay">Pagamento</label><select id="lnpay" ${pays.length?'':'disabled'}>${pays.map(p=>`<option value="${esc(p)}" ${p===L.pay?'selected':''}>${esc(p)}${isCash(p)?' (à vista)':''}</option>`).join('')}</select>
           ${po.ci.blocked?`<div class="notice">${esc(po.ci.reason.replace('Você tem','O cliente tem').replace('seu limite','o limite'))}</div>${SV?'':`<label class="switch"><input type="checkbox" id="lnover" ${L.override?'checked':''}> Liberar a prazo mesmo assim neste pedido</label>`}`:''}</div>
         <div class="field"><label for="lnsel">Vendedor</label>${SV?`<b>${esc(SVme().name)}</b>`:sellerSelect('lnsel',L.sel)}</div>
-        <div class="field"><span class="lbl">Nota fiscal</span><div class="opts"><button class="opt" data-lnfo="0" aria-pressed="${!L.nf}">Sem nota</button><button class="opt" data-lnfo="1" aria-pressed="${!!L.nf}">Emitir nota fiscal<span>${ieClient(cli)?'aplica o preço com IE':'dados obrigatórios'}</span></button></div>${ieClient(cli)?`<div class="small muted" style="margin-top:4px">Cliente contribuinte com IE: ${L.nf?'com nota, os produtos com preço com IE já estão reduzidos.':'sem nota, vale o preço normal.'}</div>`:''}</div>
-        ${L.nf?`<div class="nfbox open">${nfFieldsHtml('lnf',L.nfData||(L.nfData=defaultNf(cli)),true)}</div>`:''}
+        <div class="field"><span class="lbl">Nota fiscal</span><div class="opts"><button class="opt" data-lnfo="0" aria-pressed="${!L.nf}">Sem nota</button><button class="opt" data-lnfo="1" aria-pressed="${!!L.nf}">Emitir nota fiscal<span>${ieClient(cli)?'aplica o preço com IE':'dados opcionais'}</span></button></div>${ieClient(cli)?`<div class="small muted" style="margin-top:4px">Cliente contribuinte com IE: ${L.nf?'com nota, os produtos com preço com IE já estão reduzidos.':'sem nota, vale o preço normal.'}</div>`:''}</div>
+        ${L.nf?`<div class="nfbox open"><div class="small muted">Preencha se quiser — não é obrigatório, dá pra emitir a nota direto no seu sistema fiscal.</div>${nfFieldsHtml('lnf',L.nfData||(L.nfData=defaultNf(cli)),false)}</div>`:''}
         <div class="field"><label for="lnnote">Observação</label><textarea id="lnnote" placeholder="Ex.: pedido feito por telefone">${esc(L.note||'')}</textarea></div>
         <div class="sum"><span>Produtos (${R2.count} ${R2.count===1?'item':'itens'})</span><span class="num">${brl(R2.sub)}</span></div>
         ${R2.disc?`<div class="sum" style="color:var(--ok);font-weight:600"><span>Desconto retirada (${String(R2.pct).replace('.',',')}%)</span><span class="num">− ${brl(R2.disc)}</span></div>`:''}${(()=>{const d=R2.items.length?onerDiff(cli,L.cart,L.pay,L.nf):0;if(d<0.01)return '';const pc=String(S.store.pickupDisc).replace('.',',');return L.mode==='retirada'?`<div class="sum" style="color:var(--ok);font-weight:600"><span>Desconto retirada (${pc}%) já nos preços</span><span class="num">${brl(d)}</span></div>`:`<div class="small muted">Na retirada os preços caem ${pc}% (${brl(d)} a menos).</div>`})()}
@@ -4128,12 +4128,13 @@ function nfFieldsHtml(px,d,required){
 }
 function bindNf(px,d,onChange){document.querySelectorAll(`[id^="${px}-"][data-nf]`).forEach(el=>{const k=el.dataset.nf;const h=()=>{let v=el.value;if(k==='doc'){v=v.replace(/\D/g,'').slice(0,14);el.value=fmtDoc(v)}if(k==='cep'){v=v.replace(/\D/g,'').slice(0,8);el.value=v.length>5?v.slice(0,5)+'-'+v.slice(5):v;v=v}d[k]=k==='doc'||k==='cep'?v:el.value;onChange&&onChange(k)};el.addEventListener(el.tagName==='SELECT'?'change':'input',h)})}
 function validateNf(d){
-  const doc=String(d.doc||'').replace(/\D/g,''),miss=NF_FIELDS.filter(([k,,req])=>req&&!String(d[k]||'').trim()).map(([,l])=>l);
-  if(String(doc).length===14&&!String(d.ie||'').trim())miss.push('Inscrição estadual (ou ISENTO)');
-  if(miss.length)return 'Para emitir a nota, preencha: '+miss.join(', ')+'.';
-  if(!validDoc(doc))return 'CNPJ/CPF inválido para a nota.';
-  if(String(d.cep).replace(/\D/g,'').length!==8)return 'CEP precisa ter 8 números.';
-  if(!UFS.includes(String(d.uf||'').toUpperCase()))return 'UF inválida.';
+  /* nenhum campo é obrigatório aqui: a nota de verdade é emitida no sistema fiscal da loja, isto aqui só acompanha o pedido.
+     Se algo for preenchido, só confere o formato pra não guardar lixo. */
+  const doc=String(d.doc||'').replace(/\D/g,'');
+  if(doc&&!validDoc(doc))return 'CNPJ/CPF inválido para a nota.';
+  const cep=String(d.cep||'').replace(/\D/g,'');
+  if(cep&&cep.length!==8)return 'CEP precisa ter 8 números.';
+  if(d.uf&&!UFS.includes(String(d.uf).toUpperCase()))return 'UF inválida.';
   if(d.email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email))return 'E-mail da nota inválido.';
   return '';
 }
