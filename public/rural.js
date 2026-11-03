@@ -36,7 +36,7 @@
   let brand = {}; try { brand = JSON.parse((document.querySelector('meta[name="tino-brand"]') || {}).content || '{}'); } catch (e) { brand = {}; }
 
   let retomar = null;
-  let S = null, view = 'inicio', arg = null, per = 'ano', rocaTab = 'resumo', pesTab = 'meeiro', relRoca = '', despCat = '';
+  let S = null, view = 'inicio', arg = null, per = 'ano', rocaTab = 'resumo', pesTab = 'meeiro', relRoca = '', despCat = '', despCatRoca = '';
 
   /* ---------- servidor ---------- */
   async function api(path, body) {
@@ -281,6 +281,7 @@
     const lerTudo = async nome => { const s = fluxo(nome); if (!s) return ''; const rd = s.getReader(); let t = ''; for (;;) { const { value, done } = await rd.read(); if (done) return t; t += value; } };
     const shared = []; (await lerTudo('xl/sharedStrings.xml')).replace(/<si>([\s\S]*?)<\/si>/g, (_, si) => { shared.push(xmlTxt((si.match(/<t[^>]*>([\s\S]*?)<\/t>/g) || []).map(t => t.replace(/<[^>]+>/g, '')).join(''))); return ''; });
     const wb = await lerTudo('xl/workbook.xml'), rels = await lerTudo('xl/_rels/workbook.xml.rels');
+    base1904 = /date1904="(1|true)"/.test(wb);
     const abas = [...wb.matchAll(/<sheet\b[^>]*?name="([^"]*)"[^>]*?r:id="([^"]*)"/g)].map(m => { const rel = new RegExp('Id="' + m[2] + '"[^>]*Target="([^"]*)"').exec(rels) || new RegExp('Target="([^"]*)"[^>]*Id="' + m[2] + '"').exec(rels); let t = rel ? rel[1].replace(/^\//, '') : ''; if (t && !t.startsWith('xl/')) t = 'xl/' + t; return { nome: xmlTxt(m[1]), arq: t }; });
     const out = [];
     for (const [ai, aba] of abas.entries()) {
@@ -314,7 +315,8 @@
     }
     return out;
   }
-  const serialData = n => typeof n === 'number' && n > 20000 && n < 80000 ? new Date(Math.round((n - 25569) * 864e5)).toISOString().slice(0, 10) : null;
+  let base1904 = false;
+  const serialData = n => typeof n === 'number' && n > 20000 && n < 80000 ? new Date(Math.round((n + (base1904 ? 1462 : 0) - 25569) * 864e5)).toISOString().slice(0, 10) : null;
   const normNome = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
   /* entende as abas: tipos (coluna de caixas seguida de "Preço"), datas, despesas e a % do meeiro */
   function montarImportacao(abas) {
@@ -329,16 +331,16 @@
       if (!tipos.length) continue;
       const cDesc = h.findIndex(x => typeof x === 'string' && /^descri/i.test(x.trim())), cDescData = cDesc > 0 && typeof h[cDesc - 1] === 'string' && /^data$/i.test(h[cDesc - 1].trim()) ? cDesc - 1 : -1;
       let pct = null; for (const cel of a.linhas.values()) for (const x of cel) { const m = typeof x === 'string' && /meeiro\D{0,6}(\d+(?:[.,]\d+)?)\s*%/i.exec(x); if (m) pct = Number(m[1].replace(',', '.')); }
-      let nome = a.nome.trim(); for (const cel of a.linhas.values()) for (const x of cel) { const m = typeof x === 'string' && /^meeiro:\s*(.+)$/i.exec(x.trim()); if (m) nome = m[1].trim(); }
-      const linhas = [], despesas = [];
+      let nome = a.nome.trim(); for (const cel of a.linhas.values()) for (const x of cel) { const m = typeof x === 'string' && /^meeiro:\s*([^\d%\s][^%]*)$/i.exec(x.trim()); if (m) nome = m[1].trim(); }
+      const linhas = [], despesas = [], semDataVenda = [];
       [...a.linhas.entries()].sort((x, y) => x[0] - y[0]).forEach(([rn, cel]) => {
         if (rn <= hr) return;
         const d = serialData(cel[cData]);
         const qs = tipos.map(t => ({ tipo: t.nome, qtd: typeof cel[t.cq] === 'number' ? cel[t.cq] : 0, preco: typeof cel[t.cp] === 'number' ? cel[t.cp] : null }));
-        if (d && qs.some(q => q.qtd > 0)) linhas.push({ rn, data: d, qs });
+        if (qs.some(q => q.qtd > 0)) { if (d) linhas.push({ rn, data: d, qs }); else semDataVenda.push(rn); }
         if (cDesc >= 0 && typeof cel[cDesc] === 'string' && cel[cDesc].trim() && !/^total/i.test(cel[cDesc].trim())) despesas.push({ rn, data: cDescData >= 0 ? serialData(cel[cDescData]) : null, desc: cel[cDesc].trim(), valor: typeof cel[cDesc + 1] === 'number' ? Math.round(cel[cDesc + 1] * 100) / 100 : null });
       });
-      metas.push({ aba: a.nome, nome, pct, tipos: tipos.map(t => t.nome), linhas, despesas });
+      metas.push({ aba: a.nome, nome, pct, tipos: tipos.map(t => t.nome), linhas, despesas, semDataVenda });
     }
     if (!metas.length) throw new Error('Não achei abas de meeiro nesta planilha (uma aba por meeiro, com Data, as caixas de cada tipo e o preço ao lado).');
     // nome curto dos tipos: tira a palavra que todos têm no começo ("Pepino Bom" -> "Bom")
@@ -365,26 +367,32 @@
       I.rocaId = ''; I.rocaNome = arquivo || I.cultura || 'Roça';
       const achada = S.rocas.find(r => normNome(r.nome) === normNome(I.rocaNome)); if (achada) I.rocaId = achada.id;
       I.semData = datas[0] || hoje();
-      I.metas.forEach(m => { const p = S.pessoas.find(x => x.tipo === 'meeiro' && normNome(x.nome) === normNome(m.nome)); m.pid = p ? p.id : null; m.pctUse = m.pct != null ? m.pct : 50; m.on = true; });
+      I.novoRid = newId('r');
+      I.metas.forEach(m => { const p = S.pessoas.find(x => x.tipo === 'meeiro' && normNome(x.nome) === normNome(m.nome)); m.pid = p ? p.id : null; m.on = true; });
+      pcts();
     }
+    /* % de cada meeiro: a que ele já tem na roça escolhida; senão a da planilha; senão 50% */
+    function pcts() { const r0 = I.rocaId ? roca(I.rocaId) : null; I.metas.forEach(m => { const atual = r0 && m.pid && (r0.parceria || {})[m.pid]; m.pctUse = atual ? Number(atual) : m.pct != null ? m.pct : 50; }); }
     function plano() {
       const tipoNome = t => (I.tipos.find(x => x.orig === t) || { nome: t }).nome;
       const avisos = [], vendas = new Map(), adi = [], desp = [];
       I.metas.filter(m => m.on).forEach(m => {
+        if (m.semDataVenda.length) avisos.push(m.nome + ': ' + m.semDataVenda.length + ' linha(s) com caixas e sem data (ficam de fora): linha ' + m.semDataVenda.join(', ') + '.');
         m.linhas.forEach(l => {
+          if (l.data < '1990-01-01' || l.data > hoje()) { avisos.push(m.nome + ', linha ' + l.rn + ': data ' + dBR(l.data) + ' fora do normal (fica de fora).'); return; }
           const semPreco = l.qs.filter(q => q.qtd > 0 && !(q.preco > 0));
           if (semPreco.length) { avisos.push(m.nome + ', ' + dBR(l.data) + ': ' + semPreco.map(q => tipoNome(q.tipo)).join(', ') + ' sem preço (fica de fora).'); }
           const qs = l.qs.filter(q => q.qtd > 0 && q.preco > 0); if (!qs.length) return;
           // mesma data e mesmos preços = uma venda só, com as caixas de cada meeiro
           const chave = l.data + '|' + qs.map(q => q.tipo + '@' + q.preco).sort().join(',');
           const v = vendas.get(chave) || { data: l.data, itens: {} }; vendas.set(chave, v);
-          qs.forEach(q => { const it = v.itens[q.tipo] || (v.itens[q.tipo] = { nome: tipoNome(q.tipo), preco: q.preco, origem: [] }); it.origem.push({ m, qtd: q.qtd }); });
+          qs.forEach(q => { const it = v.itens[q.tipo] || (v.itens[q.tipo] = { orig: q.tipo, nome: tipoNome(q.tipo), preco: r2(q.preco), origem: [] }); const o = it.origem.find(x => x.m.pid ? x.m.pid === m.pid : x.m === m); if (o) o.qtd = r6(o.qtd + q.qtd); else it.origem.push({ m, qtd: q.qtd }); });
         });
         m.despesas.forEach(d => {
           if (!(d.valor > 0)) { avisos.push(m.nome + ': "' + d.desc + '" sem valor (fica de fora).'); return; }
           const data = d.data || I.semData;
           if (data > hoje()) { avisos.push(m.nome + ': "' + d.desc + '" com data ' + dBR(data) + ', no futuro (fica de fora; lance à mão com a data certa).'); return; }
-          (/^adiantamento/i.test(d.desc) ? adi : desp).push({ m, data, desc: d.desc, valor: d.valor, semData: !d.data });
+          (/^adiantamento/i.test(d.desc) ? adi : desp).push({ m, rn: d.rn, data, desc: d.desc, valor: d.valor, semData: !d.data });
         });
       });
       return { vendas: [...vendas.values()].sort((a, b) => a.data < b.data ? -1 : 1), adi, desp, avisos };
@@ -410,7 +418,7 @@
       openSheet('Importar planilha', html, pn => {
         const keepI = () => { const n = $('#irn'); if (n) I.rocaNome = n.value; pn.querySelectorAll('[data-it]').forEach(e => { I.tipos[+e.dataset.it].nome = e.value.trim() || I.tipos[+e.dataset.it].orig; }); pn.querySelectorAll('[data-ipc]').forEach(e => { const v = toNum(e.value); if (v > 0 && v <= 100) I.metas[+e.dataset.ipc].pctUse = v; }); pn.querySelectorAll('[data-ion]').forEach(e => { I.metas[+e.dataset.ion].on = e.checked; }); const d = $('#isd'); if (d && d.value) I.semData = d.value; };
         const redraw = () => { const y = pn.scrollTop; keepI(); passo2(); $('#sheet .pn').scrollTop = y; };
-        pn.querySelectorAll('[data-ir]').forEach(b => b.addEventListener('click', () => { keepI(); I.rocaId = b.dataset.ir; redraw(); }));
+        pn.querySelectorAll('[data-ir]').forEach(b => b.addEventListener('click', () => { keepI(); I.rocaId = b.dataset.ir; pcts(); redraw(); }));
         pn.querySelectorAll('[data-ion]').forEach(e => e.addEventListener('change', redraw));
         const isd = $('#isd'); if (isd) isd.addEventListener('change', redraw);
         $('#ixg').addEventListener('click', () => { keepI(); gravar(); });
@@ -424,21 +432,23 @@
       bt.disabled = true;
       try {
         // 1) meeiros novos
-        for (const m of on) if (!m.pid) { msg('Cadastrando ' + m.nome + '…'); m.pid = newId('p'); await api('/api/rural/pessoa', { id: m.pid, tipo: 'meeiro', nome: m.nome }); }
+        const nomesT = I.tipos.map(t => normNome(t.nome)); if (new Set(nomesT).size !== nomesT.length) { bt.disabled = false; return err('Dois tipos ficaram com o mesmo nome. Mude um deles.'); }
+        for (const m of on) if (!m.pid) { msg('Cadastrando ' + m.nome + '…'); const id = newId('p'); await api('/api/rural/pessoa', { id, tipo: 'meeiro', nome: m.nome }); m.pid = id; }
         // 2) a roça: meeiros com a % e os tipos
         msg('Preparando a roça…');
-        const r0 = I.rocaId ? roca(I.rocaId) : null, rid = r0 ? r0.id : newId('r');
+        const r0 = I.rocaId ? roca(I.rocaId) : null, rid = r0 ? r0.id : I.novoRid;
         const parceria = Object.assign({}, r0 ? r0.parceria : {}); on.forEach(m => { parceria[m.pid] = m.pctUse; });
         const produtos = (r0 && r0.produtos || []).slice(); I.tipos.forEach(t => { if (!produtos.some(x => normNome(x) === normNome(t.nome))) produtos.push(t.nome); });
-        await api('/api/rural/roca', r0 ? { id: r0.id, nome: r0.nome, icone: r0.icone, cultura: r0.cultura, local: r0.local, area: r0.area, inicio: r0.inicio, modo: r0.modo === 'funcionarios' ? 'misto' : r0.modo, parceria, regras: r0.regras, obs: r0.obs, ativa: r0.ativa, produtos } :
-          { id: rid, nome: I.rocaNome.trim(), cultura: I.cultura || '', inicio: P.vendas.length ? P.vendas[0].data : hoje(), modo: 'meeiro', parceria, regras: {}, produtos });
+        await api('/api/rural/roca', r0 ? { id: r0.id, nome: r0.nome, icone: r0.icone, cultura: r0.cultura, local: r0.local, area: r0.area, inicio: r0.inicio, modo: r0.modo === 'funcionarios' ? 'misto' : r0.modo, parceria, regras: r0.regras, obs: r0.obs, ativa: r0.ativa, produtos: produtos.slice(0, 20) } :
+          { id: rid, nome: I.rocaNome.trim(), cultura: I.cultura || '', inicio: P.vendas.length ? P.vendas[0].data : hoje(), modo: 'meeiro', parceria, regras: {}, produtos: produtos.slice(0, 20) });
+        I.rocaId = rid; await reload(); // tentar de novo usa a mesma roça
         // 3) vendas, adiantamentos e despesas (o mesmo item da planilha nunca entra duas vezes)
         const tot = P.vendas.length + P.adi.length + P.desp.length; let n = 0, rep = 0;
         const manda = async (chave, b) => { n++; msg('Gravando ' + n + ' de ' + tot + '…'); const r = await api('/api/rural/lanc', Object.assign({ id: await idDe(rid + '|' + chave), novo: true, rocaId: rid }, b)); if (r && r.repetido) rep++; };
-        for (const v of P.vendas) await manda('v|' + v.data + '|' + Object.values(v.itens).map(it => it.nome + '@' + it.preco).join(','), { tipo: 'venda', data: v.data, unidade: 'caixa', descricao: 'Importado da planilha', pagamentos: [],
+        for (const v of P.vendas) await manda('v|' + v.data + '|' + Object.values(v.itens).map(it => it.orig + '@' + it.preco).sort().join(',') + '|' + [...new Set(Object.values(v.itens).flatMap(it => it.origem.map(o => o.m.aba)))].sort().join(','), { tipo: 'venda', data: v.data, unidade: 'caixa', descricao: 'Importado da planilha', pagamentos: [],
           itens: Object.values(v.itens).map(it => ({ nome: it.nome, qtd: r6(it.origem.reduce((s, o) => s + o.qtd, 0)), preco: it.preco, precoMeeiro: it.preco, origem: it.origem.map(o => ({ de: o.m.pid, qtd: o.qtd })) })) });
-        for (const a of P.adi) await manda('a|' + a.m.nome + '|' + a.data + '|' + a.valor, { tipo: 'adiantamento', pessoaId: a.m.pid, data: a.data, valor: a.valor, descricao: a.desc });
-        for (const d of P.desp) await manda('d|' + d.m.nome + '|' + d.desc + '|' + d.valor, { tipo: 'despesa', categoria: 'outros', descricao: d.desc, data: d.data, valor: d.valor, partes: { [d.m.pid]: 100 } });
+        for (const a of P.adi) await manda('a|' + a.m.aba + '|' + a.rn, { tipo: 'adiantamento', pessoaId: a.m.pid, data: a.data, valor: a.valor, descricao: a.desc });
+        for (const d of P.desp) await manda('d|' + d.m.aba + '|' + d.rn, { tipo: 'despesa', categoria: 'outros', descricao: d.desc, data: d.data, valor: d.valor, partes: { [d.m.pid]: 100 } });
         await reload(); closeSheet();
         toast('Planilha importada: ' + (n - rep) + ' lançamento(s)' + (rep ? ' (' + rep + ' já estavam)' : ''));
         rocaTab = 'resumo'; go('roca', rid);
@@ -466,7 +476,7 @@
       /* despesas destrinchadas: por tipo (total, quanto ficou com o patrão e com os meeiros) e a lista, com filtro por tipo */
       const ds = L.filter(l => l.tipo === 'despesa'), tot = r2(ds.reduce((a, l) => a + l.valor, 0)), dono = r2(ds.reduce((a, l) => a + parte(l, 'dono'), 0));
       const cats = Object.entries(R.cats).sort((a, b) => b[1].total - a[1].total);
-      if (despCat && !cats.some(([c]) => c === despCat)) despCat = '';
+      if (despCat && (despCatRoca !== r.id || !cats.some(([c]) => c === despCat))) despCat = ''; despCatRoca = r.id;
       const lista = ds.filter(l => !despCat || l.categoria === despCat);
       const meses = {}; ds.forEach(l => { const k = String(l.data).slice(0, 7); meses[k] = r2((meses[k] || 0) + l.valor); });
       const mk = Object.keys(meses).sort();
@@ -693,7 +703,7 @@
       const r = F.rocaId && roca(F.rocaId), quem = quemColh();
       let vend = 0, base = 0; const m = {};
       (F.itens || []).forEach(it => {
-        const qt = toNum(it.qtd) || 0, pv = toNum(it.preco) || 0, pmv = toNum(it.pm) > 0 ? toNum(it.pm) : pv;
+        const qt = toNum(it.qtd) || 0, pv = r2(toNum(it.preco) || 0), pmv = toNum(it.pm) > 0 ? r2(toNum(it.pm)) : pv;
         vend += Math.round(qt * pv * 100); base += Math.round(qt * pmv * 100);
         quem.filter(k => k !== 'dono').forEach(k => { const qk = toNum((it.q || {})[k]) || 0; if (qk > 0) { const pct = Number((r && r.parceria || {})[k]) || 0; m[k] = (m[k] || 0) + Math.round(qk * pmv * 100); m[k + ':v'] = (m[k + ':v'] || 0) + pct / 100 * qk * pmv; } });
       });
@@ -863,7 +873,7 @@
         keep(); const mudou = F.rocaId !== (b.dataset.r || null); if (mudou) { F.orig = null; legado = false; } F.rocaId = b.dataset.r || null; if (mudou && F.colheita) { F.itens = []; colhIniciar(); } F.geral = !F.rocaId; if (F.tipo === 'despesa') regra(); if (F.tipo === 'adiantamento') { const ms = meeirosDe(roca(F.rocaId)); F.pessoaId = ms.length === 1 ? ms[0] : null; } redraw(); }));
       pn.querySelectorAll('[data-cat]').forEach(b => b.addEventListener('click', () => { keep(); F.categoria = b.dataset.cat; regra(); redraw(); }));
       pn.querySelectorAll('[data-pe]').forEach(b => b.addEventListener('click', () => { keep(); F.pessoaId = b.dataset.pe; redraw(); }));
-      pn.querySelectorAll('[data-un]').forEach(b => b.addEventListener('click', () => { keep(); F.unidade = F.unidade === b.dataset.un ? null : b.dataset.un; redraw(); }));
+      pn.querySelectorAll('[data-un]').forEach(b => b.addEventListener('click', () => { keep(); F.unidade = F.unidade === b.dataset.un && !F.colheita ? null : b.dataset.un; redraw(); }));
       pn.querySelectorAll('[data-pg]').forEach(b => b.addEventListener('click', () => { keep(); const x = F.pags[0]; if (x && x.forma === b.dataset.pg) F.pags = []; else F.pags = [Object.assign({ vence: '', cheque: {}, aberto: false }, x && x.forma === b.dataset.pg ? x : {}, { forma: b.dataset.pg, valor: '' })]; redraw(); }));
       pn.querySelectorAll('[data-nch]').forEach(b => b.addEventListener('click', () => { keep(); if (!(liqC() > 0) && +b.dataset.nch > 1) { $('#fe').textContent = 'Informe o total da venda antes de dividir.'; return; } emPartes(+b.dataset.nch, 'cheque'); redraw(); }));
       const pdv = $('#pdv'); if (pdv) pdv.addEventListener('click', () => { keep(); const x = F.pags[0]; F.pags = [Object.assign({ forma: '', vence: '', cheque: {}, aberto: false }, x || {}, { valor: liqC() > 0 ? numIn((liqC() / 100).toFixed(2)) : '' }), { forma: '', valor: '', vence: '', cheque: {}, aberto: false }]; F.dividir = true; redraw(); });
@@ -972,8 +982,6 @@
       F.id = b.id; // tocar duas vezes não lança duas vezes
       const bt = $('#fs'); bt.disabled = true;
       try {
-        // tipo novo digitado na venda: fica cadastrado na roça para as próximas
-        if (novosTipos.length) { const r = roca(F.rocaId); await api('/api/rural/roca', { id: r.id, nome: r.nome, icone: r.icone, cultura: r.cultura, local: r.local, area: r.area, inicio: r.inicio, modo: r.modo, parceria: r.parceria, regras: r.regras, obs: r.obs, ativa: r.ativa, produtos: (r.produtos || []).concat(novosTipos).slice(0, 20) }); }
         await api('/api/rural/lanc', b); await reload(); closeSheet(); toast((edit ? 'Correção salva: ' : 'Lançado ✓ ') + money(valor)); render(); }
       
       catch (e) { bt.disabled = false; if (e.status === 401 || e.login) { const keepF = Object.assign({}, F, { valor: numIn(valor), _retomar: true, _legado: legado, _origOriginal: origOriginal }); retomar = () => formLanc(keepF); return fail(e); } err(e.message); }
