@@ -36,7 +36,7 @@
   let brand = {}; try { brand = JSON.parse((document.querySelector('meta[name="tino-brand"]') || {}).content || '{}'); } catch (e) { brand = {}; }
 
   let retomar = null;
-  let S = null, view = 'inicio', arg = null, per = 'ano', rocaTab = 'resumo', pesTab = 'meeiro', relRoca = '';
+  let S = null, view = 'inicio', arg = null, per = 'ano', rocaTab = 'resumo', pesTab = 'meeiro', relRoca = '', despCat = '';
 
   /* ---------- servidor ---------- */
   async function api(path, body) {
@@ -260,7 +260,7 @@
     const r = roca(arg); if (!r) return go('rocas');
     const all = S.lanc.filter(l => l.rocaId === r.id), L = all.filter(noPeriodo), R = resumo(L);
     const meeiros = meeirosDe(r), func = S.pessoas.filter(p => p.tipo === 'funcionario' && p.rocaId === r.id && p.ativo);
-    const tabs = [['resumo', 'Resumo'], ['lanc', 'Lançamentos']].concat(meeiros.length || all.some(l => l.tipo === 'adiantamento') ? [['meeiros', 'Meeiros']] : []).concat(M('r_funcionarios') ? [['equipe', 'Equipe']] : []).concat([['regras', 'Regras']]);
+    const tabs = [['resumo', 'Resumo'], ['lanc', 'Lançamentos'], ['despesas', 'Despesas']].concat(meeiros.length || all.some(l => l.tipo === 'adiantamento') ? [['meeiros', 'Meeiros']] : []).concat(M('r_funcionarios') ? [['equipe', 'Equipe']] : []).concat([['regras', 'Regras']]);
     if (!tabs.some(t => t[0] === rocaTab)) rocaTab = 'resumo';
     let body = '';
     if (rocaTab === 'resumo') {
@@ -272,6 +272,22 @@
         <section class="card"><h3>Gastos por tipo</h3>${cats.length ? `<div class="bars">${cats.map(([c, v], i) => `<div class="bar${i === 0 ? ' top' : ''}"><div class="l"><span>${cat(c).icone} ${esc(cat(c).nome)}</span><b>${money(v.total)}</b></div><div class="tr"><i style="width:${mx ? Math.max(3, v.total / mx * 100) : 0}%"></i></div></div>`).join('')}</div>` : '<p class="muted small">Nenhuma despesa no período.</p>'}</section>`;
     } else if (rocaTab === 'lanc') {
       body = lancList(all, true);
+    } else if (rocaTab === 'despesas') {
+      /* despesas destrinchadas: por tipo (total, quanto ficou com o patrão e com os meeiros) e a lista, com filtro por tipo */
+      const ds = L.filter(l => l.tipo === 'despesa'), tot = r2(ds.reduce((a, l) => a + l.valor, 0)), dono = r2(ds.reduce((a, l) => a + parte(l, 'dono'), 0));
+      const cats = Object.entries(R.cats).sort((a, b) => b[1].total - a[1].total);
+      if (despCat && !cats.some(([c]) => c === despCat)) despCat = '';
+      const lista = ds.filter(l => !despCat || l.categoria === despCat);
+      const meses = {}; ds.forEach(l => { const k = String(l.data).slice(0, 7); meses[k] = r2((meses[k] || 0) + l.valor); });
+      const mk = Object.keys(meses).sort();
+      body = `${perChips()}<div class="kpis"><div class="k"><span>Gasto total</span><b class="neg">${money(tot)}</b></div><div class="k"><span>Por conta de ${esc(DONO())}</span><b class="neg">${money(dono)}</b></div><div class="k"><span>Por conta dos meeiros</span><b>${money(r2(tot - dono))}</b></div></div>
+        ${cats.length ? `<section class="card"><h3>Por tipo ${esc(periodo().nome)}</h3><p class="small muted">Toque num tipo para ver só as despesas dele.</p><div class="scroll"><table class="dtab"><thead><tr><th>Tipo</th><th class="n">Total</th><th class="n">${esc(DONO())}</th>${meeiros.length ? '<th class="n">Meeiros</th>' : ''}<th class="n">%</th></tr></thead><tbody>
+          ${cats.map(([c, v]) => `<tr class="${despCat === c ? 'sel' : ''}" data-dcat="${esc(c)}" tabindex="0" role="button" aria-pressed="${despCat === c}"><td>${cat(c).icone} ${esc(cat(c).nome)}</td><td class="n">${money(v.total)}</td><td class="n">${money(v.dono)}</td>${meeiros.length ? `<td class="n">${money(r2(v.total - v.dono))}</td>` : ''}<td class="n">${pctTxt(tot ? r2(v.total / tot * 100) : 0)}</td></tr>`).join('')}
+          <tr class="tot"><td>Total</td><td class="n">${money(tot)}</td><td class="n">${money(dono)}</td>${meeiros.length ? `<td class="n">${money(r2(tot - dono))}</td>` : ''}<td class="n">100%</td></tr></tbody></table></div></section>
+        ${mk.length > 1 ? `<section class="card"><h3>Por mês</h3><div class="bars">${mk.map(k => `<div class="bar"><div class="l"><span>${MESES[Number(k.slice(5)) - 1]}/${k.slice(0, 4)}</span><b>${money(meses[k])}</b></div><div class="tr"><i style="width:${Math.max(3, meses[k] / Math.max(...mk.map(x => meses[x])) * 100)}%"></i></div></div>`).join('')}</div></section>` : ''}
+        <div class="between"><h3>${despCat ? esc(cat(despCat).icone + ' ' + cat(despCat).nome) : 'Todas as despesas'} <span class="small muted">(${lista.length})</span></h3>${despCat ? '<button class="btn sm" type="button" id="dtodas">Ver todas</button>' : ''}</div>
+        ${lancList(lista, true)}` : '<div class="card empty"><div class="big">💸</div><p class="muted">Nenhuma despesa nesta roça ' + esc(periodo().nome) + '.</p></div>'}
+        <button class="btn full noprint" type="button" id="ndesp">+ Lançar despesa nesta roça</button>`;
     } else if (rocaTab === 'meeiros') {
       const ps = new Set(meeiros); all.forEach(l => { Object.keys(partesDe(l)).forEach(k => { if (k !== 'dono') ps.add(k); }); if (l.tipo === 'adiantamento') ps.add(l.pessoaId); });
       body = [...ps].map(pid => { const p = pendente(r.id, pid), hist = S.acertos.filter(a => a.rocaId === r.id && a.pessoaId === pid);
@@ -302,6 +318,9 @@
     $('#bk').addEventListener('click', () => go('rocas'));
     $('#lc').addEventListener('click', () => lancarMenu(r.id));
     document.querySelectorAll('[data-rt]').forEach(b => b.addEventListener('click', () => { rocaTab = b.dataset.rt; render(); }));
+    document.querySelectorAll('[data-dcat]').forEach(t => { const f = () => { despCat = despCat === t.dataset.dcat ? '' : t.dataset.dcat; render(); }; t.addEventListener('click', f); t.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); f(); } }); });
+    const dto = $('#dtodas'); if (dto) dto.addEventListener('click', () => { despCat = ''; render(); });
+    const nd = $('#ndesp'); if (nd) nd.addEventListener('click', () => formLanc({ tipo: 'despesa', rocaId: r.id }));
     bindPer(); bindLanc();
     document.querySelectorAll('[data-acerto]').forEach(b => b.addEventListener('click', () => go('acerto', b.dataset.acerto)));
     document.querySelectorAll('[data-adi]').forEach(b => b.addEventListener('click', () => formLanc({ tipo: 'adiantamento', rocaId: r.id, pessoaId: b.dataset.adi })));
