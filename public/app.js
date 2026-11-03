@@ -3349,6 +3349,17 @@ function makePriceListPdf(client,ie,opts){
 function withClient(c,fn){const prev=ui.client;ui.client=c;try{return fn()}finally{ui.client=prev}}
 const noPickDisc=l=>l==='Retirada no depósito'||l==='Preço negociado'||l==='Proposta em análise';
 const noDisc=i=>noPickDisc(i.label)||!!i.rp;
+/* desconto da condição de pagamento (cadastro das formas de pagamento) */
+const payDiscOf=p=>{const d=Number((S.payDisc||{})[p])||0;return d>0&&d<100?d:0};
+/* preço digitado/combinado na forma A passa para a forma B: tira o desconto de A e põe o de B (o resto do preço fica) */
+function payConv(v,from,to){const a=payDiscOf(from),b=payDiscOf(to);if(a===b)return v;return Math.round(Number(v)/(1-a/100)*(1-b/100)*100)/100}
+function payLabel(l,from,to){let t=String(l||'');const a=payDiscOf(from);if(a){const suf=from+' '+String(a).replace('.',',')+'%';if(t===suf)t='';else if(t.endsWith(' · '+suf))t=t.slice(0,-(suf.length+3))}
+  const b=payDiscOf(to);if(b&&t!=='Preço negociado')t=(t?t+' · ':'')+to+' '+String(b).replace('.',',')+'%';return t}
+/* pedido em ajuste: os preços que já estavam no pedido ficam; trocar a forma de pagamento só troca o desconto da condição */
+function payKeep(keep,from,to){const o={};Object.keys(keep||{}).forEach(id=>{const k=keep[id];o[id]=Object.assign({},k,{price:payConv(k.price,from,to),label:payLabel(k.label,from,to)})});return o}
+/* preços digitados à mão: lembra em qual forma de pagamento foram digitados */
+function overMark(L,id){L.overAt=L.overAt||{};if(L.over&&L.over[id]>0)L.overAt[id]={v:L.over[id],pay:L.pay};else delete L.overAt[id]}
+function payOver(L,from,to){L.overAt=L.overAt||{};Object.keys(L.over||{}).forEach(id=>{const b=L.overAt[id]||(L.overAt[id]={v:L.over[id],pay:from});L.over[id]=payConv(b.v,b.pay,to)})}
 function calcCartFor(c,cart,mode,pay,over,nf,keep){
   return withOner(mode||'',()=>withIe(ieClient(c)&&!!nf,()=>withClient(c,()=>{
     const items=Object.entries(cart).map(([id,q])=>({p:resolveCart(id),q})).filter(i=>i.p&&(i.p.active!==false||(keep&&keep[i.p.id]))&&i.q>0).map(i=>Object.assign(i,priceFor(i.p,i.q,mode,pay),{base:i.p.isCombo?i.p.listPrice:baseOf(i.p)}));
@@ -3407,7 +3418,7 @@ function admLancar0(){
   }
   L.over=L.over||{};const SV=!!SVme();if(SV)L.sel=SVid();const noPrice=SV&&SVme().canPrice===false;
   const RT=SV?calcCartFor(cli,L.cart,L.mode,L.pay||'',undefined,L.nf,null):null,tpOf=p=>{const t=RT&&RT.items.find(x=>x.p.id===p.id);return t?t.price:baseOf(p)};
-  const KP=()=>L.editId&&L.keep&&L.mode===L.origMode&&!!L.nf===!!L.origNf&&L.pay===L.origPay?L.keep:null;
+  const KP=()=>!(L.editId&&L.keep&&L.mode===L.origMode&&!!L.nf===!!L.origNf)?null:L.pay===L.origPay?L.keep:payKeep(L.keep,L.origPay,L.pay);
   const R=calcCartFor(cli,L.cart,L.mode,L.pay,L.over,L.nf,KP());
   const po=payOptions(cli,R.total),pays0=L.override?allowedPays(cli):po.list,pays=L.editId&&L.origPay&&!pays0.includes(L.origPay)?[L.origPay,...pays0]:pays0;
   if(!pays.includes(L.pay)){L.pay=pays[0]||'';}
@@ -3441,7 +3452,8 @@ function admLancar0(){
         ${R2.items.length?`<div class="items num" style="border-top:0;padding-top:0">${R2.items.map(i=>`<div><span>${i.q}× ${esc(i.p.name)}</span><span>${brl(i.price*i.q)}</span></div>`).join('')}</div>`:'<div class="small muted">Nenhum produto ainda.</div>'}
         <div class="field"><span class="lbl">Receber</span><div class="opts"><button class="opt" data-lm="retirada" aria-pressed="${L.mode==='retirada'}">Retirar no depósito<span>${R2.pct||Number(S.store.pickupDisc)?String(S.store.pickupDisc).replace('.',',')+'% de desconto':'Sem custo'}</span></button><button class="opt" data-lm="entrega" aria-pressed="${L.mode==='entrega'}">Entregar<span>${cli.city&&cityById(cli.city)?esc(cityById(cli.city).name):'Sem taxa'}</span></button></div></div>
         ${L.mode==='entrega'?`<div class="field"><label for="lnaddr">Endereço</label><textarea id="lnaddr">${esc(L.addr)}</textarea></div><div class="field"><label for="lnbai">Bairro</label><input type="text" id="lnbai" value="${esc(L.bairro)}"></div>`:''}
-        <div class="field"><label for="lnpay">Pagamento</label><select id="lnpay" ${pays.length?'':'disabled'}>${pays.map(p=>`<option value="${esc(p)}" ${p===L.pay?'selected':''}>${esc(p)}${isCash(p)?' (à vista)':''}</option>`).join('')}</select>
+        <div class="field"><label for="lnpay">Pagamento</label><select id="lnpay" ${pays.length?'':'disabled'}>${pays.map(p=>`<option value="${esc(p)}" ${p===L.pay?'selected':''}>${esc(p)}${isCash(p)?' (à vista)':''}${payDiscOf(p)?' · '+String(payDiscOf(p)).replace('.',',')+'% de desconto':''}</option>`).join('')}</select>
+          ${payDiscOf(L.pay)?`<div class="small muted">Desconto de ${String(payDiscOf(L.pay)).replace('.',',')}% de ${esc(L.pay)} já está nos preços.</div>`:''}${L.editId||Object.keys(L.over||{}).length?'<div class="small muted">Trocar o pagamento não muda os preços do pedido; só troca o desconto da condição de pagamento, se tiver.</div>':''}
           ${po.ci.blocked?`<div class="notice">${esc(po.ci.reason.replace('Você tem','O cliente tem').replace('seu limite','o limite'))}</div>${SV?'':`<label class="switch"><input type="checkbox" id="lnover" ${L.override?'checked':''}> Liberar a prazo mesmo assim neste pedido</label>`}`:''}</div>
         <div class="field"><label for="lnsel">Vendedor</label>${SV?`<b>${esc(SVme().name)}</b>`:sellerSelect('lnsel',L.sel)}</div>
         <div class="field"><span class="lbl">Nota fiscal</span><div class="opts"><button class="opt" data-lnfo="0" aria-pressed="${!L.nf}">Sem nota</button><button class="opt" data-lnfo="1" aria-pressed="${!!L.nf}">Emitir nota fiscal<span>${ieClient(cli)?'aplica o preço com IE':'dados obrigatórios'}</span></button></div>${ieClient(cli)?`<div class="small muted" style="margin-top:4px">Cliente contribuinte com IE: ${L.nf?'com nota, os produtos com preço com IE já estão reduzidos.':'sem nota, vale o preço normal.'}</div>`:''}</div>
@@ -3480,7 +3492,7 @@ function admLancar0(){
   c.querySelectorAll('[data-lpk]').forEach(inp=>{const id=inp.dataset.lpk,un=+inp.dataset.un||1,def=+inp.dataset.def,sib=c.querySelector(`[data-lp="${id}"]`);
     inp.oninput=()=>{const v=pnum(inp.value);if(sib&&v>0)sib.value=money(Math.round(v/un*100)/100);const mg=c.querySelector(`[data-lmg="${id}"]`);if(mg&&v>0)mg.innerHTML=lnMgText(mg.dataset.cost,v,mg.dataset.cr,mg.dataset.trib,mg.dataset.ie)};
     inp.onchange=()=>{const v=pnum(inp.value);if(v===''||isNaN(v)||!(v>0))delete L.over[id];else{const pk=Math.round(v*100)/100;if(Math.abs(pk-def)<0.005)delete L.over[id];else L.over[id]=pk}
-      const y=window.scrollY;admLancar();window.scrollTo(0,y)};
+      overMark(L,id);const y=window.scrollY;admLancar();window.scrollTo(0,y)};
     inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();inp.blur()}};
     inp.onfocus=()=>inp.select()});
   c.querySelectorAll('[data-lqu]').forEach(inp=>{const id=inp.dataset.lqu,un=+inp.dataset.un||1;
@@ -3490,13 +3502,13 @@ function admLancar0(){
   c.querySelectorAll('[data-lp]').forEach(inp=>{{const id=inp.dataset.lp,un=+inp.dataset.un||1,sib=c.querySelector(`[data-lpk="${id}"]`);inp.oninput=()=>{const v=pnum(inp.value);if(sib&&v>0)sib.value=money(Math.round(v*un*100)/100);const mg=c.querySelector(`[data-lmg="${id}"]`);if(mg&&v>0)mg.innerHTML=lnMgText(mg.dataset.cost,v*un,mg.dataset.cr,mg.dataset.trib,mg.dataset.ie)};inp.onfocus=()=>inp.select()}
     inp.onchange=()=>{const id=inp.dataset.lp,un=+inp.dataset.un||1,def=+inp.dataset.def,v=pnum(inp.value);
       if(v===''||isNaN(v)||!(v>0)){delete L.over[id]}else{const pk=Math.round(v*un*100)/100;if(Math.abs(pk-def)<0.005)delete L.over[id];else L.over[id]=pk}
-      const y=window.scrollY;admLancar();window.scrollTo(0,y)};
+      overMark(L,id);const y=window.scrollY;admLancar();window.scrollTo(0,y)};
     inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();inp.blur()}};});
-  c.querySelectorAll('[data-lpr]').forEach(b=>b.onclick=()=>{delete L.over[b.dataset.lpr];const y=window.scrollY;admLancar();window.scrollTo(0,y)});
+  c.querySelectorAll('[data-lpr]').forEach(b=>b.onclick=()=>{delete L.over[b.dataset.lpr];overMark(L,b.dataset.lpr);const y=window.scrollY;admLancar();window.scrollTo(0,y)});
   c.querySelectorAll('[data-lm]').forEach(b=>b.onclick=()=>{L.mode=b.dataset.lm;admLancar()});
   const ad=$('#lnaddr');if(ad)ad.oninput=()=>L.addr=ad.value;
   const bi=$('#lnbai');if(bi)bi.oninput=()=>L.bairro=bi.value;
-  const py=$('#lnpay');if(py)py.onchange=()=>{L.pay=py.value;admLancar()};
+  const py=$('#lnpay');if(py)py.onchange=()=>{const old=L.pay;L.pay=py.value;payOver(L,old,L.pay);admLancar()};
   const ov=$('#lnover');if(ov)ov.onchange=()=>{L.override=ov.checked;admLancar()};
   const nt=$('#lnnote');nt.oninput=()=>L.note=nt.value;
   c.querySelectorAll('[data-lnfo]').forEach(b=>b.onclick=()=>{L.nf=b.dataset.lnfo==='1';if(!L.nfData)L.nfData=defaultNf(cli);const y=window.scrollY;admLancar();window.scrollTo(0,y)});
