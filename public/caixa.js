@@ -186,6 +186,7 @@
     $('#main').innerHTML = `<section class="card">
       <h1>Puxar do StarIA</h1>
       <p class="muted small">Pede o total de vendas em dinheiro e recebimento de crediário em dinheiro de todas as filiais, no período. Quem consulta e devolve o resultado é o Claude, pelo seu pedido no chat — depois disso, revise o número aqui antes de aplicar.</p>
+      <div class="note">Peça só para um período em que as sacolas das lojas já chegaram e já foram conferidas na matriz. O StarIA não sabe se a sacola chegou ou se o caixa foi batido — ele só sabe o que foi vendido; quem garante que o dinheiro já está (ou já devia estar) aqui é a conferência física, antes de pedir.</div>
       <form id="fst">
         <div class="field"><label for="stIni">De</label><input type="date" id="stIni" max="${hoje()}" required></div>
         <div class="field"><label for="stFim">Até</label><input type="date" id="stFim" value="${hoje()}" max="${hoje()}" required></div>
