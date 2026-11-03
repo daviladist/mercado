@@ -200,19 +200,61 @@
   function vProdutos() {
     const q = busca.trim().toLowerCase();
     const L = S.produtos.filter(p => !q || (p.nome + ' ' + (p.categoria || '') + ' ' + (p.codigo || '')).toLowerCase().includes(q));
-    $('#main').innerHTML = `<div class="between"><h1>Produtos</h1><div class="row"><button class="btn" type="button" id="imp">Importar${stariaProntas() ? ' <span class="badge">' + stariaProntas() + '</span>' : ''}</button><button class="btn gold" type="button" id="np">+ Produto</button></div></div>
+    $('#main').innerHTML = `<div class="between"><h1>Produtos</h1><div class="row">${M('l_staria_preco') ? `<button class="btn" type="button" id="sprc">Preços do StarIA${precoJob('pronta') ? ' <span class="badge">1</span>' : ''}</button>` : ''}<button class="btn" type="button" id="imp">Importar${stariaProntas() ? ' <span class="badge">' + stariaProntas() + '</span>' : ''}</button><button class="btn gold" type="button" id="np">+ Produto</button></div></div>
       <input type="text" id="bq" placeholder="Buscar produto" value="${esc(busca)}" aria-label="Buscar produto">
       ${L.length ? `<section class="card"><div class="list">${L.map(p => `<button type="button" class="it" data-pr="${esc(p.id)}"><span class="thumb">${p.fotos[0] ? `<img alt="" src="${esc(p.fotos[0].url)}">` : '🏷️'}</span><span class="tx"><b>${esc(p.nome)}</b><span>${esc([p.codigo ? 'cód. ' + p.codigo : '', p.categoria, !p.ativo ? 'fora da vitrine' : '', esgotado(p) ? 'esgotado' : '', p.destaque ? '⭐ destaque' : ''].filter(Boolean).join(' · '))}</span></span><span class="vl">${money(p.preco)}${p.faixas.length && M('l_volume') ? '<small>+ preço por qtd</small>' : ''}</span></button>`).join('')}</div></section>` : `<div class="card empty"><div class="big">🏷️</div><p class="muted">${S.produtos.length ? 'Nenhum produto com esse nome.' : 'Nenhum produto ainda.'}</p></div>`}`;
     $('#np').addEventListener('click', () => formProduto(null));
     $('#imp').addEventListener('click', importarMenu);
+    { const b = $('#sprc'); if (b) b.addEventListener('click', precosMenu); }
     const bq = $('#bq'); bq.addEventListener('input', () => { busca = bq.value; const pos = bq.selectionStart; render(); const n = $('#bq'); n.focus(); n.setSelectionRange(pos, pos); });
     document.querySelectorAll('[data-pr]').forEach(b => b.addEventListener('click', () => formProduto(S.produtos.find(p => p.id === b.dataset.pr))));
   }
   /* ---------- Importar produtos: planilha do Excel ou StarIA ---------- */
-  const stariaProntas = () => (S.staria || []).filter(j => j.status === 'pronta').length;
+  const stariaImp = () => (S.staria || []).filter(j => (j.tipo || 'importar') === 'importar');
+  const stariaProntas = () => M('l_staria_imp') ? stariaImp().filter(j => j.status === 'pronta').length : 0;
+  const precoJob = st => (S.staria || []).find(j => j.tipo === 'precos' && (!st || j.status === st));
+  /* ---------- Atualizar preços pelo StarIA: preço de venda do momento; em promoção, o preço da promoção ---------- */
+  const precoNovo = r => r && r.precoVenda > 0 ? (r.precoPromo != null && r.precoPromo < r.precoVenda ? { preco: r2(r.precoPromo), de: r2(r.precoVenda), promo: true, ate: r.promoAte } : { preco: r2(r.precoVenda), de: null, promo: false }) : null;
+  function precosMenu() {
+    const comCod = S.produtos.filter(p => p.codigo && /^\d{1,14}$/.test(p.codigo));
+    const pend = precoJob('pendente'), pronta = precoJob('pronta'), feita = (S.staria || []).filter(j => j.tipo === 'precos' && j.status === 'importada')[0];
+    let corpo;
+    if (pronta) {
+      const L = comCod.map(p => ({ p, n: precoNovo(pronta.resultados[p.codigo]) })).filter(x => x.n);
+      const muda = L.filter(x => r2(x.p.preco) !== x.n.preco || (x.p.precoDe == null ? null : r2(x.p.precoDe)) !== x.n.de);
+      const sem = comCod.length - L.length;
+      corpo = `<section class="card"><h3>Preços que chegaram do StarIA</h3>
+        <p class="small muted">${muda.length} produto${muda.length === 1 ? '' : 's'} muda${muda.length === 1 ? '' : 'm'} de preço · ${L.length - muda.length} já está${L.length - muda.length === 1 ? '' : 'ão'} certo${L.length - muda.length === 1 ? '' : 's'}${sem ? ' · ' + sem + ' não achado' + (sem === 1 ? '' : 's') + ' no StarIA (fica' + (sem === 1 ? '' : 'm') + ' como está)' : ''}.</p>
+        ${muda.length ? `<div class="list">${muda.slice(0, 300).map(x => `<div class="it"><span class="tx"><b>${esc(x.p.nome)}</b><span>${x.n.promo ? '🏷️ promoção' + (x.n.ate ? ' até ' + esc(x.n.ate.split('-').reverse().join('/')) : '') + ' · de ' + money(x.n.de) : 'preço normal'}</span></span><span class="vl"><small style="text-decoration:line-through">${money(x.p.preco)}</small>${money(x.n.preco)}</span></div>`).join('')}</div>` : '<p class="muted">Nenhum preço mudou.</p>'}
+        <button class="btn pri full" type="button" id="spa">${muda.length ? 'Aplicar os novos preços' : 'Concluir'}</button>
+        <p class="neg small" id="spe" role="alert" style="font-weight:600"></p></section>`;
+    } else if (pend) {
+      corpo = `<section class="card"><h3>Esperando o StarIA</h3><p class="small muted">${pend.termos.length} produto${pend.termos.length === 1 ? '' : 's'} · pedido em ${esc(dataHora(pend.criadoEm))}.</p>
+        <p class="note">O site não fala direto com o StarIA. Para ele responder, peça no Claude: <b>"processa as consultas do StarIA da loja"</b>. Depois toque em Atualizar.</p>
+        <div class="grid2"><button class="btn pri" type="button" id="sat">Atualizar</button><button class="btn" type="button" data-sx="${esc(pend.id)}">Cancelar pedido</button></div></section>`;
+    } else {
+      corpo = `<section class="card"><h3>Atualizar preços pelo StarIA</h3>
+        <p class="small muted">Busca no StarIA o <b>preço de venda de agora</b> de cada produto. Se o produto estiver <b>em promoção</b> no StarIA, entra o <b>preço da promoção</b> (e o preço normal aparece riscado na vitrine). Você confere antes de aplicar.</p>
+        <p class="small">${comCod.length} produto${comCod.length === 1 ? '' : 's'} com código do StarIA${S.produtos.length - comCod.length ? ' · ' + (S.produtos.length - comCod.length) + ' sem código (não mudam)' : ''}.</p>
+        <button class="btn pri full" type="button" id="spp"${comCod.length ? '' : ' disabled'}>Atualizar preços agora</button>
+        ${feita ? `<p class="small muted">Última atualização aplicada: ${esc(dataHora(feita.feitoEm || feita.criadoEm))}.</p>` : ''}
+        <p class="neg small" id="spe" role="alert" style="font-weight:600"></p></section>`;
+    }
+    openSheet('Preços do StarIA', corpo, pn => {
+      const spp = $('#spp'); if (spp) spp.addEventListener('click', async () => { spp.disabled = true; try { await api('/api/loja/admin/staria/pedir', { id: 's' + hex(6), tipo: 'precos' }); await reload(); toast('Pedido de preços enviado ao StarIA'); precosMenu(); } catch (e) { spp.disabled = false; if (e.status === 401) return fail(e); $('#spe').textContent = e.message; } });
+      const sat = $('#sat'); if (sat) sat.addEventListener('click', async () => { sat.disabled = true; try { await reload(); precosMenu(); } catch (e) { sat.disabled = false; fail(e); } });
+      pn.querySelectorAll('[data-sx]').forEach(b => b.addEventListener('click', async () => { b.disabled = true; try { await api('/api/loja/admin/staria/excluir', { id: b.dataset.sx }); await reload(); precosMenu(); } catch (e) { b.disabled = false; fail(e); } }));
+      const spa = $('#spa'); if (spa) spa.addEventListener('click', async () => {
+        spa.disabled = true; spa.textContent = 'Aplicando…';
+        try { const r = await api('/api/loja/admin/staria/aplicar-precos', { id: pronta.id }); await reload(); closeSheet();
+          toast((r.atualizados ? r.atualizados + ' preço' + (r.atualizados === 1 ? '' : 's') + ' atualizado' + (r.atualizados === 1 ? '' : 's') : 'Nenhum preço mudou') + (r.pulados.length ? ' · ' + r.pulados.length + ' pulado' + (r.pulados.length === 1 ? '' : 's') + ' (preço por quantidade)' : '')); go('produtos'); }
+        catch (e) { spa.disabled = false; spa.textContent = 'Aplicar os novos preços'; if (e.status === 401) return fail(e); $('#spe').textContent = e.message; }
+      });
+    });
+  }
   const MODELO_COLS = ['Código (EAN)', 'Nome', 'Preço', 'Preço de', 'Estoque', 'Categoria', 'Unidade', 'Descrição', 'Custo'];
   function importarMenu() {
-    const js = S.staria || [];
+    const js = stariaImp();
     const stTxt = { pendente: 'Esperando o StarIA', pronta: 'Pronta para revisar', importada: 'Importada' };
     openSheet('Importar produtos', `
       <section class="card"><h3>📊 Planilha do Excel</h3>
@@ -220,21 +262,21 @@
         <div class="grid2"><label class="btn pri" for="fxl" style="text-align:center">Escolher planilha</label><a class="btn" href="/modelo-produtos-loja.xlsx" download>Baixar modelo</a></div>
         <input type="file" id="fxl" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden>
         <p class="neg small" id="xe" role="alert" style="font-weight:600"></p></section>
-      <section class="card"><h3>🔎 Do StarIA</h3>
+      ${M('l_staria_imp') ? `<section class="card"><h3>🔎 Do StarIA</h3>
         <p class="small muted">Escreva um código ou EAN para importar um produto, ou vários (um por linha) para importar em massa.</p>
         <textarea id="stt" rows="4" placeholder="7891234567890&#10;7899876543210&#10;1234"></textarea>
         <button class="btn pri full" type="button" id="stp">Pedir ao StarIA</button>
         <p class="neg small" id="ste" role="alert" style="font-weight:600"></p>
         ${js.length ? `<div class="list">${js.map(j => `<div class="it"><span class="tx"><b>${j.termos.length} código${j.termos.length === 1 ? '' : 's'} · ${esc(stTxt[j.status] || j.status)}</b><span>${esc(dataHora(j.criadoEm))}${j.status !== 'pendente' ? ' · achou ' + Object.values(j.resultados).filter(Boolean).length : ''}</span></span>
           ${j.status === 'pendente' ? `<button class="btn sm" type="button" data-sx="${esc(j.id)}">Cancelar</button>` : `<button class="btn sm ${j.status === 'pronta' ? 'gold' : ''}" type="button" data-sr="${esc(j.id)}">${j.status === 'pronta' ? 'Revisar e importar' : 'Ver'}</button>`}</div>`).join('')}</div>` : ''}
-        ${js.some(j => j.status === 'pendente') ? '<p class="note">O site não fala direto com o StarIA. Para ele responder, peça no Claude: <b>"processa as consultas do StarIA da loja"</b>. Depois toque em Atualizar.</p><button class="btn full" type="button" id="sat">Atualizar</button>' : ''}</section>`, pn => {
+        ${js.some(j => j.status === 'pendente') ? '<p class="note">O site não fala direto com o StarIA. Para ele responder, peça no Claude: <b>"processa as consultas do StarIA da loja"</b>. Depois toque em Atualizar.</p><button class="btn full" type="button" id="sat">Atualizar</button>' : ''}</section>` : ''}`, pn => {
       $('#fxl').addEventListener('change', async e => {
         const f = e.target.files[0]; if (!f) return;
         $('#xe').textContent = 'Lendo a planilha…';
         try { const rows = await lerPlanilha(f); const R = montarImport(rows); revisarPlanilha(R, f.name); }
         catch (err) { $('#xe').textContent = err.message || 'Não consegui ler a planilha.'; e.target.value = ''; }
       });
-      $('#stp').addEventListener('click', async () => {
+      if ($('#stp')) $('#stp').addEventListener('click', async () => {
         const termos = [...new Set($('#stt').value.split(/[\s,;]+/).map(x => x.replace(/\D/g, '')).filter(Boolean))];
         if (!termos.length) { $('#ste').textContent = 'Escreva pelo menos um código ou EAN (só números).'; return; }
         const bt = $('#stp'); bt.disabled = true;
