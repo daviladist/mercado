@@ -409,7 +409,7 @@
     if (reabrir || F.dividir == null) F.dividir = F.pags.length > 1;
     // de quem é a venda: {modo:'um', de} ou {modo:'mix', v:{quem: quantidade ou valor}}; null = ainda não escolheu
     // (venda antiga de antes desta tela, com mais de um meeiro: legado = mantém a divisão do dia)
-    let legado = false;
+    let legado = !reabrir && !!F._legado; delete F._legado;
     if (reabrir || F.orig === undefined) {
       F.orig = null;
       if (reabrir && F.tipo === 'venda') {
@@ -419,7 +419,8 @@
         else { const ks = Object.keys(src.partes || {}).filter(k => k !== 'dono'); if (ks.length === 1) F.orig = { modo: 'um', de: ks[0] }; else if (!ks.length) F.orig = { modo: 'um', de: 'dono' }; else legado = true; }
       }
     }
-    const origOriginal = reabrir ? JSON.stringify(src.origem || []) : null;
+    // origem gravada (ou deduzida da divisão de uma venda antiga de um meeiro só): igual a ela = mantém a divisão do dia
+    const origOriginal = reabrir ? JSON.stringify(Array.isArray(src.origem) && src.origem.length ? src.origem : F.orig && F.orig.modo === 'um' ? [{ de: F.orig.de }] : []) : (F._origOriginal || null); delete F._origOriginal;
     const origRoca = gravado ? gravado.rocaId : null, origPartes = gravado ? JSON.parse(JSON.stringify(gravado.partes || {})) : null;
     const ativas = S.rocas.filter(r => r.ativa || r.id === F.rocaId);
     if (!F.rocaId && F.tipo !== 'despesa' && ativas.length === 1) F.rocaId = ativas[0].id;
@@ -517,14 +518,14 @@
       const r = F.rocaId ? roca(F.rocaId) : null, ms = meeirosDe(r);
       if (F.tipo !== 'venda' || !ms.length) return '';
       if (!F.orig && !legado && !edit && ms.length === 1) F.orig = { modo: 'um', de: ms[0] };
-      const O = F.orig || {}, quem = ms.concat(['dono']), porQtd = toNum(F.qtd) > 0;
+      const O = F.orig || {}, quem = ms.concat(['dono']).concat(Object.keys(O.v || {}).filter(k => k !== 'dono' && !ms.includes(k))), porQtd = toNum(F.qtd) > 0;
       return `<div class="field"><span class="lbl">De quem é esta venda?</span>
         ${legado && !F.orig ? '<p class="small muted">Venda lançada antes da divisão por meeiro: a divisão do dia fica como está. Toque abaixo só se quiser refazer.</p>' : ''}
         <div class="chips">${ms.map(k => `<button type="button" class="chip" data-og="um:${esc(k)}" aria-pressed="${O.modo === 'um' && O.de === k}">🤝 ${esc(nomeParte(k))}</button>`).join('')}
           <button type="button" class="chip" data-og="um:dono" aria-pressed="${O.modo === 'um' && O.de === 'dono'}">Parte de ${esc(DONO())}</button>
           <button type="button" class="chip" data-og="mix" aria-pressed="${O.modo === 'mix'}">Misturado (de vários)</button></div>
         ${O.modo === 'mix' ? `<div class="chq"><p class="small muted" id="ohint" style="margin:0">${esc(origHint())}</p>
-          ${quem.map(k => `<div class="orow"><span>${esc(k === 'dono' ? 'Parte de ' + DONO() : nomeParte(k))}</span><input inputmode="decimal" data-oq="${esc(k)}" value="${esc((O.v || {})[k] || '')}" aria-label="Quanto foi de ${esc(nomeParte(k))}"></div>`).join('')}
+          ${quem.map(k => `<div class="orow"><span>${esc(k === 'dono' ? 'Parte de ' + DONO() : nomeParte(k) + (ms.includes(k) ? '' : ' (saiu da roça)'))}</span><input inputmode="decimal" data-oq="${esc(k)}" value="${esc((O.v || {})[k] || '')}" aria-label="Quanto foi de ${esc(nomeParte(k))}"></div>`).join('')}
           <p class="note" id="osoma" aria-live="polite">${origSoma()}</p></div>` : ''}</div>`;
     }
     const origHint = () => toNum(F.qtd) > 0 ? 'Quanto foi de cada um (' + (F.unidade || 'quantidade') + '). Deixe em branco quem não entrou.' : 'Quanto foi de cada um em R$ (do vendido). Deixe em branco quem não entrou. Dica: com a quantidade preenchida, dá para dividir por caixas.';
@@ -670,7 +671,7 @@
       F.id = b.id; // tocar duas vezes não lança duas vezes
       const bt = $('#fs'); bt.disabled = true;
       try { await api('/api/rural/lanc', b); await reload(); closeSheet(); toast((edit ? 'Correção salva: ' : 'Lançado ✓ ') + money(valor)); render(); }
-      catch (e) { bt.disabled = false; if (e.status === 401 || e.login) { const keepF = Object.assign({}, F, { valor: numIn(valor), _retomar: true }); retomar = () => formLanc(keepF); return fail(e); } err(e.message); }
+      catch (e) { bt.disabled = false; if (e.status === 401 || e.login) { const keepF = Object.assign({}, F, { valor: numIn(valor), _retomar: true, _legado: legado, _origOriginal: origOriginal }); retomar = () => formLanc(keepF); return fail(e); } err(e.message); }
     }
     draw();
   }
@@ -711,7 +712,7 @@
     if (view !== 'acerto') return;
     const t = P.totais, nm = P.pessoaNome;
     const grp = (tipo, tit) => { const it = P.itens.filter(i => i.tipo === tipo); return it.length ? `<section class="card"><h3>${tit}</h3><div class="scroll"><table><thead><tr><th>Data</th><th>O quê</th>${tipo !== 'adiantamento' ? '<th class="n">Total</th><th class="n">%</th>' : ''}<th class="n">${esc(nm)}</th></tr></thead><tbody>
-      ${it.map(i => `<tr><td>${dBR(i.data)}</td><td>${esc(i.tipo === 'venda' ? [(i.qtdParte != null ? numIn(i.qtdParte) + ' ' + (i.unidade || '') + ' da parte dele' : i.qtd ? numIn(i.qtd) + ' ' + (i.unidade || '') : ''), i.comprador].filter(Boolean).join(' · ') || 'Venda' : i.tipo === 'despesa' ? cat(i.categoria).nome + (i.descricao ? ' · ' + i.descricao : '') : i.descricao || 'Adiantamento')}</td>${tipo !== 'adiantamento' ? `<td class="n">${money(i.valorAcerto != null ? i.valorAcerto : i.valor)}</td><td class="n">${pctTxt(i.pctParte != null ? i.pctParte : i.pct)}</td>` : ''}<td class="n">${money(i.valorPessoa)}</td></tr>`).join('')}
+      ${it.map(i => `<tr><td>${dBR(i.data)}</td><td>${esc(i.tipo === 'venda' ? [(i.qtdParte != null ? numIn(i.qtdParte) + ' ' + (i.unidade || '') + ' da parte dele' : !i.misturada && i.qtd ? numIn(i.qtd) + ' ' + (i.unidade || '') : i.misturada ? 'parte dele' : ''), i.comprador].filter(Boolean).join(' · ') || 'Venda' : i.tipo === 'despesa' ? cat(i.categoria).nome + (i.descricao ? ' · ' + i.descricao : '') : i.descricao || 'Adiantamento')}</td>${tipo !== 'adiantamento' ? `<td class="n">${money(i.valorAcerto != null ? i.valorAcerto : i.valor)}</td><td class="n">${pctTxt(i.pctParte != null ? i.pctParte : i.pct)}</td>` : ''}<td class="n">${money(i.valorPessoa)}</td></tr>`).join('')}
       </tbody></table></div></section>` : ''; };
     $('#main').innerHTML = `<div class="row noprint"><button class="btn sm" type="button" id="bk">← ${esc(r.nome)}</button></div>
       <div><h1>Acerto com ${esc(nm)}</h1><p class="muted small">${esc(r.nome)} · tudo o que ainda não foi acertado · ${dBR(hoje())}</p></div>
@@ -817,7 +818,7 @@
       pn.querySelectorAll('[data-ic]').forEach(b => b.addEventListener('click', () => { keep(); W.icone = b.dataset.ic; W.iconeMao = true; redraw(); }));
       const wc = $('#wc'); if (wc) wc.addEventListener('change', () => { keep(); redraw(); });
       pn.querySelectorAll('[data-mo]').forEach(b => b.addEventListener('click', () => { keep(); W.modo = b.dataset.mo; if (W.modo === 'funcionarios') { W.parceria = {}; W.regras = {}; } redraw(); }));
-      pn.querySelectorAll('[data-me]').forEach(b => b.addEventListener('click', () => { keep(); const k = b.dataset.me; if (W.parceria[k] != null) { delete W.parceria[k]; delete W.pes[k]; } else W.parceria[k] = 50; redraw(); }));
+      pn.querySelectorAll('[data-me]').forEach(b => b.addEventListener('click', () => { keep(); const k = b.dataset.me; if (W.parceria[k] != null) { delete W.parceria[k]; delete W.pes[k]; Object.keys(W.regras).forEach(c => { if ((W.regras[c] || {})[k] != null) { delete W.regras[c]; delete W['outra_' + c]; } }); } else W.parceria[k] = 50; redraw(); }));
       pn.querySelectorAll('[data-sl]').forEach(s => { s.addEventListener('input', () => { W.parceria[s.dataset.sl] = Number(s.value); const n = pn.querySelector('[data-pn="' + s.dataset.sl + '"]'); if (n) n.value = s.value; const h = pn.querySelector('[data-wh="' + s.dataset.sl + '"]'); if (h) h.textContent = dicaW(s.dataset.sl); }); s.addEventListener('change', () => { keep(); redraw(); }); });
       pn.querySelectorAll('[data-pn]').forEach(i => i.addEventListener('input', () => { const n = toNum(i.value); if (n > 0) { W.parceria[i.dataset.pn] = Math.min(100, n); const sl = pn.querySelector('[data-sl="' + i.dataset.pn + '"]'); if (sl) sl.value = W.parceria[i.dataset.pn]; const h = pn.querySelector('[data-wh="' + i.dataset.pn + '"]'); if (h) h.textContent = dicaW(i.dataset.pn); } }));
       pn.querySelectorAll('[data-pn]').forEach(i => i.addEventListener('blur', () => setTimeout(() => { if (document.body.contains(i) && (!pn.contains(document.activeElement) || !document.activeElement.matches('input'))) { keep(); redraw(); } }, 150)));
