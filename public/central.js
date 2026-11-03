@@ -203,8 +203,8 @@
         <button class="btn dark" type="button" id="agen" style="align-self:end">${t.adminLogin ? 'Gerar nova senha' : ramoOf(t) !== 'atacado' ? esc(RAMO_UI[ramoOf(t)].acesso) : 'Criar acesso do administrador'}</button>
       </div>
       <div id="aout" aria-live="polite"></div>
-      ${t.adminLogin ? `<div class="logo-row" style="align-items:center"><button class="btn" type="button" id="aent">🛟 Entrar como esta empresa</button>
-        <span class="small muted" style="flex:1 1 220px">Abre o app numa aba nova como o administrador, sem trocar a senha dele. Vale 1 hora, mostra um aviso vermelho e fica no histórico. Neste navegador fica aberta uma empresa por vez.</span></div>` : ''}`}
+      <div class="logo-row" style="align-items:center"><button class="btn" type="button" id="aent">🛟 Entrar como esta empresa</button>
+        <span class="small muted" style="flex:1 1 220px">${t.adminLogin || st.admins ? 'Abre o app numa aba nova como o administrador, sem trocar a senha dele. Vale 1 hora, mostra um aviso vermelho e fica no histórico. Neste navegador fica aberta uma empresa por vez.' : 'Esta empresa ainda não tem administrador: crie o acesso logo acima e depois entre por aqui.'}</span></div>`}
     </section>`;
   }
   async function genAdmin() {
@@ -220,6 +220,7 @@
         <span class="small">No primeiro acesso, a pessoa cria a senha dela.</span></div>`;
       const t = D.tenants.find(x => x.id === draft.id); if (t) { t.adminLogin = r.login; draft.adminLogin = r.login; }
       b.textContent = 'Gerar nova senha';
+      const sn = $('#aent') && $('#aent').nextElementSibling; if (sn) sn.textContent = 'Abre o app numa aba nova como o administrador, sem trocar a senha dele. Vale 1 hora, mostra um aviso vermelho e fica no histórico. Neste navegador fica aberta uma empresa por vez.';
     } catch (e) { if (e.status === 401) return showLogin('Sua sessão terminou. Entre de novo.'); toast(e.message); }
     finally { b.disabled = false; }
   }

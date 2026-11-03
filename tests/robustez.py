@@ -29,7 +29,7 @@ def rej(r): return [x.get('error') for x in (r.get('rejected') or [])]
 def login(t, role, lg, p):
     c = C(t); s, _ = c.req('/api/login', {'role': role, 'login': lg, 'password': p})
     if s != 200: return None
-    np = p + 'N'; c.req('/api/password', {'current': p, 'next': np}); return c
+    np = p + 'N7'; c.req('/api/password', {'current': p, 'next': np}); return c
 
 A = C(); s, _ = A.req('/api/login', {'role': 'admin', 'login': AL, 'password': APW}); check(s == 200, 'administrador entra')
 cen = C(None); s, _ = cen.req('/api/central/login', {'login': 'super_admin', 'password': CPW}); check(s == 200, 'Central entra')
