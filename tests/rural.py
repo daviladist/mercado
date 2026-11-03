@@ -213,6 +213,12 @@ MUL = rid(); s, r = R.req('/api/rural/roca', {'id': MUL, 'nome': 'Pepino', 'cult
 s2, st2 = R.req('/api/rural/state'); mul = next(x for x in st2['rocas'] if x['id'] == MUL)
 check(s == 200 and mul['parceria'] == {LUCAS: 40, JOSE: 50} and mul['pes'] == {LUCAS: 3000, JOSE: 1000}, 'roça com 2 meeiros (40% e 50%, somam 90%) e os pés de cada um')
 s, _ = R.req('/api/rural/roca', {'id': rid(), 'nome': 'X', 'modo': 'meeiro', 'parceria': {LUCAS: 40}, 'pes': {LUCAS: 1.5}}); check(s == 400, 'pés quebrados recusados')
+PD = rid(); s, _ = R.req('/api/rural/roca', {'id': PD, 'nome': 'Alface própria', 'modo': 'funcionarios', 'pes': {'dono': 8000}})
+s2, st = R.req('/api/rural/state'); pd = next((x for x in st['rocas'] if x['id'] == PD), {}); check(s == 200 and pd.get('pes') == {'dono': 8000}, 'roça só de funcionários guarda os pés do dono')
+s, _ = R.req('/api/rural/roca', {'id': PD, 'nome': 'Alface própria', 'modo': 'funcionarios', 'pes': {'dono': -5}}); check(s == 400, 'pés do dono negativos recusados')
+s, _ = R.req('/api/rural/roca', {'id': PD, 'nome': 'Alface própria', 'modo': 'funcionarios', 'pes': {'dono': '8000'}}); check(s == 400, 'pés do dono em texto recusados')
+PM = rid(); s, _ = R.req('/api/rural/roca', {'id': PM, 'nome': 'Pepino 2', 'modo': 'meeiro', 'parceria': {LUCAS: 50}, 'pes': {LUCAS: 2000, 'dono': 1500, JOSE: 900}})
+s2, st = R.req('/api/rural/state'); pm = next((x for x in st['rocas'] if x['id'] == PM), {}); check(s == 200 and pm.get('pes') == {LUCAS: 2000, 'dono': 1500}, 'roça de meeiro guarda os pés do dono e do meeiro (quem não é da roça fica fora)')
 vb = {'novo': True, 'tipo': 'venda', 'rocaId': MUL, 'data': '2026-10-20'}
 s, r = R.req('/api/rural/lanc', dict(vb, id=lid(), valor=1000)); check(s == 400, 'roça com vários meeiros: venda sem dizer de quem é recusada')
 M1 = lid(); s, _ = R.req('/api/rural/lanc', dict(vb, id=M1, valor=1000, origem=[{'de': JOSE}]))
@@ -354,6 +360,12 @@ s, _ = X.req('/api/rural/pessoa', {'id': LUCAS, 'tipo': 'meeiro', 'nome': 'Seque
 cen.req('/api/central/tenant', {'id': TID, 'modules': {'r_meeiros': False, 'r_diaristas': False}})
 s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'adiantamento', 'rocaId': BAN, 'pessoaId': LUCAS, 'data': '2026-10-08', 'valor': 7}); check(s == 403, 'meeiros desligados na Central: adiantamento recusado')
 s, _ = R.req('/api/rural/acerto/previa?roca=' + BAN + '&pessoa=' + LUCAS); check(s == 403, 'meeiros desligados: acerto recusado')
+s, st = R.req('/api/rural/state'); mx = next(x for x in st['rocas'] if x['id'] == MUL)
+s, _ = R.req('/api/rural/roca', dict(mx, pes=dict(mx['pes'], dono=1234))); s2, st = R.req('/api/rural/state'); mx2 = next(x for x in st['rocas'] if x['id'] == MUL)
+check(s == 200 and mx2['pes'].get('dono') == 1234 and mx2['pes'].get(LUCAS) == mx['pes'].get(LUCAS) and mx2['parceria'] == mx['parceria'], 'meeiros desligados: pés do dono salvam e os dos meeiros ficam como estavam')
+s, _ = R.req('/api/rural/roca', dict(mx2, pes={LUCAS: 1})); s2, st = R.req('/api/rural/state'); mx3 = next(x for x in st['rocas'] if x['id'] == MUL)
+check(s == 200 and 'dono' not in mx3['pes'] and mx3['pes'].get(LUCAS) == mx['pes'].get(LUCAS), 'meeiros desligados: tirar os pés do dono funciona, sem mexer nos dos meeiros')
+s, _ = R.req('/api/rural/roca', dict(mx3, pes={'dono': 1.5})); check(s == 400, 'meeiros desligados: pés do dono quebrados recusados')
 s, _ = R.req('/api/rural/lanc', {'id': lid(), 'novo': True, 'tipo': 'despesa', 'categoria': 'diarista', 'rocaId': BAN, 'data': '2026-10-09', 'pessoaNome': 'João', 'valor': 10}); check(s == 403, 'diaristas desligados: recusado')
 s, _ = R.req('/api/rural/lanc', {'id': V2, 'tipo': 'venda', 'rocaId': BAN, 'data': '2026-10-20', 'valor': 1000, 'comprador': 'X'}); check(s == 403, 'meeiros desligados: venda com parte de meeiro não é corrigida (a parte dele não some)')
 s, _ = R.req('/api/rural/lanc/excluir', {'id': A1}); check(s == 403, 'meeiros desligados: adiantamento não é excluído')
@@ -372,7 +384,7 @@ cen.req('/api/central/tenant', {'id': TID, 'status': 'suspensa'})
 s, _ = R.req('/api/rural/state'); check(s == 403, 'empresa suspensa: produtor não entra')
 cen.req('/api/central/tenant', {'id': TID, 'status': 'ativa'})
 s, _ = R.req('/api/rural/state'); check(s == 200, 'reativada: volta a funcionar')
-s, st = cen.req('/api/central/state'); tp = next(t for t in st['tenants'] if t['id'] == TID); check(tp['stats']['rocas'] == 4 and tp['stats']['lancamentos'] >= 8, 'Central mostra roças e lançamentos da empresa rural')
+s, st = cen.req('/api/central/state'); tp = next(t for t in st['tenants'] if t['id'] == TID); check(tp['stats']['rocas'] == 6 and tp['stats']['lancamentos'] >= 8, 'Central mostra roças e lançamentos da empresa rural')
 
 print('== Central: "Entrar como esta empresa" (suporte)')
 s, _ = C(None).req('/api/central/entrar', {'id': TX}); check(s == 401, 'sem entrar na Central, não abre empresa nenhuma')
@@ -396,6 +408,13 @@ s, _ = SUP.req('/api/rural/state', tenant=TID); check(s == 401, 'a sessão de su
 s, _ = SUP.req('/api/central/state'); check(s == 200, 'a Central continua aberta junto')
 s, _ = SUP.req('/api/logout', {}); s2, _ = SUP.req('/api/rural/state'); check(s == 200 and s2 == 401, 'sair do suporte encerra o acesso ao app')
 s, _ = cen.req('/api/central/state'); check(s == 200, 'e a Central continua aberta')
+for ramo, rota in (('atacado', '/api/state'), ('loja', '/api/loja/admin/state')):
+    s, r = cen.req('/api/central/tenant', {'name': 'Suporte ' + ramo, 'ramo': ramo}); TT = r['tenant']['id']
+    cen.req('/api/central/tenant-admin', {'id': TT, 'login': 'adm' + ramo})
+    S3 = C(TT); S3.jar = cen.jar; S3.op = cen.op
+    s, r = S3.req('/api/central/entrar', {'id': TT}); s2, me = S3.req('/api/me'); s3, _ = S3.req(rota)
+    check(s == 200 and me.get('suporte') and s3 == 200, 'suporte entra também numa empresa de ' + ramo + ' (%s %s)' % (s, s3))
+    S3.req('/api/logout', {})
 XR = C(TX); s, me = XR.req('/api/login', {'role': 'admin', 'login': 'pai', 'password': XP}); check(s == 200 and not me.get('mustReset') and not me.get('suporte'), 'a senha do administrador não mudou e o login dele não é de suporte')
 s, r = cen.req('/api/central/tenant-admin', {'id': SA, 'login': 'dono'}); SA0 = r.get('password')
 S2 = C(SA); S2.jar = cen.jar; S2.op = cen.op
