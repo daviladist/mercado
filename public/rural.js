@@ -278,7 +278,7 @@
       p += 46 + nl + xl + cl;
     }
     const fluxo = nome => { const f = files[nome]; if (!f) return null; const st = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true), data = u8.subarray(st, st + f.csize); let s = new Blob([data]).stream(); if (f.met === 8) s = s.pipeThrough(new DecompressionStream('deflate-raw')); return s.pipeThrough(new TextDecoderStream()); };
-    const lerTudo = async nome => { const s = fluxo(nome); return s ? new Response(s).text() : ''; };
+    const lerTudo = async nome => { const s = fluxo(nome); if (!s) return ''; const rd = s.getReader(); let t = ''; for (;;) { const { value, done } = await rd.read(); if (done) return t; t += value; } };
     const shared = []; (await lerTudo('xl/sharedStrings.xml')).replace(/<si>([\s\S]*?)<\/si>/g, (_, si) => { shared.push(xmlTxt((si.match(/<t[^>]*>([\s\S]*?)<\/t>/g) || []).map(t => t.replace(/<[^>]+>/g, '')).join(''))); return ''; });
     const wb = await lerTudo('xl/workbook.xml'), rels = await lerTudo('xl/_rels/workbook.xml.rels');
     const abas = [...wb.matchAll(/<sheet\b[^>]*?name="([^"]*)"[^>]*?r:id="([^"]*)"/g)].map(m => { const rel = new RegExp('Id="' + m[2] + '"[^>]*Target="([^"]*)"').exec(rels) || new RegExp('Target="([^"]*)"[^>]*Id="' + m[2] + '"').exec(rels); let t = rel ? rel[1].replace(/^\//, '') : ''; if (t && !t.startsWith('xl/')) t = 'xl/' + t; return { nome: xmlTxt(m[1]), arq: t }; });
@@ -357,7 +357,7 @@
         const f = ev.target.files[0]; if (!f) return;
         arquivo = f.name.replace(/\.xlsx$/i, '').replace(/[-_ ]*\d+$/, '').trim();
         try { const abas = await lerPlanilhaMeeiros(f, t => { const e = $('#ixs'); if (e) e.textContent = t; }); I = montarImportacao(abas); prepararPrevia(); passo2(); }
-        catch (err) { const e = $('#ixe'); if (e) e.textContent = err.message || 'Não consegui ler a planilha.'; ev.target.value = ''; }
+        catch (err) { console.error(err); const e = $('#ixe'); if (e) e.textContent = err.message || 'Não consegui ler a planilha.'; ev.target.value = ''; }
       });
     });
     function prepararPrevia() {
