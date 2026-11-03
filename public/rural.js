@@ -472,6 +472,7 @@
     const add = (de, q, v) => { const o = P.por[de] || (P.por[de] = { qtd: 0, vend: 0 }); o.qtd += q; o.vend += v; };
     vs.forEach(l => {
       if (!un || unOf(l) !== un) { P.semQtd = r2(P.semQtd + l.valor); P.nSem++; return; }
+      const antes = {}; Object.keys(P.por).forEach(k => { antes[k] = P.por[k].qtd; });
       let q = 0;
       if ((l.itens || []).length) {
         l.itens.forEach(it => {
@@ -490,40 +491,47 @@
       }
       P.qtd += q; P.vend += l.valor;
       P.dias[l.data] = (P.dias[l.data] || 0) + q;
-      const mk = String(l.data).slice(0, 7), m = P.meses[mk] || (P.meses[mk] = { qtd: 0, vend: 0 }); m.qtd += q; m.vend += l.valor;
+      const mk = String(l.data).slice(0, 7), m = P.meses[mk] || (P.meses[mk] = { qtd: 0, vend: 0, por: {} }); m.qtd += q; m.vend += l.valor;
+      Object.keys(P.por).forEach(k => { const d = P.por[k].qtd - (antes[k] || 0); if (d) m.por[k] = (m.por[k] || 0) + d; });
       if (q > 0) P.precos.push({ data: l.data, q, p: l.valor / q });
     });
     P.qtd = r6(P.qtd); P.vend = r2(P.vend);
     return P;
   }
+  /* pés da roça: total, produção de quem tem pés e se toda a produção é de quem tem pés (senão os números por pé ficam de fora) */
+  function pesInfo(r, por, qtd) {
+    const pes = r.pes || {}, quem = Object.keys(pes).filter(k => pes[k] > 0), tot = quem.reduce((a, k) => a + Number(pes[k]), 0);
+    const qCom = quem.reduce((a, k) => a + ((por[k] || {}).qtd != null ? por[k].qtd : Number(por[k]) || 0), 0);
+    const semQ = r6(qtd - qCom);
+    return { pes, quem, tot, qCom, semQ, completo: tot > 0 && semQ <= 0.0005, meeiros: quem.filter(k => k !== 'dono').reduce((a, k) => a + Number(pes[k]), 0) };
+  }
   function numerosHtml(r, L) {
-    const P = producao(L), R = resumo(L), un = P.un, pes = r.pes || {};
-    const quem = Object.keys(pes).filter(k => pes[k] > 0), pesTot = quem.reduce((a, k) => a + Number(pes[k]), 0);
-    const qComPes = quem.reduce((a, k) => a + ((P.por[k] || {}).qtd || 0), 0);
-    const semPesQ = r6(P.qtd - qComPes);
+    const P = producao(L), R = resumo(L), un = P.un || 'caixa';
+    const I = pesInfo(r, P.por, P.qtd), pes = I.pes, quem = I.quem, pesTot = I.tot, qComPes = I.qCom, semPesQ = I.semQ;
     const porMil = (q, p) => p > 0 ? nf(q / p * 1000, 1) : '—';
+    const pesOk = I.completo ? pesTot : 0; // pés incompletos: não divide o dinheiro da roça inteira só pelos pés de alguns
     const porPe = (v, p) => p > 0 ? money(v / p) : '—';
     const U = (n) => unPl(un, n), u1 = un === 'kg' ? 'kg' : un;
     const tit = esc(periodo().nome);
     if (!P.qtd && !R.vendas && !R.desp) return `<div class="card empty"><div class="big">📊</div><p class="muted">Nada lançado nesta roça ${tit}. Os números aparecem com as vendas e as despesas.</p></div>`;
     let h = `<div class="kpis"><div class="k"><span>Produção ${tit}</span><b>${P.qtd ? nf(P.qtd, 1) + ' ' + esc(U(P.qtd)) : '—'}</b></div><div class="k"><span>Pés</span><b>${pesTot ? nf(pesTot) : '—'}</b></div><div class="k res"><span>${esc(U(2)).replace(/^./, c => c.toUpperCase())} por mil pés</span><b>${qComPes && pesTot ? porMil(qComPes, pesTot) : '—'}</b></div></div>`;
-    if (!pesTot) h += `<p class="small muted noprint">Para ver os números por pé, cadastre os pés da roça em Regras → Editar a roça (os de ${esc(DONO())} e os de cada meeiro).</p>`;
-    else if (semPesQ > 0.0005) h += `<p class="small muted">${nf(semPesQ, 1)} ${esc(U(semPesQ))} são de quem não tem pés cadastrados e ficam fora da conta "por mil pés".</p>`;
+    if (!pesTot) h += `<p class="small muted noprint">Para ver os números por pé, cadastre os pés da roça em Regras → Editar a roça (os de ${esc(DONO())}${meeirosDe(r).length ? ' e os de cada meeiro' : ''}).</p>`;
+    else if (semPesQ > 0.0005) h += `<p class="warn small">${nf(semPesQ, 1)} ${esc(U(semPesQ))} são de quem não tem pés cadastrados (${esc(Object.keys(P.por).filter(k => !(pes[k] > 0) && P.por[k].qtd > 0).map(k => k === '?' ? 'vendas misturadas antigas' : nomeParte(k)).join(', '))}). "Por mil pés" conta só quem tem pés; os valores em reais por pé só aparecem com os pés de todos cadastrados.</p>`;
     const linha = (a, b, cl) => `<tr><td>${a}</td><td class="n ${cl || ''}">${b}</td></tr>`;
     h += `<section class="card"><h3>Por pé</h3><table><tbody>
-      ${linha('Vendido por pé', porPe(R.vendas, pesTot), 'pos')}
-      ${linha('Gasto por pé (todos os gastos da roça)', porPe(R.desp, pesTot), 'neg')}
-      ${linha('Gasto de ' + esc(DONO()) + ' por pé', porPe(R.despDono, pesTot), 'neg')}
-      <tr class="tot"><td>${R.resultado >= 0 ? 'Lucro' : 'Prejuízo'} de ${esc(DONO())} por pé</td><td class="n ${R.resultado >= 0 ? 'pos' : 'neg'}">${porPe(R.resultado, pesTot)}</td></tr>
-      ${R.parteMeeiros ? linha('Ganho dos meeiros por pé', porPe(R.parteMeeiros, pesTot)) : ''}
-      ${pesTot ? linha('Lucro de ' + esc(DONO()) + ' por mil pés', money(R.resultado / pesTot * 1000), R.resultado >= 0 ? 'pos' : 'neg') : ''}
-      </tbody></table><p class="small muted">Conta feita com ${pesTot ? nf(pesTot) + ' pés' : 'os pés cadastrados'} e com o que foi lançado ${tit}.</p></section>`;
+      ${linha('Vendido por pé', porPe(R.vendas, pesOk), 'pos')}
+      ${linha('Gasto por pé (todos os gastos da roça)', porPe(R.desp, pesOk), 'neg')}
+      ${linha('Gasto de ' + esc(DONO()) + ' por pé', porPe(R.despDono, pesOk), 'neg')}
+      <tr class="tot"><td>${R.resultado >= 0 ? 'Lucro' : 'Prejuízo'} de ${esc(DONO())} por pé</td><td class="n ${R.resultado >= 0 ? 'pos' : 'neg'}">${porPe(R.resultado, pesOk)}</td></tr>
+      ${R.parteMeeiros ? linha('Ganho dos meeiros por pé (pés dos meeiros)', porPe(R.parteMeeiros, I.completo ? I.meeiros : 0)) : ''}
+      ${pesOk ? linha('Lucro de ' + esc(DONO()) + ' por mil pés', money(R.resultado / pesOk * 1000), R.resultado >= 0 ? 'pos' : 'neg') : ''}
+      </tbody></table><p class="small muted">${pesOk ? 'Conta feita com ' + nf(pesOk) + ' pés (os de todos) e com o que foi lançado ' + tit + '.' : 'Aparece quando os pés de todos que produziram estiverem cadastrados.'}</p></section>`;
     if (P.qtd) h += `<section class="card"><h3>Por ${esc(u1)}</h3><table><tbody>
       ${linha('Preço médio de venda', money(P.vend / P.qtd), 'pos')}
       ${linha('Custo por ' + esc(u1) + ' (todos os gastos)', money(R.desp / P.qtd), 'neg')}
       ${linha('Custo de ' + esc(DONO()) + ' por ' + esc(u1), money(R.despDono / P.qtd), 'neg')}
       <tr class="tot"><td>${R.resultado >= 0 ? 'Lucro' : 'Prejuízo'} de ${esc(DONO())} por ${esc(u1)}</td><td class="n ${R.resultado >= 0 ? 'pos' : 'neg'}">${money(R.resultado / P.qtd)}</td></tr>
-      </tbody></table>${P.nSem ? `<p class="small muted">${P.nSem} venda${P.nSem > 1 ? 's' : ''} sem quantidade em ${esc(U(2))} (${money(P.semQtd)}) não ${P.nSem > 1 ? 'entram' : 'entra'} no preço médio.</p>` : ''}</section>`;
+      </tbody></table>${P.nSem ? `<p class="small muted">${P.nSem} venda${P.nSem > 1 ? 's' : ''} sem quantidade ou em outra unidade (${money(P.semQtd)}) não ${P.nSem > 1 ? 'entram' : 'entra'} no preço médio. Custo e lucro por ${esc(u1)} usam todos os gastos e vendas da roça.</p>` : ''}</section>`;
     if (R.vendas) h += `<section class="card"><h3>Retorno</h3><table><tbody>
       ${linha('De cada R$ 100 vendidos, sobraram para ' + esc(DONO()), money(R.resultado / R.vendas * 100), R.resultado >= 0 ? 'pos' : 'neg')}
       ${R.despDono ? linha('Cada R$ 1 que ' + esc(DONO()) + ' gastou voltou', money(R.vendaDono / R.despDono)) : ''}
@@ -559,16 +567,16 @@
     }
     const mk = Object.keys(P.meses).sort();
     if (mk.length > 1) h += `<section class="card"><h3>Mês a mês</h3><div class="scroll"><table><thead><tr><th>Mês</th><th class="n">${esc(U(2)).replace(/^./, c => c.toUpperCase())}</th><th class="n">Vendido</th><th class="n">Preço médio</th>${pesTot ? '<th class="n">Por mil pés</th>' : ''}</tr></thead><tbody>
-      ${mk.map(k => { const m = P.meses[k]; return `<tr><td>${MESES[Number(k.slice(5)) - 1]}/${k.slice(0, 4)}</td><td class="n">${nf(m.qtd, 1)}</td><td class="n">${money(m.vend)}</td><td class="n">${money(m.qtd ? m.vend / m.qtd : 0)}</td>${pesTot ? `<td class="n">${porMil(m.qtd, pesTot)}</td>` : ''}</tr>`; }).join('')}</tbody></table></div></section>`;
+      ${mk.map(k => { const m = P.meses[k]; return `<tr><td>${MESES[Number(k.slice(5)) - 1]}/${k.slice(0, 4)}</td><td class="n">${nf(m.qtd, 1)}</td><td class="n">${money(m.vend)}</td><td class="n">${money(m.qtd ? m.vend / m.qtd : 0)}</td>${pesTot ? `<td class="n">${porMil(pesInfo(r, m.por, m.qtd).qCom, pesTot)}</td>` : ''}</tr>`; }).join('')}</tbody></table></div></section>`;
     return h;
   }
   /* comparação entre roças (relatório geral) */
   function compRocas(base) {
-    const rows = S.rocas.map(r => { const L = base.filter(l => l.rocaId === r.id), P = producao(L), R = resumo(L), pes = Object.values(r.pes || {}).reduce((a, n) => a + Number(n), 0); return { r, P, R, pes }; }).filter(o => o.P.qtd || o.R.vendas);
+    const rows = S.rocas.map(r => { const L = base.filter(l => l.rocaId === r.id), P = producao(L), R = resumo(L), I = pesInfo(r, P.por, P.qtd); return { r, P, R, I, pes: I.tot }; }).filter(o => o.P.qtd || o.R.vendas);
     if (!rows.length) return '';
     return `<section class="card"><h2>Produção por roça</h2><div class="scroll"><table><thead><tr><th>Roça</th><th class="n">Pés</th><th class="n">Produção</th><th class="n">Por mil pés</th><th class="n">Preço médio</th><th class="n">Lucro de ${esc(DONO())} por pé</th></tr></thead><tbody>
-      ${rows.map(o => `<tr><td>${esc(o.r.nome)}</td><td class="n">${o.pes ? nf(o.pes) : '—'}</td><td class="n">${o.P.qtd ? nf(o.P.qtd, 1) + ' ' + esc(unPl(o.P.un, o.P.qtd)) : '—'}</td><td class="n">${o.pes && o.P.qtd ? nf(o.P.qtd / o.pes * 1000, 1) : '—'}</td><td class="n">${o.P.qtd ? money(o.P.vend / o.P.qtd) : '—'}</td><td class="n ${o.R.resultado >= 0 ? 'pos' : 'neg'}">${o.pes ? money(o.R.resultado / o.pes) : '—'}</td></tr>`).join('')}
-      </tbody></table></div><p class="small muted">Os números por pé usam os pés cadastrados em cada roça. Toque no nome da roça acima para ver todos os números dela.</p></section>`;
+      ${rows.map(o => `<tr><td>${esc(o.r.nome)}</td><td class="n">${o.pes ? nf(o.pes) : '—'}</td><td class="n">${o.P.qtd ? nf(o.P.qtd, 1) + ' ' + esc(unPl(o.P.un, o.P.qtd)) : '—'}</td><td class="n">${o.pes && o.I.qCom ? nf(o.I.qCom / o.pes * 1000, 1) : '—'}</td><td class="n">${o.P.qtd ? money(o.P.vend / o.P.qtd) : '—'}</td><td class="n ${o.R.resultado >= 0 ? 'pos' : 'neg'}">${o.I.completo ? money(o.R.resultado / o.pes) : '—'}</td></tr>`).join('')}
+      </tbody></table></div><p class="small muted">Por mil pés conta só a produção de quem tem pés cadastrados; o lucro por pé aparece quando os pés de todos estão cadastrados. Toque no nome da roça acima para ver todos os números dela.</p></section>`;
   }
 
   function vRoca() {
@@ -1226,6 +1234,7 @@
       if (k === 'revisar') {
         const ms = Object.keys(W.parceria);
         h += `<section class="card"><div class="row" style="flex-wrap:nowrap">${tile(W, true)}<h2>${esc(W.nome)}</h2></div><p class="small muted">${esc([W.cultura, W.local, W.area].filter(Boolean).join(' · '))}</p><p>${esc(modoTxt(W.modo))}</p>
+          ${W.pes.dono ? `<p class="small">Pés de ${esc(DONO())}: ${nf(W.pes.dono)}</p>` : ''}
           ${ms.length ? `<div class="parc">${ms.map(k => `<span class="pp"><b>${esc(nomeK(k))}</b> ${pctTxt(W.parceria[k])}${W.pes[k] ? ' · ' + numIn(W.pes[k]) + ' pés' : ''}</span>`).join('')}</div><p class="small muted">Cada um ganha a % dele sobre a venda da parte dele.</p>` : ''}
           ${temFunc() ? `<p class="small">Funcionários: ${esc(W.func.map(id => (pessoa(id) || {}).nome).concat(W.novosF.map(f => f.nome)).filter(Boolean).join(', ') || 'nenhum por enquanto')}</p>` : ''}</section>
           <div class="field"><label for="wo">Observação (opcional)</label><input type="text" id="wo" maxlength="300" value="${esc(W.obs)}"></div>`;
