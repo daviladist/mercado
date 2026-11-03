@@ -2968,18 +2968,25 @@ const noDisc=i=>noPickDisc(i.label)||!!i.rp;
 /* desconto da condição de pagamento (cadastro das formas de pagamento) */
 const payDiscOf=p=>{const d=Number((S.payDisc||{})[p])||0;return d>0&&d<100?d:0};
 /* preço digitado/combinado na forma A passa para a forma B: tira o desconto de A e põe o de B (o resto do preço fica) */
-function payConv(v,from,to){const a=payDiscOf(from),b=payDiscOf(to);if(a===b)return v;return Math.round(Number(v)/(1-a/100)*(1-b/100)*100)/100}
-function payLabel(l,from,to){let t=String(l||'');const a=payDiscOf(from);if(a){const suf=from+' '+String(a).replace('.',',')+'%';if(t===suf)t='';else if(t.endsWith(' · '+suf))t=t.slice(0,-(suf.length+3))}
-  const b=payDiscOf(to);if(b&&t!=='Preço negociado')t=(t?t+' · ':'')+to+' '+String(b).replace('.',',')+'%';return t}
-/* pedido em ajuste: os preços que já estavam no pedido ficam; trocar a forma de pagamento só troca o desconto da condição */
-function payKeep(keep,from,to){const o={};Object.keys(keep||{}).forEach(id=>{const k=keep[id];o[id]=Object.assign({},k,{price:payConv(k.price,from,to),label:payLabel(k.label,from,to)})});return o}
+function payConvP(v,a,b){a=Number(a)>0&&Number(a)<100?Number(a):0;b=Number(b)>0&&Number(b)<100?Number(b):0;if(a===b)return Number(v);return Math.round(Number(v)/(1-a/100)*(1-b/100)*100)/100}
+function payConv(v,from,to){return payConvP(v,payDiscOf(from),payDiscOf(to))}
+const reEsc=t=>String(t).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+/* desconto da forma de pagamento que está no rótulo do item ("… · PIX 3%"); null se não tiver */
+function labelPct(l,pay){const m=new RegExp('(?:^| · )'+reEsc(pay)+' (\\d+(?:,\\d+)?)%$').exec(String(l||''));return m?Number(m[1].replace(',','.')):null}
+const payNoSuf=t=>t==='Preço negociado'||t==='Proposta em análise';
+function payLabel(l,from,to){let t=String(l||'');const m=new RegExp('(?:^| · )'+reEsc(from)+' \\d+(?:,\\d+)?%$').exec(t);if(m)t=t.slice(0,m.index);
+  const b=payDiscOf(to);if(b&&!payNoSuf(t))t=(t?t+' · ':'')+to+' '+String(b).replace('.',',')+'%';return t}
+/* pedido em ajuste: os preços que já estavam no pedido ficam; trocar a forma de pagamento só troca o desconto da condição.
+   O desconto de origem é o do pedido quando foi feito (rótulo do item ou o % gravado), não o de hoje no cadastro. */
+function payKeep(keep,from,to,basePct){const o={};Object.keys(keep||{}).forEach(id=>{const k=keep[id],lp=labelPct(k.label,from),a=lp!=null?lp:(Number(basePct)||0);
+  o[id]=Object.assign({},k,{price:payConvP(k.price,a,payDiscOf(to)),label:payLabel(k.label,from,to),conv:true})});return o}
 /* preços digitados à mão: lembra em qual forma de pagamento foram digitados */
 function overMark(L,id){L.overAt=L.overAt||{};if(L.over&&L.over[id]>0)L.overAt[id]={v:L.over[id],pay:L.pay};else delete L.overAt[id]}
 function payOver(L,from,to){L.overAt=L.overAt||{};Object.keys(L.over||{}).forEach(id=>{const b=L.overAt[id]||(L.overAt[id]={v:L.over[id],pay:from});L.over[id]=payConv(b.v,b.pay,to)})}
 function calcCartFor(c,cart,mode,pay,over,nf,keep){
   return withOner(mode||'',()=>withIe(ieClient(c)&&!!nf,()=>withClient(c,()=>{
     const items=Object.entries(cart).map(([id,q])=>({p:resolveCart(id),q})).filter(i=>i.p&&(i.p.active!==false||(keep&&keep[i.p.id]))&&i.q>0).map(i=>Object.assign(i,priceFor(i.p,i.q,mode,pay),{base:i.p.isCombo?i.p.listPrice:baseOf(i.p)}));
-    if(keep)items.forEach(i=>{const k=keep[i.p.id];if(k){i.price=k.price;i.label=k.label;i.ie=k.ie;i.rp=k.rp;if(k.base)i.base=k.base}});
+    if(keep)items.forEach(i=>{const k=keep[i.p.id];if(k){if(k.conv&&Math.abs(k.price-i.price)<=0.011&&!payNoSuf(k.label))return;i.price=k.price;i.label=k.label;i.ie=k.ie;i.rp=k.rp;if(k.base)i.base=k.base}});
     if(over)items.forEach(i=>{const v=Number(over[i.p.id]);if(v>0){i.std=i.price;i.price=v;i.label='Preço negociado'}});
     const sub=Math.round(items.reduce((s,i)=>s+i.price*i.q,0)*100)/100;
     const pct=mode==='retirada'&&!onerOn()?Number(S.store.pickupDisc)||0:0;
@@ -3034,10 +3041,10 @@ function admLancar0(){
   }
   L.over=L.over||{};const SV=!!SVme();if(SV)L.sel=SVid();const noPrice=SV&&SVme().canPrice===false;
   const RT=SV?calcCartFor(cli,L.cart,L.mode,L.pay||'',undefined,L.nf,null):null,tpOf=p=>{const t=RT&&RT.items.find(x=>x.p.id===p.id);return t?t.price:baseOf(p)};
-  const KP=()=>!(L.editId&&L.keep&&L.mode===L.origMode&&!!L.nf===!!L.origNf)?null:L.pay===L.origPay?L.keep:payKeep(L.keep,L.origPay,L.pay);
+  const KP=()=>!(L.editId&&L.keep&&L.mode===L.origMode&&!!L.nf===!!L.origNf)?null:L.pay===L.origPay?L.keep:payKeep(L.keep,L.origPay,L.pay,L.origPct);
   const R=calcCartFor(cli,L.cart,L.mode,L.pay,L.over,L.nf,KP());
   const po=payOptions(cli,R.total),pays0=L.override?allowedPays(cli):po.list,pays=L.editId&&L.origPay&&!pays0.includes(L.origPay)?[L.origPay,...pays0]:pays0;
-  if(!pays.includes(L.pay)){L.pay=pays[0]||'';}
+  if(!pays.includes(L.pay)){const o0=L.pay;L.pay=pays[0]||'';payOver(L,o0,L.pay)}
   const R2=calcCartFor(cli,L.cart,L.mode,L.pay,L.over,L.nf,KP()),R0=calcCartFor(cli,L.cart,L.mode,L.pay,undefined,L.nf,KP());
   if(SV)L._tblOk=R2.items.every(i=>i.p.isCombo||i.price>=tpOf(i.p)-0.004);
   const q=(L.q||'').trim().toLowerCase();
@@ -3141,7 +3148,7 @@ function admLancar0(){
     if(L.editId){const eo=S.orders.find(x=>x.id===L.editId);if(!eo){$('#lnerr').textContent='Pedido não encontrado.';return}
       const changed=Math.abs(F.total-eo.total)>0.004;let msg='';
       const sameSeller=eo.sellerId===(sellerById(L.sel)?L.sel:'');
-      Object.assign(eo,{items:mkItems(),sub:F.sub,disc:F.disc,discPct:F.pct,total:F.total,mode:L.mode,addr:L.mode==='entrega'?(L.addr||'').trim():'',bairro:L.mode==='entrega'?(L.bairro||'').trim():'',pay:L.pay,note:(L.note||'').trim(),nf:nfd,
+      Object.assign(eo,{payPct:payDiscOf(L.pay),items:mkItems(),sub:F.sub,disc:F.disc,discPct:F.pct,total:F.total,mode:L.mode,addr:L.mode==='entrega'?(L.addr||'').trim():'',bairro:L.mode==='entrega'?(L.bairro||'').trim():'',pay:L.pay,note:(L.note||'').trim(),nf:nfd,
         sellerId:sellerById(L.sel)?L.sel:'',sellerRate:sameSeller?eo.sellerRate:(sellerById(L.sel)?Number(sellerById(L.sel).commission)||0:''),editedAt:new Date().toISOString(),editedBy:ui.adminName||'Loja'});
       delete eo.totalOrig;delete eo.adjAt;
       if(!SV&&f3On()){if(L.frete3&&L.frete3.carrierId)eo.frete3=f3Make(L.frete3.carrierId,L.frete3.pct);else delete eo.frete3}
@@ -3159,7 +3166,7 @@ function admLancar0(){
     const o={id:uid(),no:S.seq++,date:new Date().toISOString(),customerId:cli.id,customer:cli.name,doc:cli.doc||'',phone:cli.phone||'',
       sellerId:sellerById(L.sel)?L.sel:'',sellerRate:sellerById(L.sel)?Number(sellerById(L.sel).commission)||0:'',items:F.items.map(({p,q,price,label,base,ie,rp})=>({ie:!!ie,rp:!!rp,commP:pCommOwn(p),pid:p.id,cat:p.cat||'',cost:p.cost>0?p.cost:'',refC:refCOf(p),name:p.name,unit:p.unit,perPack:packOf(p)||'',kg:isKg(p)||undefined,code:p.code||'',ean:p.ean||'',base,price,label,q,...(p.isCombo?{combo:true,comboId:p.comboId,components:p.components}:{})})),
       sub:F.sub,disc:F.disc,discPct:F.pct,total:F.total,mode:L.mode,addr:L.mode==='entrega'?(L.addr||'').trim():'',bairro:L.mode==='entrega'?(L.bairro||'').trim():'',
-      city:cli.city||'',cityName:(cityById(cli.city)||{}).name||'',table:tableOf(cli),pay:L.pay,note:(L.note||'').trim(),nf:nfd,status:'novo',...(SV?{bySeller:SVme().name}:{byAdmin:ui.adminName||'Loja'})};
+      city:cli.city||'',cityName:(cityById(cli.city)||{}).name||'',table:tableOf(cli),pay:L.pay,payPct:payDiscOf(L.pay),note:(L.note||'').trim(),nf:nfd,status:'novo',...(SV?{bySeller:SVme().name}:{byAdmin:ui.adminName||'Loja'})};
     let apMsg='';if(SV){const K=lnLock(F,cli,L);if(K&&!K.ok&&!L._ask){$('#lnerr').textContent='A margem do pedido está abaixo do permitido. Ajuste os preços para liberar.';return}if(K&&!K.ok){o.appr='pendente';o.apprMin=K.min;o.apprMg=Math.round(K.mg*10)/10;o.apprNeed=K.need;apMsg=' · aguardando análise da loja'}if(K&&K.ok&&K.tol)o.tolUsed={mg:Math.round(K.mg*10)/10,min:Math.round(K.min*10)/10,at:new Date().toISOString()}}L._ask=false;
     addEvent(o,'Seu pedido nº '+o.no+' foi lançado '+(SV?'pelo vendedor '+SVme().name:'pela loja')+': '+F.count+' itens, total '+brl(F.total)+'.');
     if(!SV&&f3On()&&L.frete3&&L.frete3.carrierId)o.frete3=f3Make(L.frete3.carrierId,L.frete3.pct);
@@ -4249,7 +4256,7 @@ function admOrders(){
     const cli=S.customers.find(x=>x.id===o.customerId);if(!cli){toast('O cliente deste pedido não está mais cadastrado.');return}
     const cart={},keep={};let lost=0;o.items.forEach(i=>{const id=i.combo?'c:'+i.comboId:(itemProduct(i)||{}).id;if(!id||!resolveCart(id)){lost++;return}
       if(!(i.q>0))return;cart[id]=(cart[id]||0)+i.q;keep[id]={price:i.price,label:i.label||'',ie:!!i.ie,rp:!!i.rp,base:i.base}});
-    ui.lanc={frete3:o.frete3?Object.assign({},o.frete3):null,cid:cli.id,editId:o.id,editNo:o.no,origTotal:o.total,origMode:o.mode,origPay:o.pay,origNf:!!o.nf,recWas:!!o.recLaunched,keep,cart,over:{},mode:o.mode,pay:o.pay,addr:o.addr||cli.address||'',bairro:o.bairro||cli.bairro||'',note:o.note||'',sel:o.sellerId||'',nf:!!o.nf,nfData:o.nf?{...o.nf}:defaultNf(cli),q:''};
+    ui.lanc={frete3:o.frete3?Object.assign({},o.frete3):null,cid:cli.id,editId:o.id,editNo:o.no,origTotal:o.total,origMode:o.mode,origPay:o.pay,origPct:o.payPct,origNf:!!o.nf,recWas:!!o.recLaunched,keep,cart,over:{},mode:o.mode,pay:o.pay,addr:o.addr||cli.address||'',bairro:o.bairro||cli.bairro||'',note:o.note||'',sel:o.sellerId||'',nf:!!o.nf,nfData:o.nf?{...o.nf}:defaultNf(cli),q:''};
     if(lost)toast(lost+' item(ns) do pedido não existem mais no cadastro e ficaram de fora');
     admOrders();window.scrollTo(0,0)});
   c.querySelectorAll('[data-msw]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.msw);if(!o)return;const y=window.scrollY;
@@ -4687,7 +4694,7 @@ function lnReview(c,L,cli,R2,R0,pays,lnDoSave,tpOf){
     </section>`;
   const rer=()=>{const y=window.scrollY;admLancar();window.scrollTo(0,y)};
   c.querySelectorAll('[data-rvp]').forEach(inp=>{inp.onfocus=()=>inp.select();inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();inp.blur()}};
-    inp.onchange=()=>{const id=inp.dataset.rvp,un=+inp.dataset.un||1,def=+inp.dataset.def,v=pnum(inp.value);if(v===''||isNaN(v)||!(v>0))delete L.over[id];else{const pk=Math.round(v*un*100)/100;if(Math.abs(pk-def)<0.005)delete L.over[id];else L.over[id]=pk}rer()}});
+    inp.onchange=()=>{const id=inp.dataset.rvp,un=+inp.dataset.un||1,def=+inp.dataset.def,v=pnum(inp.value);if(v===''||isNaN(v)||!(v>0))delete L.over[id];else{const pk=Math.round(v*un*100)/100;if(Math.abs(pk-def)<0.005)delete L.over[id];else L.over[id]=pk}overMark(L,id);rer()}});
   $('#rvEdit').onclick=()=>{L.review=false;admLancar();window.scrollTo(0,0)};
   {const b=$('#rvSend');if(b)b.onclick=()=>{L.review=false;lnDoSave();if(ui.lanc===L)L.review=true}}
   {const b=$('#rvAsk');if(b)b.onclick=()=>{L._ask=true;L.review=false;lnDoSave();L._ask=false;if(ui.lanc===L)L.review=true}}
@@ -4796,7 +4803,7 @@ function renderVend(){
   app.querySelectorAll('[data-vop]').forEach(b=>b.onclick=()=>{ui.vop=ui.vop||{};const o=S.orders.find(x=>x.id===b.dataset.vop);const cur=!!ui.vop[b.dataset.vop]||(o&&o.appr==='ajustar'&&ui.vop[b.dataset.vop]===undefined);ui.vop[b.dataset.vop]=!cur;rer()});
   app.querySelectorAll('[data-vedit]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.vedit);if(!o)return;const cli=S.customers.find(x=>x.id===o.customerId);if(!cli){toast('Cliente não encontrado.');return}
     const cart={},keep={};o.items.forEach(i=>{const id=i.combo?'c:'+i.comboId:(itemProduct(i)||{}).id;if(!id||!resolveCart(id)||!(i.q>0))return;cart[id]=(cart[id]||0)+i.q;keep[id]={price:i.price,label:i.label||'',ie:!!i.ie,rp:!!i.rp,base:i.base}});
-    ui.lanc={cid:cli.id,editId:o.id,editNo:o.no,origTotal:o.total,origMode:o.mode,origPay:o.pay,origNf:!!o.nf,recWas:false,keep,cart,over:{},mode:o.mode,pay:o.pay,addr:o.addr||cli.address||'',bairro:o.bairro||cli.bairro||'',note:o.note||'',sel:me.id,nf:!!o.nf,nfData:o.nf?{...o.nf}:defaultNf(cli),q:'',only:true};renderVend();window.scrollTo(0,0)});
+    ui.lanc={cid:cli.id,editId:o.id,editNo:o.no,origTotal:o.total,origMode:o.mode,origPay:o.pay,origPct:o.payPct,origNf:!!o.nf,recWas:false,keep,cart,over:{},mode:o.mode,pay:o.pay,addr:o.addr||cli.address||'',bairro:o.bairro||cli.bairro||'',note:o.note||'',sel:me.id,nf:!!o.nf,nfData:o.nf?{...o.nf}:defaultNf(cli),q:'',only:true};renderVend();window.scrollTo(0,0)});
   app.querySelectorAll('[data-vpdfo]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.vpdfo);if(!o)return;try{offerFile('proposta-pedido-'+o.no+'.pdf',makePdf([o],{prop:true}))}catch(e){pdfFail(e)}});
   bindRm(app,rer);
   app.querySelectorAll('[data-vacc]').forEach(b=>b.onclick=()=>{const o=S.orders.find(x=>x.id===b.dataset.vacc);if(!o||o.appr!=='contra')return;{const e=rmApply(o,me.name);if(e){toast(e);return}}o.appr='aceito';o.apprAt=new Date().toISOString();(o.apprHist=o.apprHist||[]).push({at:o.apprAt,by:me.name,what:'cliente aceitou a contraproposta'});save();toast('Pedido nº '+o.no+' liberado: já vai para o conferente');rer()});

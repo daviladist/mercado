@@ -376,6 +376,16 @@ with sync_playwright() as pw:
     check(abs(float(val()) - 7.76) < 0.001, 'pedido já salvo: PIX aplica só os 3%% (7,76): %s' % val())
     pg.click('#lnSave'); wait_sync(pg); pg.wait_for_timeout(500)
     po = order('pg1'); check(po and abs(po['items'][0]['price'] - 7.76) < 0.001 and po['pay'] == 'PIX' and abs(po['total'] - 77.6) < 0.01, 'salvo no PIX: 10 × 7,76 = 77,60: %s' % str(po and (po['items'][0]['price'], po['total'])))
+    def reabre(oid):
+        if not pg.locator('[data-edo="%s"]' % oid).count(): pg.locator('button:has-text("Abrir todos")').first.click(); pg.wait_for_timeout(600)
+        pg.evaluate("id => document.querySelector('[data-edo=\"' + id + '\"]').click()", oid); pg.wait_for_timeout(800)
+    reabre('pg1'); pg.select_option('#lnpay', 'Dinheiro'); pg.wait_for_timeout(500)
+    check(abs(float(val()) - 8) < 0.001, 'pedido salvo no PIX com 7,76: voltar para Dinheiro tira só os 3%% (8,00): %s' % val())
+    pg.click('#lnBack'); pg.wait_for_timeout(500)
+    s, r = A.req('/api/sync', {'changes': [o('pg2', 'novo', {'pay': 'PIX', 'items': [{'pid': 'pb', 'name': 'Feijão', 'unit': 'UN', 'q': 2, 'price': 9, 'base': 9, 'cost': 7, 'label': ''}], 'sub': 18, 'total': 18})]})
+    pg.reload(); pg.wait_for_timeout(1200); pg.locator('[data-tab="pedidos"]').first.click(); pg.wait_for_timeout(600)
+    reabre('pg2'); pg.select_option('#lnpay', 'Boleto 28 dias'); pg.wait_for_timeout(500)
+    check(abs(float(val()) - 9) < 0.001, 'pedido antigo no PIX feito antes do desconto (9,00): trocar para Boleto não aumenta o preço: %s' % val())
     check(not E, 'ajuste de pedido sem erro de JavaScript: %s' % E[:2]); b.close()
 
     for dev, inset in [('iPhone 13', 34), ('Pixel 7', 0)]:
