@@ -289,7 +289,7 @@
     } else {
       body = `<section class="card"><h3>Como a roça é tocada</h3><p>${esc(modoTxt(r.modo))}</p>${meeiros.length ? splitBar(r) + '<p class="small muted">Cada meeiro ganha a porcentagem dele sobre a venda da parte dele. Na venda você diz de quem foi e, se quiser, o valor para o meeiro (já descontando frete, caixa…).</p>' : ''}</section>
         ${meeiros.length ? `<section class="card"><h3>Quem paga cada despesa</h3><div class="list">${S.cats.map(c => { const p = r.regras[c.id] || { dono: 100 }; return `<div class="it"><span class="ic">${c.icone}</span><span class="tx"><b>${esc(c.nome)}</b><span>${esc(regraTxt(r, p))}</span></span></div>`; }).join('')}</div></section>` : ''}
-        <section class="card"><h3>Dados</h3><p class="small">${esc([r.cultura && 'Cultura: ' + r.cultura, r.local && 'Local: ' + r.local, r.area && 'Área: ' + r.area, r.inicio && 'Início: ' + dBR(r.inicio)].filter(Boolean).join(' · ') || 'Sem detalhes.')}</p>${r.obs ? `<p class="small muted">${esc(r.obs)}</p>` : ''}</section>
+        <section class="card"><h3>Dados</h3><p class="small">${esc([r.cultura && 'Cultura: ' + r.cultura, r.local && 'Local: ' + r.local, r.area && 'Área: ' + r.area, r.inicio && 'Início: ' + dBR(r.inicio), (r.produtos || []).length && 'Tipos: ' + r.produtos.join(', ')].filter(Boolean).join(' · ') || 'Sem detalhes.')}</p>${r.obs ? `<p class="small muted">${esc(r.obs)}</p>` : ''}</section>
         <button class="btn pri full" type="button" id="ed">Editar a roça</button>
         <button class="btn full" type="button" id="enc">${r.ativa ? 'Encerrar a roça (sai da tela inicial)' : 'Reabrir a roça'}</button>`;
     }
@@ -331,7 +331,7 @@
     if (!list.length) return '<div class="card empty"><div class="big">📝</div><p class="muted">Nada lançado ainda.</p></div>';
     const ic = l => l.tipo === 'venda' ? '💰' : l.tipo === 'adiantamento' ? '🤝' : cat(l.categoria).icone;
     const tit = l => l.tipo === 'venda' ? 'Venda' + (l.qtd ? ' · ' + numIn(l.qtd) + ' ' + (l.unidade || '') : '') : l.tipo === 'adiantamento' ? 'Adiantamento · ' + (l.pessoaNome || '') : cat(l.categoria).nome + (l.pessoaNome ? ' · ' + l.pessoaNome : '');
-    const sub = l => [dBR(l.data), !semRoca && (l.rocaId ? (roca(l.rocaId) || {}).nome : 'Geral'), l.veiculoId && ((S.veiculos.find(v => v.id === l.veiculoId) || {}).nome), l.descricao, l.comprador, l.tipo === 'venda' && l.base != null && 'para o meeiro ' + money(l.base), l.tipo === 'venda' && pagTxt(l), Object.keys(l.acertos || {}).length ? 'acertado' : ''].filter(Boolean).join(' · ');
+    const sub = l => [dBR(l.data), !semRoca && (l.rocaId ? (roca(l.rocaId) || {}).nome : 'Geral'), l.veiculoId && ((S.veiculos.find(v => v.id === l.veiculoId) || {}).nome), l.descricao, l.comprador, l.tipo === 'venda' && (l.itens || []).length && l.itens.map(it => numIn(it.qtd) + ' ' + it.nome).join(' + '), l.tipo === 'venda' && l.base != null && 'para o meeiro ' + money(l.base), l.tipo === 'venda' && pagTxt(l), Object.keys(l.acertos || {}).length ? 'acertado' : ''].filter(Boolean).join(' · ');
     return `<section class="card"><div class="list">${list.map(l => `<button type="button" class="it" data-lc="${esc(l.id)}"><span class="ic">${ic(l)}</span><span class="tx"><b>${esc(tit(l))}</b><span>${esc(sub(l))}</span></span><span class="vl ${l.tipo === 'venda' ? 'pos' : l.tipo === 'adiantamento' ? 'inf' : 'neg'}">${l.tipo === 'venda' ? '+' : '−'} ${money(l.valor)}${l.tipo === 'despesa' && Object.keys(partesDe(l)).length > 1 ? '<small>dividida</small>' : ''}</span></button>`).join('')}</div></section>`;
   }
   function bindLanc() { document.querySelectorAll('[data-lc]').forEach(b => b.addEventListener('click', () => { const l = S.lanc.find(x => x.id === b.dataset.lc); if (l) formLanc(l); })); }
@@ -362,7 +362,7 @@
     const temMeeiro = rid ? meeirosDe(r).length > 0 : S.rocas.some(x => x.ativa && meeirosDe(x).length);
     if (!S.rocas.length && !M('r_gerais')) { toast('Cadastre uma roça primeiro.'); return wizard(); }
     const temRoca = S.rocas.some(x => x.ativa);
-    const op = [['despesa', '💸', 'Despesa', 'adubo, veneno, energia…']].concat(temRoca ? [['venda', '💰', 'Venda', 'o que foi vendido']] : [])
+    const op = [['despesa', '💸', 'Despesa', 'adubo, veneno, energia…']].concat(temRoca ? [['venda', '💰', 'Venda', 'o que foi vendido'], ['colheita', '🧺', 'Venda da colheita', 'vários tipos e as caixas de cada meeiro']] : [])
       .concat(M('r_meeiros') && temMeeiro ? [['adiantamento', '🤝', 'Adiantamento', 'ao meeiro']] : [])
       .concat(M('r_diaristas') ? [['diarista', '🧑‍🌾', 'Diarista', 'serviço pontual']] : [])
       .concat(M('r_funcionarios') && S.pessoas.some(p => p.tipo === 'funcionario' && p.ativo) ? [['salarios', '👷', 'Salários', 'pagar o mês']] : []);
@@ -371,6 +371,7 @@
         const k = b.dataset.op;
         if (k === 'salarios') return formSalarios(rid);
         if (k === 'diarista') return formLanc({ tipo: 'despesa', categoria: 'diarista', rocaId: rid });
+        if (k === 'colheita') return formLanc({ tipo: 'venda', colheita: true, rocaId: rid });
         formLanc({ tipo: k, rocaId: rid });
       }));
     });
@@ -399,6 +400,12 @@
     // reabrir = abrir um lançamento gravado; voltando do login (retomar), o que a pessoa digitou fica como estava
     const reabrir = edit && !src._retomar; delete F._retomar;
     const gravado = edit ? S.lanc.find(l => l.id === src.id) : null;
+    // venda da colheita: tipos (Top, Torto…) com caixas, preço de venda e preço para o meeiro por caixa, e as caixas de cada um
+    if (reabrir && Array.isArray(src.itens) && src.itens.length) {
+      F.colheita = true;
+      F.itens = src.itens.map(it => ({ nome: it.nome, qtd: numIn(it.qtd), preco: numIn(it.preco), pm: Number(it.precoMeeiro) !== Number(it.preco) ? numIn(it.precoMeeiro) : '', q: Object.fromEntries((it.origem || []).map(o => [o.de, numIn(o.qtd)])) }));
+    }
+    if (F.colheita && !F.unidade) F.unidade = 'caixa';
     // valor para o meeiro: em branco = o mesmo do vendido
     if (reabrir) F.base = src.base != null ? numIn(src.base) : '';
     if (F.base == null) F.base = '';
@@ -431,7 +438,7 @@
     const regra = () => { const r = F.rocaId && roca(F.rocaId); F.partes = r && meeirosDe(r).length && F.categoria ? JSON.parse(JSON.stringify(r.regras[F.categoria] || { dono: 100 })) : { dono: 100 }; F.qpOutra = false; };
     if (!edit && F.tipo === 'despesa') regra();
     const diar = F.tipo === 'despesa' && F.categoria === 'diarista';
-    const title = (edit ? 'Corrigir ' : '') + (F.tipo === 'venda' ? 'venda' : F.tipo === 'adiantamento' ? 'adiantamento' : diar ? 'diarista' : 'despesa');
+    const title = (edit ? 'Corrigir ' : '') + (F.colheita ? 'venda da colheita' : F.tipo === 'venda' ? 'venda' : F.tipo === 'adiantamento' ? 'adiantamento' : diar ? 'diarista' : 'despesa');
     function draw() {
       const r = F.rocaId ? roca(F.rocaId) : null;
       const rocasOk = F.tipo === 'adiantamento' ? ativas.filter(x => meeirosDe(x).length) : ativas;
@@ -446,12 +453,13 @@
         ${F.tipo === 'adiantamento' && r ? `<div class="field"><span class="lbl">Para qual meeiro?</span><div class="chips">${meeirosDe(r).map(k => `<button type="button" class="chip" data-pe="${esc(k)}" aria-pressed="${F.pessoaId === k}">${esc(nomeParte(k))}</button>`).join('')}</div></div>` : ''}
         ${diar ? `<div class="field"><label for="fpn">Nome do diarista</label><input type="text" id="fpn" maxlength="80" value="${esc(F.pessoaNome || '')}" placeholder="Ex.: João"></div>
           <div class="grid2"><div class="field"><label for="fdi">Dias</label><input inputmode="decimal" id="fdi" value="${esc(F.dias || '')}" placeholder="Ex.: 3"></div><div class="field"><label for="fpr">Valor do dia (R$)</label><input inputmode="decimal" id="fpr" value="${esc(F.preco || '')}" placeholder="Ex.: 120,00"></div></div>` : ''}
-        ${F.tipo === 'venda' ? `<div class="grid2"><div class="field"><label for="fq">Quantidade</label><input inputmode="decimal" id="fq" value="${esc(F.qtd || '')}" placeholder="Ex.: 300"></div><div class="field"><label for="fpr">Preço por ${esc(F.unidade || 'unidade')} (R$)</label><input inputmode="decimal" id="fpr" value="${esc(F.preco || '')}" placeholder="Ex.: 25,00"></div></div>
+        ${F.colheita ? colhHtml() : ''}
+        ${F.tipo === 'venda' && !F.colheita ? `<div class="grid2"><div class="field"><label for="fq">Quantidade</label><input inputmode="decimal" id="fq" value="${esc(F.qtd || '')}" placeholder="Ex.: 300"></div><div class="field"><label for="fpr">Preço por ${esc(F.unidade || 'unidade')} (R$)</label><input inputmode="decimal" id="fpr" value="${esc(F.preco || '')}" placeholder="Ex.: 25,00"></div></div>
           <div class="field"><span class="lbl">Unidade</span><div class="chips">${S.unidades.map(u => `<button type="button" class="chip" data-un="${u}" aria-pressed="${(F.unidade || '') === u}">${u}</button>`).join('')}</div></div>` : ''}
-        <div class="field"><label for="fv">${F.tipo === 'venda' ? 'Valor vendido (R$)' : 'Valor (R$)'}</label><input inputmode="decimal" class="money" id="fv" value="${esc(F.valor || '')}" placeholder="0,00" ${vtotal != null ? 'readonly' : ''}>${vtotal != null ? '<span class="small muted">Calculado: ' + (F.tipo === 'venda' ? 'quantidade × preço' : 'dias × valor do dia') + '.</span>' : ''}</div>
-        ${F.tipo === 'venda' ? origHtml() : ''}
-        ${F.tipo === 'venda' ? baseHtml() : ''}
-        ${F.tipo === 'venda' && r && meeirosDe(r).length ? `<p class="note" id="vnote" ${baseV() > 0 ? '' : 'hidden'}>${vendaNote(r, baseV())}</p>` : ''}
+        ${F.colheita ? '' : `<div class="field"><label for="fv">${F.tipo === 'venda' ? 'Valor vendido (R$)' : 'Valor (R$)'}</label><input inputmode="decimal" class="money" id="fv" value="${esc(F.valor || '')}" placeholder="0,00" ${vtotal != null ? 'readonly' : ''}>${vtotal != null ? '<span class="small muted">Calculado: ' + (F.tipo === 'venda' ? 'quantidade × preço' : 'dias × valor do dia') + '.</span>' : ''}</div>`}
+        ${F.tipo === 'venda' && !F.colheita ? origHtml() : ''}
+        ${F.tipo === 'venda' && !F.colheita ? baseHtml() : ''}
+        ${F.tipo === 'venda' && !F.colheita && r && meeirosDe(r).length ? `<p class="note" id="vnote" ${baseV() > 0 ? '' : 'hidden'}>${vendaNote(r, baseV())}</p>` : ''}
         ${quemPagaHtml(F)}
         ${F.tipo === 'despesa' && M('r_veiculos') && S.veiculos.some(v => v.ativo) ? `<div class="field"><span class="lbl">É de algum veículo ou máquina? (opcional)</span><div class="chips">${S.veiculos.filter(v => v.ativo || v.id === F.veiculoId).map(v => `<button type="button" class="chip" data-ve="${esc(v.id)}" aria-pressed="${F.veiculoId === v.id}">🚜 ${esc(v.nome)}</button>`).join('')}</div></div>` : ''}
         ${F.tipo === 'venda' ? `<div class="field"><label for="fc">Comprador (opcional)</label><input type="text" id="fc" maxlength="80" value="${esc(F.comprador || '')}" placeholder="Ex.: Ceasa, atravessador"></div>
@@ -462,6 +470,47 @@
         <button class="btn pri full" type="button" id="fs" ${travado ? 'disabled' : ''}>${edit ? 'Salvar a correção' : 'Lançar'}</button>
         ${edit && !travado ? '<button class="btn dan full" type="button" id="fx">Excluir este lançamento</button>' : ''}`;
       openSheet(title.charAt(0).toUpperCase() + title.slice(1), html, bind);
+    }
+    /* ---- venda da colheita ---- */
+    const itemVazio = nome => ({ nome: nome || '', qtd: '', preco: '', pm: '', q: {} });
+    function colhIniciar() { // tipos da roça (ou a cultura) quando ainda não tem nada digitado
+      const r = F.rocaId && roca(F.rocaId);
+      if (!r || (F.itens || []).some(it => toNum(it.qtd) > 0 || toNum(it.preco) > 0)) return;
+      F.itens = (r.produtos || []).length ? r.produtos.map(itemVazio) : [itemVazio(r.cultura || '')];
+    }
+    if (F.colheita && !F.itens) { F.itens = []; colhIniciar(); }
+    const quemColh = () => { const r = F.rocaId && roca(F.rocaId), ms = meeirosDe(r); if (!ms.length && !(F.itens || []).some(it => Object.keys(it.q || {}).some(k => k !== 'dono'))) return []; const extra = []; (F.itens || []).forEach(it => Object.keys(it.q || {}).forEach(k => { if (k !== 'dono' && !ms.includes(k) && !extra.includes(k)) extra.push(k); })); return ms.concat(extra).concat(['dono']); };
+    const colhConta = () => {
+      const r = F.rocaId && roca(F.rocaId), quem = quemColh();
+      let vend = 0, base = 0; const m = {};
+      (F.itens || []).forEach(it => {
+        const qt = toNum(it.qtd) || 0, pv = toNum(it.preco) || 0, pmv = toNum(it.pm) > 0 ? toNum(it.pm) : pv;
+        vend += Math.round(qt * pv * 100); base += Math.round(qt * pmv * 100);
+        quem.filter(k => k !== 'dono').forEach(k => { const qk = toNum((it.q || {})[k]) || 0; if (qk > 0) { const pct = Number((r && r.parceria || {})[k]) || 0; m[k] = (m[k] || 0) + Math.round(qk * pmv * 100); m[k + ':v'] = (m[k + ':v'] || 0) + pct / 100 * qk * pmv; } });
+      });
+      return { vend: vend / 100, base: base / 100, m };
+    };
+    const colhSoma = i => { const it = F.itens[i], quem = quemColh(); if (!quem.length) return ''; const so = r6(quem.reduce((a, k) => a + (toNum((it.q || {})[k]) || 0), 0)), tot = toNum(it.qtd) || 0, d = r6(tot - so); return (it.nome ? esc(it.nome) + ': ' : '') + numIn(so) + ' de ' + numIn(tot) + (Math.abs(d) < 0.0005 ? ' ✓' : d > 0 ? ' · falta <b>' + numIn(d) + '</b>' : ' · passou <b>' + numIn(-d) + '</b>'); };
+    function colhResumo() {
+      const c = colhConta(), quem = quemColh().filter(k => k !== 'dono'), r = F.rocaId && roca(F.rocaId);
+      let meeiros = 0; const linhas = quem.filter(k => c.m[k]).map(k => { const v = r2(c.m[k + ':v']); meeiros += v; return esc(nomeParte(k)) + ' (' + pctTxt((r && r.parceria || {})[k] || 0) + ' de ' + money(c.m[k] / 100) + '): <b>' + money(v) + '</b>'; });
+      return '<div class="liq"><span>Vendido</span><b>' + money(c.vend) + '</b><small>' + numIn(r6((F.itens || []).reduce((a, it) => a + (toNum(it.qtd) || 0), 0))) + ' ' + esc(F.unidade || 'caixa') + (c.base !== c.vend ? ' · para o meeiro ' + money(c.base) : '') + '</small></div>'
+        + (linhas.length ? '<p class="note">' + linhas.join(' · ') + ' · ' + esc(DONO()) + ': <b>' + money(r2(c.vend - meeiros)) + '</b></p>' : '');
+    }
+    function colhHtml() {
+      const r = F.rocaId && roca(F.rocaId); if (!r) return '<p class="small muted">Escolha a roça.</p>';
+      const quem = quemColh(), ms = meeirosDe(r), un = F.unidade || 'caixa';
+      return `<div class="field"><span class="lbl">Vende por</span><div class="chips">${S.unidades.map(u => `<button type="button" class="chip" data-un="${u}" aria-pressed="${un === u}">${u}</button>`).join('')}</div></div>
+        <div class="field"><span class="lbl">Tipos (${esc(un)}, preço de venda e preço para o meeiro por ${esc(un)})</span>
+        ${F.itens.map((it, i) => `<div class="chq"><div class="thead"><input type="text" class="tnome" data-cn="${i}" maxlength="30" value="${esc(it.nome)}" placeholder="Tipo (ex.: Top)" aria-label="Nome do tipo ${i + 1}">${F.itens.length > 1 ? `<button type="button" class="btn sm" data-crm="${i}" aria-label="Tirar o tipo ${esc(it.nome)}">Tirar</button>` : ''}</div>
+          <div class="tri"><div class="field"><label for="cq${i}">${esc(un.charAt(0).toUpperCase() + un.slice(1))}s</label><input inputmode="decimal" id="cq${i}" data-cq="${i}" value="${esc(it.qtd)}" placeholder="0"></div>
+          <div class="field"><label for="cp${i}">Venda (R$)</label><input inputmode="decimal" id="cp${i}" data-cp="${i}" value="${esc(it.preco)}" placeholder="0,00"></div>
+          ${ms.length ? `<div class="field"><label for="cm${i}">P/ meeiro (R$)</label><input inputmode="decimal" id="cm${i}" data-cm="${i}" value="${esc(it.pm)}" placeholder="${esc(it.preco || 'igual')}"></div>` : ''}</div></div>`).join('')}
+        <button type="button" class="btn ghost full" id="cad">+ Outro tipo</button></div>
+        ${quem.length ? `<div class="field"><span class="lbl">De quem são as ${esc(un)}s</span><div class="scroll"><table class="ctab"><thead><tr><th>Quem</th>${F.itens.map(it => `<th class="n">${esc(it.nome || 'Tipo')}</th>`).join('')}</tr></thead><tbody>
+          ${quem.map(k => `<tr><td>${esc(k === 'dono' ? 'Parte de ' + DONO() : nomeParte(k) + (ms.includes(k) ? ' · ' + pctTxt(r.parceria[k]) : ' (saiu da roça)'))}</td>${F.itens.map((it, i) => `<td class="n"><input inputmode="decimal" data-co="${i}:${esc(k)}" value="${esc((it.q || {})[k] || '')}" aria-label="${esc(un)}s de ${esc(k === 'dono' ? DONO() : nomeParte(k))} em ${esc(it.nome || 'tipo ' + (i + 1))}"></td>`).join('')}</tr>`).join('')}
+          </tbody></table></div>${F.itens.map((it, i) => `<p class="small" id="cs${i}">${colhSoma(i)}</p>`).join('')}</div>` : ''}
+        <div id="csum">${colhResumo()}</div>`;
     }
     const maxVence = () => (Number(hoje().slice(0, 4)) + 5) + hoje().slice(4);
     /* forma de pagamento da venda: uma forma só ou dividida em partes (ex.: 3 cheques; parte Pix, parte dinheiro).
@@ -567,6 +616,7 @@
     /* atualiza totais e prévias sem redesenhar (o campo que a pessoa tocou continua com o foco) */
     function upd() {
       keep();
+      if (F.colheita) { (F.itens || []).forEach((it, i) => { const e = $('#cs' + i); if (e) e.innerHTML = colhSoma(i); }); const cs = $('#csum'); if (cs) cs.innerHTML = colhResumo(); const ps = $('#psoma'); if (ps) ps.innerHTML = somaTxt(); return; }
       const fv = $('#fv'); if (!fv) return;
       const a = toNum(F.tipo === 'venda' ? F.qtd : F.dias), b = toNum(F.preco);
       if ((F.tipo === 'venda' || F.categoria === 'diarista') && a > 0 && b > 0) { F.valor = numIn(r2(a * b)); fv.value = F.valor; fv.readOnly = true; }
@@ -582,6 +632,15 @@
       const g = id => { const e = document.getElementById(id); return e ? e.value : undefined; };
       ['fv:valor', 'fd:data', 'fds:descricao', 'fq:qtd', 'fpr:preco', 'fc:comprador', 'fpn:pessoaNome', 'fdi:dias'].forEach(x => { const [id, k] = x.split(':'); const v = g(id); if (v !== undefined) F[k] = v; });
       document.querySelectorAll('[data-pp]').forEach(i => { F.partes = F.partes || {}; F.partes[i.dataset.pp] = toNum(i.value) || 0; });
+      if (F.colheita) {
+        const at = (sel, f) => document.querySelectorAll('#sheet ' + sel).forEach(f);
+        at('[data-cn]', e => { const it = F.itens[+e.dataset.cn]; if (it) it.nome = e.value.trim() ? e.value : ''; });
+        at('[data-cq]', e => { const it = F.itens[+e.dataset.cq]; if (it) it.qtd = e.value; });
+        at('[data-cp]', e => { const it = F.itens[+e.dataset.cp]; if (it) it.preco = e.value; });
+        at('[data-cm]', e => { const it = F.itens[+e.dataset.cm]; if (it) it.pm = e.value; });
+        at('[data-co]', e => { const [i, k] = e.dataset.co.split(':'), it = F.itens[+i]; if (it) { it.q = it.q || {}; it.q[k] = e.value; } });
+        F.valor = numIn(colhConta().vend);
+      }
       document.querySelectorAll('#sheet [data-oq]').forEach(e => { if (F.orig && F.orig.modo === 'mix') { F.orig.v = F.orig.v || {}; F.orig.v[e.dataset.oq] = e.value; } });
       { const e = document.getElementById('fbs'); if (e) F.base = e.value; }
       document.querySelectorAll('#sheet [data-pv]').forEach(e => { const x = F.pags[+e.dataset.pv]; if (x) x.valor = e.value; });
@@ -592,7 +651,7 @@
       const redraw = () => { const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
       pn.querySelectorAll('[data-r]').forEach(b => b.addEventListener('click', () => {
         if (edit && F.tipo === 'venda' && origRoca && (b.dataset.r || null) !== F.rocaId && !confirm('Mudar a roça desta venda refaz a divisão com a parceria de hoje da outra roça (a divisão do dia da venda se perde). Continuar?')) return;
-        keep(); if (F.rocaId !== (b.dataset.r || null)) { F.orig = null; legado = false; } F.rocaId = b.dataset.r || null; F.geral = !F.rocaId; if (F.tipo === 'despesa') regra(); if (F.tipo === 'adiantamento') { const ms = meeirosDe(roca(F.rocaId)); F.pessoaId = ms.length === 1 ? ms[0] : null; } redraw(); }));
+        keep(); const mudou = F.rocaId !== (b.dataset.r || null); if (mudou) { F.orig = null; legado = false; } F.rocaId = b.dataset.r || null; if (mudou && F.colheita) { F.itens = []; colhIniciar(); } F.geral = !F.rocaId; if (F.tipo === 'despesa') regra(); if (F.tipo === 'adiantamento') { const ms = meeirosDe(roca(F.rocaId)); F.pessoaId = ms.length === 1 ? ms[0] : null; } redraw(); }));
       pn.querySelectorAll('[data-cat]').forEach(b => b.addEventListener('click', () => { keep(); F.categoria = b.dataset.cat; regra(); redraw(); }));
       pn.querySelectorAll('[data-pe]').forEach(b => b.addEventListener('click', () => { keep(); F.pessoaId = b.dataset.pe; redraw(); }));
       pn.querySelectorAll('[data-un]').forEach(b => b.addEventListener('click', () => { keep(); F.unidade = F.unidade === b.dataset.un ? null : b.dataset.un; redraw(); }));
@@ -607,6 +666,10 @@
       pn.querySelectorAll('[data-pv]').forEach(e => e.addEventListener('input', upd));
       { const e = $('#fbs'); if (e) e.addEventListener('input', upd); }
       pn.querySelectorAll('[data-oq]').forEach(e => e.addEventListener('input', upd));
+      pn.querySelectorAll('[data-cq],[data-cp],[data-cm],[data-co]').forEach(e => e.addEventListener('input', upd));
+      pn.querySelectorAll('[data-cn]').forEach(e => e.addEventListener('change', () => { keep(); redraw(); }));
+      const cad = $('#cad'); if (cad) cad.addEventListener('click', () => { keep(); F.itens.push(itemVazio('')); redraw(); const n = pn.querySelector('[data-cn="' + (F.itens.length - 1) + '"]') || $('[data-cn="' + (F.itens.length - 1) + '"]'); if (n) n.focus(); });
+      pn.querySelectorAll('[data-crm]').forEach(b => b.addEventListener('click', () => { keep(); F.itens.splice(+b.dataset.crm, 1); redraw(); }));
       pn.querySelectorAll('[data-og]').forEach(b => b.addEventListener('click', () => { keep(); const g = b.dataset.og; F.orig = g === 'mix' ? { modo: 'mix', v: F.orig && F.orig.modo === 'mix' ? F.orig.v : {} } : { modo: 'um', de: g.slice(3) }; redraw(); }));
       pn.querySelectorAll('[data-ve]').forEach(b => b.addEventListener('click', () => { keep(); F.veiculoId = F.veiculoId === b.dataset.ve ? null : b.dataset.ve; redraw(); }));
       pn.querySelectorAll('[data-qp]').forEach(b => b.addEventListener('click', () => {
@@ -629,6 +692,34 @@
       if (F.tipo === 'despesa' && !F.rocaId && !F.geral) return err('Escolha onde foi o gasto: a roça ou "Geral da fazenda".');
       if (F.tipo === 'despesa' && !F.categoria) return err('Escolha o tipo da despesa.');
       if (F.tipo === 'adiantamento' && !F.pessoaId) return err('Escolha o meeiro.');
+      // venda da colheita: confere os tipos e as caixas de cada um
+      let itens = null, novosTipos = [];
+      if (F.colheita) {
+        const r = roca(F.rocaId), quem = quemColh(), vistos = new Set();
+        itens = [];
+        for (const it of F.itens) {
+          const nome = String(it.nome || '').trim(), qt = toNum(it.qtd), pv = toNum(it.preco), pmv = String(it.pm || '').trim() ? toNum(it.pm) : null;
+          if (!nome && !(qt > 0) && !(pv > 0)) continue; // linha em branco
+          if (!nome) return err('Dê um nome para cada tipo (ex.: Top, Torto).');
+          if (vistos.has(nome.toLowerCase())) return err('O tipo "' + nome + '" aparece duas vezes.');
+          vistos.add(nome.toLowerCase());
+          if (!(qt > 0)) return err(nome + ': informe quantas ' + (F.unidade || 'caixa') + 's.');
+          if (!(pv > 0)) return err(nome + ': informe o preço de venda.');
+          if (pmv != null && !(pmv > 0)) return err(nome + ': preço para o meeiro inválido (ou deixe em branco).');
+          if (pmv != null && pmv > pv) return err(nome + ': o preço para o meeiro não pode ser maior que o de venda.');
+          const o = { nome, qtd: qt, preco: r2(pv), precoMeeiro: pmv != null ? r2(pmv) : null };
+          if (quem.length) {
+            o.origem = quem.map(k => [k, toNum((it.q || {})[k])]).filter(([, x]) => x > 0).map(([de, x]) => ({ de, qtd: x }));
+            if (Object.values(it.q || {}).some(x => String(x).trim() && !(toNum(x) >= 0))) return err(nome + ': use só números nas ' + (F.unidade || 'caixa') + 's de cada um.');
+            const so = r6(o.origem.reduce((a, x) => a + x.qtd, 0));
+            if (Math.abs(so - qt) > 0.0005) return err(nome + ': as ' + (F.unidade || 'caixa') + 's de cada um somam ' + numIn(so) + ' e o total é ' + numIn(qt) + '.');
+          }
+          itens.push(o);
+          if (!(r.produtos || []).some(x => x.toLowerCase() === nome.toLowerCase())) novosTipos.push(nome);
+        }
+        if (!itens.length) return err('Coloque pelo menos um tipo com as ' + (F.unidade || 'caixa') + 's e o preço.');
+        valor = colhConta().vend; F.valor = numIn(valor);
+      }
       if (!(valor > 0)) return err('Informe o valor.');
       if (F.categoria === 'outros' && !String(F.descricao || '').trim()) return err('Em "Outros", escreva o que foi.');
       if (F.categoria === 'diarista' && String(F.pessoaNome || '').trim().length < 2) return err('Escreva o nome do diarista.');
@@ -640,7 +731,7 @@
         if (soma !== 100) return err('A divisão precisa somar 100% (agora soma ' + pctTxt(soma) + ').');
       }
       let base = null;
-      if (F.tipo === 'venda' && comMeeiro() && String(F.base || '').trim()) {
+      if (F.tipo === 'venda' && !F.colheita && comMeeiro() && String(F.base || '').trim()) {
         base = toNum(F.base);
         if (!(base > 0)) return err('Valor para o meeiro: use só números (ex.: 50,00), ou deixe em branco.');
         if (base > valor) return err('O valor para o meeiro não pode ser maior que o valor vendido.');
@@ -648,8 +739,9 @@
       }
       const b = { id: F.id || newId('l'), novo: !edit, tipo: F.tipo, rocaId: F.rocaId || null, data: F.data, valor, categoria: F.categoria || null, descricao: F.descricao || '', qtd: toNum(F.qtd), unidade: F.unidade || null, preco: toNum(F.preco), comprador: F.comprador || '', pessoaId: F.pessoaId || null, pessoaNome: F.pessoaNome || '', dias: toNum(F.dias), veiculoId: F.veiculoId || null, partes };
       if (F.tipo === 'venda') {
-        b.base = base;
-        if (F.rocaId && meeirosDe(roca(F.rocaId)).length) {
+        if (F.colheita) { b.itens = itens; b.qtd = null; b.preco = null; }
+        else b.base = base;
+        if (!F.colheita && F.rocaId && meeirosDe(roca(F.rocaId)).length) {
           const og = origemPayload();
           if (typeof og === 'string') return err(og);
           if (og) b.origem = og; else if (!legado) return err('Escolha de quem é esta venda (de qual meeiro, da parte de ' + DONO() + ' ou misturado).');
@@ -670,7 +762,11 @@
       }
       F.id = b.id; // tocar duas vezes não lança duas vezes
       const bt = $('#fs'); bt.disabled = true;
-      try { await api('/api/rural/lanc', b); await reload(); closeSheet(); toast((edit ? 'Correção salva: ' : 'Lançado ✓ ') + money(valor)); render(); }
+      try {
+        // tipo novo digitado na venda: fica cadastrado na roça para as próximas
+        if (novosTipos.length) { const r = roca(F.rocaId); await api('/api/rural/roca', { id: r.id, nome: r.nome, icone: r.icone, cultura: r.cultura, local: r.local, area: r.area, inicio: r.inicio, modo: r.modo, parceria: r.parceria, regras: r.regras, obs: r.obs, ativa: r.ativa, produtos: (r.produtos || []).concat(novosTipos).slice(0, 20) }); }
+        await api('/api/rural/lanc', b); await reload(); closeSheet(); toast((edit ? 'Correção salva: ' : 'Lançado ✓ ') + money(valor)); render(); }
+      
       catch (e) { bt.disabled = false; if (e.status === 401 || e.login) { const keepF = Object.assign({}, F, { valor: numIn(valor), _retomar: true, _legado: legado, _origOriginal: origOriginal }); retomar = () => formLanc(keepF); return fail(e); } err(e.message); }
     }
     draw();
@@ -712,7 +808,7 @@
     if (view !== 'acerto') return;
     const t = P.totais, nm = P.pessoaNome;
     const grp = (tipo, tit) => { const it = P.itens.filter(i => i.tipo === tipo); return it.length ? `<section class="card"><h3>${tit}</h3><div class="scroll"><table><thead><tr><th>Data</th><th>O quê</th>${tipo !== 'adiantamento' ? '<th class="n">Total</th><th class="n">%</th>' : ''}<th class="n">${esc(nm)}</th></tr></thead><tbody>
-      ${it.map(i => `<tr><td>${dBR(i.data)}</td><td>${esc(i.tipo === 'venda' ? [(i.qtdParte != null ? numIn(i.qtdParte) + ' ' + (i.unidade || '') + ' da parte dele' : !i.misturada && i.qtd ? numIn(i.qtd) + ' ' + (i.unidade || '') : i.misturada ? 'parte dele' : ''), i.comprador].filter(Boolean).join(' · ') || 'Venda' : i.tipo === 'despesa' ? cat(i.categoria).nome + (i.descricao ? ' · ' + i.descricao : '') : i.descricao || 'Adiantamento')}</td>${tipo !== 'adiantamento' ? `<td class="n">${money(i.valorAcerto != null ? i.valorAcerto : i.valor)}</td><td class="n">${pctTxt(i.pctParte != null ? i.pctParte : i.pct)}</td>` : ''}<td class="n">${money(i.valorPessoa)}</td></tr>`).join('')}
+      ${it.map(i => `<tr><td>${dBR(i.data)}</td><td>${esc(i.tipo === 'venda' ? [(i.itensParte ? i.itensParte.map(x => numIn(x.qtd) + ' ' + x.nome).join(' + ') + ' (' + (i.unidade || 'caixa') + 's dele)' : i.qtdParte != null ? numIn(i.qtdParte) + ' ' + (i.unidade || '') + ' da parte dele' : !i.misturada && i.qtd ? numIn(i.qtd) + ' ' + (i.unidade || '') : i.misturada ? 'parte dele' : ''), i.comprador].filter(Boolean).join(' · ') || 'Venda' : i.tipo === 'despesa' ? cat(i.categoria).nome + (i.descricao ? ' · ' + i.descricao : '') : i.descricao || 'Adiantamento')}</td>${tipo !== 'adiantamento' ? `<td class="n">${money(i.valorAcerto != null ? i.valorAcerto : i.valor)}</td><td class="n">${pctTxt(i.pctParte != null ? i.pctParte : i.pct)}</td>` : ''}<td class="n">${money(i.valorPessoa)}</td></tr>`).join('')}
       </tbody></table></div></section>` : ''; };
     $('#main').innerHTML = `<div class="row noprint"><button class="btn sm" type="button" id="bk">← ${esc(r.nome)}</button></div>
       <div><h1>Acerto com ${esc(nm)}</h1><p class="muted small">${esc(r.nome)} · tudo o que ainda não foi acertado · ${dBR(hoje())}</p></div>
@@ -743,8 +839,8 @@
 
   /* ---------- nova roça / editar (passo a passo) ---------- */
   function wizard(r0) {
-    const W = r0 ? { id: r0.id, nome: r0.nome, icone: r0.icone || '', iconeMao: !!r0.icone, cultura: r0.cultura || '', local: r0.local || '', area: r0.area || '', inicio: r0.inicio || '', modo: r0.modo, parceria: Object.assign({}, r0.parceria), pes: Object.assign({}, r0.pes || {}), regras: JSON.parse(JSON.stringify(r0.regras || {})), obs: r0.obs || '', ativa: r0.ativa, novos: [], func: S.pessoas.filter(p => p.tipo === 'funcionario' && p.rocaId === r0.id).map(p => p.id), novosF: [], step: 0 }
-      : { id: newId('r'), nome: '', icone: '', cultura: '', local: '', area: '', inicio: hoje(), modo: M('r_meeiros') ? '' : 'funcionarios', parceria: {}, pes: {}, regras: {}, obs: '', ativa: true, novos: [], func: [], novosF: [], step: 0 };
+    const W = r0 ? { id: r0.id, nome: r0.nome, icone: r0.icone || '', iconeMao: !!r0.icone, cultura: r0.cultura || '', local: r0.local || '', area: r0.area || '', inicio: r0.inicio || '', modo: r0.modo, produtos: (r0.produtos || []).slice(), parceria: Object.assign({}, r0.parceria), pes: Object.assign({}, r0.pes || {}), regras: JSON.parse(JSON.stringify(r0.regras || {})), obs: r0.obs || '', ativa: r0.ativa, novos: [], func: S.pessoas.filter(p => p.tipo === 'funcionario' && p.rocaId === r0.id).map(p => p.id), novosF: [], step: 0 }
+      : { id: newId('r'), nome: '', icone: '', cultura: '', local: '', area: '', inicio: hoje(), modo: M('r_meeiros') ? '' : 'funcionarios', produtos: [], parceria: {}, pes: {}, regras: {}, obs: '', ativa: true, novos: [], func: [], novosF: [], step: 0 };
     const CULT = (S.culturas || []).filter(c => c.nome !== 'Outra');
     const temMeeiro = () => W.modo === 'meeiro' || W.modo === 'misto';
     const temFunc = () => (W.modo === 'funcionarios' || W.modo === 'misto') && M('r_funcionarios');
@@ -760,6 +856,9 @@
         <div class="field"><span class="lbl">O que vai plantar / criar?</span><div class="chips">${CULT.map(c => `<button type="button" class="chip" data-cu="${esc(c.nome)}" aria-pressed="${W.cultura === c.nome}">${c.icone} ${esc(c.nome)}</button>`).join('')}</div><input type="text" id="wc" maxlength="40" value="${esc(W.cultura)}" placeholder="Ou escreva aqui"></div>
         <div class="field"><span class="lbl">Cara da roça</span><div class="row" style="flex-wrap:nowrap">${tile(W, true)}<span class="small muted">${W.iconeMao ? 'Ícone escolhido por você.' : 'O ícone vem da cultura. Toque em outro, se quiser.'}</span></div>
           <div class="icgrid" role="group" aria-label="Escolher ícone">${(S.culturas || []).map(c => `<button type="button" data-ic="${esc(c.icone)}" aria-pressed="${visual(W).icone === c.icone}" aria-label="${esc(c.nome)}" style="border-color:${c.cor}55">${c.icone}</button>`).join('')}</div></div>
+        <div class="field"><span class="lbl">Tipos do produto (opcional)</span><span class="small muted">Ex.: Top e Torto, Extra e Segunda. Cada tipo tem o seu preço na venda da colheita.</span>
+          ${W.produtos.length ? `<div class="chips">${W.produtos.map((t, i) => `<button type="button" class="chip" data-wpr="${i}" aria-label="Tirar ${esc(t)}">${esc(t)} ×</button>`).join('')}</div>` : ''}
+          <div class="row"><input type="text" id="wpn" maxlength="30" placeholder="Nome do tipo" style="flex:1 1 160px"><button class="btn" type="button" id="wpa">+ Tipo</button></div></div>
         <div class="field"><label for="wl">Onde fica</label><input type="text" id="wl" maxlength="80" value="${esc(W.local)}" placeholder="Ex.: Sítio São José, Minas Gerais"></div>
         <div class="grid2"><div class="field"><label for="wa">Tamanho (opcional)</label><input type="text" id="wa" maxlength="40" value="${esc(W.area)}" placeholder="Ex.: 5 hectares, 3 mil pés"></div><div class="field"><label for="wi">Começou em</label><input type="date" id="wi" value="${esc(W.inicio)}"></div></div>`;
       if (k === 'modo') h += `<p>Quem toca esta roça?</p><div class="modo">
@@ -817,6 +916,9 @@
       pn.querySelectorAll('[data-cu]').forEach(b => b.addEventListener('click', () => { keep(); W.cultura = W.cultura === b.dataset.cu ? '' : b.dataset.cu; if (!W.iconeMao) W.icone = ''; redraw(); }));
       pn.querySelectorAll('[data-ic]').forEach(b => b.addEventListener('click', () => { keep(); W.icone = b.dataset.ic; W.iconeMao = true; redraw(); }));
       const wc = $('#wc'); if (wc) wc.addEventListener('change', () => { keep(); redraw(); });
+      const wpa = $('#wpa'); if (wpa) wpa.addEventListener('click', () => { keep(); const n = $('#wpn').value.trim(); if (!n) return err('Escreva o nome do tipo.'); if (W.produtos.some(x => x.toLowerCase() === n.toLowerCase())) return err('Esse tipo já está na lista.'); if (W.produtos.length >= 20) return err('No máximo 20 tipos.'); W.produtos.push(n); redraw(); const e = $('#wpn'); if (e) e.focus(); });
+      const wpn = $('#wpn'); if (wpn) wpn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#wpa').click(); } });
+      pn.querySelectorAll('[data-wpr]').forEach(b => b.addEventListener('click', () => { keep(); W.produtos.splice(+b.dataset.wpr, 1); redraw(); }));
       pn.querySelectorAll('[data-mo]').forEach(b => b.addEventListener('click', () => { keep(); W.modo = b.dataset.mo; if (W.modo === 'funcionarios') { W.parceria = {}; W.regras = {}; } redraw(); }));
       pn.querySelectorAll('[data-me]').forEach(b => b.addEventListener('click', () => { keep(); const k = b.dataset.me; if (W.parceria[k] != null) { delete W.parceria[k]; delete W.pes[k]; Object.keys(W.regras).forEach(c => { if ((W.regras[c] || {})[k] != null) { delete W.regras[c]; delete W['outra_' + c]; } }); } else W.parceria[k] = 50; redraw(); }));
       pn.querySelectorAll('[data-sl]').forEach(s => { s.addEventListener('input', () => { W.parceria[s.dataset.sl] = Number(s.value); const n = pn.querySelector('[data-pn="' + s.dataset.sl + '"]'); if (n) n.value = s.value; const h = pn.querySelector('[data-wh="' + s.dataset.sl + '"]'); if (h) h.textContent = dicaW(s.dataset.sl); }); s.addEventListener('change', () => { keep(); redraw(); }); });
@@ -846,7 +948,7 @@
         try {
           for (const n of W.novos) if (W.parceria[n.id] != null) await api('/api/rural/pessoa', { id: n.id, tipo: 'meeiro', nome: n.nome, telefone: n.telefone });
           const regras = {}; if (temMeeiro()) Object.entries(W.regras).forEach(([c, p]) => { const o = {}; Object.entries(p).forEach(([kk, v]) => { if (Number(v) > 0 && (kk === 'dono' || W.parceria[kk] != null)) o[kk] = Number(v); }); if (Object.keys(o).length) regras[c] = o; });
-          await api('/api/rural/roca', { id: W.id, nome: W.nome, icone: W.iconeMao ? W.icone : (visual(W).icone || null), cultura: W.cultura, local: W.local, area: W.area, inicio: W.inicio || null, modo: W.modo, parceria: temMeeiro() ? W.parceria : {}, pes: temMeeiro() ? Object.fromEntries(Object.entries(W.pes).filter(([k, n]) => W.parceria[k] != null && n > 0)) : {}, regras, obs: W.obs, ativa: W.ativa });
+          await api('/api/rural/roca', { id: W.id, nome: W.nome, icone: W.iconeMao ? W.icone : (visual(W).icone || null), cultura: W.cultura, local: W.local, area: W.area, inicio: W.inicio || null, modo: W.modo, produtos: W.produtos, parceria: temMeeiro() ? W.parceria : {}, pes: temMeeiro() ? Object.fromEntries(Object.entries(W.pes).filter(([k, n]) => W.parceria[k] != null && n > 0)) : {}, regras, obs: W.obs, ativa: W.ativa });
           if (temFunc()) {
             for (const f of W.novosF) await api('/api/rural/pessoa', { id: f.id, tipo: 'funcionario', nome: f.nome, salario: f.salario, rocaId: W.id });
             for (const p of S.pessoas.filter(x => x.tipo === 'funcionario')) {
@@ -931,6 +1033,14 @@
   }
 
   /* ---------- relatório ---------- */
+  /* venda da colheita: quanto saiu de cada tipo (Top, Torto…) */
+  function tiposRel(base) {
+    const t = {};
+    base.forEach(l => { if (l.tipo !== 'venda') return; (l.itens || []).forEach(it => { const k = ((roca(l.rocaId) || {}).nome || '') + '|' + it.nome; const o = t[k] || (t[k] = { roca: (roca(l.rocaId) || {}).nome || '', nome: it.nome, un: l.unidade || 'caixa', qtd: 0, valor: 0 }); o.qtd = r6(o.qtd + Number(it.qtd)); o.valor = r2(o.valor + r2(Number(it.qtd) * Number(it.preco))); }); });
+    const ks = Object.keys(t); if (!ks.length) return '';
+    return `<section class="card"><h2>Vendas por tipo (colheita)</h2><div class="scroll"><table><thead><tr><th>Tipo</th><th class="n">Quantidade</th><th class="n">Vendido</th><th class="n">Média</th></tr></thead><tbody>
+      ${ks.sort().map(k => { const o = t[k]; return `<tr><td>${esc(o.nome)}<span class="small muted"> · ${esc(o.roca)}</span></td><td class="n">${numIn(o.qtd)} ${esc(o.un)}</td><td class="n">${money(o.valor)}</td><td class="n">${money(o.qtd ? o.valor / o.qtd : 0)}</td></tr>`; }).join('')}</tbody></table></div></section>`;
+  }
   function pagRel(base) {
     const vs = base.filter(l => l.tipo === 'venda'); if (!vs.length) return '';
     const t = {}; vs.forEach(l => { const ps = pagsDe(l).filter(x => pagDe(x.forma)); if (!ps.length) { t[''] = r2((t[''] || 0) + l.valor); return; } ps.forEach(x => { t[x.forma] = r2((t[x.forma] || 0) + Number(x.valor)); }); });
@@ -962,6 +1072,7 @@
         <tr class="tot"><td>${R.resultado >= 0 ? 'Ganhou' : 'Perdeu'}</td><td class="n ${R.resultado >= 0 ? 'pos' : 'neg'}">${money(R.resultado)}</td></tr></tbody></table>
         ${R.desp !== R.despDono ? `<p class="small muted">Gasto total ${money(R.desp)}, dos quais ${money(r2(R.desp - R.despDono))} por conta dos meeiros.</p>` : ''}
         ${R.adiant ? `<p class="small muted">Adiantamentos a meeiros no período: ${money(R.adiant)} (são descontados no acerto, não são gasto de ${esc(DONO())}).</p>` : ''}</section>
+      ${tiposRel(base)}
       ${pagRel(base)}
       <section class="card"><h2>Onde gastou</h2>${cats.length ? `<div class="scroll"><table><thead><tr><th>Tipo</th><th class="n">Total</th><th class="n">${esc(DONO())}</th><th class="n">% dos gastos</th></tr></thead><tbody>
         ${cats.map(([c, v], i) => `<tr><td>${cat(c).icone} ${esc(cat(c).nome)}${i === 0 ? ' <b class="neg small">maior gasto</b>' : ''}</td><td class="n">${money(v.total)}</td><td class="n">${money(v.dono)}</td><td class="n">${pctTxt(r2(v.dono / tot * 100))}</td></tr>`).join('')}
