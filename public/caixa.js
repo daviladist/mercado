@@ -89,7 +89,7 @@
   /* ---------- ícone e texto de cada lançamento ---------- */
   function movIcon(m) { return m.tipo === 'venda_staria' ? '🔄' : m.tipo === 'crediario_staria' ? '💳' : m.tipo === 'sangria' ? '💵' : m.tipo === 'gaveta_entrada' ? '🧾' : m.tipo === 'gaveta_saida' ? '➖' : m.valor >= 0 ? '➕' : '➖'; }
   function movTitulo(m) {
-    if (m.tipo === 'venda_staria') return 'Vendas em dinheiro';
+    if (m.tipo === 'venda_staria') { const fs = Object.keys((m.detalhe || {}).porFilial || {}); return 'Vendas em dinheiro' + (fs.length === 1 ? ' · Filial ' + esc(fs[0]) : ''); }
     if (m.tipo === 'crediario_staria') return 'Recebimento de crediário';
     if (m.tipo === 'sangria') return m.destino === 'impostos' ? 'Sangria · gaveta de impostos' : 'Sangria';
     if (m.tipo === 'gaveta_entrada') return 'Entrada na gaveta (sangria)';
@@ -262,16 +262,15 @@
   /* ---------- StarIA (admin) ---------- */
   function jobBadge(j) {
     if (j.status === 'pendente') return '<span class="pill wa">Aguardando o Claude</span>';
-    if (j.status === 'pronta') return '<span class="pill wa">Pronto · revise e aplique</span>';
-    return '<span class="pill ok">Aplicado ao caixa</span>';
+    return '<span class="pill ok">Trazido · veja em Sacolas e no crediário pendente</span>';
   }
   function renderStaria() {
     if (!isAdmin()) { view = 'inicio'; return render(); }
     const jobs = S.jobs;
     $('#main').innerHTML = `<section class="card">
       <h1>Puxar do StarIA</h1>
-      <p class="muted small">Pede o total de vendas em dinheiro e recebimento de crediário em dinheiro de todas as filiais, no período. Quem consulta e devolve o resultado é o Claude, pelo seu pedido no chat — depois disso, revise o número aqui antes de aplicar.</p>
-      <div class="note">Peça só para um período em que as sacolas das lojas já chegaram e já foram conferidas na matriz. O StarIA não sabe se a sacola chegou ou se o caixa foi batido — ele só sabe o que foi vendido; quem garante que o dinheiro já está (ou já devia estar) aqui é a conferência física, antes de pedir.</div>
+      <p class="muted small">Pede o total de vendas em dinheiro e recebimento de crediário em dinheiro de todas as filiais, no período. Quem consulta e devolve o resultado é o Claude (pelo seu pedido no chat, ou pela importação automática da noite) — cada filial vira uma sacola em "Sacolas", esperando chegar na matriz e ser conferida; o crediário vira uma pendência de aprovação.</p>
+      <div class="note">O StarIA só sabe o que foi vendido — não sabe se o dinheiro já chegou na matriz. É por isso que agora existe a sacola: o valor daqui é só uma expectativa, o saldo só sobe depois da conferência física, com o valor realmente contado.</div>
       <form id="fst">
         <div class="field"><label for="stIni">De</label><input type="date" id="stIni" max="${hoje()}" required></div>
         <div class="field"><label for="stFim">Até</label><input type="date" id="stFim" value="${hoje()}" max="${hoje()}" required></div>
@@ -285,11 +284,68 @@
               ${j.status !== 'pendente' ? `<div class="small" style="margin-top:6px">${Object.entries(j.resultado.porFilial).map(([f, v]) => `Filial ${esc(f)}: ${money(v.vendasDinheiro)} vendas + ${money(v.recebCrediarioDinheiro)} crediário`).join('<br>')}
                 <br><b>Total: ${money(j.resultado.total)}</b></div>` : ''}
             </div>
-            <div class="vl">${j.status === 'pronta' ? `<button class="btn sm pri" type="button" data-aplicar="${esc(j.id)}">Aplicar ao caixa</button>` : ''}</div>
           </div>`).join('') : '<p class="muted">Nenhuma consulta ainda.</p>'}
       </section>`;
     $('#fst').addEventListener('submit', e => { e.preventDefault(); post('/api/caixa/staria/pedir', { periodoIni: $('#stIni').value, periodoFim: $('#stFim').value }, 'Consulta pedida. Peça ao Claude para processar as consultas do StarIA.'); });
-    document.querySelectorAll('[data-aplicar]').forEach(b => b.addEventListener('click', () => { if (confirm('Aplicar este resultado ao caixa? As vendas em dinheiro entram direto no saldo; o recebimento de crediário entra como pendente, aguardando aprovação. Depois de aplicado não pode ser desfeito (lance um ajuste se precisar corrigir).')) post('/api/caixa/staria/aplicar', { id: b.dataset.aplicar }, 'Aplicado: vendas no saldo, crediário aguardando aprovação'); }));
+  }
+
+  /* ---------- Sacolas (venda em dinheiro por filial): na filial -> chegou na matriz -> conferida ----------
+     caixista e financeiro marcam a chegada; só financeiro (ou admin) confere o valor real e lança no saldo. */
+  function podeConferirSacola() { return isAdmin() || S.me.role === 'financeiro'; }
+  function sacolaStatus(s) {
+    if (s.conferidoEm) return s.diferenca === 0 ? '<span class="pill ok">Conferida · bateu certinho</span>' : '<span class="pill wa">Conferida · ' + (s.diferenca > 0 ? 'sobrou ' : 'faltou ') + money(Math.abs(s.diferenca)) + '</span>';
+    if (s.chegouEm) return '<span class="pill wa">Chegou na matriz · aguardando conferência</span>';
+    return '<span class="pill wa">Ainda na filial</span>';
+  }
+  function renderSacolas() {
+    const mc = S.miniCaixas || {};
+    const filiais = Object.keys(mc).sort((a, b) => a - b);
+    const pendentes = (S.sacolas || []).filter(s => !s.conferidoEm);
+    const conferidas = (S.sacolas || []).filter(s => s.conferidoEm);
+    $('#main').innerHTML = `<section class="card">
+      <h1>Sacolas</h1>
+      <p class="muted small">Cada filial manda uma sacola de dinheiro pra matriz. O StarIA diz quanto vendeu; só depois que a sacola chega e é conferida de verdade é que esse dinheiro entra no saldo do caixa principal — com o valor realmente contado.</p>
+      ${filiais.length ? `<div class="list">${filiais.map(f => `<div class="it">
+          <div class="ic">🏪</div><div class="tx"><b>Filial ${esc(f)}</b><span>${mc[f].naFilial ? 'Ainda na filial: ' + money(mc[f].naFilial) : ''}${mc[f].naFilial && mc[f].aguardandoConferencia ? ' · ' : ''}${mc[f].aguardandoConferencia ? 'Aguardando conferência: ' + money(mc[f].aguardandoConferencia) : ''}</span></div>
+        </div>`).join('')}</div>` : '<p class="muted">Nenhum valor pendente agora.</p>'}
+    </section>
+    <section class="card">
+      <h2>Pendentes</h2>
+      ${pendentes.length ? `<div class="list">${pendentes.map(s => `<div class="it" style="align-items:flex-start">
+          <div class="ic">📦</div>
+          <div class="tx"><b>Filial ${esc(s.filial)} · ${money(s.valorStaria)}</b><span>${dBR(s.periodoIni)} a ${dBR(s.periodoFim)} · ${sacolaStatus(s)}</span></div>
+          <div class="vl">${!s.chegouEm ? `<button class="btn sm pri" type="button" data-chegou="${esc(s.id)}">Chegou na matriz</button>`
+            : podeConferirSacola() ? `<button class="btn sm pri" type="button" data-conferir="${esc(s.id)}">Conferir</button>` : ''}</div>
+        </div>`).join('')}</div>` : '<p class="muted">Nenhuma sacola pendente.</p>'}
+    </section>
+    ${conferidas.length ? `<section class="card"><h2>Conferidas</h2><div class="list">${conferidas.slice(0, 20).map(s => `<div class="it">
+        <div class="ic">📦</div><div class="tx"><b>Filial ${esc(s.filial)} · ${money(s.valorContado)}</b><span>${dBR(s.periodoIni)} a ${dBR(s.periodoFim)} · ${sacolaStatus(s)}</span></div>
+      </div>`).join('')}</div></section>` : ''}
+    <div id="pOut"></div>`;
+    document.querySelectorAll('[data-chegou]').forEach(b => b.addEventListener('click', () => post('/api/caixa/sacola/chegou', { id: b.dataset.chegou }, 'Marcado: chegou na matriz')));
+    document.querySelectorAll('[data-conferir]').forEach(b => b.addEventListener('click', () => sheetConferirSacola(S.sacolas.find(s => s.id === b.dataset.conferir))));
+  }
+  function sheetConferirSacola(s) {
+    openSheet(`<div class="tt"><h2>Conferir sacola · Filial ${esc(s.filial)}</h2><button class="x" type="button" id="shxb">✕</button></div>
+      <p class="muted small">O StarIA apontou ${money(s.valorStaria)} em vendas dessa filial. Digite o que realmente veio dentro da sacola — é esse valor que entra no saldo do caixa principal.</p>
+      <form id="fcs">
+        <div class="field"><label for="csValor">Valor contado</label><input type="text" id="csValor" inputmode="decimal" placeholder="0,00" required></div>
+        <div class="field"><label for="csMotivo">Observação (se sobrou ou faltou)</label><input type="text" id="csMotivo" maxlength="300"></div>
+        <button class="btn pri full" type="submit">Confirmar conferência</button>
+      </form><div id="csOut"></div>`, () => {
+      $('#shxb').addEventListener('click', () => { closeSheet(); render(); });
+      $('#fcs').addEventListener('submit', async e => {
+        e.preventDefault(); const b = e.target.querySelector('button'); b.disabled = true;
+        try {
+          const r = await api('/api/caixa/sacola/conferir', { id: s.id, valorContado: $('#csValor').value, motivo: $('#csMotivo').value });
+          await reload();
+          $('#fcs').hidden = true;
+          $('#csOut').innerHTML = r.diferenca === 0
+            ? `<div class="note" style="background:var(--green-bg);color:var(--green)"><b>Bateu certinho!</b> O valor contado confere com o que o StarIA apontou.</div>`
+            : `<div class="warn"><b>${r.diferenca > 0 ? 'Sobrou' : 'Faltou'} ${money(Math.abs(r.diferenca))}.</b> Ficou registrado na aba Ocorrências para o administrador.</div>`;
+        } catch (er) { fail(er); } finally { b.disabled = false; }
+      });
+    });
   }
 
   /* ---------- Acessos (admin): quem guarda o caixa (caixista), quem aprova o crediário (financeiro) e o acesso
@@ -350,12 +406,16 @@
 
   /* ---------- Ocorrências (admin): conferências com diferença + tudo que foi apagado, alterado ou decidido,
      inclusive pelo próprio admin — para dar transparência e segurança a quem trabalha com o dinheiro. Só leitura. */
-  function ocorIcon(o) { return o.tipo === 'conferencia' ? '⚖️' : '🛡️'; }
+  function ocorIcon(o) { return o.tipo === 'conferencia' ? '⚖️' : o.tipo === 'sacola' ? '📦' : '🛡️'; }
   function ocorDetalheTxt(o) {
     const d = o.detalhe || {};
     if (o.tipo === 'conferencia') {
       const sinal = d.diferenca > 0 ? 'Sobrou ' : 'Faltou ';
       return sinal + money(Math.abs(d.diferenca)) + ' (contado ' + money(d.valorContado) + ', esperado ' + money(d.saldoEsperado) + ')' + (d.motivo ? ' · ' + esc(d.motivo) : '') + ' · ' + esc(d.por || '');
+    }
+    if (o.tipo === 'sacola') {
+      const sinal = d.diferenca > 0 ? 'Sobrou ' : 'Faltou ';
+      return 'Filial ' + esc(d.filial) + ': ' + sinal + money(Math.abs(d.diferenca)) + ' (contado ' + money(d.valorContado) + ', StarIA apontava ' + money(d.valorStaria) + ')' + (d.motivo ? ' · ' + esc(d.motivo) : '') + ' · ' + esc(d.por || '');
     }
     if (o.titulo === 'Ajuste lançado') return (d.valor != null ? money(Number(d.valor)) : '') + ' · ' + esc(d.role || '');
     if (o.titulo === 'Saldo inicial alterado') return 'Novo saldo inicial: ' + money(Number(d.saldoInicial) || 0) + ' · ' + esc(d.role || '');
@@ -386,6 +446,7 @@
     $('#navSangria').hidden = isFinanceiro(); $('#navStaria').hidden = !isAdmin(); $('#navAcessos').hidden = !isAdmin(); $('#navGaveta').hidden = !isAdmin(); $('#navOcorrencias').hidden = !isAdmin();
     document.querySelectorAll('#bn [data-go]').forEach(b => b.setAttribute('aria-current', b.dataset.go === view));
     if (view === 'sangria') return renderSangria();
+    if (view === 'sacolas') return renderSacolas();
     if (view === 'staria') return renderStaria();
     if (view === 'acessos') return renderAcessos();
     if (view === 'gaveta') return renderGaveta();

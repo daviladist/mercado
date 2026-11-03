@@ -571,6 +571,32 @@ create table if not exists caixa_jobs (
   primary key (tenant_id, id)
 );
 create index if not exists caixa_jobs_tenant on caixa_jobs(tenant_id, status);
+-- sacola física de cada filial (venda em dinheiro apontada pelo StarIA): fica "na filial" até alguém (caixista ou
+-- financeiro) marcar que chegou na matriz; só depois disso o financeiro confere o valor REAL que veio dentro e
+-- lança no saldo — com o valor contado, não o do StarIA. Qualquer diferença vira ocorrência. O crediário não passa
+-- por aqui (não vem em sacola física): continua só no fluxo de aprovar/rejeitar, de quando a consulta é entregue.
+create table if not exists caixa_sacola (
+  tenant_id text not null references tenants(id),
+  id text primary key,
+  job_id text not null,
+  filial int not null,
+  periodo_ini date not null,
+  periodo_fim date not null,
+  valor_staria numeric(14,2) not null,
+  chegou_em timestamptz,
+  chegou_por text,
+  chegou_por_role text,
+  valor_contado numeric(14,2),
+  diferenca numeric(14,2),
+  motivo text,
+  conferido_em timestamptz,
+  conferido_por text,
+  conferido_por_role text,
+  mov_id text,
+  created_at timestamptz not null default now(),
+  unique(job_id, filial)
+);
+create index if not exists caixa_sacola_tenant on caixa_sacola(tenant_id, created_at desc);
 -- conferência física do caixa principal: a caixista (ou o admin) digita quanto contou em dinheiro; o servidor
 -- compara com o saldo esperado NA HORA e grava a diferença (pode ser 0). Nunca editada nem excluída: é um
 -- retrato do que foi contado naquele momento. Toda conferência com diferença ≠ 0 vira uma ocorrência (ver abaixo).
