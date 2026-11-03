@@ -17,13 +17,22 @@
   const fmtTel = v => { let d = String(v || '').replace(/\D/g, ''); if (d.length > 11 && d.startsWith('55')) d = d.slice(2); d = d.slice(0, 11); if (!d.length) return ''; if (d.length <= 2) return '(' + d; if (d.length <= 6) return '(' + d.slice(0, 2) + ') ' + d.slice(2); if (d.length <= 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6); return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7); };
 
   /* guardado só neste aparelho (o carrinho, os dados do cliente para não digitar de novo, os links dos pedidos e o cupom digitado) */
+  // o que fica guardado no aparelho pode estar estragado (outra versão, extensão, espaço cheio): cada leitura confere o formato
+  const ehObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+  const itemOk = i => ehObj(i) && typeof i.produtoId === 'string' && /^x[a-f0-9]{12}$/.test(i.produtoId) && Number.isInteger(i.qtd) && i.qtd > 0 && i.qtd <= 999 && (i.variacaoId == null || typeof i.variacaoId === 'string');
+  const LIMPA = {
+    'tino-carrinho': v => Array.isArray(v) ? v.filter(itemOk) : [],
+    'tino-cupom': v => ehObj(v) && typeof v.codigo === 'string' && (v.tipo === 'pct' || v.tipo === 'reais') && Number(v.valor) > 0 ? v : null,
+    'tino-cliente': v => ehObj(v) ? v : {},
+    'tino-visita': v => Number(v) || 0,
+    'tino-envio': v => ehObj(v) ? v : null,
+    'tino-pedidos': v => Array.isArray(v) ? v.filter(p => ehObj(p) && typeof p.chave === 'string' && /^[a-f0-9]{32}$/.test(p.chave)).map(p => Object.assign({}, p, { itens: Array.isArray(p.itens) ? p.itens.filter(itemOk) : [] })).slice(0, 50) : []
+  };
   const mem = {
-    get(k, d) { try { const v = localStorage.getItem(k + ':' + slug); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    get(k, d) { try { const v = localStorage.getItem(k + ':' + slug); const x = v ? JSON.parse(v) : d; return LIMPA[k] ? LIMPA[k](x) : x; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k + ':' + slug, JSON.stringify(v)); } catch (e) { /* sem espaço ou bloqueado */ } }
   };
   let V = null, cart = mem.get('tino-carrinho', []), filtroCat = '', busca = '', ordem = 'rel', enviando = false, cupom = mem.get('tino-cupom', null);
-  if (!Array.isArray(cart)) cart = [];
-  if (cupom && (typeof cupom !== 'object' || !cupom.codigo)) cupom = null;
   // carrinho de outra visita (mais de 30 min sem abrir a loja): avisa no topo
   let abandonado = cart.length > 0 && Date.now() - (Number(mem.get('tino-visita', 0)) || 0) > 30 * 60 * 1000;
   const tocar = () => mem.set('tino-visita', Date.now());

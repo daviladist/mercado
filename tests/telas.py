@@ -289,6 +289,30 @@ with sync_playwright() as pw:
     check(pg.locator('#abd').count() == 1 and 'Oi, Ana' in pg.inner_text('.hero'), 'volta depois: faixa do carrinho deixado e "Oi, Ana" no topo')
     check(not E, 'vitrine sem erro de JavaScript: %s' % E[:2]); b.close()
 
+    print('== vitrine: o que ficou guardado no aparelho estragado não quebra a loja; link #p com lixo; modo escuro')
+    import json as _json
+    b = pw.chromium.launch()
+    for nome, k, v in [('carrinho com item nulo', 'tino-carrinho', [None, {'produtoId': 'zz', 'qtd': 'x'}, {'produtoId': BOLO, 'qtd': 1}]), ('carrinho que não é lista', 'tino-carrinho', {'a': 1}),
+                       ('meus pedidos que não é lista', 'tino-pedidos', {'a': 1}), ('meus pedidos com lixo', 'tino-pedidos', [None, 'x', {'numero': 'a', 'chave': 123, 'itens': 'x'}]),
+                       ('cupom estragado', 'tino-cupom', {'codigo': {}, 'valor': 'x'}), ('cliente como texto', 'tino-cliente', 'ana'), ('visita como objeto', 'tino-visita', {'x': 1})]:
+        ctx = b.new_context(viewport={'width': 390, 'height': 844}); ctx.add_init_script("localStorage.setItem('%s:%s', %s)" % (k, LID, _json.dumps(_json.dumps(v)))); ctx.route('**/*', route)
+        pg = ctx.new_page(); E = []; pg.on('pageerror', lambda e: E.append(str(e)[:160]))
+        pg.goto(LURL); pg.wait_for_timeout(1200)
+        okp = pg.locator('.pc').count() > 0
+        if okp: pg.locator('.pc [data-add]').first.click(); pg.wait_for_timeout(300); pg.click('#cartBtn'); pg.wait_for_timeout(400)
+        check(okp and not E and pg.locator('#go').count() == 1, '%s: vitrine abre, adiciona e abre o carrinho (%s)' % (nome, E[:1])); ctx.close()
+    for h in ['#p/zzz', '#p/' + BOLO + '/x', '#pedido/abc', '#%00']:
+        ctx = b.new_context(viewport={'width': 390, 'height': 844}); ctx.route('**/*', route); pg = ctx.new_page(); E = []; pg.on('pageerror', lambda e: E.append(str(e)[:160]))
+        pg.goto(LURL + h); pg.wait_for_timeout(1000); check(pg.locator('.pc').count() > 0 and not E and not pg.locator('#sheet').inner_html().strip(), 'link %s: vitrine abre normal, sem abrir produto (%s)' % (h, E[:1])); ctx.close()
+    ctx = b.new_context(viewport={'width': 390, 'height': 844}, color_scheme='dark'); ctx.route('**/*', route); pg = ctx.new_page(); E = []; pg.on('pageerror', lambda e: E.append(str(e)[:160]))
+    pg.goto(LURL); pg.wait_for_selector('.pc'); pg.locator('.pc [data-add]').first.click(); pg.wait_for_timeout(300); pg.click('#cartBtn'); pg.wait_for_timeout(500)
+    baixo = pg.evaluate(r"""()=>{const L=c=>{const m=(c.match(/\d+/g)||[0,0,0]).map(Number);const f=v=>{v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)};return .2126*f(m[0])+.7152*f(m[1])+.0722*f(m[2])};
+      const bg=e=>{for(let x=e;x;x=x.parentElement){const c=getComputedStyle(x).backgroundColor;if(c&&!/rgba\(0, 0, 0, 0\)|transparent/.test(c))return c}return getComputedStyle(document.body).backgroundColor};
+      const out=[];document.querySelectorAll('#sheet *, #main *').forEach(e=>{if(![...e.childNodes].some(n=>n.nodeType===3&&n.textContent.trim()))return;const r=e.getBoundingClientRect();if(r.width<2||r.height<2)return;
+        const cr=(Math.max(L(getComputedStyle(e).color),L(bg(e)))+.05)/(Math.min(L(getComputedStyle(e).color),L(bg(e)))+.05);if(cr<3)out.push(e.textContent.trim().slice(0,25)+' '+cr.toFixed(1))});return out.slice(0,5)}""")
+    check(not E and not baixo, 'modo escuro: vitrine e carrinho sem erro e sem texto apagado (%s %s)' % (E[:1], baixo))
+    b.close()
+
     print('== celular: barra de baixo, cabeçalho e rolagem lateral (iPhone 13 com área segura e Pixel 7)')
     TOP = r"""()=>{const fixed=[...document.querySelectorAll('header.top,#app .tabs,#app .navband,#app .subnavwrap,.cnav,#app .catbar')].filter(e=>e.offsetParent!==null);
       const bars=fixed.map(f=>({el:f,r:f.getBoundingClientRect()}));const bad=[];window.scrollTo(0,0);

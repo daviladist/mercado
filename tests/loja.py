@@ -354,6 +354,20 @@ check(uso.get('DEZ') == 1 and uso.get('CINCO') == 1 and uso.get('PRIMEIRA') == 1
 pc = next(p for p in st['pedidos'] if p.get('cupom') == 'DEZ'); check(pc['desconto'] == 8.4 and pc['total'] == 75.6, 'painel vê o cupom e o desconto no pedido')
 s, html, h = C(None).req('/t/' + TD + '/loja', raw=True); js = C(None).req('/loja.js', raw=True, headers={})[1]
 check(s == 200 and b'#p/' in js and b'/api/loja/cupom' in js and 'Peça junto'.encode() in js, 'vitrine do cliente tem a rota #p/<id>, o cupom e o "Peça junto"')
+print('== segurança da vitrine: cupom de outra loja, cupom malformado, validade impossível, corrida da primeira compra')
+import concurrent.futures as cf
+s, r = C(TX).req('/api/loja/cupom?c=DEZ'); check(s in (403, 404), 'cupom de uma loja não vale na vitrine de outra (%s)' % s)
+s, r = DV.req('/api/loja/pedido', dict(bd, id=oid(), chave=chave(), itens=[{'produtoId': COOKIE, 'qtd': 1}], entrega='retirada', cupom=['DEZ'], totalVisto=6)); check(s == 400, 'cupom que não é texto é recusado (%s)' % s)
+s, r = DA.req('/api/loja/admin/config', dict(CFG, cupons=[{'codigo': 'AB', 'tipo': 'pct', 'valor': 5, 'validade': '2026-13-45'}])); check(s == 400, 'validade impossível (2026-13-45) é recusada')
+s, r = DA.req('/api/loja/admin/config', dict(CFG, cupons='x')); check(s == 400, 'cupons que não são lista: recusado (um envio errado não apaga os cupons)')
+s, st = DA.req('/api/loja/admin/state'); check(len(st['config']['cupons']) == 5, 'os 5 cupons continuam lá')
+PS = [xid() for _ in range(6)]
+for i, pid in enumerate(PS): DA.req('/api/loja/admin/produto', {'id': pid, 'nome': 'Doce %d' % i, 'preco': 20, 'categoria': 'Doces'})
+par = dict(bd, cliente={'nome': 'Dudu Paralelo', 'telefone': '27 95555-0003'}, entrega='retirada', cupom='PRIMEIRA', totalVisto=10)
+def pede(k): return C(TD).req('/api/loja/pedido', dict(par, id=oid(), chave=chave(), itens=[{'produtoId': PS[k], 'qtd': 1}]))
+with cf.ThreadPoolExecutor(6) as ex: R = list(ex.map(pede, range(6)))
+check(sum(1 for s, r in R if s == 200 and r.get('desconto') == 10) == 1 and all(s in (200, 400) for s, _ in R), '6 pedidos ao mesmo tempo do mesmo WhatsApp com cupom de primeira compra: só 1 leva o desconto (%s)' % [s for s, _ in R])
+limpa()
 print('== limite de pedidos por aparelho (por último)')
 codes = [V.req('/api/loja/pedido', dict(base, id=oid(), chave=chave(), itens=[{'produtoId': BLU, 'qtd': 1}], entrega='retirada', totalVisto=49.9))[0] for _ in range(30)]
 check(429 in codes and codes.count(200) <= 5, 'muitos pedidos seguidos do mesmo aparelho/telefone são barrados, e ninguém segura estoque com mais de 5 pedidos esperando (%s)' % codes)
