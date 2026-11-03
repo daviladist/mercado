@@ -242,6 +242,22 @@ s, oc = A.req('/api/caixa/ocorrencias'); titulos = [o['titulo'] for o in oc['oco
 check('Ajuste lançado' in titulos and 'Lançamento apagado' in titulos, 'ajuste e exclusão do admin aparecem nas ocorrências, mesmo sendo ele mesmo quem fez')
 check('Crediário aprovado/rejeitado' in titulos, 'aprovar/rejeitar crediário também vira ocorrência (já tínhamos aprovado e rejeitado antes)')
 
+print('== acesso de automação (StarIA): só pede e entrega a consulta, nada mais')
+s, r = A.req('/api/caixa/pessoa', {'login': 'automacao1', 'papel': 'automacao', 'senha': 'curta1'}); check(s == 400, 'senha curta demais para o acesso de automação é recusada')
+SENHA_AUTO = 'AutoStaria2026x9'
+s, r = A.req('/api/caixa/pessoa', {'login': 'automacao1', 'papel': 'automacao', 'senha': SENHA_AUTO}); check(s == 200 and r.get('login') == 'automacao1' and not r.get('password'), 'cria o acesso de automação com a senha escolhida pelo admin (sem gerar provisória)')
+AU = C(TID)
+s, _ = AU.req('/api/login', {'role': 'admin', 'login': 'automacao1', 'password': SENHA_AUTO}); check(s == 200, 'acesso de automação entra direto, sem precisar trocar senha')
+s, _ = AU.req('/api/caixa/state'); check(s == 403, 'acesso de automação não vê o estado do caixa')
+s, _ = AU.req('/api/caixa/ocorrencias'); check(s == 403, 'acesso de automação não vê as ocorrências')
+s, _ = AU.req('/api/caixa/ajuste', {'valor': '10', 'data': '2026-10-10', 'motivo': 'x'}); check(s == 403, 'acesso de automação não lança nada além do StarIA')
+s, r = AU.req('/api/caixa/staria/pedir', {'periodoIni': '2026-10-09', 'periodoFim': '2026-10-09'}); JOB3 = r.get('id'); check(s == 200 and JOB3, 'acesso de automação pede a consulta ao StarIA')
+s, _ = AU.req('/api/caixa/staria/resultado', {'id': JOB3, 'resultado': {'porFilial': {'1': {'vendasDinheiro': 500, 'recebCrediarioDinheiro': 0}}}}); check(s == 200, 'acesso de automação entrega o resultado, que fica pronto pra revisão (nunca aplica sozinha)')
+s, oc = A.req('/api/caixa/ocorrencias'); titulos3 = [o['titulo'] for o in oc['ocorrencias']]
+check('Consulta ao StarIA pedida' in titulos3 and 'Consulta ao StarIA pronta para revisão' in titulos3, 'a consulta pedida e entregue pela automação aparece nas ocorrências do admin')
+s, st3 = A.req('/api/caixa/state'); autos = [p for p in st3['pessoas'] if p['papel'] == 'automacao']
+check(len(autos) == 1 and autos[0]['login'] == 'automacao1', 'admin vê o acesso de automação na lista de acessos')
+
 print('== desativar e reativar a pessoa; nova senha provisória')
 s, _ = A.req('/api/caixa/pessoa', {'login': 'caixista1', 'nome': 'Menina do caixa', 'ativo': False}); check(s == 200, 'admin desativa o acesso da caixista')
 s, _ = M.req('/api/caixa/state'); check(s == 401, 'caixista desativada perde a sessão imediatamente')

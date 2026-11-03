@@ -292,40 +292,52 @@
     document.querySelectorAll('[data-aplicar]').forEach(b => b.addEventListener('click', () => { if (confirm('Aplicar este resultado ao caixa? As vendas em dinheiro entram direto no saldo; o recebimento de crediário entra como pendente, aguardando aprovação. Depois de aplicado não pode ser desfeito (lance um ajuste se precisar corrigir).')) post('/api/caixa/staria/aplicar', { id: b.dataset.aplicar }, 'Aplicado: vendas no saldo, crediário aguardando aprovação'); }));
   }
 
-  /* ---------- Acessos (admin): quem guarda o caixa (caixista) e quem aprova o crediário (financeiro) ---------- */
-  const papelLabel = p => p === 'financeiro' ? 'Financeiro · aprova o crediário' : 'Caixista · guarda o dinheiro';
+  /* ---------- Acessos (admin): quem guarda o caixa (caixista), quem aprova o crediário (financeiro) e o acesso
+     de automação (só o Claude, importação noturna do StarIA) ---------- */
+  const papelLabel = p => p === 'financeiro' ? 'Financeiro · aprova o crediário' : p === 'automacao' ? 'Automação · só StarIA' : 'Caixista · guarda o dinheiro';
   function renderAcessos() {
     if (!isAdmin()) { view = 'inicio'; return render(); }
     $('#main').innerHTML = `<section class="card">
       <h1>Acessos</h1>
-      <p class="muted small">Quem pode entrar neste controle de caixa. Nenhum dos dois vê custo ou margem (não existe nada disso aqui), e nenhum dos dois apaga ou cancela nada — isso é só pelo seu usuário.</p>
+      <p class="muted small">Quem pode entrar neste controle de caixa. Ninguém vê custo ou margem (não existe nada disso aqui), e ninguém apaga ou cancela nada — isso é só pelo seu usuário.</p>
       ${S.pessoas.length ? `<div class="list">${S.pessoas.map(p => `<div class="it">
-          <div class="ic">${p.papel === 'financeiro' ? '✅' : '👤'}</div><div class="tx"><b>${esc(p.nome)}</b><span>${esc(p.login)} · ${papelLabel(p.papel)}${p.ativo ? '' : ' · inativo'}${p.trocarSenha ? ' · ainda não trocou a senha provisória' : ''}</span></div>
+          <div class="ic">${p.papel === 'financeiro' ? '✅' : p.papel === 'automacao' ? '🤖' : '👤'}</div><div class="tx"><b>${esc(p.nome)}</b><span>${esc(p.login)} · ${papelLabel(p.papel)}${p.ativo ? '' : ' · inativo'}${p.trocarSenha ? ' · ainda não trocou a senha provisória' : ''}</span></div>
           <div class="vl"><button class="btn sm" type="button" data-editp="${esc(p.login)}">Editar</button></div>
         </div>`).join('')}</div>` : '<p class="muted">Nenhum acesso criado ainda.</p>'}
       <div class="row"><button class="btn pri" type="button" id="btnNovaCaixista">+ Nova pessoa do caixa</button><button class="btn pri" type="button" id="btnNovoFinanceiro">+ Novo aprovador (financeiro)</button></div>
+      <div class="row"><button class="btn" type="button" id="btnNovaAutomacao">🤖 + Acesso de automação (StarIA)</button></div>
     </section>
     <div id="pOut"></div>`;
     $('#btnNovaCaixista').addEventListener('click', () => sheetPessoa(null, 'caixista'));
     $('#btnNovoFinanceiro').addEventListener('click', () => sheetPessoa(null, 'financeiro'));
+    $('#btnNovaAutomacao').addEventListener('click', () => sheetPessoa(null, 'automacao'));
     document.querySelectorAll('[data-editp]').forEach(b => b.addEventListener('click', () => sheetPessoa(S.pessoas.find(p => p.login === b.dataset.editp))));
   }
   function sheetPessoa(p, papelNovo) {
     const papel = p ? p.papel : papelNovo;
-    openSheet(`<div class="tt"><h2>${p ? 'Editar acesso' : (papel === 'financeiro' ? 'Novo aprovador (financeiro)' : 'Nova pessoa do caixa')}</h2><button class="x" type="button" id="shxb">✕</button></div>
-      <p class="muted small">${papel === 'financeiro' ? 'Só aprova ou rejeita o recebimento de crediário do StarIA; não lança sangria nem vê os acessos.' : 'Lança sangria, vê o saldo e marca quando um valor foi ao banco.'}</p>
+    const auto = papel === 'automacao';
+    const titulo = p ? 'Editar acesso' : auto ? 'Novo acesso de automação' : (papel === 'financeiro' ? 'Novo aprovador (financeiro)' : 'Nova pessoa do caixa');
+    const sub = auto ? 'Só para o Claude usar na importação noturna do StarIA: pede e entrega a consulta, deixando pronta pra você revisar. Não vê saldo, extrato, pessoas nem ocorrências — mesmo assim, é uma senha guardada fora do app, então escolha uma forte e não reaproveite de outro lugar.'
+      : papel === 'financeiro' ? 'Só aprova ou rejeita o recebimento de crediário do StarIA; não lança sangria nem vê os acessos.' : 'Lança sangria, vê o saldo e marca quando um valor foi ao banco.';
+    openSheet(`<div class="tt"><h2>${titulo}</h2><button class="x" type="button" id="shxb">✕</button></div>
+      <p class="muted small">${sub}</p>
       <form id="fp">
         <div class="field"><label for="pLogin">Usuário</label><input type="text" id="pLogin" value="${esc((p || {}).login || '')}" autocapitalize="off" spellcheck="false" ${p ? 'readonly' : ''} required></div>
-        <div class="field"><label for="pNome">Nome</label><input type="text" id="pNome" value="${esc((p || {}).nome || '')}" required></div>
+        <div class="field"><label for="pNome">Nome</label><input type="text" id="pNome" value="${esc((p || {}).nome || '')}" ${auto ? '' : 'required'} placeholder="${auto ? 'Automação (StarIA)' : ''}"></div>
+        ${auto ? `<div class="field"><label for="pSenha">${p ? 'Nova senha (deixe em branco para manter a atual)' : 'Senha'}</label>
+            <input type="text" id="pSenha" autocapitalize="off" spellcheck="false" minlength="12" ${p ? '' : 'required'}></div>
+          <p class="small muted">Pelo menos 12 caracteres, com letras e números.</p>` : ''}
         ${p ? `<label class="row"><input type="checkbox" id="pAtivo" ${p.ativo ? 'checked' : ''}> Acesso ativo</label>
-          <label class="row"><input type="checkbox" id="pNova"> Gerar nova senha provisória</label>` : ''}
+          ${auto ? '' : '<label class="row"><input type="checkbox" id="pNova"> Gerar nova senha provisória</label>'}` : ''}
         <button class="btn pri full" type="submit">${p ? 'Salvar' : 'Criar acesso'}</button>
       </form><div id="pOutS"></div>`, () => {
       $('#shxb').addEventListener('click', closeSheet);
       $('#fp').addEventListener('submit', async e => {
         e.preventDefault(); const b = e.target.querySelector('button'); b.disabled = true;
         try {
-          const r = await api('/api/caixa/pessoa', { login: $('#pLogin').value.trim().toLowerCase(), nome: $('#pNome').value, papel, ativo: p ? $('#pAtivo').checked : true, novaSenha: p ? $('#pNova').checked : true });
+          const body = { login: $('#pLogin').value.trim().toLowerCase(), nome: $('#pNome').value, papel, ativo: p ? $('#pAtivo').checked : true };
+          if (auto) { if ($('#pSenha').value) body.senha = $('#pSenha').value; } else body.novaSenha = p ? $('#pNova').checked : true;
+          const r = await api('/api/caixa/pessoa', body);
           await reload();
           if (r.password) $('#pOutS').innerHTML = `<div class="note" style="display:grid;gap:6px"><b>Anote agora: esta senha aparece só uma vez.</b>
             <span>Usuário: <code>${esc(r.login)}</code></span><span>Senha provisória: <code style="font-size:17px">${esc(r.password)}</code></span>
@@ -350,6 +362,8 @@
     if (o.titulo === 'Crediário aprovado/rejeitado') return (d.acao === 'aprovar' ? 'Aprovado' : 'Rejeitado') + ' por ' + esc(d.role || '');
     if (o.titulo === 'Acesso criado ou alterado') return esc(d.login || '') + (d.papel ? ' · ' + esc(d.papel) : '') + ' · por ' + esc(d.role || '');
     if (o.titulo === 'Lançamento apagado') return 'por ' + esc(d.role || '');
+    if (o.titulo === 'Consulta ao StarIA pedida') return 'Período: ' + (d.periodo || []).map(dBR).join(' a ') + ' · por ' + esc(d.role || '');
+    if (o.titulo === 'Consulta ao StarIA pronta para revisão') return 'Aguardando sua revisão e aplicação · por ' + esc(d.role || '');
     return esc(d.role || '');
   }
   function renderOcorrencias() {
