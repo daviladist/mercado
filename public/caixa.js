@@ -133,7 +133,10 @@
         <table><thead><tr><th>Filial</th><th class="n">Vendas</th><th class="n">Crediário aprovado</th><th class="n">Total</th></tr></thead><tbody>
         ${pf.map(([f, v]) => `<tr><td>${esc(f)}</td><td class="n">${money(v.vendas)}</td><td class="n">${money(v.crediario)}</td><td class="n"><b>${money(r2(v.vendas + v.crediario))}</b></td></tr>`).join('')}
         </tbody></table></section>` : ''}
-      ${isAdmin() ? '<div class="row"><button class="btn sm" type="button" id="btnAjuste">✏️ Lançar ajuste</button></div>' : ''}
+      <div class="row">
+        ${!isFinanceiro() ? '<button class="btn sm pri" type="button" id="btnConferir">⚖️ Conferir caixa</button>' : ''}
+        ${isAdmin() ? '<button class="btn sm" type="button" id="btnAjuste">✏️ Lançar ajuste</button>' : ''}
+      </div>
       <section class="card">
         <h2>Lançamentos</h2>
         ${lista.length ? `<div class="list">${lista.map(m => { const naoConta = m.tipo === 'crediario_staria' && m.status !== 'aprovado'; return `<div class="it">
@@ -149,6 +152,7 @@
       </section>`;
     const vc = $('#verCfg'); if (vc) vc.addEventListener('click', e => { e.preventDefault(); sheetCfg(); });
     const ba = $('#btnAjuste'); if (ba) ba.addEventListener('click', sheetAjuste);
+    const bc = $('#btnConferir'); if (bc) bc.addEventListener('click', sheetConferir);
     document.querySelectorAll('[data-dep]').forEach(b => b.addEventListener('click', () => post('/api/caixa/depositado', { id: b.dataset.dep, depositadoEm: hoje() }, 'Marcado como depositado')));
     document.querySelectorAll('[data-delmov]').forEach(b => b.addEventListener('click', () => { if (confirm('Apagar este lançamento?')) post('/api/caixa/mov/excluir', { id: b.dataset.delmov }, 'Lançamento apagado'); }));
     document.querySelectorAll('[data-aprovar]').forEach(b => b.addEventListener('click', () => post('/api/caixa/crediario/decidir', { id: b.dataset.aprovar, acao: 'aprovar' }, 'Crediário aprovado: entrou no saldo')));
@@ -162,6 +166,29 @@
         <button class="btn pri full" type="submit">Salvar</button></form>`, () => {
       $('#shxb').addEventListener('click', closeSheet);
       $('#fcfg2').addEventListener('submit', e => { e.preventDefault(); post('/api/caixa/cfg', { saldoInicial: $('#cfSaldo2').value, dataInicial: $('#cfData2').value }, 'Saldo inicial atualizado'); });
+    });
+  }
+  function sheetConferir() {
+    openSheet(`<div class="tt"><h2>Conferir caixa</h2><button class="x" type="button" id="shxb">✕</button></div>
+      <p class="muted small">Conte o dinheiro físico e digite quanto deu. O sistema compara com o saldo esperado agora (${money(S.saldo)}) e, se for diferente, fica registrado para o administrador.</p>
+      <form id="fcf">
+        <div class="field"><label for="cfValor">Quanto você contou</label><input type="text" inputmode="decimal" id="cfValor" placeholder="0,00" required></div>
+        <div class="field"><label for="cfObs">Observação (opcional)</label><textarea id="cfObs" placeholder="Ex.: nota rasgada, troco emprestado…"></textarea></div>
+        <button class="btn pri full" type="submit">Conferir</button>
+      </form><div id="cfOut"></div>`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      $('#fcf').addEventListener('submit', async e => {
+        e.preventDefault(); const b = e.target.querySelector('button'); b.disabled = true;
+        try {
+          const r = await api('/api/caixa/conferir', { valorContado: $('#cfValor').value, motivo: $('#cfObs').value });
+          await reload();
+          const dif = Number(r.diferenca);
+          $('#fcf').hidden = true;
+          $('#cfOut').innerHTML = dif === 0
+            ? `<div class="note" style="background:var(--green-bg);color:var(--green)"><b>Bateu certinho!</b> O caixa confere com o esperado.</div>`
+            : `<div class="warn"><b>${dif > 0 ? 'Sobrou' : 'Faltou'} ${money(Math.abs(dif))}.</b> Ficou registrado na aba Ocorrências para o administrador.</div>`;
+        } catch (er) { fail(er); } finally { b.disabled = false; }
+      });
     });
   }
   function sheetAjuste() {
@@ -309,15 +336,46 @@
     });
   }
 
+  /* ---------- Ocorrências (admin): conferências com diferença + tudo que foi apagado, alterado ou decidido,
+     inclusive pelo próprio admin — para dar transparência e segurança a quem trabalha com o dinheiro. Só leitura. */
+  function ocorIcon(o) { return o.tipo === 'conferencia' ? '⚖️' : '🛡️'; }
+  function ocorDetalheTxt(o) {
+    const d = o.detalhe || {};
+    if (o.tipo === 'conferencia') {
+      const sinal = d.diferenca > 0 ? 'Sobrou ' : 'Faltou ';
+      return sinal + money(Math.abs(d.diferenca)) + ' (contado ' + money(d.valorContado) + ', esperado ' + money(d.saldoEsperado) + ')' + (d.motivo ? ' · ' + esc(d.motivo) : '') + ' · ' + esc(d.por || '');
+    }
+    if (o.titulo === 'Ajuste lançado') return (d.valor != null ? money(Number(d.valor)) : '') + ' · ' + esc(d.role || '');
+    if (o.titulo === 'Saldo inicial alterado') return 'Novo saldo inicial: ' + money(Number(d.saldoInicial) || 0) + ' · ' + esc(d.role || '');
+    if (o.titulo === 'Crediário aprovado/rejeitado') return (d.acao === 'aprovar' ? 'Aprovado' : 'Rejeitado') + ' por ' + esc(d.role || '');
+    if (o.titulo === 'Acesso criado ou alterado') return esc(d.login || '') + (d.papel ? ' · ' + esc(d.papel) : '') + ' · por ' + esc(d.role || '');
+    if (o.titulo === 'Lançamento apagado') return 'por ' + esc(d.role || '');
+    return esc(d.role || '');
+  }
+  function renderOcorrencias() {
+    if (!isAdmin()) { view = 'inicio'; return render(); }
+    const lista = S.ocorrencias || [];
+    $('#main').innerHTML = `<section class="card">
+      <h1>Ocorrências</h1>
+      <p class="muted small">Conferências do caixa que não bateram, e tudo que foi apagado, alterado ou aprovado/rejeitado neste controle de caixa — inclusive por você. Só leitura.</p>
+      ${lista.length ? `<div class="list">${lista.map(o => `<div class="it">
+          <div class="ic">${ocorIcon(o)}</div>
+          <div class="tx"><b>${esc(o.titulo)}</b><span>${ocorDetalheTxt(o)}</span></div>
+          <div class="vl"><small class="muted">${dBR(o.em)} ${new Date(o.em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</small></div>
+        </div>`).join('')}</div>` : '<p class="muted">Nenhuma ocorrência registrada.</p>'}
+      </section>`;
+  }
+
   /* ---------- navegação ---------- */
   function render() {
     $('#bn').hidden = false; $('#sair').hidden = false;
-    $('#navSangria').hidden = isFinanceiro(); $('#navStaria').hidden = !isAdmin(); $('#navAcessos').hidden = !isAdmin(); $('#navGaveta').hidden = !isAdmin();
+    $('#navSangria').hidden = isFinanceiro(); $('#navStaria').hidden = !isAdmin(); $('#navAcessos').hidden = !isAdmin(); $('#navGaveta').hidden = !isAdmin(); $('#navOcorrencias').hidden = !isAdmin();
     document.querySelectorAll('#bn [data-go]').forEach(b => b.setAttribute('aria-current', b.dataset.go === view));
     if (view === 'sangria') return renderSangria();
     if (view === 'staria') return renderStaria();
     if (view === 'acessos') return renderAcessos();
     if (view === 'gaveta') return renderGaveta();
+    if (view === 'ocorrencias') return renderOcorrencias();
     return renderInicio();
   }
   document.querySelectorAll('#bn [data-go]').forEach(b => b.addEventListener('click', () => { view = b.dataset.go; closeSheet(); render(); window.scrollTo(0, 0); }));

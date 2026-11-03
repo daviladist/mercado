@@ -221,6 +221,27 @@ s, st = A.req('/api/caixa/state'); check(st['saldoImpostos'] == 1000, 'gaveta vo
 s, _ = A.req('/api/caixa/mov/excluir', {'id': SGI1}); check(s == 200, 'agora dá para apagar a sangria 1: os 1.000 continuam disponíveis na gaveta')
 s, st = A.req('/api/caixa/state'); check(st['saldoImpostos'] == 0 and st['saldo'] == 27700, 'gaveta zerada, saldo principal de volta a 27.700')
 
+print('== conferência física do caixa e ocorrências')
+s, _ = F.req('/api/caixa/conferir', {'valorContado': '27700'}); check(s == 403, 'financeiro não confere o caixa')
+s, _ = M.req('/api/caixa/conferir', {'valorContado': '-5'}); check(s == 400, 'valor contado negativo recusado')
+s, r = M.req('/api/caixa/conferir', {'valorContado': '27700'}); check(s == 200 and r.get('diferenca') == 0, 'caixista confere e bate certinho (27.700 = 27.700)')
+s, _ = M.req('/api/caixa/ocorrencias'); check(s == 403, 'caixista não vê a aba de ocorrências')
+s, _ = F.req('/api/caixa/ocorrencias'); check(s == 403, 'financeiro não vê a aba de ocorrências')
+s, oc = A.req('/api/caixa/ocorrencias'); check(s == 200 and not any(o['tipo'] == 'conferencia' for o in oc['ocorrencias']), 'conferência que bateu NÃO vira ocorrência')
+s, r = M.req('/api/caixa/conferir', {'valorContado': '27500', 'motivo': 'Nota estranha na gaveta'}); check(s == 200 and r.get('diferenca') == -200, 'caixista confere e falta R$ 200 (27.500 − 27.700)')
+s, oc = A.req('/api/caixa/ocorrencias'); confs = [o for o in oc['ocorrencias'] if o['tipo'] == 'conferencia']
+check(s == 200 and len(confs) == 1, 'conferência com diferença já aparece nas ocorrências do admin')
+check(confs[0]['detalhe']['diferenca'] == -200 and confs[0]['detalhe']['motivo'] == 'Nota estranha na gaveta' and confs[0]['detalhe']['por'] == 'Menina do caixa', 'ocorrência traz a diferença, o motivo e quem conferiu')
+s, st = A.req('/api/caixa/state'); check(st['saldo'] == 27700, 'conferir nunca muda o saldo (só registra o que foi contado)')
+check('ocorrencias' in st, 'o estado do admin já vem com as ocorrências (sem precisar de outra chamada)')
+s, stm = M.req('/api/caixa/state'); check('ocorrencias' not in stm, 'caixista não recebe as ocorrências no próprio estado')
+
+s, r = A.req('/api/caixa/ajuste', {'valor': '50', 'data': '2026-10-10', 'motivo': 'sobra de caixa'}); AJ1 = r.get('id')
+s, _ = A.req('/api/caixa/mov/excluir', {'id': AJ1}); check(s == 200, 'admin apaga o próprio ajuste (mesmo com a senha dele, fica registrado)')
+s, oc = A.req('/api/caixa/ocorrencias'); titulos = [o['titulo'] for o in oc['ocorrencias']]
+check('Ajuste lançado' in titulos and 'Lançamento apagado' in titulos, 'ajuste e exclusão do admin aparecem nas ocorrências, mesmo sendo ele mesmo quem fez')
+check('Crediário aprovado/rejeitado' in titulos, 'aprovar/rejeitar crediário também vira ocorrência (já tínhamos aprovado e rejeitado antes)')
+
 print('== desativar e reativar a pessoa; nova senha provisória')
 s, _ = A.req('/api/caixa/pessoa', {'login': 'caixista1', 'nome': 'Menina do caixa', 'ativo': False}); check(s == 200, 'admin desativa o acesso da caixista')
 s, _ = M.req('/api/caixa/state'); check(s == 401, 'caixista desativada perde a sessão imediatamente')

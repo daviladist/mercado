@@ -569,3 +569,19 @@ create table if not exists caixa_jobs (
   primary key (tenant_id, id)
 );
 create index if not exists caixa_jobs_tenant on caixa_jobs(tenant_id, status);
+-- conferência física do caixa principal: a caixista (ou o admin) digita quanto contou em dinheiro; o servidor
+-- compara com o saldo esperado NA HORA e grava a diferença (pode ser 0). Nunca editada nem excluída: é um
+-- retrato do que foi contado naquele momento. Toda conferência com diferença ≠ 0 vira uma ocorrência (ver abaixo).
+create table if not exists caixa_conferencia (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  valor_contado numeric(14,2) not null,
+  saldo_esperado numeric(14,2) not null,
+  diferenca numeric(14,2) not null,
+  motivo text,
+  criado_por text,
+  criado_por_role text,
+  created_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+create index if not exists caixa_conferencia_tenant on caixa_conferencia(tenant_id, created_at desc);
