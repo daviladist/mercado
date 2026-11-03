@@ -539,7 +539,8 @@
       const html = `
         <div class="field"><span class="lbl">Fotos (a primeira é a capa)</span><div class="fotos">
           ${F.fotos.map((f, i) => `<div class="f"><img alt="" src="${esc(f.url)}">${i === 0 ? '<span class="cap">capa</span>' : `<button type="button" class="noprint" data-capa="${i}" style="left:4px;right:auto" aria-label="Usar como capa">★</button>`}<button type="button" data-rmf="${i}" aria-label="Tirar foto">×</button></div>`).join('')}
-          ${F.fotos.length < 6 ? `<label class="add" for="ff">${enviando ? 'Enviando…' : '📷<br>Adicionar foto'}</label><input type="file" id="ff" accept="image/*" multiple hidden>` : ''}</div></div>
+          ${F.fotos.length < 6 ? `<label class="add" for="ff">${enviando ? 'Enviando…' : '📷<br>Adicionar foto'}</label><input type="file" id="ff" accept="image/*" multiple hidden>` : ''}</div>
+          ${F.fotos.length < 6 ? `<div class="row" style="margin-top:8px;align-items:center;flex-wrap:wrap;gap:8px"><button type="button" class="btn sm" id="fweb">🔎 Buscar imagem na internet</button><div id="fcola" tabindex="0" role="textbox" aria-label="Colar imagem do produto" class="small muted" style="flex:1;min-width:180px;border:1.5px dashed currentColor;border-radius:10px;padding:8px 10px;cursor:text">Copiou uma imagem (Ctrl+C)? Clique aqui e cole com <b>Ctrl+V</b>.</div></div>` : ''}</div>
         <div class="field"><label for="pn">Nome do produto</label><input type="text" id="pn" maxlength="80" value="${esc(F.nome)}" placeholder="Ex.: Vestido midi floral"></div>
         <div class="grid2"><div class="field"><label for="pp">Preço (R$)</label><input inputmode="decimal" class="money" id="pp" value="${esc(F.preco)}" placeholder="0,00"></div>
           <div class="field"><label for="pd">Preço "de" riscado (opcional)</label><input inputmode="decimal" id="pd" value="${esc(F.precoDe)}" placeholder="Ex.: 199,90"></div></div>
@@ -580,15 +581,30 @@
     }
     function bind(pn) {
       const redraw = () => { const y = pn.scrollTop; draw(); $('#sheet .pn').scrollTop = y; };
-      const ff = $('#ff'); if (ff) ff.addEventListener('change', async () => {
-        const files = [...ff.files].slice(0, 6 - F.fotos.length); if (!files.length) return;
+      async function enviarFotos(lista) {
+        const files = lista.slice(0, 6 - F.fotos.length); if (!files.length) return;
         enviando = files.length; redesenhar();
         for (const f of files) {
           try { const data = await reduzir(f); const r = await api('/api/loja/admin/foto', { data }); if (F.fotos.length < 6) F.fotos.push({ id: r.id, url: r.url }); }
           catch (e) { if (e.status === 401) { enviando = 0; if (aberto()) keep(); retomar = () => formProduto(F); return fail(e); } toast(e.message, true); }
           enviando--; redesenhar();
         }
+      }
+      const ff = $('#ff'); if (ff) ff.addEventListener('change', () => enviarFotos([...ff.files]));
+      /* buscar imagem na internet: abre o Google Imagens com o nome do produto */
+      const fw = $('#fweb'); if (fw) fw.addEventListener('click', () => {
+        const nm = ($('#pn') ? $('#pn').value : F.nome || '').trim();
+        if (!nm) { toast('Escreva o nome do produto primeiro'); const n = $('#pn'); if (n) n.focus(); return; }
+        window.open('https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(nm), '_blank', 'noopener');
+        toast('Achou? Botão direito na imagem › Copiar imagem, e cole aqui com Ctrl+V. No celular: salve e use "Adicionar foto".');
       });
+      /* Ctrl+V: imagem copiada vira foto (texto colado nos campos continua normal) */
+      if (!pn.dataset.colaOk) { pn.dataset.colaOk = '1'; pn.addEventListener('paste', e => {
+        if (!$('#ff')) return;
+        const imgs = [...((e.clipboardData && e.clipboardData.items) || [])].filter(it => it.kind === 'file' && /^image\//.test(it.type)).map(it => it.getAsFile()).filter(Boolean);
+        if (!imgs.length) return;
+        e.preventDefault(); keep(); enviarFotos(imgs);
+      }); }
       pn.querySelectorAll('[data-rmf]').forEach(b => b.addEventListener('click', () => { keep(); F.fotos.splice(+b.dataset.rmf, 1); redraw(); }));
       pn.querySelectorAll('[data-capa]').forEach(b => b.addEventListener('click', () => { keep(); const [f] = F.fotos.splice(+b.dataset.capa, 1); F.fotos.unshift(f); redraw(); }));
       pn.querySelectorAll('[data-cat]').forEach(b => b.addEventListener('click', () => { keep(); F.categoria = b.dataset.cat; redraw(); }));
