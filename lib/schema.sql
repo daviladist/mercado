@@ -523,12 +523,20 @@ create table if not exists caixa_cfg (
 --   alguém aprovar (status 'pendente' -> 'aprovado' conta no saldo; 'rejeitado' nunca conta);
 -- ambos gravados pelo servidor a partir de uma consulta pronta do StarIA (nunca editados à mão, nunca duplicados
 --   no mesmo período, nunca excluídos: só mudam de status);
--- 'sangria' = saída do caixa para o banco (depositado_em marca quando de fato chegou lá; pode ficar em aberto);
--- 'ajuste' = correção manual (valor pode ser negativo), só o admin lança
+-- 'sangria' = saída do caixa principal para o banco (depositado_em marca quando de fato chegou lá; pode ficar em
+--   aberto); se destino='impostos', o dinheiro não vai para o dono: vai para a gaveta de impostos/financiamentos
+--   (só o admin lança esse destino), e esta mesma operação cria em paralelo um 'gaveta_entrada' ligado por par_id;
+-- 'ajuste' = correção manual no caixa principal (valor pode ser negativo), só o admin lança;
+-- 'gaveta_entrada'/'gaveta_saida' = movimentos da gaveta de impostos/financiamentos (caixa='impostos'), separada do
+--   saldo principal: 'entrada' sempre vem pareada com uma sangria destino='impostos' (par_id); 'saida' é o admin
+--   usando esse dinheiro pra de fato pagar um imposto/parcela (não afeta o saldo principal, só o da gaveta).
+-- a coluna 'caixa' separa os dois saldos: 'principal' (o de sempre) e 'impostos' (a gaveta); tudo que não é da
+--   gaveta fica em 'principal'. Só o admin vê/lança/exclui qualquer coisa da gaveta.
 create table if not exists caixa_mov (
   tenant_id text not null references tenants(id),
   id text not null,
-  tipo text not null check (tipo in ('venda_staria','crediario_staria','sangria','ajuste')),
+  caixa text not null default 'principal' check (caixa in ('principal','impostos')),
+  tipo text not null check (tipo in ('venda_staria','crediario_staria','sangria','ajuste','gaveta_entrada','gaveta_saida')),
   valor numeric(14,2) not null,
   data date not null,
   periodo_ini date,
@@ -538,6 +546,8 @@ create table if not exists caixa_mov (
   status text check (status in ('pendente','aprovado','rejeitado')),
   decidido_por text,
   depositado_em date,
+  destino text check (destino is null or destino = 'impostos'),
+  par_id text,
   criado_por text,
   criado_por_role text,
   created_at timestamptz not null default now(),

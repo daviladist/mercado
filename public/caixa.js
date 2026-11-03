@@ -5,6 +5,7 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
   const money = v => BRL.format(Math.round((Number(v) || 0) * 100) / 100);
+  const r2 = v => Math.round((Number(v) || 0) * 100) / 100;
   const numIn = v => v == null || v === '' ? '' : String(v).replace('.', ',');
   const hoje = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
   const dBR = s => s ? String(s).slice(0, 10).split('-').reverse().join('/') : '';
@@ -86,11 +87,13 @@
   }
 
   /* ---------- ícone e texto de cada lançamento ---------- */
-  function movIcon(m) { return m.tipo === 'venda_staria' ? '🔄' : m.tipo === 'crediario_staria' ? '💳' : m.tipo === 'sangria' ? '💵' : m.valor >= 0 ? '➕' : '➖'; }
+  function movIcon(m) { return m.tipo === 'venda_staria' ? '🔄' : m.tipo === 'crediario_staria' ? '💳' : m.tipo === 'sangria' ? '💵' : m.tipo === 'gaveta_entrada' ? '🧾' : m.tipo === 'gaveta_saida' ? '➖' : m.valor >= 0 ? '➕' : '➖'; }
   function movTitulo(m) {
     if (m.tipo === 'venda_staria') return 'Vendas em dinheiro';
     if (m.tipo === 'crediario_staria') return 'Recebimento de crediário';
-    if (m.tipo === 'sangria') return 'Sangria';
+    if (m.tipo === 'sangria') return m.destino === 'impostos' ? 'Sangria · gaveta de impostos' : 'Sangria';
+    if (m.tipo === 'gaveta_entrada') return 'Entrada na gaveta (sangria)';
+    if (m.tipo === 'gaveta_saida') return 'Pago com a gaveta';
     return 'Ajuste';
   }
   function crediarioBadge(m) {
@@ -122,9 +125,14 @@
     }
     const cls = S.saldo > 0 ? 'p' : S.saldo < 0 ? 'n' : 'z';
     const lista = S.mov;
+    const pf = Object.entries(S.porFilial || {}).sort((a, b) => a[0] - b[0]);
     $('#main').innerHTML = `
-      <section class="saldo ${cls}"><span>Saldo esperado em dinheiro</span><b>${money(S.saldo)}</b>
+      <section class="saldo ${cls}"><span>Saldo esperado em dinheiro (consolidado)</span><b>${money(S.saldo)}</b>
         <span class="small">desde ${dBR(S.cfg.dataInicial)}${isAdmin() ? ' · <a href="#" id="verCfg" style="color:inherit;font-weight:700">editar saldo inicial</a>' : ''}</span></section>
+      ${pf.length ? `<section class="card"><h2>Por filial (já entrou no consolidado acima)</h2>
+        <table><thead><tr><th>Filial</th><th class="n">Vendas</th><th class="n">Crediário aprovado</th><th class="n">Total</th></tr></thead><tbody>
+        ${pf.map(([f, v]) => `<tr><td>${esc(f)}</td><td class="n">${money(v.vendas)}</td><td class="n">${money(v.crediario)}</td><td class="n"><b>${money(r2(v.vendas + v.crediario))}</b></td></tr>`).join('')}
+        </tbody></table></section>` : ''}
       ${isAdmin() ? '<div class="row"><button class="btn sm" type="button" id="btnAjuste">✏️ Lançar ajuste</button></div>' : ''}
       <section class="card">
         <h2>Lançamentos</h2>
@@ -174,17 +182,53 @@
     if (isFinanceiro()) { view = 'inicio'; return render(); }
     $('#main').innerHTML = `<section class="card">
       <h1>Nova sangria</h1>
-      <p class="muted small">Dinheiro que saiu do caixa para ir ao banco. Pode ficar guardado alguns dias até o depósito; marque "depositado" quando chegar lá.</p>
+      <p class="muted small">Dinheiro que saiu do caixa principal. Pode ficar guardado alguns dias até o depósito; marque "depositado" quando chegar lá.</p>
       <form id="fsg">
         <div class="field"><label for="sgValor">Valor</label><input type="text" inputmode="decimal" id="sgValor" placeholder="0,00" required></div>
         <div class="field"><label for="sgData">Data</label><input type="date" id="sgData" value="${hoje()}" max="${hoje()}"></div>
         <div class="field"><label for="sgMotivo">Motivo / observação</label><textarea id="sgMotivo" placeholder="Ex.: para depósito no Banco do Brasil" required></textarea></div>
+        ${isAdmin() ? `<div class="field"><label for="sgDestino">Destino</label>
+          <select id="sgDestino"><option value="">Retirada normal (vai para mim)</option><option value="impostos">Gaveta de impostos e financiamentos</option></select></div>` : ''}
         <button class="btn pri full" type="submit">Lançar sangria</button>
       </form></section>`;
     $('#fsg').addEventListener('submit', async e => {
       e.preventDefault();
-      const r = await post('/api/caixa/sangria', { valor: $('#sgValor').value, data: $('#sgData').value, motivo: $('#sgMotivo').value }, 'Sangria lançada');
+      const destino = isAdmin() ? $('#sgDestino').value : '';
+      const r = await post('/api/caixa/sangria', { valor: $('#sgValor').value, data: $('#sgData').value, motivo: $('#sgMotivo').value, destino: destino || undefined }, destino === 'impostos' ? 'Sangria lançada na gaveta de impostos' : 'Sangria lançada');
       if (r) { view = 'inicio'; render(); }
+    });
+  }
+
+  /* ---------- Gaveta de impostos e financiamentos (admin) ---------- */
+  function renderGaveta() {
+    if (!isAdmin()) { view = 'inicio'; return render(); }
+    const cls = S.saldoImpostos > 0 ? 'p' : S.saldoImpostos < 0 ? 'n' : 'z';
+    const lista = S.movImpostos || [];
+    $('#main').innerHTML = `<section class="saldo ${cls}"><span>Gaveta de impostos e financiamentos</span><b>${money(S.saldoImpostos)}</b>
+        <span class="small">separado do caixa principal</span></section>
+      <div class="row"><button class="btn sm pri" type="button" id="btnGavetaSaida">➖ Lançar pagamento (saída)</button></div>
+      <section class="card"><h2>Lançamentos da gaveta</h2>
+        ${lista.length ? `<div class="list">${lista.map(m => `<div class="it">
+            <div class="ic">${movIcon(m)}</div>
+            <div class="tx"><b>${esc(movTitulo(m))}</b><span>${esc(m.motivo || '')} · ${esc(m.criadoPor || '')}</span></div>
+            <div class="vl"><span class="${m.tipo === 'gaveta_saida' ? 'neg' : 'pos'}">${m.tipo === 'gaveta_saida' ? '−' : '+'}${money(m.valor)}</span>
+              <br><small class="muted">${dBR(m.data)}</small>
+              <br><button class="btn sm dan" type="button" data-delmov="${esc(m.id)}" style="margin-top:4px">Apagar</button>
+            </div></div>`).join('')}</div>` : '<p class="muted">Nenhum lançamento ainda. Lance uma sangria com destino "Gaveta de impostos" na tela de Sangria para alimentar aqui.</p>'}
+      </section>`;
+    $('#btnGavetaSaida').addEventListener('click', sheetGavetaSaida);
+    document.querySelectorAll('[data-delmov]').forEach(b => b.addEventListener('click', () => { if (confirm('Apagar este lançamento da gaveta?')) post('/api/caixa/mov/excluir', { id: b.dataset.delmov }, 'Lançamento apagado'); }));
+  }
+  function sheetGavetaSaida() {
+    openSheet(`<div class="tt"><h2>Pagamento com a gaveta</h2><button class="x" type="button" id="shxb">✕</button></div>
+      <p class="muted small">Registra que você usou esse dinheiro da gaveta para pagar um imposto ou parcela. Não muda o saldo do caixa principal.</p>
+      <form id="fgs">
+        <div class="field"><label for="gsValor">Valor</label><input type="text" inputmode="decimal" id="gsValor" placeholder="0,00" required></div>
+        <div class="field"><label for="gsData">Data</label><input type="date" id="gsData" value="${hoje()}" max="${hoje()}"></div>
+        <div class="field"><label for="gsMotivo">Motivo</label><textarea id="gsMotivo" placeholder="Ex.: DAS de outubro" required></textarea></div>
+        <button class="btn pri full" type="submit">Lançar saída</button></form>`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      $('#fgs').addEventListener('submit', e => { e.preventDefault(); post('/api/caixa/gaveta-saida', { valor: $('#gsValor').value, data: $('#gsData').value, motivo: $('#gsMotivo').value }, 'Saída lançada na gaveta'); });
     });
   }
 
@@ -268,11 +312,12 @@
   /* ---------- navegação ---------- */
   function render() {
     $('#bn').hidden = false; $('#sair').hidden = false;
-    $('#navSangria').hidden = isFinanceiro(); $('#navStaria').hidden = !isAdmin(); $('#navAcessos').hidden = !isAdmin();
+    $('#navSangria').hidden = isFinanceiro(); $('#navStaria').hidden = !isAdmin(); $('#navAcessos').hidden = !isAdmin(); $('#navGaveta').hidden = !isAdmin();
     document.querySelectorAll('#bn [data-go]').forEach(b => b.setAttribute('aria-current', b.dataset.go === view));
     if (view === 'sangria') return renderSangria();
     if (view === 'staria') return renderStaria();
     if (view === 'acessos') return renderAcessos();
+    if (view === 'gaveta') return renderGaveta();
     return renderInicio();
   }
   document.querySelectorAll('#bn [data-go]').forEach(b => b.addEventListener('click', () => { view = b.dataset.go; closeSheet(); render(); window.scrollTo(0, 0); }));
