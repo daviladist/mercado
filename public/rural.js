@@ -250,11 +250,201 @@
   function vRocas() {
     const at = S.rocas.filter(r => r.ativa), ina = S.rocas.filter(r => !r.ativa);
     const card = r => `<button type="button" class="roca" data-roca="${esc(r.id)}" style="border-left:5px solid ${visual(r).cor}"><div class="t"><div class="row" style="flex-wrap:nowrap;min-width:0">${tile(r)}<div style="min-width:0"><b>${esc(r.nome)}</b><p class="small muted">${esc([r.cultura, r.local, r.area].filter(Boolean).join(' · '))}</p></div></div><span class="small muted">${esc(modoTxt(r.modo))}</span></div>${meeirosDe(r).length ? splitBar(r) : ''}</button>`;
-    $('#main').innerHTML = `<div class="between"><h1>Roças</h1><button class="btn gold" type="button" id="nr">+ Nova roça</button></div>
+    $('#main').innerHTML = `<div class="between"><h1>Roças</h1><div class="row"><button class="btn" type="button" id="imp">Importar planilha</button><button class="btn gold" type="button" id="nr">+ Nova roça</button></div></div>
       ${at.length ? at.map(card).join('') : '<div class="card empty"><div class="big">🌳</div><p class="muted">Nenhuma roça ainda.</p></div>'}
       ${ina.length ? `<h2 style="margin-top:8px">Encerradas</h2>${ina.map(card).join('')}` : ''}`;
     $('#nr').addEventListener('click', () => wizard());
+    $('#imp').addEventListener('click', () => importarPlanilha());
     document.querySelectorAll('[data-roca]').forEach(b => b.addEventListener('click', () => { rocaTab = 'resumo'; go('roca', b.dataset.roca); }));
+  }
+
+  /* ---------- importar a planilha de meeiros (Excel) ----------
+     Formato de hoje: uma aba por meeiro (o nome da aba é o meeiro), com Data, as caixas de cada tipo (ex.: "Pepino Bom")
+     e o preço ao lado ("Preço unit."), e, à direita, as despesas do meeiro (Data, Descrição, Total; "Adiantamento" vira
+     adiantamento). A aba "Painel" é só resumo e fica de fora. O arquivo é lido aqui no aparelho e não é enviado. */
+  const xmlTxt = s => String(s).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&amp;/g, '&');
+  const colNum = l => { let n = 0; for (const ch of l) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
+  /* lê só o começo de cada aba: para depois de muitas linhas seguidas sem nada digitado (planilhas com fórmula até o fim) */
+  async function lerPlanilhaMeeiros(file, progresso) {
+    if (typeof DecompressionStream === 'undefined') throw new Error('Este navegador não abre planilhas. Use o Chrome atualizado.');
+    const buf = await file.arrayBuffer(), u8 = new Uint8Array(buf), dv = new DataView(buf), dec = new TextDecoder();
+    let e = -1; for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65558); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }
+    if (e < 0) throw new Error('Não consegui abrir: o arquivo não parece uma planilha .xlsx do Excel.');
+    const files = {}; let p = dv.getUint32(e + 16, true);
+    for (let k = 0, n = dv.getUint16(e + 10, true); k < n && p + 46 <= u8.length; k++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) break;
+      const nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+      files[dec.decode(u8.subarray(p + 46, p + 46 + nl))] = { met: dv.getUint16(p + 10, true), csize: dv.getUint32(p + 20, true), off: dv.getUint32(p + 42, true) };
+      p += 46 + nl + xl + cl;
+    }
+    const fluxo = nome => { const f = files[nome]; if (!f) return null; const st = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true), data = u8.subarray(st, st + f.csize); let s = new Blob([data]).stream(); if (f.met === 8) s = s.pipeThrough(new DecompressionStream('deflate-raw')); return s.pipeThrough(new TextDecoderStream()); };
+    const lerTudo = async nome => { const s = fluxo(nome); return s ? new Response(s).text() : ''; };
+    const shared = []; (await lerTudo('xl/sharedStrings.xml')).replace(/<si>([\s\S]*?)<\/si>/g, (_, si) => { shared.push(xmlTxt((si.match(/<t[^>]*>([\s\S]*?)<\/t>/g) || []).map(t => t.replace(/<[^>]+>/g, '')).join(''))); return ''; });
+    const wb = await lerTudo('xl/workbook.xml'), rels = await lerTudo('xl/_rels/workbook.xml.rels');
+    const abas = [...wb.matchAll(/<sheet\b[^>]*?name="([^"]*)"[^>]*?r:id="([^"]*)"/g)].map(m => { const rel = new RegExp('Id="' + m[2] + '"[^>]*Target="([^"]*)"').exec(rels) || new RegExp('Target="([^"]*)"[^>]*Id="' + m[2] + '"').exec(rels); let t = rel ? rel[1].replace(/^\//, '') : ''; if (t && !t.startsWith('xl/')) t = 'xl/' + t; return { nome: xmlTxt(m[1]), arq: t }; });
+    const out = [];
+    for (const [ai, aba] of abas.entries()) {
+      if (progresso) progresso('Lendo a aba ' + aba.nome + ' (' + (ai + 1) + ' de ' + abas.length + ')…');
+      const s = fluxo(aba.arq); if (!s) continue;
+      const rd = s.getReader(), linhas = new Map(); let bufS = '', vazias = 0, ultima = 0, parar = false;
+      while (!parar) {
+        const { value, done } = await rd.read(); if (done) break;
+        bufS += value; let fim;
+        while ((fim = bufS.search(/<\/row>|<row\b[^>]*\/>/)) >= 0) {
+          const ini = bufS.indexOf('<row'), corte = bufS.slice(fim).startsWith('</row>') ? fim + 6 : bufS.indexOf('>', fim) + 1;
+          const xml = bufS.slice(Math.max(0, ini), corte); bufS = bufS.slice(corte);
+          const rn = Number((/<row\b[^>]*\br="(\d+)"/.exec(xml) || [])[1] || ultima + 1); ultima = rn;
+          const cel = []; let digitado = false;
+          for (const m of xml.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+            const at = m[1], corpo = m[2] || '', ref = (/\br="([A-Z]+)\d+"/.exec(at) || [])[1]; if (!ref) continue;
+            const t = (/\bt="(\w+)"/.exec(at) || [])[1], v = (/<v>([\s\S]*?)<\/v>/.exec(corpo) || [])[1];
+            let x = null;
+            if (t === 's') x = v != null ? shared[+v] : null; else if (t === 'inlineStr') x = xmlTxt((corpo.match(/<t[^>]*>([\s\S]*?)<\/t>/g) || []).map(q => q.replace(/<[^>]+>/g, '')).join('')); else if (t === 'str' || t === 'e') x = v != null ? xmlTxt(v) : null; else if (t === 'b') x = v; else x = v != null && v !== '' ? Number(v) : null;
+            if (x == null || x === '') continue;
+            cel[colNum(ref)] = x;
+            if (!/<f[\s>\/]/.test(corpo)) digitado = true; // valor digitado (não fórmula)
+          }
+          if (cel.length) linhas.set(rn, cel);
+          if (digitado) vazias = 0; else if (rn > 40 && ++vazias > 300) { parar = true; break; }
+        }
+        if (bufS.length > 2e6) bufS = bufS.slice(-2e5);
+      }
+      try { await rd.cancel(); } catch (err) { /* já fechou */ }
+      out.push({ nome: aba.nome, linhas });
+    }
+    return out;
+  }
+  const serialData = n => typeof n === 'number' && n > 20000 && n < 80000 ? new Date(Math.round((n - 25569) * 864e5)).toISOString().slice(0, 10) : null;
+  const normNome = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  /* entende as abas: tipos (coluna de caixas seguida de "Preço"), datas, despesas e a % do meeiro */
+  function montarImportacao(abas) {
+    const metas = [];
+    for (const a of abas) {
+      if (/^painel$/i.test(a.nome.trim())) continue;
+      let hr = null, h = null;
+      for (const [rn, cel] of [...a.linhas.entries()].sort((x, y) => x[0] - y[0]).slice(0, 10)) if (cel.some(x => typeof x === 'string' && /^data$/i.test(x.trim()))) { hr = rn; h = cel; break; }
+      if (!h) continue;
+      const cData = h.findIndex(x => typeof x === 'string' && /^data$/i.test(x.trim()));
+      const tipos = []; h.forEach((x, i) => { if (typeof x === 'string' && i > cData && typeof h[i + 1] === 'string' && /^pre[cç]o/i.test(h[i + 1].trim()) && !/^pre[cç]o|^total/i.test(x.trim())) tipos.push({ nome: x.trim(), cq: i, cp: i + 1 }); });
+      if (!tipos.length) continue;
+      const cDesc = h.findIndex(x => typeof x === 'string' && /^descri/i.test(x.trim())), cDescData = cDesc > 0 && typeof h[cDesc - 1] === 'string' && /^data$/i.test(h[cDesc - 1].trim()) ? cDesc - 1 : -1;
+      let pct = null; for (const cel of a.linhas.values()) for (const x of cel) { const m = typeof x === 'string' && /meeiro\D{0,6}(\d+(?:[.,]\d+)?)\s*%/i.exec(x); if (m) pct = Number(m[1].replace(',', '.')); }
+      let nome = a.nome.trim(); for (const cel of a.linhas.values()) for (const x of cel) { const m = typeof x === 'string' && /^meeiro:\s*(.+)$/i.exec(x.trim()); if (m) nome = m[1].trim(); }
+      const linhas = [], despesas = [];
+      [...a.linhas.entries()].sort((x, y) => x[0] - y[0]).forEach(([rn, cel]) => {
+        if (rn <= hr) return;
+        const d = serialData(cel[cData]);
+        const qs = tipos.map(t => ({ tipo: t.nome, qtd: typeof cel[t.cq] === 'number' ? cel[t.cq] : 0, preco: typeof cel[t.cp] === 'number' ? cel[t.cp] : null }));
+        if (d && qs.some(q => q.qtd > 0)) linhas.push({ rn, data: d, qs });
+        if (cDesc >= 0 && typeof cel[cDesc] === 'string' && cel[cDesc].trim() && !/^total/i.test(cel[cDesc].trim())) despesas.push({ rn, data: cDescData >= 0 ? serialData(cel[cDescData]) : null, desc: cel[cDesc].trim(), valor: typeof cel[cDesc + 1] === 'number' ? Math.round(cel[cDesc + 1] * 100) / 100 : null });
+      });
+      metas.push({ aba: a.nome, nome, pct, tipos: tipos.map(t => t.nome), linhas, despesas });
+    }
+    if (!metas.length) throw new Error('Não achei abas de meeiro nesta planilha (uma aba por meeiro, com Data, as caixas de cada tipo e o preço ao lado).');
+    // nome curto dos tipos: tira a palavra que todos têm no começo ("Pepino Bom" -> "Bom")
+    const todos = [...new Set(metas.flatMap(m => m.tipos))], p1 = todos.map(t => t.split(/\s+/)[0].toLowerCase());
+    const comum = todos.length > 1 && p1.every(x => x === p1[0]) && todos.every(t => t.split(/\s+/).length > 1) ? todos[0].split(/\s+/)[0] : '';
+    const curto = t => comum ? t.slice(comum.length).trim() : t;
+    return { metas, tipos: todos.map(t => ({ orig: t, nome: curto(t) })), cultura: comum };
+  }
+  function importarPlanilha() {
+    let I = null, arquivo = '', lendo = '';
+    const passo1 = () => openSheet('Importar planilha', `<p>Traga para o Tino a planilha de uma roça com meeiros, do jeito que vocês usam hoje: <b>uma aba para cada meeiro</b>, com a data, as caixas de cada tipo (ex.: Pepino Bom, Pepino Torto) e o preço ao lado, e as despesas e adiantamentos do meeiro.</p>
+      <p class="small muted">A planilha é lida aqui no aparelho. Antes de gravar você vê tudo o que vai entrar.</p>
+      <label class="btn pri full" for="ixf" style="text-align:center">Escolher a planilha (.xlsx)</label><input type="file" id="ixf" accept=".xlsx" hidden>
+      <p class="small" id="ixs" aria-live="polite">${esc(lendo)}</p><p class="neg small" id="ixe" role="alert" style="font-weight:600"></p>`, pn => {
+      $('#ixf').addEventListener('change', async ev => {
+        const f = ev.target.files[0]; if (!f) return;
+        arquivo = f.name.replace(/\.xlsx$/i, '').replace(/[-_ ]*\d+$/, '').trim();
+        try { const abas = await lerPlanilhaMeeiros(f, t => { const e = $('#ixs'); if (e) e.textContent = t; }); I = montarImportacao(abas); prepararPrevia(); passo2(); }
+        catch (err) { const e = $('#ixe'); if (e) e.textContent = err.message || 'Não consegui ler a planilha.'; ev.target.value = ''; }
+      });
+    });
+    function prepararPrevia() {
+      const datas = I.metas.flatMap(m => m.linhas.map(l => l.data)).sort();
+      I.rocaId = ''; I.rocaNome = arquivo || I.cultura || 'Roça';
+      const achada = S.rocas.find(r => normNome(r.nome) === normNome(I.rocaNome)); if (achada) I.rocaId = achada.id;
+      I.semData = datas[0] || hoje();
+      I.metas.forEach(m => { const p = S.pessoas.find(x => x.tipo === 'meeiro' && normNome(x.nome) === normNome(m.nome)); m.pid = p ? p.id : null; m.pctUse = m.pct != null ? m.pct : 50; m.on = true; });
+    }
+    function plano() {
+      const tipoNome = t => (I.tipos.find(x => x.orig === t) || { nome: t }).nome;
+      const avisos = [], vendas = new Map(), adi = [], desp = [];
+      I.metas.filter(m => m.on).forEach(m => {
+        m.linhas.forEach(l => {
+          const semPreco = l.qs.filter(q => q.qtd > 0 && !(q.preco > 0));
+          if (semPreco.length) { avisos.push(m.nome + ', ' + dBR(l.data) + ': ' + semPreco.map(q => tipoNome(q.tipo)).join(', ') + ' sem preço (fica de fora).'); }
+          const qs = l.qs.filter(q => q.qtd > 0 && q.preco > 0); if (!qs.length) return;
+          // mesma data e mesmos preços = uma venda só, com as caixas de cada meeiro
+          const chave = l.data + '|' + qs.map(q => q.tipo + '@' + q.preco).sort().join(',');
+          const v = vendas.get(chave) || { data: l.data, itens: {} }; vendas.set(chave, v);
+          qs.forEach(q => { const it = v.itens[q.tipo] || (v.itens[q.tipo] = { nome: tipoNome(q.tipo), preco: q.preco, origem: [] }); it.origem.push({ m, qtd: q.qtd }); });
+        });
+        m.despesas.forEach(d => {
+          if (!(d.valor > 0)) { avisos.push(m.nome + ': "' + d.desc + '" sem valor (fica de fora).'); return; }
+          const data = d.data || I.semData;
+          if (data > hoje()) { avisos.push(m.nome + ': "' + d.desc + '" com data ' + dBR(data) + ', no futuro (fica de fora; lance à mão com a data certa).'); return; }
+          (/^adiantamento/i.test(d.desc) ? adi : desp).push({ m, data, desc: d.desc, valor: d.valor, semData: !d.data });
+        });
+      });
+      return { vendas: [...vendas.values()].sort((a, b) => a.data < b.data ? -1 : 1), adi, desp, avisos };
+    }
+    function passo2() {
+      const P = plano(), on = I.metas.filter(m => m.on);
+      const cx = t => r6(P.vendas.reduce((a, v) => a + (v.itens[t] ? v.itens[t].origem.reduce((s, o) => s + o.qtd, 0) : 0), 0));
+      const val = r2(P.vendas.reduce((a, v) => a + Object.values(v.itens).reduce((s, it) => s + r2(it.origem.reduce((q, o) => q + o.qtd, 0) * it.preco), 0), 0));
+      const html = `<p class="small muted">${esc(arquivo)} · ${I.metas.length} meeiro(s) · ${P.vendas.length} venda(s)${P.vendas.length ? ' de ' + dBR(P.vendas[0].data) + ' a ' + dBR(P.vendas[P.vendas.length - 1].data) : ''}</p>
+        <div class="field"><span class="lbl">Para qual roça?</span><div class="chips">${S.rocas.map(r => `<button type="button" class="chip" data-ir="${esc(r.id)}" aria-pressed="${I.rocaId === r.id}">${esc(r.nome)}</button>`).join('')}<button type="button" class="chip" data-ir="" aria-pressed="${!I.rocaId}">Roça nova</button></div>
+          ${I.rocaId ? '' : `<input type="text" id="irn" maxlength="60" value="${esc(I.rocaNome)}" aria-label="Nome da roça nova">`}</div>
+        <div class="field"><span class="lbl">Tipos</span>${I.tipos.map((t, i) => `<div class="orow"><span>${esc(t.orig)} →</span><input type="text" data-it="${i}" maxlength="30" value="${esc(t.nome)}" aria-label="Nome do tipo ${esc(t.orig)}" style="text-align:left"></div>`).join('')}</div>
+        <div class="field"><span class="lbl">Meeiros (uma aba cada)</span><div class="scroll"><table><thead><tr><th></th><th>Meeiro</th><th class="n">%</th>${I.tipos.map(t => `<th class="n">${esc(t.nome)}</th>`).join('')}<th class="n">Adiant.</th><th class="n">Despesas</th></tr></thead><tbody>
+          ${I.metas.map((m, i) => { const a = r2(P.adi.filter(x => x.m === m).reduce((s, x) => s + x.valor, 0)), d = r2(P.desp.filter(x => x.m === m).reduce((s, x) => s + x.valor, 0)); return `<tr><td><input type="checkbox" data-ion="${i}" ${m.on ? 'checked' : ''} aria-label="Importar ${esc(m.nome)}" style="width:22px;height:22px;accent-color:var(--brand)"></td><td>${esc(m.nome)}<span class="small muted"> · ${m.pid ? 'já cadastrado' : 'novo'}</span></td><td class="n"><input inputmode="decimal" data-ipc="${i}" value="${esc(numIn(m.pctUse))}" style="width:58px;text-align:right" aria-label="Porcentagem de ${esc(m.nome)}"></td>${I.tipos.map(t => `<td class="n">${numIn(r6(m.linhas.reduce((s, l) => s + (l.qs.find(q => q.tipo === t.orig) || { qtd: 0 }).qtd, 0)))}</td>`).join('')}<td class="n">${money(a)}</td><td class="n">${money(d)}</td></tr>`; }).join('')}
+          </tbody></table></div></div>
+        <div class="kpis"><div class="k"><span>Vendas</span><b>${P.vendas.length}</b></div><div class="k"><span>Caixas</span><b>${I.tipos.map(t => numIn(cx(t.orig))).join(' + ')}</b></div><div class="k"><span>Valor</span><b class="pos">${money(val)}</b></div></div>
+        <p class="note">A planilha tem o preço que vale para o meeiro. As vendas entram com esse preço também como valor vendido (só as caixas dos meeiros). Depois dá para abrir cada venda e corrigir o valor vendido e a parte de ${esc(DONO())}.</p>
+        ${P.adi.length || P.desp.length ? `<p class="small">${P.adi.length} adiantamento(s) (${money(r2(P.adi.reduce((s, x) => s + x.valor, 0)))}) e ${P.desp.length} despesa(s) por conta dos meeiros (${money(r2(P.desp.reduce((s, x) => s + x.valor, 0)))}).</p>` : ''}
+        ${P.adi.concat(P.desp).some(x => x.semData) ? `<div class="field"><label for="isd">Despesas sem data na planilha entram no dia</label><input type="date" id="isd" value="${esc(I.semData)}" max="${hoje()}"></div>` : ''}
+        ${P.avisos.length ? `<div class="warn"><b>Ficam de fora:</b><br>${P.avisos.slice(0, 20).map(esc).join('<br>')}${P.avisos.length > 20 ? '<br>E mais ' + (P.avisos.length - 20) + '.' : ''}</div>` : ''}
+        <p class="small" id="ixp" aria-live="polite"></p><p class="neg small" id="ixe" role="alert" style="font-weight:600"></p>
+        <button class="btn pri full" type="button" id="ixg" ${on.length ? '' : 'disabled'}>Importar</button>`;
+      openSheet('Importar planilha', html, pn => {
+        const keepI = () => { const n = $('#irn'); if (n) I.rocaNome = n.value; pn.querySelectorAll('[data-it]').forEach(e => { I.tipos[+e.dataset.it].nome = e.value.trim() || I.tipos[+e.dataset.it].orig; }); pn.querySelectorAll('[data-ipc]').forEach(e => { const v = toNum(e.value); if (v > 0 && v <= 100) I.metas[+e.dataset.ipc].pctUse = v; }); pn.querySelectorAll('[data-ion]').forEach(e => { I.metas[+e.dataset.ion].on = e.checked; }); const d = $('#isd'); if (d && d.value) I.semData = d.value; };
+        const redraw = () => { const y = pn.scrollTop; keepI(); passo2(); $('#sheet .pn').scrollTop = y; };
+        pn.querySelectorAll('[data-ir]').forEach(b => b.addEventListener('click', () => { keepI(); I.rocaId = b.dataset.ir; redraw(); }));
+        pn.querySelectorAll('[data-ion]').forEach(e => e.addEventListener('change', redraw));
+        const isd = $('#isd'); if (isd) isd.addEventListener('change', redraw);
+        $('#ixg').addEventListener('click', () => { keepI(); gravar(); });
+      });
+    }
+    async function idDe(chave) { const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(chave)); return 'l' + [...new Uint8Array(h)].slice(0, 8).map(x => x.toString(16).padStart(2, '0')).join(''); }
+    async function gravar() {
+      const bt = $('#ixg'), msg = t => { const e = $('#ixp'); if (e) e.textContent = t; }, err = t => { const e = $('#ixe'); if (e) e.textContent = t; };
+      const P = plano(), on = I.metas.filter(m => m.on);
+      if (!I.rocaId && String(I.rocaNome || '').trim().length < 2) return err('Dê um nome para a roça nova.');
+      bt.disabled = true;
+      try {
+        // 1) meeiros novos
+        for (const m of on) if (!m.pid) { msg('Cadastrando ' + m.nome + '…'); m.pid = newId('p'); await api('/api/rural/pessoa', { id: m.pid, tipo: 'meeiro', nome: m.nome }); }
+        // 2) a roça: meeiros com a % e os tipos
+        msg('Preparando a roça…');
+        const r0 = I.rocaId ? roca(I.rocaId) : null, rid = r0 ? r0.id : newId('r');
+        const parceria = Object.assign({}, r0 ? r0.parceria : {}); on.forEach(m => { parceria[m.pid] = m.pctUse; });
+        const produtos = (r0 && r0.produtos || []).slice(); I.tipos.forEach(t => { if (!produtos.some(x => normNome(x) === normNome(t.nome))) produtos.push(t.nome); });
+        await api('/api/rural/roca', r0 ? { id: r0.id, nome: r0.nome, icone: r0.icone, cultura: r0.cultura, local: r0.local, area: r0.area, inicio: r0.inicio, modo: r0.modo === 'funcionarios' ? 'misto' : r0.modo, parceria, regras: r0.regras, obs: r0.obs, ativa: r0.ativa, produtos } :
+          { id: rid, nome: I.rocaNome.trim(), cultura: I.cultura || '', inicio: P.vendas.length ? P.vendas[0].data : hoje(), modo: 'meeiro', parceria, regras: {}, produtos });
+        // 3) vendas, adiantamentos e despesas (o mesmo item da planilha nunca entra duas vezes)
+        const tot = P.vendas.length + P.adi.length + P.desp.length; let n = 0, rep = 0;
+        const manda = async (chave, b) => { n++; msg('Gravando ' + n + ' de ' + tot + '…'); const r = await api('/api/rural/lanc', Object.assign({ id: await idDe(rid + '|' + chave), novo: true, rocaId: rid }, b)); if (r && r.repetido) rep++; };
+        for (const v of P.vendas) await manda('v|' + v.data + '|' + Object.values(v.itens).map(it => it.nome + '@' + it.preco).join(','), { tipo: 'venda', data: v.data, unidade: 'caixa', descricao: 'Importado da planilha', pagamentos: [],
+          itens: Object.values(v.itens).map(it => ({ nome: it.nome, qtd: r6(it.origem.reduce((s, o) => s + o.qtd, 0)), preco: it.preco, precoMeeiro: it.preco, origem: it.origem.map(o => ({ de: o.m.pid, qtd: o.qtd })) })) });
+        for (const a of P.adi) await manda('a|' + a.m.nome + '|' + a.data + '|' + a.valor, { tipo: 'adiantamento', pessoaId: a.m.pid, data: a.data, valor: a.valor, descricao: a.desc });
+        for (const d of P.desp) await manda('d|' + d.m.nome + '|' + d.desc + '|' + d.valor, { tipo: 'despesa', categoria: 'outros', descricao: d.desc, data: d.data, valor: d.valor, partes: { [d.m.pid]: 100 } });
+        await reload(); closeSheet();
+        toast('Planilha importada: ' + (n - rep) + ' lançamento(s)' + (rep ? ' (' + rep + ' já estavam)' : ''));
+        rocaTab = 'resumo'; go('roca', rid);
+      } catch (e) { bt.disabled = false; if (e.status === 401 || e.login) return fail(e); err(e.message + ' O que já foi gravado fica; importar de novo não duplica.'); await reload().catch(() => {}); }
+    }
+    passo1();
   }
   function vRoca() {
     const r = roca(arg); if (!r) return go('rocas');
