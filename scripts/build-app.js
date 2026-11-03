@@ -109,7 +109,7 @@ R("<button class=\"btn ghost\" data-ce=\"${x.id}\" style=\"min-height:40px;paddi
 R("<h2>${isAdmin?'Acesso do administrador':'Entrar para fazer pedido'}</h2>", "<h2>${isAdmin?'Acesso do administrador':'Entrar'}</h2>");
 
 // ---------- 7. trava de margem e negociação: resposta do servidor
-R("function lnLock(R2,cli,L){const me=SVme();if(!me||!R2.items.length)return null;", "function lnLock(R2,cli,L){const me=SVme();if(!me||!R2.items.length)return null;if(SRV.me&&SRV.me.role==='vendedor')return srvLock(R2,cli,L);");
+R("function lnLock(R2,cli,L){const me=SVme();if(!me||!R2.items.length||me.canPrice===false)return null;", "function lnLock(R2,cli,L){const me=SVme();if(!me||!R2.items.length)return null;if(SRV.me&&SRV.me.role==='vendedor')return srvLock(R2,cli,L);if(me.canPrice===false)return null;");
 R("function lnItemLevel(p,packPrice,k,L,cli,tp){", "function lnItemLevel(p,packPrice,k,L,cli,tp){if(SRV.me&&SRV.me.role==='vendedor')return srvItemLevel(p,L,cli);");
 R("function negEval(p,asked,from){const C=negCfg();", "function negEval(p,asked,from){if(SRV.me&&SRV.me.role==='cliente')return ((ui.negSt||{})[p.id+'|'+asked])||'an';const C=negCfg();");
 R(`    ui.neg=ui.neg||{};ui.neg[id]=pack;ui.negEdit=null;rer();
