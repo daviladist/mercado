@@ -243,6 +243,52 @@ with sync_playwright() as pw:
         check(not pg.locator('#errN').is_visible() and 'visto' in pg.inner_text('#editor'), '"Marcar como visto" zera o contador')
         check(not E, 'Central sem erro de JavaScript: %s' % E[:2]); b.close()
 
+    print('== Loja online: cliente adiciona pelo cartão, vê a entrega grátis, usa cupom, fecha o pedido e pede de novo')
+    import secrets
+    s, r = cen.req('/api/central/tenant', {'name': 'Doce Lar', 'ramo': 'loja'}); LID = r['tenant']['id']; cen.req('/api/central/tenant', {'id': LID, 'status': 'ativa'})
+    s, r = cen.req('/api/central/tenant-admin', {'id': LID, 'login': 'dona'}); LA = C(LID); LA.req('/api/login', {'role': 'admin', 'login': 'dona', 'password': r['password']}); LA.req('/api/password', {'current': r['password'], 'next': NPW})
+    s, r = LA.req('/api/loja/admin/config', {'whatsapp': '27 99999-0000', 'pagamentos': ['pix', 'dinheiro'], 'retirada': True, 'entrega': True, 'taxaEntrega': 8, 'entregaGratisDe': 80, 'tempoPreparo': 40, 'entregaHoje': 'Entrega hoje até 18h', 'cupons': [{'codigo': 'DEZ', 'tipo': 'pct', 'valor': 10, 'minimo': 50}]})
+    check(s == 200, 'loja configurada: entrega R$ 8 grátis a partir de R$ 80, cupom DEZ (%s)' % r.get('error', ''))
+    BOLO, TORTA, COOKIE, POTE = ['x' + secrets.token_hex(6) for _ in range(4)]
+    for pid, nome, preco, extra in [(BOLO, 'Bolo de cenoura', 30, {'precoDe': 36, 'estoque': 9}), (TORTA, 'Torta de limão', 42, {}), (COOKIE, 'Cookie', 6, {}), (POTE, 'Bolo no pote', 12, {'grupoVar': 'Sabor', 'variacoes': [{'id': 'v' + secrets.token_hex(4), 'nome': 'Ninho', 'estoque': 3}]})]:
+        LA.req('/api/loja/admin/produto', dict({'id': pid, 'nome': nome, 'preco': preco, 'categoria': 'Bolos'}, **extra))
+    b = pw.chromium.launch(); ctx = b.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True); ctx.route('**/*', route); pg = ctx.new_page(); E = []
+    pg.on('pageerror', lambda e: E.append('erro de JavaScript: ' + str(e)[:200]))
+    pg.on('console', lambda m: E.append('console: ' + m.text[:200]) if m.type == 'error' and 'Failed to load resource' not in m.text else None)
+    LURL = BASE + '/t/' + LID + '/loja'
+    pg.goto(LURL); pg.wait_for_selector('.pc', timeout=15000)
+    check(pg.locator('.pc[data-id="%s"] .tag' % BOLO).first.inner_text() == '-17%', 'etiqueta da oferta com o número (-17%%): %s' % pg.locator('.pc[data-id="%s"] .tag' % BOLO).first.inner_text())
+    check(pg.evaluate('() => document.documentElement.scrollWidth <= innerWidth'), 'vitrine sem rolagem lateral no celular')
+    pg.locator('.grid [data-add="%s"]' % BOLO).click(); pg.wait_for_timeout(300); pg.locator('.grid [data-mais="%s"]' % BOLO).click(); pg.wait_for_timeout(300)
+    check(pg.locator('.grid .pc[data-id="%s"] .qty input' % BOLO).input_value() == '2' and 'Ver carrinho (2)' in pg.inner_text('#cartbar'), 'adiciona pelo cartão (1 toque) e o cartão vira contador: 2 no carrinho')
+    check(pg.locator('.grid .pc[data-id="%s"] [data-add]' % POTE).count() == 0 and 'Escolher sabor' in pg.inner_text('.grid .pc[data-id="%s"]' % POTE), 'produto com opções não tem "+ Adicionar" direto (abre o produto)')
+    pg.fill('#bq', 'tortta de limao'); pg.wait_for_timeout(400)
+    check(pg.locator('.grid .pc[data-id="%s"]' % TORTA).count() == 1 and pg.locator('.sug button').count() >= 1, 'busca tolerante acha "Torta de limão" com "tortta de limao"')
+    pg.fill('#bq', ''); pg.wait_for_timeout(300)
+    pg.click('#cartBtn'); pg.wait_for_selector('.bar.gratis', timeout=5000)
+    check('Faltam R$ 20,00 para a entrega grátis' in pg.inner_text('.bar.gratis').replace('\xa0', ' '), 'carrinho de R$ 60: "Faltam R$ 20,00 para a entrega grátis"')
+    check(pg.locator('#sheet .junto [data-add]').count() >= 2, '"Aproveite e leve também" com sugestões no carrinho')
+    pg.fill('#cc', 'nada'); pg.click('#ca'); pg.wait_for_timeout(600); check('não encontrado' in pg.inner_text('#ce'), 'cupom errado: avisa "não encontrado"')
+    pg.fill('#cc', 'dez'); pg.click('#ca'); pg.wait_for_selector('.cupom.on', timeout=5000)
+    t = pg.inner_text('#sheet').replace('\xa0', ' '); check('DEZ' in t and '−R$ 6,00' in t and 'R$ 54,00' in t, 'cupom DEZ aplicado: −R$ 6,00, total R$ 54,00')
+    pg.click('#go'); pg.wait_for_selector('#env', timeout=5000)
+    check('2 itens' in pg.inner_text('.resumo') and 'Enviar pedido · R$ 54,00' in pg.inner_text('#env').replace('\xa0', ' '), 'fechar pedido: resumo no topo e botão com o total')
+    pg.fill('#fn', 'Ana Souza'); pg.type('#ft', '27999990000'); check(pg.input_value('#ft') == '(27) 99999-0000', 'máscara do WhatsApp: (27) 99999-0000')
+    pg.click('[data-e="entrega"]'); pg.wait_for_selector('#fe', timeout=5000); pg.fill('#fe', 'Rua A, 10'); pg.wait_for_timeout(200)
+    t = pg.inner_text('#sheet').replace('\xa0', ' '); check('Enviar pedido · R$ 62,00' in t and 'Pronto em cerca de 40 min' in t and 'Entrega hoje até 18h' in t, 'com entrega: total R$ 62,00 (60 − 6 + 8) e a previsão')
+    pg.click('#env'); pg.wait_for_selector('text=enviado!', timeout=15000)
+    t = pg.inner_text('#main').replace('\xa0', ' '); check('R$ 62,00' in t and 'Pronto em cerca de 40 min' in t, 'pedido enviado com o total certo e a previsão')
+    s, st = LA.req('/api/loja/admin/state'); po = st['pedidos'][0]
+    check(po['cupom'] == 'DEZ' and po['desconto'] == 6 and po['taxaEntrega'] == 8 and po['total'] == 62, 'servidor gravou o cupom, o desconto e a taxa (R$ 62,00)')
+    pg.click('#acp'); pg.wait_for_selector('#again', timeout=10000); pg.click('#again'); pg.wait_for_selector('#go', timeout=5000)
+    check('Bolo de cenoura' in pg.inner_text('#sheet') and 'Ver carrinho (2)' in pg.inner_text('#cartbar'), '"Pedir de novo" recoloca os 2 bolos no carrinho')
+    pg.goto(LURL + '#p/' + TORTA); pg.wait_for_selector('#sheet #add', timeout=10000)
+    check('Torta de limão' in pg.inner_text('#sheet .tt'), 'link compartilhado #p/<id> abre a vitrine já com o produto')
+    pg.click('#shx'); pg.wait_for_timeout(400); pg.click('#mp'); pg.wait_for_selector('[data-again="0"]', timeout=5000); check(True, 'Meus pedidos tem "Pedir de novo"')
+    ctx.add_init_script("localStorage.setItem('tino-visita:%s', '1')" % LID); pg.goto(LURL); pg.wait_for_selector('.pc', timeout=10000)
+    check(pg.locator('#abd').count() == 1 and 'Oi, Ana' in pg.inner_text('.hero'), 'volta depois: faixa do carrinho deixado e "Oi, Ana" no topo')
+    check(not E, 'vitrine sem erro de JavaScript: %s' % E[:2]); b.close()
+
     print('== celular: barra de baixo, cabeçalho e rolagem lateral (iPhone 13 com área segura e Pixel 7)')
     TOP = r"""()=>{const fixed=[...document.querySelectorAll('header.top,#app .tabs,#app .navband,#app .subnavwrap,.cnav,#app .catbar')].filter(e=>e.offsetParent!==null);
       const bars=fixed.map(f=>({el:f,r:f.getBoundingClientRect()}));const bad=[];window.scrollTo(0,0);
