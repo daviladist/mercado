@@ -6,8 +6,8 @@
   const SWATCHES = [['#1F3D2B', 'Verde Tino'], ['#E11F2C', 'Vermelho'], ['#0A66B2', 'Azul'], ['#B4410F', 'Laranja'], ['#6D28D9', 'Roxo']];
   const STATUS = { ativa: 'Ativa', em_preparo: 'Em preparo', suspensa: 'Suspensa' };
   let D = null, sel = null, draft = null, dirty = false, pendingDraft = null, segUI = null, aba = 'atacado';
-  const ramoOf = t => (t && (t.ramo === 'rural' || t.ramo === 'loja') ? t.ramo : 'atacado');
-  const modsOf = t => ramoOf(t) === 'rural' ? D.ruralModules : ramoOf(t) === 'loja' ? D.lojaModules : D.modules;
+  const ramoOf = t => (t && ['rural', 'loja', 'caixa'].includes(t.ramo) ? t.ramo : 'atacado');
+  const modsOf = t => ramoOf(t) === 'rural' ? D.ruralModules : ramoOf(t) === 'loja' ? D.lojaModules : ramoOf(t) === 'caixa' ? D.caixaModules : D.modules;
   const naAba = () => D.tenants.filter(t => ramoOf(t) === aba);
   /* textos de cada segmento (Rural e Loja online usam o mesmo editor) */
   const RAMO_UI = {
@@ -18,9 +18,13 @@
     loja: { tipo: 'Loja online', novo: 'Nova loja online', criar: 'Criar loja', acesso: 'Criar acesso da loja', usuario: 'Usuário da dona da loja', exemplo: 'Ex.: Ateliê Maria', nomeLabel: 'Nome da loja (aparece na vitrine)', botao: 'Enviar pedido',
       nota: () => 'Loja online: a loja publica os produtos com fotos, tamanhos, cores e preço por quantidade; o cliente escolhe pelo celular, monta o carrinho e envia o pedido. A loja confirma pelo painel e avisa pelo WhatsApp.',
       stats: st => `${st.lojaProdutos || 0} produtos · ${st.lojaPedidos || 0} pedidos`,
-      links: base => [['Vitrine (para os clientes)', base + '/loja', 'Mande este link no WhatsApp, Instagram e status'], ['Painel da loja', base + '/', 'Produtos, pedidos e configurações (dona da loja)']] }
+      links: base => [['Vitrine (para os clientes)', base + '/loja', 'Mande este link no WhatsApp, Instagram e status'], ['Painel da loja', base + '/', 'Produtos, pedidos e configurações (dona da loja)']] },
+    caixa: { tipo: 'Controle de caixa', novo: 'Nova empresa (controle de caixa)', criar: 'Criar', acesso: 'Criar acesso', usuario: 'Usuário', exemplo: 'Ex.: Dávila Supermercados', nomeLabel: 'Nome da empresa', botao: '+ Lançar sangria',
+      nota: () => 'Uso interno: saldo esperado em dinheiro na matriz, sangrias (quem fez, motivo e data) e conferência com as vendas e recebimentos em dinheiro do StarIA. Sem custo nem margem.',
+      stats: st => `${st.caixaMov || 0} lançamentos`,
+      links: base => [['Controle de caixa', base + '/', 'Saldo esperado, sangrias e conferência (dono e equipe)']] }
   };
-  const ABAS = [['atacado', 'Atacado e varejo'], ['rural', 'Rural'], ['loja', 'Loja online']];
+  const ABAS = [['atacado', 'Atacado e varejo'], ['rural', 'Rural'], ['loja', 'Loja online'], ['caixa', 'Controle de caixa']];
 
   async function api(path, body) {
     const opt = body === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-App': '1' }, body: JSON.stringify(body) };

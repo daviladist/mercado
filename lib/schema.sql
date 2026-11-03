@@ -501,3 +501,89 @@ alter table loja_pedidos add column if not exists desconto numeric(12,2) not nul
 alter table loja_pedidos add column if not exists avaliacao_nota smallint check (avaliacao_nota is null or avaliacao_nota between 1 and 5);
 alter table loja_pedidos add column if not exists avaliacao_comentario text;
 alter table loja_pedidos add column if not exists avaliacao_em timestamptz;
+
+-- ===== Tino Controle de caixa (ramo 'caixa'): saldo esperado em dinheiro, sangrias/depósitos e conferência com o StarIA =====
+-- novos papéis de login: só este app, sem custo nem margem (não existe nada disso aqui).
+-- 'caixista' guarda o dinheiro e lança sangria; 'financeiro' só aprova/rejeita o recebimento de crediário do StarIA
+-- (não lança sangria, não cancela nada: cancelar/excluir é só pelo usuário do admin, o dono).
+alter table users_t drop constraint if exists users_role_check;
+alter table users_t drop constraint if exists users_t_role_check;
+alter table users_t add constraint users_role_check check (role in ('admin','cliente','vendedor','conferente','faturamento','entregador','operador_caixa','caixista','financeiro','automacao'));
+-- 'automacao': acesso de uso só pelo Claude, para a importação noturna do StarIA (pede e entrega a consulta,
+-- deixando pronta pra revisão; nunca aplica sozinha). Não vê saldo, extrato, pessoas nem ocorrências.
+-- saldo de partida (contagem física no dia em que começou a usar o controle): tudo depois disso é lançamento
+create table if not exists caixa_cfg (
+  tenant_id text primary key references tenants(id),
+  saldo_inicial numeric(14,2) not null default 0,
+  data_inicial date not null default current_date,
+  updated_at timestamptz not null default now()
+);
+-- lançamentos do caixa consolidado (o dinheiro de todas as filiais converge fisicamente na matriz):
+-- 'venda_staria' = vendas em dinheiro do período (StarIA), já conferido pela sacola; entra direto no saldo;
+-- 'crediario_staria' = recebimento de crediário em dinheiro do período (StarIA): às vezes é recebido num caixa
+--   separado, no retaguarda, que não passa pela conferência normal do PDV, então só entra no saldo depois de
+--   alguém aprovar (status 'pendente' -> 'aprovado' conta no saldo; 'rejeitado' nunca conta);
+-- ambos gravados pelo servidor a partir de uma consulta pronta do StarIA (nunca editados à mão, nunca duplicados
+--   no mesmo período, nunca excluídos: só mudam de status);
+-- 'sangria' = saída do caixa principal para o banco (depositado_em marca quando de fato chegou lá; pode ficar em
+--   aberto); se destino='impostos', o dinheiro não vai para o dono: vai para a gaveta de impostos/financiamentos
+--   (só o admin lança esse destino), e esta mesma operação cria em paralelo um 'gaveta_entrada' ligado por par_id;
+-- 'ajuste' = correção manual no caixa principal (valor pode ser negativo), só o admin lança;
+-- 'gaveta_entrada'/'gaveta_saida' = movimentos da gaveta de impostos/financiamentos (caixa='impostos'), separada do
+--   saldo principal: 'entrada' sempre vem pareada com uma sangria destino='impostos' (par_id); 'saida' é o admin
+--   usando esse dinheiro pra de fato pagar um imposto/parcela (não afeta o saldo principal, só o da gaveta).
+-- a coluna 'caixa' separa os dois saldos: 'principal' (o de sempre) e 'impostos' (a gaveta); tudo que não é da
+--   gaveta fica em 'principal'. Só o admin vê/lança/exclui qualquer coisa da gaveta.
+create table if not exists caixa_mov (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  caixa text not null default 'principal' check (caixa in ('principal','impostos')),
+  tipo text not null check (tipo in ('venda_staria','crediario_staria','sangria','ajuste','gaveta_entrada','gaveta_saida')),
+  valor numeric(14,2) not null,
+  data date not null,
+  periodo_ini date,
+  periodo_fim date,
+  detalhe jsonb not null default '{}'::jsonb,
+  motivo text,
+  status text check (status in ('pendente','aprovado','rejeitado')),
+  decidido_por text,
+  depositado_em date,
+  destino text check (destino is null or destino = 'impostos'),
+  par_id text,
+  criado_por text,
+  criado_por_role text,
+  created_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+create index if not exists caixa_mov_tenant on caixa_mov(tenant_id, data desc, created_at desc);
+-- pedido de consulta ao StarIA (vendas em dinheiro + recebimento de crediário em dinheiro, por filial, no período).
+-- O Claude consulta e devolve o total; aplicar o resultado cria UM lançamento 'venda_staria' (status 'aplicada', sem repetir período)
+create table if not exists caixa_jobs (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  periodo_ini date not null,
+  periodo_fim date not null,
+  status text not null default 'pendente' check (status in ('pendente','pronta','aplicada')),
+  resultado jsonb,
+  criado_por text,
+  created_at timestamptz not null default now(),
+  pronto_em timestamptz,
+  primary key (tenant_id, id)
+);
+create index if not exists caixa_jobs_tenant on caixa_jobs(tenant_id, status);
+-- conferência física do caixa principal: a caixista (ou o admin) digita quanto contou em dinheiro; o servidor
+-- compara com o saldo esperado NA HORA e grava a diferença (pode ser 0). Nunca editada nem excluída: é um
+-- retrato do que foi contado naquele momento. Toda conferência com diferença ≠ 0 vira uma ocorrência (ver abaixo).
+create table if not exists caixa_conferencia (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  valor_contado numeric(14,2) not null,
+  saldo_esperado numeric(14,2) not null,
+  diferenca numeric(14,2) not null,
+  motivo text,
+  criado_por text,
+  criado_por_role text,
+  created_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+create index if not exists caixa_conferencia_tenant on caixa_conferencia(tenant_id, created_at desc);
