@@ -501,3 +501,53 @@ alter table loja_pedidos add column if not exists desconto numeric(12,2) not nul
 alter table loja_pedidos add column if not exists avaliacao_nota smallint check (avaliacao_nota is null or avaliacao_nota between 1 and 5);
 alter table loja_pedidos add column if not exists avaliacao_comentario text;
 alter table loja_pedidos add column if not exists avaliacao_em timestamptz;
+
+-- ===== Tino Controle de caixa (ramo 'caixa'): saldo esperado em dinheiro, sangrias/depósitos e conferência com o StarIA =====
+-- novo papel de login: só este app, sem custo nem margem (não existe nada disso aqui)
+alter table users_t drop constraint if exists users_role_check;
+alter table users_t drop constraint if exists users_t_role_check;
+alter table users_t add constraint users_role_check check (role in ('admin','cliente','vendedor','conferente','faturamento','entregador','operador_caixa','caixista'));
+-- saldo de partida (contagem física no dia em que começou a usar o controle): tudo depois disso é lançamento
+create table if not exists caixa_cfg (
+  tenant_id text primary key references tenants(id),
+  saldo_inicial numeric(14,2) not null default 0,
+  data_inicial date not null default current_date,
+  updated_at timestamptz not null default now()
+);
+-- lançamentos do caixa consolidado (o dinheiro de todas as filiais converge fisicamente na matriz):
+-- 'venda_staria' = vendas em dinheiro + recebimento de crediário em dinheiro do período, gravado pelo servidor
+--   a partir de uma consulta pronta do StarIA (nunca editado à mão, nunca duplicado no mesmo período);
+-- 'sangria' = saída do caixa para o banco (depositado_em marca quando de fato chegou lá; pode ficar em aberto);
+-- 'ajuste' = correção manual (valor pode ser negativo), só o admin lança
+create table if not exists caixa_mov (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  tipo text not null check (tipo in ('venda_staria','sangria','ajuste')),
+  valor numeric(14,2) not null,
+  data date not null,
+  periodo_ini date,
+  periodo_fim date,
+  detalhe jsonb not null default '{}'::jsonb,
+  motivo text,
+  depositado_em date,
+  criado_por text,
+  criado_por_role text,
+  created_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+create index if not exists caixa_mov_tenant on caixa_mov(tenant_id, data desc, created_at desc);
+-- pedido de consulta ao StarIA (vendas em dinheiro + recebimento de crediário em dinheiro, por filial, no período).
+-- O Claude consulta e devolve o total; aplicar o resultado cria UM lançamento 'venda_staria' (status 'aplicada', sem repetir período)
+create table if not exists caixa_jobs (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  periodo_ini date not null,
+  periodo_fim date not null,
+  status text not null default 'pendente' check (status in ('pendente','pronta','aplicada')),
+  resultado jsonb,
+  criado_por text,
+  created_at timestamptz not null default now(),
+  pronto_em timestamptz,
+  primary key (tenant_id, id)
+);
+create index if not exists caixa_jobs_tenant on caixa_jobs(tenant_id, status);
