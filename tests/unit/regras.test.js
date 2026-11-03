@@ -317,3 +317,21 @@ test('vendedor recebe só a data da última compra do cliente (qualquer canal), 
   assert.equal(JSON.stringify(out).includes('999'), false, 'valor do pedido não vaza');
   assert.equal(policy.project(S, U.cliente).customers[0].lastBuyAt, undefined, 'cliente não recebe o campo');
 });
+
+test('desconto da condição gravado no pedido (payPct): o servidor calcula e o vendedor pode editar o pedido', () => {
+  const S = base(); S.payDisc = { Pix: 3 };
+  const o = order(S, { status: 'novo', sellerId: 's1' });
+  // o app manda payPct (inclusive um valor falso): não é recusado e o servidor grava o de verdade
+  const n = clone(o); n.pay = 'Pix'; n.payPct = 50; n.items[0].price = 58.2;
+  const out = upd(S, U.vendedor, o, n);
+  assert.equal(out.pay, 'Pix');
+  assert.equal(out.payPct, 3);
+  // só a observação mudou: o % gravado fica como estava
+  const n2 = clone(out); n2.note = 'entregar cedo'; n2.payPct = 0;
+  const out2 = upd(S, U.vendedor, out, n2);
+  assert.equal(out2.payPct, 3);
+  // pedido antigo sem payPct: editar sem mexer em pagamento/itens não quebra
+  const o3 = order(S, { id: 'o3', no: 1003, status: 'novo', sellerId: 's1' });
+  const n3 = clone(o3); n3.note = 'x'; n3.payPct = 0;
+  assert.doesNotThrow(() => upd(S, U.vendedor, o3, n3));
+});
