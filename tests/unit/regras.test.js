@@ -99,6 +99,34 @@ test('vendedor: quantidade/preço absurdos e pedido mínimo', () => {
   const t = r.writes[0].doc.total; assert.equal(Math.round(t * 100) / 100, t);
 });
 
+test('vendedor sem permissão de negociar preço: servidor força o preço de tabela (novo pedido)', () => {
+  const S = base(); S.sellers[0].canPrice = false;
+  const send = items => policy.applySync(S, { meta: {} }, U.vendedor, [{ c: 'orders', id: 'v' + Math.random().toString(36).slice(2, 8), op: 'put', doc: { customerId: 'c1', items, mode: 'retirada', pay: 'Pix' } }]);
+  // mesmo mandando um preço bem diferente (e fora do teto de 5x que travaria um vendedor normal), o servidor ignora e usa o preço de tabela
+  const r = send([{ pid: 'p1', q: 3, price: 999 }]);
+  const item = r.writes[0].doc.items[0];
+  assert.equal(item.price, 60);
+});
+
+test('vendedor sem permissão de negociar preço: servidor força o preço de tabela (edição de pedido existente)', () => {
+  const S = base(); S.sellers[0].canPrice = false;
+  const o = order(S, { status: 'novo', sellerId: 's1' });
+  const n = clone(o); n.items[0].price = 999;
+  const out = upd(S, U.vendedor, o, n);
+  assert.equal(out.items[0].price, 60);
+});
+
+test('desconto por forma de pagamento (payDisc): só se aplica na forma configurada', () => {
+  const S = base(); S.payDisc = { Pix: 10 };
+  const { C } = policy.coreFor(S, 'x', {});
+  const p1 = S.products[0]; // preço de tabela 60
+  const comPix = C.priceFor(p1, 3, 'retirada', 'Pix');
+  assert.equal(comPix.price, 54); // 60 * (1 - 10%)
+  assert.match(comPix.label, /Pix/);
+  const semDesc = C.priceFor(p1, 3, 'retirada', 'Boleto 28 dias');
+  assert.equal(semDesc.price, 60); // outra forma de pagamento não tem desconto
+});
+
 test('cliente aceita contraproposta tirando produto: com menos de 5, o preço negociado volta', () => {
   const S = base();
   S.products.push(...['p3', 'p4', 'p5'].map(id => ({ id, name: id, unit: 'Fardo 6 un', perPack: 6, price: 30, cost: 20, active: true })));

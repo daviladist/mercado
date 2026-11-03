@@ -1701,6 +1701,8 @@ function priceFor(p,q,mode,pay){
   if(r.qty.on&&condOn('qty'))r.qty.tiers.forEach(t=>{if(t.min>0&&q>=t.min)tryp(ieAdj(p,t.price),'A partir de '+t.min)});
   if(r.vista.on&&condOn('vista')&&(S.cashPays||[]).includes(pay))tryp(ieAdj(p,r.vista.price),'À vista');
   if(r.retira.on&&condOn('retira')&&mode==='retirada')tryp(ieAdj(p,r.retira.price),'Retirada no depósito');
+  const pd=Number((S.payDisc||{})[pay])||0;
+  if(pd>0){const v=Math.round(best.price*(1-pd/100)*100)/100;best={price:v,label:(best.label?best.label+' · ':'')+pay+' '+String(pd).replace('.',',')+'%'}}
   best.ie=ieOn()&&ieF(p)<1;
   best.rp=!!(r.retira&&r.retira.on&&Number(r.retira.price)>0);
   return best;
@@ -1759,7 +1761,7 @@ if(!Array.isArray(S.checkers))S.checkers=[];
 if(!Array.isArray(S.billers))S.billers=[];
 if(!S.cities)S.cities=['Itaguaçu','Itarana','Laranja da Terra'].map(n=>({id:uid(),name:n,fuel:'',driver:'',helper:'',other:''}));
 if(!S.vehicles)S.vehicles=[];if(!S.sellers)S.sellers=[];if(!S.commPayouts)S.commPayouts=[];if(!S.combos)S.combos=[];
-S.orders.forEach(o=>{if(o.sellerId&&(o.sellerRate===undefined||o.sellerRate==='')){const sl=S.sellers.find(x=>x.id===o.sellerId);if(sl)o.sellerRate=Number(sl.commission)||0}});if(!S.trips)S.trips=[];if(!S.payDays)S.payDays={};
+S.orders.forEach(o=>{if(o.sellerId&&(o.sellerRate===undefined||o.sellerRate==='')){const sl=S.sellers.find(x=>x.id===o.sellerId);if(sl)o.sellerRate=Number(sl.commission)||0}});if(!S.trips)S.trips=[];if(!S.payDays)S.payDays={};if(!S.payDisc)S.payDisc={};
 if(!S.admins)S.admins=[];
 S.admins=S.admins.filter(a=>a.login!=='admin');delete S.admin;
 if(!S.cashPays)S.cashPays=S.payments.filter(p=>/pix|dinheiro|vista/i.test(p));
@@ -3377,6 +3379,13 @@ function lnCliList(q,pool){pool=pool||S.customers;
   if(!L.length)return `<div class="small muted" style="padding:8px 2px">Nenhum cliente encontrado com "${esc(q)}".</div>`;
   return `${q?'':`<div class="small muted" style="margin:2px 2px 6px">Últimos que compraram${pool.length>8?' · digite para achar entre os '+pool.length+' clientes':''}:</div>`}<div class="lnclist">${L.map(x=>`<button type="button" class="lncli" data-lncli="${x.id}"><b>${esc(x.name)}</b><span class="small muted">${[x.doc?(x.doc.length===11?'CPF ':'CNPJ ')+fmtDoc(x.doc):'',x.stCode?'Cód. '+esc(x.stCode):'',city(x)?esc(city(x)):'',x.phone?esc(x.phone):''].filter(Boolean).join(' · ')}</span></button>`).join('')}</div>`;
 }
+/* margem do pedido para quem lança direto (administrador/acesso total, sem trava de vendedor) */
+function admMgCalc(R2,L,cli){if(!R2.items.length)return null;let cost=0,miss=0,comm=0;
+  R2.items.forEach(i=>{const pc=Number(i.p.cost);if(pc>0)cost+=effCost(i.p,pc,i.price,L.nf&&ieClient(cli))*i.q;else miss++;comm+=i.price*i.q*lnCommRate(i.p,L.sel)/100});
+  const f3=f3On()&&L.frete3&&L.frete3.carrierId?Math.round(R2.total*Number(L.frete3.pct))/100:0,net=R2.total-cost-comm-f3,mg=R2.total>0?net/R2.total*100:0;
+  return {net,mg,miss,comm,f3}}
+function admMgPill(M){if(!M)return '';const lv=M.net<0?'red':M.mg<8?'yellow':'green';
+  return `<div class="mgpillwrap"><div class="mgpill mg-${lv}" role="status" aria-live="polite"><span class="mgdot"></span>margem ${(Math.round(M.mg*10)/10).toLocaleString('pt-BR')}%${M.miss?' · '+M.miss+' sem custo':''}</div></div>`}
 function admLancar0(){
   const c=$('#tabc'),L=ui.lanc;
   if(SVme()&&vitrineClosed()){c.innerHTML=vitrineClosedHtml('vend')+`<div style="text-align:center"><button class="btn ghost" id="lnBackC">Voltar</button></div>`;$('#lnBackC').onclick=()=>{ui.lanc=null;lnExit()};return}
@@ -3396,7 +3405,7 @@ function admLancar0(){
     bindRes();cq.focus();
     return;
   }
-  L.over=L.over||{};const SV=!!SVme();if(SV)L.sel=SVid();
+  L.over=L.over||{};const SV=!!SVme();if(SV)L.sel=SVid();const noPrice=SV&&SVme().canPrice===false;
   const RT=SV?calcCartFor(cli,L.cart,L.mode,L.pay||'',undefined,L.nf,null):null,tpOf=p=>{const t=RT&&RT.items.find(x=>x.p.id===p.id);return t?t.price:baseOf(p)};
   const KP=()=>L.editId&&L.keep&&L.mode===L.origMode&&!!L.nf===!!L.origNf&&L.pay===L.origPay?L.keep:null;
   const R=calcCartFor(cli,L.cart,L.mode,L.pay,L.over,L.nf,KP());
@@ -3414,7 +3423,7 @@ function admLancar0(){
     return (L.cart[b.id]?1:0)-(L.cart[a.id]?1:0)||(b.isCombo?1:0)-(a.isCombo?1:0)||(a.cat||'').localeCompare(b.cat||'','pt-BR')||nm});
   const min=Number(S.store.min)||0;
   c.innerHTML=`<div class="sectionhead"><h2>${L.editId?'Ajustar pedido nº '+esc(L.editNo):'Lançar pedido'} · ${esc(cli.name)}</h2><div class="row" style="gap:6px">${L.editId?'':'<button class="btn ghost dlb" id="lnSheet" aria-label="Folha de pedido deste cliente em PDF">'+PDFI+'Folha de pedido</button><button class="btn ghost dlb" id="lnChange">Trocar cliente</button>'}<button class="btn ghost dlb" id="lnBack">Cancelar</button></div></div>
-    ${SV&&L.cid?lnPill(lnLock(R2,cli,L)):''}
+    ${SV&&L.cid?lnPill(lnLock(R2,cli,L)):!SV&&L.cid?admMgPill(admMgCalc(R2,L,cli)):''}
     ${ieClient(cli)?`<div class="iebar ${L.nf?'on':''}" style="margin-bottom:10px"><div><b>Cliente com inscrição estadual.</b> ${L.nf?'Preços <b>com nota fiscal</b>: os produtos com preço com IE já estão reduzidos.':'Preços <b>sem nota</b>. Com nota, os produtos com preço com IE ficam mais baratos.'}</div><div class="seg" role="group" aria-label="Com ou sem nota fiscal"><button data-lnfo="1" aria-pressed="${!!L.nf}">Com nota</button><button data-lnfo="0" aria-pressed="${!L.nf}">Sem nota</button></div></div>`:''}
     <div class="lgrid">
       <section class="panel" style="display:grid;gap:10px;align-content:start;min-width:0">
@@ -3424,7 +3433,7 @@ function admLancar0(){
         <div class="small muted">Use o + e o − (ou digite) a quantidade. O preço já vem com as condições do cadastro; se você negociou outro valor com o cliente, troque no preço.</div>
         <div class="tablewrap"><table class="btable ltable"><thead><tr><th>Produto</th><th class="r">Preço</th><th class="r">Qtd</th><th class="r">Total</th></tr></thead><tbody>
           ${prods.map(p=>{const qn=L.cart[p.id]||0,it=R2.items.find(i=>i.p.id===p.id),i0=R0.items.find(i=>i.p.id===p.id),def=i0?i0.price:baseOf(p),ov=L.over[p.id]>0,pr=ov?Number(L.over[p.id]):(it?it.price:def),un=!p.isCombo&&packOf(p)?packOf(p):1;return `<tr class="${qn?'sel':''}"><td>${SV&&!p.isCombo?lnDot(lnItemLevel(p,pr,R2.sub>0?R2.total/R2.sub:1,L,cli,tpOf(p))):''}<b>${esc(p.name)}</b>${lnPhotoBtn(p)}<div class="codes">${p.code?'Cód. '+esc(p.code)+' · ':''}${esc(p.unit||'')}${it&&it.label?' · <span style="color:var(--ok);font-weight:700">'+esc(it.label)+'</span>':''}${ieOn()&&ieF(p)<1?' · <span style="color:var(--accent);font-weight:700">Preço com IE</span>':''}${SV&&pCommOwn(p)!==''?` <span class="commchip">comissão ${String(pCommOwn(p)).replace('.',',')}%</span>`:''}</div></td>
-            <td class="r num">${un>1?`<div class="lnpair"><label><span>R$ ${isKg(p)?'kg':'unidade'}</span><input type="text" inputmode="decimal" class="lnpr ${ov?'ovr':''}" data-lp="${p.id}" data-un="${un}" data-def="${def}" value="${money(Math.round(pr/un*100)/100)}" aria-label="Preço da unidade de ${esc(p.name)}"></label><label><span>R$ ${esc(packWord(p))}<span class="lnc"> c/ ${un}</span></span><input type="text" inputmode="decimal" class="lnpr ${ov?'ovr':''}" data-lpk="${p.id}" data-un="${un}" data-def="${def}" value="${money(pr)}" aria-label="Preço da embalagem de ${esc(p.name)}"></label></div>`:`<input type="text" inputmode="decimal" class="lnpr ${ov?'ovr':''}" data-lp="${p.id}" data-un="1" data-def="${def}" value="${money(pr)}" aria-label="Preço de ${esc(p.name)}">`}${SV&&un>1?`<div class="small muted svonly">${esc(packWord(p))} ${brl(pr)}</div>`:''}<div class="upx lnmg" data-lmg="${p.id}" data-cost="${!p.isCombo&&p.cost>0?p.cost:(p.isCombo&&p.cost>0?p.cost:'')}" data-cr="${esc(String(lnCommRate(p,L.sel)))}" data-trib="${p.trib?1:''}" data-ie="${L.nf&&ieClient(cli)?1:''}">${lnMgText(p.cost,pr,lnCommRate(p,L.sel),p.trib,L.nf&&ieClient(cli))}</div>${ov?`<div class="upx">padrão ${brl(def/un)}${un>1?'/'+uw(p):''} · <button type="button" class="link" data-lpr="${p.id}" style="font-size:11px;padding:0">voltar</button></div>`:''}</td><td class="r">${un>1?`<div class="lnpair"><label><span>${esc(packWord(p,true))}</span><div class="lnstep"><button type="button" data-lqd="${p.id}" aria-label="Menos uma de ${esc(p.name)}" ${qn?'':'disabled'}>−</button><input type="number" inputmode="numeric" min="0" class="lnqty" data-lq="${p.id}" value="${qn||''}" placeholder="0" aria-label="Quantidade em embalagens de ${esc(p.name)}"><button type="button" data-lqi="${p.id}" aria-label="Mais uma de ${esc(p.name)}">+</button></div></label><label><span>${isKg(p)?'kg':'unidades'}</span><input type="number" inputmode="decimal" min="0" step="${un}" class="lnqty" data-lqu="${p.id}" data-un="${un}" value="${qn?qn*un:''}" placeholder="0" aria-label="Quantidade em unidades de ${esc(p.name)}"></label></div>`:`<div class="lnstep"><button type="button" data-lqd="${p.id}" aria-label="Menos uma de ${esc(p.name)}" ${qn?'':'disabled'}>−</button><input type="number" inputmode="numeric" min="0" class="lnqty" data-lq="${p.id}" value="${qn||''}" placeholder="0" aria-label="Quantidade de ${esc(p.name)}"><button type="button" data-lqi="${p.id}" aria-label="Mais uma de ${esc(p.name)}">+</button></div>`}</td><td class="r num">${qn?(un>1?'<span class="small muted lnun">'+(qn*un).toLocaleString('pt-BR')+(isKg(p)?' kg':' un.')+' · </span>':'')+brl(pr*qn):''}</td></tr>`}).join('')||'<tr><td colspan="4" class="muted">Nenhum produto encontrado.</td></tr>'}
+            <td class="r num">${un>1?`<div class="lnpair"><label><span>R$ ${isKg(p)?'kg':'unidade'}</span><input type="text" inputmode="decimal" class="lnpr ${ov?'ovr':''}" data-lp="${p.id}" data-un="${un}" data-def="${def}" value="${money(Math.round(pr/un*100)/100)}" aria-label="Preço da unidade de ${esc(p.name)}" ${noPrice?'disabled':''}></label><label><span>R$ ${esc(packWord(p))}<span class="lnc"> c/ ${un}</span></span><input type="text" inputmode="decimal" class="lnpr ${ov?'ovr':''}" data-lpk="${p.id}" data-un="${un}" data-def="${def}" value="${money(pr)}" aria-label="Preço da embalagem de ${esc(p.name)}" ${noPrice?'disabled':''}></label></div>`:`<input type="text" inputmode="decimal" class="lnpr ${ov?'ovr':''}" data-lp="${p.id}" data-un="1" data-def="${def}" value="${money(pr)}" aria-label="Preço de ${esc(p.name)}" ${noPrice?'disabled':''}>`}${SV&&un>1?`<div class="small muted svonly">${esc(packWord(p))} ${brl(pr)}</div>`:''}<div class="upx lnmg" data-lmg="${p.id}" data-cost="${!p.isCombo&&p.cost>0?p.cost:(p.isCombo&&p.cost>0?p.cost:'')}" data-cr="${esc(String(lnCommRate(p,L.sel)))}" data-trib="${p.trib?1:''}" data-ie="${L.nf&&ieClient(cli)?1:''}">${lnMgText(p.cost,pr,lnCommRate(p,L.sel),p.trib,L.nf&&ieClient(cli))}</div>${ov?`<div class="upx">padrão ${brl(def/un)}${un>1?'/'+uw(p):''} · <button type="button" class="link" data-lpr="${p.id}" style="font-size:11px;padding:0">voltar</button></div>`:''}</td><td class="r">${un>1?`<div class="lnpair"><label><span>${esc(packWord(p,true))}</span><div class="lnstep"><button type="button" data-lqd="${p.id}" aria-label="Menos uma de ${esc(p.name)}" ${qn?'':'disabled'}>−</button><input type="number" inputmode="numeric" min="0" class="lnqty" data-lq="${p.id}" value="${qn||''}" placeholder="0" aria-label="Quantidade em embalagens de ${esc(p.name)}"><button type="button" data-lqi="${p.id}" aria-label="Mais uma de ${esc(p.name)}">+</button></div></label><label><span>${isKg(p)?'kg':'unidades'}</span><input type="number" inputmode="decimal" min="0" step="${un}" class="lnqty" data-lqu="${p.id}" data-un="${un}" value="${qn?qn*un:''}" placeholder="0" aria-label="Quantidade em unidades de ${esc(p.name)}"></label></div>`:`<div class="lnstep"><button type="button" data-lqd="${p.id}" aria-label="Menos uma de ${esc(p.name)}" ${qn?'':'disabled'}>−</button><input type="number" inputmode="numeric" min="0" class="lnqty" data-lq="${p.id}" value="${qn||''}" placeholder="0" aria-label="Quantidade de ${esc(p.name)}"><button type="button" data-lqi="${p.id}" aria-label="Mais uma de ${esc(p.name)}">+</button></div>`}</td><td class="r num">${qn?(un>1?'<span class="small muted lnun">'+(qn*un).toLocaleString('pt-BR')+(isKg(p)?' kg':' un.')+' · </span>':'')+brl(pr*qn):''}</td></tr>`}).join('')||'<tr><td colspan="4" class="muted">Nenhum produto encontrado.</td></tr>'}
         </tbody></table></div>
       </section>
       <section class="panel" style="display:grid;gap:12px;align-content:start">
@@ -3443,8 +3452,7 @@ function admLancar0(){
         <div class="sum total"><span>Total</span><span class="v num">${brl(R2.total)}</span></div>
         ${SV?lnLockBox(lnLock(R2,cli,L)):''}
         ${SV&&R2.items.length?(()=>{const k=R2.sub>0?R2.total/R2.sub:1,cm=R2.items.reduce((s2,i)=>s2+i.price*k*i.q*lnCommRate(i.p,L.sel)/100,0);return `<div class="small commnote" style="margin:0">Sua comissão estimada neste pedido: <b>${brl(cm)}</b></div>`})():''}
-        ${SV?'':(()=>{if(!R2.items.length)return '';let cost=0,miss=0,comm=0;R2.items.forEach(i=>{const pc=Number(i.p.cost);if(pc>0)cost+=effCost(i.p,pc,i.price,L.nf&&ieClient(cli))*i.q;else miss++;comm+=i.price*i.q*lnCommRate(i.p,L.sel)/100});
-          const f3=f3On()&&L.frete3&&L.frete3.carrierId?Math.round(R2.total*Number(L.frete3.pct))/100:0;const net=R2.total-cost-comm-f3,mg=R2.total>0?net/R2.total*100:0;return `<div class="small ${net<0?'neg':''}" style="${net<0?'font-weight:700':''}">Lucro estimado ${brl(net)} · margem ${(Math.round(mg*10)/10).toLocaleString('pt-BR')}%${comm>0||f3>0?' (já descontad'+(comm>0&&f3>0?'os comissão e frete':comm>0?'a a comissão':'o o frete')+')':''}${miss?` <span class="muted">· ${miss} item(ns) sem custo contam lucro total</span>`:''}</div>`})()}
+        ${SV?'':(()=>{const M=admMgCalc(R2,L,cli);if(!M)return '';const{net,mg,miss,comm,f3}=M;return `<div class="small ${net<0?'neg':''}" style="${net<0?'font-weight:700':''}">Lucro estimado ${brl(net)} · margem ${(Math.round(mg*10)/10).toLocaleString('pt-BR')}%${comm>0||f3>0?' (já descontad'+(comm>0&&f3>0?'os comissão e frete':comm>0?'a a comissão':'o o frete')+')':''}${miss?` <span class="muted">· ${miss} item(ns) sem custo contam lucro total</span>`:''}</div>`})()}
         ${R2.items.length&&R2.sub<min?`<div class="notice">Abaixo do pedido mínimo de ${brl(min)}. ${SV?'':'Como é você lançando, dá para salvar assim mesmo.'}</div>`:''}
         <div class="err" id="lnerr"></div>
         ${L.editId?`<div class="small muted">Pedido original: ${brl(L.origTotal)}${Math.abs(R2.total-L.origTotal)>0.004?` · diferença <b style="color:var(--fg)">${R2.total>L.origTotal?'+':'−'} ${brl(Math.abs(R2.total-L.origTotal))}</b>`:''}${L.recWas&&Math.abs(R2.total-L.origTotal)>0.004?'<br><b style="color:var(--warn)">Já lançado no contas a receber: ao salvar, sai de lá e precisa ser lançado de novo.</b>':''}</div>`:''}
@@ -4024,23 +4032,25 @@ function admPagamentos(){
       ${f.type==='prazo'?`<div class="field"><label for="pyd">Dias de cada parcela</label><input type="text" id="pyd" value="${esc(f.days)}" placeholder="Ex.: 14/21/28 ou 60"></div>`:'<div></div>'}</div>
     <div class="field"><label for="pyn">Nome que aparece para o cliente</label><input type="text" id="pyn" value="${esc(f.name)}" placeholder="${f.type==='prazo'?'Ex.: Boleto '+(days.length?days.join('/'):'14/21/28')+' dias':'Ex.: PIX'}"></div>
     ${f.type==='prazo'?`<div class="small ${days.length?'':'muted'}" id="pyprev">${days.length?`Gera <b>${days.length} parcela${days.length===1?'':'s'}</b> no contas a receber: ${days.map(d=>d+' dias').join(', ')} depois da conclusão do pedido.`:'Informe os dias, separados por barra.'}</div>`:'<div class="small muted">Libera o "preço à vista" dos produtos e não gera parcelas a prazo.</div>'}
+    <div class="field" style="max-width:260px"><label for="pydisc">Desconto nesta forma (%)</label><input type="text" inputmode="decimal" id="pydisc" value="${hasVal(f.disc)?String(f.disc).replace('.',','):''}" placeholder="Em branco = sem desconto"></div>
+    <div class="small muted">Sai automaticamente do preço de todos os produtos quando o cliente escolhe esta forma de pagamento (ex.: Pix com 2% de desconto). Varia de empresa para empresa: fica só aqui, por forma de pagamento.</div>
     ${f.idx==null?`<label class="switch"><input type="checkbox" id="pyall" ${f.all?'checked':''}> Liberar para todos os clientes já cadastrados</label>`:''}
     <div class="err" id="pyerr"></div>
     <div class="row"><button class="btn" type="submit">Salvar</button><button class="btn ghost" type="button" id="pycancel">Cancelar</button></div></form>`};
   const noTerm=S.payments.filter(payNoTerm);
   c.innerHTML=`<div class="sectionhead"><h2>Formas de pagamento</h2><button class="btn" id="pynew">+ Nova forma</button></div>
     ${E?form():''}${noTerm.length?`<div class="panel" style="margin-bottom:12px;border-color:var(--warn)"><b>Atenção:</b> ${noTerm.map(esc).join(', ')} ${noTerm.length===1?'está':'estão'} como <b>a prazo</b>, mas sem os dias das parcelas. Pedido concluído com ${noTerm.length===1?'essa forma':'essas formas'} não entra sozinho no contas a receber. Clique em Editar e informe os dias (ex.: 28), ou mude para À vista.</div>`:''}
-    <div class="tablewrap"><table class="btable"><thead><tr><th>Forma</th><th>Tipo</th><th>Prazo das parcelas</th><th class="r">Clientes com acesso</th><th></th></tr></thead><tbody>
-    ${S.payments.map((p,i)=>`<tr><td><b>${esc(p)}</b></td><td>${isCash(p)?'<span class="rulechip">À vista</span>':'<span class="rulechip" style="color:var(--warn)">A prazo</span>'}</td><td>${payNoTerm(p)?'<span class="chgtxt">Sem prazo: pedido concluído não gera parcela. Edite e informe os dias, ou mude para À vista.</span>':esc(payTermsText(p))}</td><td class="r num">${users(p)}</td>
+    <div class="tablewrap"><table class="btable"><thead><tr><th>Forma</th><th>Tipo</th><th>Prazo das parcelas</th><th>Desconto</th><th class="r">Clientes com acesso</th><th></th></tr></thead><tbody>
+    ${S.payments.map((p,i)=>`<tr><td><b>${esc(p)}</b></td><td>${isCash(p)?'<span class="rulechip">À vista</span>':'<span class="rulechip" style="color:var(--warn)">A prazo</span>'}</td><td>${payNoTerm(p)?'<span class="chgtxt">Sem prazo: pedido concluído não gera parcela. Edite e informe os dias, ou mude para À vista.</span>':esc(payTermsText(p))}</td><td>${hasVal((S.payDisc||{})[p])?String(S.payDisc[p]).replace('.',',')+'%':'<span class="small muted">—</span>'}</td><td class="r num">${users(p)}</td>
       <td class="r"><div class="row" style="gap:6px;justify-content:flex-end"><button class="btn ghost dlb" data-pye="${i}">Editar</button>${ui.confirmDel==='pay'+i?`<button class="btn danger dlb" data-pydok="${i}">Confirmar exclusão</button>`:`<button class="btn ghost dlb" data-pyd="${i}">Excluir</button>`}</div></td></tr>`).join('')}
     </tbody></table></div>
     <p class="small muted">O prazo cadastrado aqui é o que o contas a receber usa para gerar as parcelas. Pedidos antigos guardam o nome da forma usada na época.</p>`;
-  $('#pynew').onclick=()=>{ui.payEdit={idx:null,name:'',type:'prazo',days:'',all:false};admPagamentos()};
-  c.querySelectorAll('[data-pye]').forEach(b=>b.onclick=()=>{const i=+b.dataset.pye,p=S.payments[i];ui.payEdit={idx:i,name:p,type:isCash(p)?'vista':'prazo',days:parseDays(daysFromPay(p).replace('outro:','')).join('/')};admPagamentos()});
+  $('#pynew').onclick=()=>{ui.payEdit={idx:null,name:'',type:'prazo',days:'',disc:'',all:false};admPagamentos()};
+  c.querySelectorAll('[data-pye]').forEach(b=>b.onclick=()=>{const i=+b.dataset.pye,p=S.payments[i];ui.payEdit={idx:i,name:p,type:isCash(p)?'vista':'prazo',days:parseDays(daysFromPay(p).replace('outro:','')).join('/'),disc:hasVal((S.payDisc||{})[p])?S.payDisc[p]:''};admPagamentos()});
   c.querySelectorAll('[data-pyd]').forEach(b=>b.onclick=()=>{ui.confirmDel='pay'+b.dataset.pyd;admPagamentos()});
-  c.querySelectorAll('[data-pydok]').forEach(b=>b.onclick=()=>{const p=S.payments.splice(+b.dataset.pydok,1)[0];S.cashPays=S.cashPays.filter(x=>x!==p);if(S.payDays)delete S.payDays[p];S.customers.forEach(x=>{if(Array.isArray(x.pays))x.pays=x.pays.filter(y=>y!==p)});ui.confirmDel=null;save();toast('Forma de pagamento excluída');admPagamentos()});
+  c.querySelectorAll('[data-pydok]').forEach(b=>b.onclick=()=>{const p=S.payments.splice(+b.dataset.pydok,1)[0];S.cashPays=S.cashPays.filter(x=>x!==p);if(S.payDays)delete S.payDays[p];if(S.payDisc)delete S.payDisc[p];S.customers.forEach(x=>{if(Array.isArray(x.pays))x.pays=x.pays.filter(y=>y!==p)});ui.confirmDel=null;save();toast('Forma de pagamento excluída');admPagamentos()});
   if(!E)return;
-  const read=()=>{E.type=$('#pyt').value;E.name=$('#pyn').value;const d=$('#pyd');if(d)E.days=d.value;const a=$('#pyall');if(a)E.all=a.checked};
+  const read=()=>{E.type=$('#pyt').value;E.name=$('#pyn').value;const d=$('#pyd');if(d)E.days=d.value;const pdi=$('#pydisc');if(pdi)E.disc=pdi.value;const a=$('#pyall');if(a)E.all=a.checked};
   $('#pyt').onchange=()=>{read();admPagamentos()};
   const pd=$('#pyd');if(pd)pd.oninput=()=>{read();const days=parseDays(E.days),pv=$('#pyprev');pv.className='small'+(days.length?'':' muted');pv.innerHTML=days.length?`Gera <b>${days.length} parcela${days.length===1?'':'s'}</b> no contas a receber: ${days.map(d=>d+' dias').join(', ')} depois da conclusão do pedido.`:'Informe os dias, separados por barra.';$('#pyn').placeholder='Ex.: Boleto '+(days.length?days.join('/'):'14/21/28')+' dias'};
   $('#pycancel').onclick=()=>{ui.payEdit=null;admPagamentos()};
@@ -4050,11 +4060,13 @@ function admPagamentos(){
     const name=(E.name.trim()||(E.type==='prazo'?'Boleto '+days.join('/')+' dias':'')).trim();
     if(!name)return err('Informe o nome da forma de pagamento.');
     if(S.payments.some((p,i)=>i!==E.idx&&p.toLowerCase()===name.toLowerCase()))return err('Já existe uma forma com esse nome.');
-    S.payDays=S.payDays||{};
+    const disc=pnum(E.disc);if(disc!==''&&(isNaN(disc)||disc<0||disc>90))return err('Desconto entre 0 e 90%.');
+    S.payDays=S.payDays||{};S.payDisc=S.payDisc||{};
     const old=E.idx==null?null:S.payments[E.idx];
-    if(old!=null&&old!==name){S.payments[E.idx]=name;S.customers.forEach(x=>{if(Array.isArray(x.pays))x.pays=x.pays.map(y=>y===old?name:y)});S.cashPays=S.cashPays.filter(x=>x!==old);delete S.payDays[old]}
+    if(old!=null&&old!==name){S.payments[E.idx]=name;S.customers.forEach(x=>{if(Array.isArray(x.pays))x.pays=x.pays.map(y=>y===old?name:y)});S.cashPays=S.cashPays.filter(x=>x!==old);delete S.payDays[old];delete S.payDisc[old]}
     if(old==null){S.payments.push(name);if(E.all)S.customers.forEach(x=>{if(Array.isArray(x.pays)&&!x.pays.includes(name))x.pays.push(name)})}
     S.cashPays=S.cashPays.filter(x=>x!==name);if(E.type==='vista'){S.cashPays.push(name);delete S.payDays[name]}else S.payDays[name]=days.join('/');
+    if(disc!==''&&disc>0)S.payDisc[name]=disc;else delete S.payDisc[name];
     save();ui.payEdit=null;toast('Forma de pagamento salva');admPagamentos();
   };
 }
@@ -4249,12 +4261,14 @@ function admVendedores(){
         <div class="grid2"><div class="field"><label for="slmg">Margem mínima padrão (%)</label><input type="text" inputmode="decimal" id="slmg" value="${hasVal(E.minMg)?String(E.minMg).replace('.',','):''}" placeholder="Para produtos sem mínimo na categoria"><span class="small muted">Vale só para produtos cuja categoria não tem margem mínima.</span>
           <label for="sladj" style="margin-top:6px">Ajuste deste vendedor (pontos)</label><input type="text" inputmode="decimal" id="sladj" value="${hasVal(E.minAdj)?String(E.minAdj).replace('.',','):''}" placeholder="0"><span class="small muted">Ex.: 1 = exige 1 ponto a mais que o mínimo das categorias; -1 = deixa ir 1 ponto abaixo.</span></div>
           <div class="small muted" style="align-self:end">O vendedor <b>não vê</b> a margem. Ele pode mexer nos preços produto a produto; o pedido só sai se a margem do pedido inteiro ficar acima desse mínimo. Se não ficar, o pedido trava e ele pode enviar para a sua análise (aba Análise).</div></div>
+        <label class="switch"><input type="checkbox" id="slneg" ${E.canPrice!==false?'checked':''}> Pode negociar preço (mudar o preço dos produtos no pedido)</label>
+        <div class="small muted" style="margin:-6px 0 0 0">Desmarcado: o vendedor só usa o preço de tabela, sem editar; o jogo de margem acima some, porque não tem o que negociar.</div>
         <label class="switch"><input type="checkbox" id="slall" ${E.allCli?'checked':''}> Pode vender para todos os clientes (desmarcado: só os clientes dele)</label>
         <label class="switch"><input type="checkbox" id="slact" ${E.active!==false?'checked':''}> Acesso ativo</label>
       </div>
       <div class="err" id="slerr"></div>
       <div class="row"><button class="btn" type="submit">Salvar</button><button class="btn ghost" type="button" id="slcancel">Cancelar</button></div></form>`:''}
-    ${(S.sellers||[]).length?`<div class="list" style="max-width:760px">${S.sellers.map(x=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(x.name)}</b><span class="small muted">Comissão padrão ${String(Number(x.commission)||0).replace('.',',')}% · ${nCli(x.id)} cliente${nCli(x.id)===1?'':'s'}${x.phone?' · '+esc(x.phone):''}</span><span class="small muted">${x.login?`Acesso: <b>${esc(x.login)}</b> · ${srvPassLabel(x)}${x.active===false?' · <b>desativado</b>':''}`:'Sem acesso ao app'}${hasVal(x.minMg)&&x.minMg!==''?' · mínimo padrão '+String(x.minMg).replace('.',',')+'%':''}${Number(x.minAdj)?' · ajuste '+(x.minAdj>0?'+':'')+String(x.minAdj).replace('.',',')+' pts':''}${x.allCli?' · todos os clientes':''}</span></div>
+    ${(S.sellers||[]).length?`<div class="list" style="max-width:760px">${S.sellers.map(x=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(x.name)}</b><span class="small muted">Comissão padrão ${String(Number(x.commission)||0).replace('.',',')}% · ${nCli(x.id)} cliente${nCli(x.id)===1?'':'s'}${x.phone?' · '+esc(x.phone):''}</span><span class="small muted">${x.login?`Acesso: <b>${esc(x.login)}</b> · ${srvPassLabel(x)}${x.active===false?' · <b>desativado</b>':''}`:'Sem acesso ao app'}${hasVal(x.minMg)&&x.minMg!==''?' · mínimo padrão '+String(x.minMg).replace('.',',')+'%':''}${Number(x.minAdj)?' · ajuste '+(x.minAdj>0?'+':'')+String(x.minAdj).replace('.',',')+' pts':''}${x.allCli?' · todos os clientes':''}${x.canPrice===false?' · <b>sem negociar preço</b>':''}</span></div>
       <div class="row" style="gap:6px"><button class="btn ghost dlb" data-sle="${x.id}">Editar</button>${srvResetBtn('sellers',x)}${ui.confirmDel==='sl'+x.id?`<button class="btn danger dlb" data-sldok="${x.id}">Confirmar</button>`:`<button class="btn ghost dlb" data-sld="${x.id}">Excluir</button>`}</div></div>`).join('')}</div>`:'<div class="empty">Nenhum vendedor cadastrado. Sem vendedor na venda, a comissão é zero.</div>'}
     <p class="small muted">O vendedor de cada cliente fica no cadastro do cliente e vai para os pedidos dele. Você pode trocar o vendedor em cada pedido.</p>`;
   $('#cmm').onchange=e=>{S.store.commMode=e.target.value;save();toast(e.target.value==='venda'?'Comissão liberada na conclusão do pedido':'Comissão liberada quando o cliente paga');admVendedores()};
@@ -4272,7 +4286,7 @@ function admVendedores(){
     if(lg&&loginTaken(lg,E.id)){$('#slerr').textContent='O usuário "'+lg+'" já é usado por outra pessoa. Escolha outro.';return}if(lg&&!pw&&!E.hasPass){$('#slerr').textContent='Informe a senha do vendedor.';return}if(pw&&pw.length<8){$('#slerr').textContent='A senha precisa ter pelo menos 8 caracteres.';return}
     if(lg&&S.sellers.some(x=>x.id!==E.id&&String(x.login||'').toLowerCase()===lg)){$('#slerr').textContent='Esse usuário já existe.';return}
     if(mg!==''&&(isNaN(mg)||mg<0||mg>90)){$('#slerr').textContent='Margem mínima entre 0 e 90%.';return}
-    const v={...E,id:E.id||uid(),name,phone:$('#slp').value.trim(),commission:cm===''?0:cm,login:lg,pass:pw,minMg:mg===''?'':mg,minAdj:adj,allCli:$('#slall').checked,active:$('#slact').checked};
+    const v={...E,id:E.id||uid(),name,phone:$('#slp').value.trim(),commission:cm===''?0:cm,login:lg,pass:pw,minMg:mg===''?'':mg,minAdj:adj,canPrice:$('#slneg').checked,allCli:$('#slall').checked,active:$('#slact').checked};
     const i=S.sellers.findIndex(x=>x.id===v.id);if(i>=0)S.sellers[i]=v;else S.sellers.push(v);
     save();ui.selEdit=null;toast('Vendedor salvo');admVendedores()};
 }
@@ -5014,7 +5028,7 @@ function lnTarget(R2){const me=SVme();if(!me)return null;const adj=Number(me.min
   return any&&w>0?Math.max(0,t/w+adj):null}
 function lnItemMin(p){const me=SVme();if(!me)return null;const pm=polMin(p),m=pm?pm.v:(setV(me.minMg)?Number(me.minMg):null);return m==null?null:Math.max(0,m+(Number(me.minAdj)||0))}
 const mgTol=()=>{const v=S.store&&S.store.mgTol;return v==null||v===''?2:Math.max(0,Number(v)||0)};
-function lnLock(R2,cli,L){const me=SVme();if(!me||!R2.items.length)return null;if(SRV.me&&SRV.me.role==='vendedor')return srvLock(R2,cli,L);const min=lnTarget(R2);if(min==null)return null;
+function lnLock(R2,cli,L){const me=SVme();if(!me||!R2.items.length)return null;if(SRV.me&&SRV.me.role==='vendedor')return srvLock(R2,cli,L);if(me.canPrice===false)return null;const min=lnTarget(R2);if(min==null)return null;
   const mg=lnMargin(R2,cli,L);if(mg>=min-1e-9)return {ok:true,min,mg,level:mg<min+1?'yellow':'green'};
   if(L._tblOk)return {ok:true,min,mg,level:'yellow',table:true};
   if(mgTol()>0&&mg>=min-mgTol()-1e-9)return {ok:true,min,mg,level:'yellow',tol:true};
@@ -5023,17 +5037,17 @@ function lnLock(R2,cli,L){const me=SVme();if(!me||!R2.items.length)return null;i
   return {ok:false,min,mg,level:'red',need:Math.ceil(R2.total*(hi-1)*100)/100}}
 function lnPill(K){if(!K)return '';const t={red:'Abaixo do permitido',yellow:'No limite',green:'Margem ok'}[K.level];return `<div class="mgpillwrap"><div class="mgpill mg-${K.level}" role="status" aria-live="polite"><span class="mgdot"></span>${t}</div></div>`}
 /* luz por produto (vendedor): margem do item depois da comissão, contra o mínimo dele */
-function lnItemLevel(p,packPrice,k,L,cli,tp){if(SRV.me&&SRV.me.role==='vendedor')return srvItemLevel(p,L,cli);const min=lnItemMin(p);if(min==null||!(packPrice>0))return null;const atTable=tp>0&&packPrice>=tp-0.004;const pc=lockCost(p);if(!(pc>0))return atTable?'yellow':'red';
+function lnItemLevel(p,packPrice,k,L,cli,tp){if(SRV.me&&SRV.me.role==='vendedor')return srvItemLevel(p,L,cli);const me=SVme();if(me&&me.canPrice===false)return null;const min=lnItemMin(p);if(min==null||!(packPrice>0))return null;const atTable=tp>0&&packPrice>=tp-0.004;const pc=lockCost(p);if(!(pc>0))return atTable?'yellow':'red';
   const ie=!!(L.nf&&ieClient(cli)),net=packPrice*k,cost=effCost(p,pc,net,ie),mg=(net-cost-net*lnCommRate(p,L.sel)/100)/net*100;return mg<min-1e-9?(atTable?'yellow':'red'):mg<min+1?'yellow':'green'}
 const lnDot=(lv,title)=>lv?`<span class="mgdot mg-${lv}" title="${title||({red:'Abaixo do permitido',yellow:'No limite',green:'Margem ok'})[lv]}"></span> `:'';
 function lnReview(c,L,cli,R2,R0,pays,lnDoSave,tpOf){
-  const K=lnLock(R2,cli,L),k=R2.sub>0?R2.total/R2.sub:1,cm=R2.items.reduce((s2,i)=>s2+i.price*k*i.q*lnCommRate(i.p,L.sel)/100,0);
+  const noPrice=SVme().canPrice===false,K=lnLock(R2,cli,L),k=R2.sub>0?R2.total/R2.sub:1,cm=R2.items.reduce((s2,i)=>s2+i.price*k*i.q*lnCommRate(i.p,L.sel)/100,0);
   c.innerHTML=`${lnPill(K)}<div class="sectionhead"><h2>Revisar pedido · ${esc(cli.name)}</h2></div>
     <section class="panel rvbox">
-      <div class="small muted">Confira produto por produto. Dá para mudar o preço da unidade aqui mesmo; para mudar quantidade ou incluir produto, toque em <b>Editar pedido</b>.</div>
+      <div class="small muted">${noPrice?'Confira produto por produto. O preço é o de tabela; para mudar quantidade ou incluir produto, toque em':'Confira produto por produto. Dá para mudar o preço da unidade aqui mesmo; para mudar quantidade ou incluir produto, toque em'} <b>Editar pedido</b>.</div>
       <div class="rvlist">${R2.items.map(i=>{const p=i.p,un=!p.isCombo&&packOf(p)?packOf(p):1,i0=R0.items.find(x=>x.p.id===p.id),def=i0?i0.price:baseOf(p),lv=p.isCombo?null:lnItemLevel(p,i.price,k,L,cli,tpOf(p));
         return `<div class="rvrow"><div class="rvn">${lnDot(lv)}<b>${esc(p.name)}</b><div class="small muted">${i.q} ${un>1?esc(packWord(p,i.q>1))+' · '+nfmt(i.q*un)+(isKg(p)?' kg':' un.'):esc(p.unit||'')}${pCommOwn(p)!==''?` · <span class="commchip">comissão ${String(pCommOwn(p)).replace('.',',')}%</span>`:''}</div></div>
-          <label class="rvp"><span class="small muted">R$ ${un>1?(isKg(p)?'kg':'unidade'):'preço'}</span><input type="text" inputmode="decimal" data-rvp="${p.id}" data-un="${un}" data-def="${def}" value="${money(Math.round(i.price/un*100)/100)}" class="${Math.abs(i.price-def)>0.004?'ovr':''}" aria-label="Preço de ${esc(p.name)}"></label>
+          <label class="rvp"><span class="small muted">R$ ${un>1?(isKg(p)?'kg':'unidade'):'preço'}</span><input type="text" inputmode="decimal" data-rvp="${p.id}" data-un="${un}" data-def="${def}" value="${money(Math.round(i.price/un*100)/100)}" class="${Math.abs(i.price-def)>0.004?'ovr':''}" aria-label="Preço de ${esc(p.name)}" ${noPrice?'disabled':''}></label>
           <b class="num rvt">${brl(i.price*i.q)}</b></div>`}).join('')}</div>
       <div class="rvsum"><div><span class="muted">Receber</span> <b>${L.mode==='entrega'?'Entrega':'Retirada no depósito'}</b></div><div><span class="muted">Pagamento</span> <b>${esc(L.pay||'—')}</b></div><div><span class="muted">Nota fiscal</span> <b>${L.nf?'Sim':'Não'}</b></div>${R2.disc?`<div><span class="muted">Desconto retirada</span> <b>− ${brl(R2.disc)}</b></div>`:''}<div class="rvtot"><span>Total</span><b class="num">${brl(R2.total)}</b></div></div>
       ${lnLockBox(K)}
