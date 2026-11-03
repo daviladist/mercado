@@ -121,9 +121,9 @@
   const partesDe = l => (l.partes && Object.keys(l.partes).length ? l.partes : { dono: 100 });
   /* parte de cada um em reais: cada meeiro arredonda os centavos dele e o dono fica com o resto (a soma sempre fecha com o valor) */
   const parte = (l, k) => {
-    const ps = partesDe(l);
-    if (k !== 'dono') return r2(l.valor * (Number(ps[k]) || 0) / 100);
-    const outros = Object.keys(ps).filter(x => x !== 'dono').reduce((a, x) => a + r2(l.valor * (Number(ps[x]) || 0) / 100), 0);
+    const ps = partesDe(l), b = l.tipo === 'venda' && l.base != null ? l.base : l.valor; // venda: o meeiro ganha sobre o valor para o meeiro
+    if (k !== 'dono') return r2(b * (Number(ps[k]) || 0) / 100);
+    const outros = Object.keys(ps).filter(x => x !== 'dono').reduce((a, x) => a + r2(b * (Number(ps[x]) || 0) / 100), 0);
     return r2(l.valor - outros);
   };
   function periodo() {
@@ -275,7 +275,7 @@
     } else if (rocaTab === 'meeiros') {
       const ps = new Set(meeiros); all.forEach(l => { Object.keys(partesDe(l)).forEach(k => { if (k !== 'dono') ps.add(k); }); if (l.tipo === 'adiantamento') ps.add(l.pessoaId); });
       body = [...ps].map(pid => { const p = pendente(r.id, pid), hist = S.acertos.filter(a => a.rocaId === r.id && a.pessoaId === pid);
-        return `<section class="card"><div class="between"><div><h3>${esc(nomeParte(pid))}</h3><p class="small muted">${r.parceria[pid] ? pctTxt(r.parceria[pid]) + ' da venda da parte dele (já tirados frete, caixa e outros descontos)' + ((r.pes || {})[pid] ? ' · ' + numIn(r.pes[pid]) + ' pés' : '') : 'não está mais na parceria'}${(pessoa(pid) || {}).telefone ? ' · ' + esc(pessoa(pid).telefone) : ''}</p></div>
+        return `<section class="card"><div class="between"><div><h3>${esc(nomeParte(pid))}</h3><p class="small muted">${r.parceria[pid] ? pctTxt(r.parceria[pid]) + ' da venda da parte dele' + ((r.pes || {})[pid] ? ' · ' + numIn(r.pes[pid]) + ' pés' : '') : 'não está mais na parceria'}${(pessoa(pid) || {}).telefone ? ' · ' + esc(pessoa(pid).telefone) : ''}</p></div>
           ${r.parceria[pid] ? `<button class="btn sm" type="button" data-adi="${esc(pid)}">+ Adiantamento</button>` : ''}</div>
           <div class="kpis"><div class="k"><span>Parte nas vendas</span><b class="pos">${money(p.parte)}</b></div><div class="k"><span>Despesas dele</span><b class="neg">${money(p.desp)}</b></div><div class="k"><span>Adiantamentos</span><b class="inf">${money(p.adi)}</b></div></div>
           ${p.n ? `<div class="saldo ${p.saldo > 0 ? 'p' : p.saldo < 0 ? 'n' : 'z'}"><span class="small">Em aberto hoje</span><b>${money(Math.abs(p.saldo))}</b><span class="small">${p.saldo > 0 ? esc(DONO()) + ' paga para ' + esc(nomeParte(pid)) : p.saldo < 0 ? esc(nomeParte(pid)) + ' deve para ' + esc(DONO()) : 'Zerado'}</span></div>
@@ -287,7 +287,7 @@
         ${func.length ? `<div class="list">${func.map(p => `<button type="button" class="it" data-pes="${esc(p.id)}"><span class="ic">👷</span><span class="tx"><b>${esc(p.nome)}</b><span>${esc(p.telefone || '')}</span></span><span class="vl">${p.salario ? money(p.salario) + '<small>por mês</small>' : ''}</span></button>`).join('')}</div>` : '<p class="muted small">Nenhum funcionário fixo nesta roça.</p>'}
         ${func.length ? '<button class="btn full" type="button" id="sal">Pagar salários do mês</button>' : ''}</section>`;
     } else {
-      body = `<section class="card"><h3>Como a roça é tocada</h3><p>${esc(modoTxt(r.modo))}</p>${meeiros.length ? splitBar(r) + '<p class="small muted">Cada meeiro ganha a porcentagem dele sobre a venda da parte dele, depois de tirar os descontos da venda (frete, caixa…). Na venda você diz de quem foi.</p>' : ''}</section>
+      body = `<section class="card"><h3>Como a roça é tocada</h3><p>${esc(modoTxt(r.modo))}</p>${meeiros.length ? splitBar(r) + '<p class="small muted">Cada meeiro ganha a porcentagem dele sobre a venda da parte dele. Na venda você diz de quem foi e, se quiser, o valor para o meeiro (já descontando frete, caixa…).</p>' : ''}</section>
         ${meeiros.length ? `<section class="card"><h3>Quem paga cada despesa</h3><div class="list">${S.cats.map(c => { const p = r.regras[c.id] || { dono: 100 }; return `<div class="it"><span class="ic">${c.icone}</span><span class="tx"><b>${esc(c.nome)}</b><span>${esc(regraTxt(r, p))}</span></span></div>`; }).join('')}</div></section>` : ''}
         <section class="card"><h3>Dados</h3><p class="small">${esc([r.cultura && 'Cultura: ' + r.cultura, r.local && 'Local: ' + r.local, r.area && 'Área: ' + r.area, r.inicio && 'Início: ' + dBR(r.inicio)].filter(Boolean).join(' · ') || 'Sem detalhes.')}</p>${r.obs ? `<p class="small muted">${esc(r.obs)}</p>` : ''}</section>
         <button class="btn pri full" type="button" id="ed">Editar a roça</button>
@@ -331,7 +331,7 @@
     if (!list.length) return '<div class="card empty"><div class="big">📝</div><p class="muted">Nada lançado ainda.</p></div>';
     const ic = l => l.tipo === 'venda' ? '💰' : l.tipo === 'adiantamento' ? '🤝' : cat(l.categoria).icone;
     const tit = l => l.tipo === 'venda' ? 'Venda' + (l.qtd ? ' · ' + numIn(l.qtd) + ' ' + (l.unidade || '') : '') : l.tipo === 'adiantamento' ? 'Adiantamento · ' + (l.pessoaNome || '') : cat(l.categoria).nome + (l.pessoaNome ? ' · ' + l.pessoaNome : '');
-    const sub = l => [dBR(l.data), !semRoca && (l.rocaId ? (roca(l.rocaId) || {}).nome : 'Geral'), l.veiculoId && ((S.veiculos.find(v => v.id === l.veiculoId) || {}).nome), l.descricao, l.comprador, l.tipo === 'venda' && (l.descontos || []).length && 'vendido ' + money(l.bruto) + ' − ' + l.descontos.map(d => ((S.descontos || []).find(x => x.id === d.tipo) || { nome: d.tipo }).nome.toLowerCase()).join(', '), l.tipo === 'venda' && pagTxt(l), Object.keys(l.acertos || {}).length ? 'acertado' : ''].filter(Boolean).join(' · ');
+    const sub = l => [dBR(l.data), !semRoca && (l.rocaId ? (roca(l.rocaId) || {}).nome : 'Geral'), l.veiculoId && ((S.veiculos.find(v => v.id === l.veiculoId) || {}).nome), l.descricao, l.comprador, l.tipo === 'venda' && l.base != null && 'para o meeiro ' + money(l.base), l.tipo === 'venda' && pagTxt(l), Object.keys(l.acertos || {}).length ? 'acertado' : ''].filter(Boolean).join(' · ');
     return `<section class="card"><div class="list">${list.map(l => `<button type="button" class="it" data-lc="${esc(l.id)}"><span class="ic">${ic(l)}</span><span class="tx"><b>${esc(tit(l))}</b><span>${esc(sub(l))}</span></span><span class="vl ${l.tipo === 'venda' ? 'pos' : l.tipo === 'adiantamento' ? 'inf' : 'neg'}">${l.tipo === 'venda' ? '+' : '−'} ${money(l.valor)}${l.tipo === 'despesa' && Object.keys(partesDe(l)).length > 1 ? '<small>dividida</small>' : ''}</span></button>`).join('')}</div></section>`;
   }
   function bindLanc() { document.querySelectorAll('[data-lc]').forEach(b => b.addEventListener('click', () => { const l = S.lanc.find(x => x.id === b.dataset.lc); if (l) formLanc(l); })); }
@@ -399,8 +399,9 @@
     // reabrir = abrir um lançamento gravado; voltando do login (retomar), o que a pessoa digitou fica como estava
     const reabrir = edit && !src._retomar; delete F._retomar;
     const gravado = edit ? S.lanc.find(l => l.id === src.id) : null;
-    if (reabrir || !Array.isArray(F.descs)) F.descs = (reabrir && Array.isArray(src.descontos) ? src.descontos : []).map(d => ({ tipo: d.tipo, valor: numIn(d.valor), obs: d.obs || '' }));
-    if (reabrir && F.descs.length && src.bruto != null) F.valor = src.bruto;
+    // valor para o meeiro: em branco = o mesmo do vendido
+    if (reabrir) F.base = src.base != null ? numIn(src.base) : '';
+    if (F.base == null) F.base = '';
     if (reabrir) { F.valor = numIn(F.valor); F.qtd = numIn(F.qtd); F.preco = numIn(F.preco); F.dias = numIn(F.dias); }
     const travado = edit && Object.keys(F.acertos || {}).length > 0;
     // pagamento: lista de partes {forma, valor, vence, cheque, aberto}; uma parte só = a venda toda
@@ -446,10 +447,10 @@
           <div class="grid2"><div class="field"><label for="fdi">Dias</label><input inputmode="decimal" id="fdi" value="${esc(F.dias || '')}" placeholder="Ex.: 3"></div><div class="field"><label for="fpr">Valor do dia (R$)</label><input inputmode="decimal" id="fpr" value="${esc(F.preco || '')}" placeholder="Ex.: 120,00"></div></div>` : ''}
         ${F.tipo === 'venda' ? `<div class="grid2"><div class="field"><label for="fq">Quantidade</label><input inputmode="decimal" id="fq" value="${esc(F.qtd || '')}" placeholder="Ex.: 300"></div><div class="field"><label for="fpr">Preço por ${esc(F.unidade || 'unidade')} (R$)</label><input inputmode="decimal" id="fpr" value="${esc(F.preco || '')}" placeholder="Ex.: 25,00"></div></div>
           <div class="field"><span class="lbl">Unidade</span><div class="chips">${S.unidades.map(u => `<button type="button" class="chip" data-un="${u}" aria-pressed="${(F.unidade || '') === u}">${u}</button>`).join('')}</div></div>` : ''}
-        <div class="field"><label for="fv">${F.tipo === 'venda' ? ((F.descs || []).length ? 'Vendido (R$)' : 'Total da venda (R$)') : 'Valor (R$)'}</label><input inputmode="decimal" class="money" id="fv" value="${esc(F.valor || '')}" placeholder="0,00" ${vtotal != null ? 'readonly' : ''}>${vtotal != null ? '<span class="small muted">Calculado: ' + (F.tipo === 'venda' ? 'quantidade × preço' : 'dias × valor do dia') + '.</span>' : ''}</div>
-        ${F.tipo === 'venda' ? descHtml() : ''}
+        <div class="field"><label for="fv">${F.tipo === 'venda' ? 'Valor vendido (R$)' : 'Valor (R$)'}</label><input inputmode="decimal" class="money" id="fv" value="${esc(F.valor || '')}" placeholder="0,00" ${vtotal != null ? 'readonly' : ''}>${vtotal != null ? '<span class="small muted">Calculado: ' + (F.tipo === 'venda' ? 'quantidade × preço' : 'dias × valor do dia') + '.</span>' : ''}</div>
         ${F.tipo === 'venda' ? origHtml() : ''}
-        ${F.tipo === 'venda' && r && meeirosDe(r).length ? `<p class="note" id="vnote" ${liq() > 0 ? '' : 'hidden'}>${vendaNote(r, liq())}</p>` : ''}
+        ${F.tipo === 'venda' ? baseHtml() : ''}
+        ${F.tipo === 'venda' && r && meeirosDe(r).length ? `<p class="note" id="vnote" ${baseV() > 0 ? '' : 'hidden'}>${vendaNote(r, baseV())}</p>` : ''}
         ${quemPagaHtml(F)}
         ${F.tipo === 'despesa' && M('r_veiculos') && S.veiculos.some(v => v.ativo) ? `<div class="field"><span class="lbl">É de algum veículo ou máquina? (opcional)</span><div class="chips">${S.veiculos.filter(v => v.ativo || v.id === F.veiculoId).map(v => `<button type="button" class="chip" data-ve="${esc(v.id)}" aria-pressed="${F.veiculoId === v.id}">🚜 ${esc(v.nome)}</button>`).join('')}</div></div>` : ''}
         ${F.tipo === 'venda' ? `<div class="field"><label for="fc">Comprador (opcional)</label><input type="text" id="fc" maxlength="80" value="${esc(F.comprador || '')}" placeholder="Ex.: Ceasa, atravessador"></div>
@@ -492,19 +493,14 @@
         <div class="grid2"><button type="button" class="btn" id="pad">+ Outra parte</button><button type="button" class="btn ghost" id="pun">Uma forma só</button></div>`;
     }
     const centavos = v => Math.round((toNum(v) || 0) * 100);
-    /* venda: vendido − descontos = o que entra de fato (o meeiro ganha sobre ele) */
-    const somaDesc = () => F.tipo === 'venda' ? (F.descs || []).reduce((a, d) => a + centavos(d.valor), 0) : 0;
-    const liqC = () => centavos(F.valor) - somaDesc();
-    const liq = () => liqC() / 100;
-    const DS = () => S.descontos || [];
-    function descHtml() {
-      const ds = F.descs || [];
-      return `<div class="field"><span class="lbl">Descontos da venda (opcional): frete, caixa…</span>
-          ${ds.map((d, i) => { const t = DS().find(x => x.id === d.tipo) || { nome: d.tipo, icone: '' }; return `<div class="chq"><div class="between"><b>${esc(t.icone)} ${esc(t.nome)}</b><button type="button" class="btn sm" data-drm="${i}" aria-label="Tirar ${esc(t.nome)}">Tirar</button></div>
-            <div class="drow"><div class="field"><label for="dv${i}">Valor (R$)</label><input inputmode="decimal" id="dv${i}" data-dv="${i}" value="${esc(d.valor || '')}" placeholder="0,00"></div>
-            <div class="field"><label for="do${i}">${d.tipo === 'outro' ? 'O que foi' : 'Obs. (opcional)'}</label><input type="text" id="do${i}" data-do="${i}" maxlength="60" value="${esc(d.obs || '')}" placeholder="${d.tipo === 'outro' ? 'Ex.: pedágio' : ''}"></div></div></div>`; }).join('')}
-          <div class="chips">${DS().map(t => `<button type="button" class="chip" data-dadd="${esc(t.id)}">+ ${esc(t.icone)} ${esc(t.nome)}</button>`).join('')}</div></div>
-        <div class="liq${liqC() <= 0 ? ' neg' : ''}" id="liqbox" ${ds.length ? '' : 'hidden'}><span>Recebe de fato</span><b id="liqv">${money(liq())}</b><small id="liqs">Vendido ${money(centavos(F.valor) / 100)} − descontos ${money(somaDesc() / 100)}</small></div>`;
+    const liqC = () => centavos(F.valor); // total do pagamento = o vendido
+    /* valor para o meeiro: o patrão põe de cabeça (já tirando frete, caixa…); o meeiro ganha a % dele sobre este valor e só vê ele */
+    const comMeeiro = () => { const r = F.rocaId && roca(F.rocaId); return !!(r && meeirosDe(r).length) && !(F.orig && F.orig.modo === 'um' && F.orig.de === 'dono'); };
+    const baseV = () => { const b = toNum(F.base); return b > 0 ? b : (toNum(F.valor) || 0); };
+    function baseHtml() {
+      if (!comMeeiro()) return '';
+      return `<div class="field"><label for="fbs">Valor para o meeiro (R$)</label><input inputmode="decimal" class="money" id="fbs" value="${esc(F.base || '')}" placeholder="${esc(F.valor ? numIn(toNum(F.valor)) : 'Igual ao vendido')}">
+        <span class="small muted">É sobre este valor que o meeiro ganha a parte dele, e é só ele que aparece no acerto. Ponha já descontando frete, caixa… Em branco = o mesmo do vendido. O vendido fica só para você.</span></div>`;
     }
     function somaTxt() {
       const tot = liqC(), so = F.pags.reduce((a, x) => a + centavos(x.valor), 0), d = tot - so;
@@ -552,7 +548,7 @@
       return it.map(([de, x]) => ({ de, valor: r2(x) }));
     }
     /* venda corrigida na mesma roça: mostra a divisão gravada (do dia da venda), não a parceria de hoje */
-    function vendaNote(r, v) { const og = origemPayload(); const ps = edit && F.rocaId === origRoca && Object.keys(origPartes).length && (legado && !F.orig || Array.isArray(og) && JSON.stringify(og) === origOriginal) ? origPartes : Array.isArray(og) ? partesDaOrigem(r, og) : null; if (!ps) return 'Escolha de quem é a venda para ver a parte de cada um.'; return Object.entries(ps).map(([k, p]) => esc(nomeParte(k)) + ' (' + pctTxt(p) + '): <b>' + money((v || 0) * p / 100) + '</b>').join(' · '); }
+    function vendaNote(r, v) { const og = origemPayload(); const ps = edit && F.rocaId === origRoca && Object.keys(origPartes).length && (legado && !F.orig || Array.isArray(og) && JSON.stringify(og) === origOriginal) ? origPartes : Array.isArray(og) ? partesDaOrigem(r, og) : null; if (!ps) return 'Escolha de quem é a venda para ver a parte de cada um.'; const vend = toNum(F.valor) || 0; let soma = 0; const ks = Object.keys(ps).filter(x => x !== 'dono'); const linhas = ks.map(x => { const m = r2(v * ps[x] / 100); soma += m; return esc(nomeParte(x)) + ' (' + pctTxt(ps[x]) + ' de ' + money(v) + '): <b>' + money(m) + '</b>'; }); if (vend > 0) linhas.push(esc(DONO()) + ': <b>' + money(r2(vend - soma)) + '</b>'); return linhas.join(' · '); }
     /* atualiza totais e prévias sem redesenhar (o campo que a pessoa tocou continua com o foco) */
     function upd() {
       keep();
@@ -560,8 +556,8 @@
       const a = toNum(F.tipo === 'venda' ? F.qtd : F.dias), b = toNum(F.preco);
       if ((F.tipo === 'venda' || F.categoria === 'diarista') && a > 0 && b > 0) { F.valor = numIn(r2(a * b)); fv.value = F.valor; fv.readOnly = true; }
       else if (fv.readOnly) { fv.readOnly = false; fv.value = ''; F.valor = ''; }
-      const v = F.tipo === 'venda' ? liq() : toNum(F.valor), vn = $('#vnote'), r = F.rocaId && roca(F.rocaId);
-      const lv = $('#liqv'); if (lv) { lv.textContent = money(liq()); $('#liqs').textContent = 'Vendido ' + money(centavos(F.valor) / 100) + ' − descontos ' + money(somaDesc() / 100); $('#liqbox').classList.toggle('neg', liqC() <= 0); }
+      const v = F.tipo === 'venda' ? baseV() : toNum(F.valor), vn = $('#vnote'), r = F.rocaId && roca(F.rocaId);
+      const fb = $('#fbs'); if (fb) fb.placeholder = F.valor ? numIn(toNum(F.valor)) : 'Igual ao vendido';
       if (vn && r) { vn.hidden = !(v > 0); vn.innerHTML = vendaNote(r, v); }
       const ps = $('#psoma'); if (ps) ps.innerHTML = somaTxt();
       const os = $('#osoma'); if (os) { os.innerHTML = origSoma(); $('#ohint').textContent = origHint(); }
@@ -572,8 +568,7 @@
       ['fv:valor', 'fd:data', 'fds:descricao', 'fq:qtd', 'fpr:preco', 'fc:comprador', 'fpn:pessoaNome', 'fdi:dias'].forEach(x => { const [id, k] = x.split(':'); const v = g(id); if (v !== undefined) F[k] = v; });
       document.querySelectorAll('[data-pp]').forEach(i => { F.partes = F.partes || {}; F.partes[i.dataset.pp] = toNum(i.value) || 0; });
       document.querySelectorAll('#sheet [data-oq]').forEach(e => { if (F.orig && F.orig.modo === 'mix') { F.orig.v = F.orig.v || {}; F.orig.v[e.dataset.oq] = e.value; } });
-      document.querySelectorAll('#sheet [data-dv]').forEach(e => { const d = (F.descs || [])[+e.dataset.dv]; if (d) d.valor = e.value; });
-      document.querySelectorAll('#sheet [data-do]').forEach(e => { const d = (F.descs || [])[+e.dataset.do]; if (d) d.obs = e.value; });
+      { const e = document.getElementById('fbs'); if (e) F.base = e.value; }
       document.querySelectorAll('#sheet [data-pv]').forEach(e => { const x = F.pags[+e.dataset.pv]; if (x) x.valor = e.value; });
       document.querySelectorAll('#sheet [data-pvc]').forEach(e => { const x = F.pags[+e.dataset.pvc]; if (x) x.vence = e.value; });
       document.querySelectorAll('#sheet [data-pc]').forEach(e => { const [i, k] = e.dataset.pc.split(':'), x = F.pags[+i]; if (x) { x.cheque = Object.assign({}, x.cheque); x.cheque[k] = e.value; } });
@@ -595,11 +590,9 @@
       const pad = $('#pad'); if (pad) pad.addEventListener('click', () => { keep(); const falta = liqC() - F.pags.reduce((a, x) => a + centavos(x.valor), 0); const ult = F.pags[F.pags.length - 1]; F.pags.push({ forma: ult && ult.forma === 'cheque' ? 'cheque' : '', valor: falta > 0 ? numIn((falta / 100).toFixed(2)) : '', vence: '', cheque: {}, aberto: false }); redraw(); });
       const pun = $('#pun'); if (pun) pun.addEventListener('click', () => { keep(); if (F.pags.filter(x => x.forma || toNum(x.valor) > 0).length > 1 && !confirm('Voltar para uma forma só apaga as partes (valores e vencimentos). Continuar?')) return; const fs = [...new Set(F.pags.map(x => x.forma).filter(Boolean))]; F.pags = fs.length === 1 ? [Object.assign({}, F.pags.find(x => x.forma === fs[0]), { valor: '' })] : []; F.dividir = false; redraw(); });
       pn.querySelectorAll('[data-pv]').forEach(e => e.addEventListener('input', upd));
-      pn.querySelectorAll('[data-dv]').forEach(e => e.addEventListener('input', upd));
+      { const e = $('#fbs'); if (e) e.addEventListener('input', upd); }
       pn.querySelectorAll('[data-oq]').forEach(e => e.addEventListener('input', upd));
       pn.querySelectorAll('[data-og]').forEach(b => b.addEventListener('click', () => { keep(); const g = b.dataset.og; F.orig = g === 'mix' ? { modo: 'mix', v: F.orig && F.orig.modo === 'mix' ? F.orig.v : {} } : { modo: 'um', de: g.slice(3) }; redraw(); }));
-      pn.querySelectorAll('[data-dadd]').forEach(b => b.addEventListener('click', () => { keep(); F.descs = (F.descs || []).concat([{ tipo: b.dataset.dadd, valor: '', obs: '' }]); redraw(); const n = F.descs.length - 1, e = $('#dv' + n); if (e) e.focus(); }));
-      pn.querySelectorAll('[data-drm]').forEach(b => b.addEventListener('click', () => { keep(); F.descs.splice(+b.dataset.drm, 1); redraw(); }));
       pn.querySelectorAll('[data-ve]').forEach(b => b.addEventListener('click', () => { keep(); F.veiculoId = F.veiculoId === b.dataset.ve ? null : b.dataset.ve; redraw(); }));
       pn.querySelectorAll('[data-qp]').forEach(b => b.addEventListener('click', () => {
         keep(); const k = b.dataset.qp, r = roca(F.rocaId);
@@ -631,20 +624,16 @@
         const soma = Object.values(partes).reduce((a, b) => a + Math.round(b * 100), 0) / 100;
         if (soma !== 100) return err('A divisão precisa somar 100% (agora soma ' + pctTxt(soma) + ').');
       }
-      let vendido = null, descontos = [];
-      if (F.tipo === 'venda' && (F.descs || []).length) {
-        for (const d of F.descs) {
-          const t = DS().find(x => x.id === d.tipo) || { nome: d.tipo }, dv = toNum(d.valor);
-          if (!(dv > 0)) return err('Informe o valor do desconto (' + t.nome + '), ou tire.');
-          if (d.tipo === 'outro' && String(d.obs || '').trim().length < 2) return err('No desconto "Outro", escreva o que foi.');
-          descontos.push(Object.assign({ tipo: d.tipo, valor: r2(dv) }, String(d.obs || '').trim() ? { obs: String(d.obs).trim() } : {}));
-        }
-        if (!(liqC() > 0)) return err('Os descontos passaram do valor vendido. Confira.');
-        vendido = valor; valor = liq();
+      let base = null;
+      if (F.tipo === 'venda' && comMeeiro() && String(F.base || '').trim()) {
+        base = toNum(F.base);
+        if (!(base > 0)) return err('Valor para o meeiro: use só números (ex.: 50,00), ou deixe em branco.');
+        if (base > valor) return err('O valor para o meeiro não pode ser maior que o valor vendido.');
+        base = r2(base);
       }
       const b = { id: F.id || newId('l'), novo: !edit, tipo: F.tipo, rocaId: F.rocaId || null, data: F.data, valor, categoria: F.categoria || null, descricao: F.descricao || '', qtd: toNum(F.qtd), unidade: F.unidade || null, preco: toNum(F.preco), comprador: F.comprador || '', pessoaId: F.pessoaId || null, pessoaNome: F.pessoaNome || '', dias: toNum(F.dias), veiculoId: F.veiculoId || null, partes };
       if (F.tipo === 'venda') {
-        b.descontos = descontos; if (vendido != null) b.bruto = vendido;
+        b.base = base;
         if (F.rocaId && meeirosDe(roca(F.rocaId)).length) {
           const og = origemPayload();
           if (typeof og === 'string') return err(og);
@@ -667,7 +656,7 @@
       F.id = b.id; // tocar duas vezes não lança duas vezes
       const bt = $('#fs'); bt.disabled = true;
       try { await api('/api/rural/lanc', b); await reload(); closeSheet(); toast((edit ? 'Correção salva: ' : 'Lançado ✓ ') + money(valor)); render(); }
-      catch (e) { bt.disabled = false; if (e.status === 401 || e.login) { const keepF = Object.assign({}, F, { valor: numIn(vendido != null ? vendido : valor), _retomar: true }); retomar = () => formLanc(keepF); return fail(e); } err(e.message); }
+      catch (e) { bt.disabled = false; if (e.status === 401 || e.login) { const keepF = Object.assign({}, F, { valor: numIn(valor), _retomar: true }); retomar = () => formLanc(keepF); return fail(e); } err(e.message); }
     }
     draw();
   }
@@ -708,13 +697,13 @@
     if (view !== 'acerto') return;
     const t = P.totais, nm = P.pessoaNome;
     const grp = (tipo, tit) => { const it = P.itens.filter(i => i.tipo === tipo); return it.length ? `<section class="card"><h3>${tit}</h3><div class="scroll"><table><thead><tr><th>Data</th><th>O quê</th>${tipo !== 'adiantamento' ? '<th class="n">Total</th><th class="n">%</th>' : ''}<th class="n">${esc(nm)}</th></tr></thead><tbody>
-      ${it.map(i => `<tr><td>${dBR(i.data)}</td><td>${esc(i.tipo === 'venda' ? [i.qtd ? numIn(i.qtd) + ' ' + (i.unidade || '') : '', i.comprador, (i.descontos || []).length ? 'vendido ' + money(i.bruto) + ' − ' + i.descontos.map(d => (((S.descontos || []).find(x => x.id === d.tipo) || { nome: d.tipo }).nome.toLowerCase()) + ' ' + money(d.valor)).join(', ') : ''].filter(Boolean).join(' · ') || 'Venda' : i.tipo === 'despesa' ? cat(i.categoria).nome + (i.descricao ? ' · ' + i.descricao : '') : i.descricao || 'Adiantamento')}</td>${tipo !== 'adiantamento' ? `<td class="n">${money(i.valor)}</td><td class="n">${pctTxt(i.pct)}</td>` : ''}<td class="n">${money(i.valorPessoa)}</td></tr>`).join('')}
+      ${it.map(i => `<tr><td>${dBR(i.data)}</td><td>${esc(i.tipo === 'venda' ? [(i.qtdParte != null ? numIn(i.qtdParte) + ' ' + (i.unidade || '') + ' da parte dele' : i.qtd ? numIn(i.qtd) + ' ' + (i.unidade || '') : ''), i.comprador].filter(Boolean).join(' · ') || 'Venda' : i.tipo === 'despesa' ? cat(i.categoria).nome + (i.descricao ? ' · ' + i.descricao : '') : i.descricao || 'Adiantamento')}</td>${tipo !== 'adiantamento' ? `<td class="n">${money(i.valorAcerto != null ? i.valorAcerto : i.valor)}</td><td class="n">${pctTxt(i.pctParte != null ? i.pctParte : i.pct)}</td>` : ''}<td class="n">${money(i.valorPessoa)}</td></tr>`).join('')}
       </tbody></table></div></section>` : ''; };
     $('#main').innerHTML = `<div class="row noprint"><button class="btn sm" type="button" id="bk">← ${esc(r.nome)}</button></div>
       <div><h1>Acerto com ${esc(nm)}</h1><p class="muted small">${esc(r.nome)} · tudo o que ainda não foi acertado · ${dBR(hoje())}</p></div>
       ${P.itens.length ? `
       <section class="card"><table><tbody>
-        <tr><td>Vendas da roça no período do acerto (já sem frete, caixa e outros descontos)</td><td class="n">${money(t.vendas)}</td></tr>
+        <tr><td>Vendas da parte de ${esc(nm)} no período do acerto</td><td class="n">${money(t.vendas)}</td></tr>
         <tr><td><b>Parte de ${esc(nm)} nas vendas</b></td><td class="n pos"><b>+ ${money(t.parte)}</b></td></tr>
         <tr><td>Despesas por conta de ${esc(nm)}</td><td class="n neg">− ${money(t.despesas)}</td></tr>
         <tr><td>Adiantamentos já recebidos</td><td class="n neg">− ${money(t.adiantamentos)}</td></tr>
@@ -763,7 +752,7 @@
         ${M('r_meeiros') ? `<button type="button" data-mo="misto" aria-pressed="${W.modo === 'misto'}"><i>🤝👷</i><span><b>Meeiro e funcionários</b><span>Tem parceiro e também funcionário fixo</span></span></button>` : ''}</div>`;
       if (k === 'meeiros') {
         const lista = S.pessoas.filter(p => p.tipo === 'meeiro' && (p.ativo || W.parceria[p.id])).concat(W.novos);
-        h += `<p>Marque os meeiros desta roça. Cada um cuida da <b>parte dele</b> e ganha a porcentagem dele <b>sobre a venda da parte dele</b> (depois dos descontos da venda, como frete e caixa). As porcentagens não somam entre si.</p>
+        h += `<p>Marque os meeiros desta roça. Cada um cuida da <b>parte dele</b> e ganha a porcentagem dele <b>sobre a venda da parte dele</b>. As porcentagens não somam entre si.</p>
           <div class="chips">${lista.map(p => `<button type="button" class="chip" data-me="${esc(p.id)}" aria-pressed="${W.parceria[p.id] != null}">${esc(p.nome)}</button>`).join('')}</div>
           <div class="row"><input type="text" id="wmn" maxlength="80" placeholder="Nome do meeiro novo" style="flex:1 1 180px"><input type="tel" id="wmt" maxlength="30" placeholder="Telefone (opcional)" style="flex:1 1 140px"><button class="btn" type="button" id="wma">+ Adicionar</button></div>
           ${Object.keys(W.parceria).map(pid => `<div class="card" style="padding:12px;gap:6px"><b>${esc(meeiroNome(pid))}</b><div class="pct"><input type="range" min="1" max="100" step="1" value="${Number(W.parceria[pid])}" data-sl="${esc(pid)}" aria-label="Porcentagem de ${esc(meeiroNome(pid))}"><div class="n"><input inputmode="decimal" data-pn="${esc(pid)}" value="${numIn(W.parceria[pid])}" aria-label="Porcentagem de ${esc(meeiroNome(pid))}"></div></div>
@@ -945,14 +934,13 @@
     const gerais = resumo(base.filter(l => !l.rocaId));
     const ps = {}; base.forEach(l => { Object.keys(partesDe(l)).forEach(k => { if (k !== 'dono') ps[k] = 1; }); if (l.tipo === 'adiantamento') ps[l.pessoaId] = 1; });
     const veic = M('r_veiculos') ? S.veiculos.map(v => ({ v, t: r2(base.filter(l => l.veiculoId === v.id).reduce((a, l) => a + l.valor, 0)) })).filter(o => o.t) : [];
-    const descR = (() => { const t = {}; base.forEach(l => { if (l.tipo === 'venda') (l.descontos || []).forEach(d => { t[d.tipo] = r2((t[d.tipo] || 0) + Number(d.valor)); }); }); const ks = Object.keys(t); return { tot: r2(ks.reduce((a, k) => a + t[k], 0)), nomes: ks.map(k => (((S.descontos || []).find(x => x.id === k) || { nome: k }).nome + ' ' + money(t[k]))).join(', ') }; })();
     const tituloRoca = relRoca === '' ? 'Todas as roças e gastos gerais' : relRoca === 'geral' ? 'Só gastos gerais' : (roca(relRoca) || {}).nome;
     $('#main').innerHTML = `<div class="between"><h1>Relatório</h1><button class="btn sm noprint" type="button" id="pr">Imprimir / PDF</button></div>
       <p class="muted small">${esc(DONO())} · ${esc(tituloRoca)} · ${esc(periodo().nome)}</p>
       ${perChips()}
       <div class="chips noprint"><button type="button" class="chip" data-rr="" aria-pressed="${relRoca === ''}">Tudo</button>${S.rocas.map(r => `<button type="button" class="chip" data-rr="${esc(r.id)}" aria-pressed="${relRoca === r.id}">${esc(r.nome)}</button>`).join('')}${M('r_gerais') || M('r_veiculos') ? `<button type="button" class="chip" data-rr="geral" aria-pressed="${relRoca === 'geral'}">Gastos gerais</button>` : ''}</div>
       <section class="card"><h2>Resultado</h2><table><tbody>
-        ${descR.tot ? `<tr><td>Vendido (antes dos descontos)</td><td class="n">${money(r2(R.vendas + descR.tot))}</td></tr><tr><td>Descontos da venda (${esc(descR.nomes)})</td><td class="n">− ${money(descR.tot)}</td></tr><tr><td>Vendido líquido</td><td class="n pos">${money(R.vendas)}</td></tr>` : `<tr><td>Vendido (bruto)</td><td class="n pos">${money(R.vendas)}</td></tr>`}
+        <tr><td>Vendido</td><td class="n pos">${money(R.vendas)}</td></tr>
         ${R.parteMeeiros ? `<tr><td>Parte dos meeiros nas vendas</td><td class="n">− ${money(R.parteMeeiros)}</td></tr><tr><td>Vendas de ${esc(DONO())}</td><td class="n">${money(R.vendaDono)}</td></tr>` : ''}
         <tr><td>Gastos de ${esc(DONO())}</td><td class="n neg">− ${money(R.despDono)}</td></tr>
         <tr class="tot"><td>${R.resultado >= 0 ? 'Ganhou' : 'Perdeu'}</td><td class="n ${R.resultado >= 0 ? 'pos' : 'neg'}">${money(R.resultado)}</td></tr></tbody></table>
