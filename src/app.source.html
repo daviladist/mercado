@@ -4133,7 +4133,7 @@ function comboForm(){
 /* ---------- NOTA FISCAL: dados obrigatórios e exportação para o Star2 ---------- */
 const UFS='AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ');
 const NF_FIELDS=[['razao','Razão social / nome completo',1,'wide'],['doc','CNPJ ou CPF',1],['ie','Inscrição estadual',0],['email','E-mail para receber a nota',0],
-  ['cep','CEP',1],['rua','Logradouro (rua, avenida)',1,'wide'],['num','Número',1],['comp','Complemento',0],['bairro','Bairro',1],['cidade','Município',1],['uf','UF',1]];
+  ['cep','CEP',0],['rua','Logradouro (rua, avenida)',0,'wide'],['num','Número',0],['comp','Complemento',0],['bairro','Bairro',0],['cidade','Município',0],['uf','UF',0]];
 function defaultNf(c){const f=(c&&c.fiscal)||{},ct=c&&cityById(c.city);return {razao:f.razao||(c?c.name:''),doc:f.doc||(c&&c.doc)||'',ie:f.ie||'',email:f.email||'',cep:f.cep||'',rua:f.rua||'',num:f.num||'',comp:f.comp||'',bairro:f.bairro||(c&&c.bairro)||'',cidade:f.cidade||(ct?ct.name:''),uf:f.uf||'ES'}}
 function nfFieldsHtml(px,d,required){
   return `<div class="nfgrid">${NF_FIELDS.map(([k,l,req,w])=>{const r=required&&(req||(k==='ie'&&String(d.doc||'').replace(/\D/g,'').length===14));
@@ -4146,8 +4146,9 @@ function validateNf(d){
   if(String(doc).length===14&&!String(d.ie||'').trim())miss.push('Inscrição estadual (ou ISENTO)');
   if(miss.length)return 'Para emitir a nota, preencha: '+miss.join(', ')+'.';
   if(!validDoc(doc))return 'CNPJ/CPF inválido para a nota.';
-  if(String(d.cep).replace(/\D/g,'').length!==8)return 'CEP precisa ter 8 números.';
-  if(!UFS.includes(String(d.uf||'').toUpperCase()))return 'UF inválida.';
+  const cep=String(d.cep||'').replace(/\D/g,'');
+  if(cep&&cep.length!==8)return 'CEP precisa ter 8 números.';
+  if(d.uf&&!UFS.includes(String(d.uf).toUpperCase()))return 'UF inválida.';
   if(d.email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email))return 'E-mail da nota inválido.';
   return '';
 }
