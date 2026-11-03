@@ -482,3 +482,6 @@ create table if not exists loja_staria (
 );
 -- pagamento da venda dividido em partes: [{forma, valor, vence, cheque}] (a soma fecha com o valor da venda)
 alter table rural_lanc add column if not exists pagamentos jsonb not null default '[]'::jsonb;
+-- descontos da venda (frete, caixa, comissão…): bruto = vendido; valor = líquido (o que entra; o meeiro ganha sobre ele)
+alter table rural_lanc add column if not exists bruto numeric(12,2);
+alter table rural_lanc add column if not exists descontos jsonb not null default '[]'::jsonb;

@@ -320,7 +320,7 @@
     if (!list.length) return '<div class="card empty"><div class="big">📝</div><p class="muted">Nada lançado ainda.</p></div>';
     const ic = l => l.tipo === 'venda' ? '💰' : l.tipo === 'adiantamento' ? '🤝' : cat(l.categoria).icone;
     const tit = l => l.tipo === 'venda' ? 'Venda' + (l.qtd ? ' · ' + numIn(l.qtd) + ' ' + (l.unidade || '') : '') : l.tipo === 'adiantamento' ? 'Adiantamento · ' + (l.pessoaNome || '') : cat(l.categoria).nome + (l.pessoaNome ? ' · ' + l.pessoaNome : '');
-    const sub = l => [dBR(l.data), !semRoca && (l.rocaId ? (roca(l.rocaId) || {}).nome : 'Geral'), l.veiculoId && ((S.veiculos.find(v => v.id === l.veiculoId) || {}).nome), l.descricao, l.comprador, l.tipo === 'venda' && pagTxt(l), Object.keys(l.acertos || {}).length ? 'acertado' : ''].filter(Boolean).join(' · ');
+    const sub = l => [dBR(l.data), !semRoca && (l.rocaId ? (roca(l.rocaId) || {}).nome : 'Geral'), l.veiculoId && ((S.veiculos.find(v => v.id === l.veiculoId) || {}).nome), l.descricao, l.comprador, l.tipo === 'venda' && (l.descontos || []).length && 'vendido ' + money(l.bruto) + ' − ' + l.descontos.map(d => ((S.descontos || []).find(x => x.id === d.tipo) || { nome: d.tipo }).nome.toLowerCase()).join(', '), l.tipo === 'venda' && pagTxt(l), Object.keys(l.acertos || {}).length ? 'acertado' : ''].filter(Boolean).join(' · ');
     return `<section class="card"><div class="list">${list.map(l => `<button type="button" class="it" data-lc="${esc(l.id)}"><span class="ic">${ic(l)}</span><span class="tx"><b>${esc(tit(l))}</b><span>${esc(sub(l))}</span></span><span class="vl ${l.tipo === 'venda' ? 'pos' : l.tipo === 'adiantamento' ? 'inf' : 'neg'}">${l.tipo === 'venda' ? '+' : '−'} ${money(l.valor)}${l.tipo === 'despesa' && Object.keys(partesDe(l)).length > 1 ? '<small>dividida</small>' : ''}</span></button>`).join('')}</div></section>`;
   }
   function bindLanc() { document.querySelectorAll('[data-lc]').forEach(b => b.addEventListener('click', () => { const l = S.lanc.find(x => x.id === b.dataset.lc); if (l) formLanc(l); })); }
@@ -385,11 +385,13 @@
   function formLanc(src) {
     const edit = !!(src && src.id && S.lanc.some(l => l.id === src.id));
     const F = Object.assign({ tipo: 'despesa', data: hoje(), valor: '', rocaId: null }, JSON.parse(JSON.stringify(src || {})));
+    if (edit || !Array.isArray(F.descs)) F.descs = (edit && Array.isArray(src.descontos) ? src.descontos : []).map(d => ({ tipo: d.tipo, valor: numIn(d.valor), obs: d.obs || '' }));
+    if (edit && F.descs.length && src.bruto != null) F.valor = src.bruto;
     if (edit) { F.valor = numIn(F.valor); F.qtd = numIn(F.qtd); F.preco = numIn(F.preco); F.dias = numIn(F.dias); }
     const travado = edit && Object.keys(F.acertos || {}).length > 0;
     // pagamento: lista de partes {forma, valor, vence, cheque, aberto}; uma parte só = a venda toda
-    F.pags = (edit ? pagsDe(src) : []).map(x => ({ forma: x.forma, valor: numIn(x.valor), vence: x.vence || '', cheque: Object.assign({}, x.cheque || {}), aberto: !!Object.keys(x.cheque || {}).length }));
-    F.dividir = F.pags.length > 1;
+    if (edit || !Array.isArray(F.pags)) F.pags = (edit ? pagsDe(src) : []).map(x => ({ forma: x.forma, valor: numIn(x.valor), vence: x.vence || '', cheque: Object.assign({}, x.cheque || {}), aberto: !!Object.keys(x.cheque || {}).length }));
+    if (edit || F.dividir == null) F.dividir = F.pags.length > 1;
     const origRoca = edit ? F.rocaId : null, origPartes = edit ? JSON.parse(JSON.stringify(F.partes || {})) : null;
     const ativas = S.rocas.filter(r => r.ativa || r.id === F.rocaId);
     if (!F.rocaId && F.tipo !== 'despesa' && ativas.length === 1) F.rocaId = ativas[0].id;
@@ -417,8 +419,9 @@
           <div class="grid2"><div class="field"><label for="fdi">Dias</label><input inputmode="decimal" id="fdi" value="${esc(F.dias || '')}" placeholder="Ex.: 3"></div><div class="field"><label for="fpr">Valor do dia (R$)</label><input inputmode="decimal" id="fpr" value="${esc(F.preco || '')}" placeholder="Ex.: 120,00"></div></div>` : ''}
         ${F.tipo === 'venda' ? `<div class="grid2"><div class="field"><label for="fq">Quantidade</label><input inputmode="decimal" id="fq" value="${esc(F.qtd || '')}" placeholder="Ex.: 300"></div><div class="field"><label for="fpr">Preço por ${esc(F.unidade || 'unidade')} (R$)</label><input inputmode="decimal" id="fpr" value="${esc(F.preco || '')}" placeholder="Ex.: 25,00"></div></div>
           <div class="field"><span class="lbl">Unidade</span><div class="chips">${S.unidades.map(u => `<button type="button" class="chip" data-un="${u}" aria-pressed="${(F.unidade || '') === u}">${u}</button>`).join('')}</div></div>` : ''}
-        <div class="field"><label for="fv">${F.tipo === 'venda' ? 'Total da venda (R$)' : 'Valor (R$)'}</label><input inputmode="decimal" class="money" id="fv" value="${esc(F.valor || '')}" placeholder="0,00" ${vtotal != null ? 'readonly' : ''}>${vtotal != null ? '<span class="small muted">Calculado: ' + (F.tipo === 'venda' ? 'quantidade × preço' : 'dias × valor do dia') + '.</span>' : ''}</div>
-        ${F.tipo === 'venda' && r && meeirosDe(r).length ? `<p class="note" id="vnote" ${toNum(F.valor) > 0 ? '' : 'hidden'}>${vendaNote(r, toNum(F.valor))}</p>` : ''}
+        <div class="field"><label for="fv">${F.tipo === 'venda' ? ((F.descs || []).length ? 'Vendido (R$)' : 'Total da venda (R$)') : 'Valor (R$)'}</label><input inputmode="decimal" class="money" id="fv" value="${esc(F.valor || '')}" placeholder="0,00" ${vtotal != null ? 'readonly' : ''}>${vtotal != null ? '<span class="small muted">Calculado: ' + (F.tipo === 'venda' ? 'quantidade × preço' : 'dias × valor do dia') + '.</span>' : ''}</div>
+        ${F.tipo === 'venda' ? descHtml() : ''}
+        ${F.tipo === 'venda' && r && meeirosDe(r).length ? `<p class="note" id="vnote" ${liq() > 0 ? '' : 'hidden'}>${vendaNote(r, liq())}</p>` : ''}
         ${quemPagaHtml(F)}
         ${F.tipo === 'despesa' && M('r_veiculos') && S.veiculos.some(v => v.ativo) ? `<div class="field"><span class="lbl">É de algum veículo ou máquina? (opcional)</span><div class="chips">${S.veiculos.filter(v => v.ativo || v.id === F.veiculoId).map(v => `<button type="button" class="chip" data-ve="${esc(v.id)}" aria-pressed="${F.veiculoId === v.id}">🚜 ${esc(v.nome)}</button>`).join('')}</div></div>` : ''}
         ${F.tipo === 'venda' ? `<div class="field"><label for="fc">Comprador (opcional)</label><input type="text" id="fc" maxlength="80" value="${esc(F.comprador || '')}" placeholder="Ex.: Ceasa, atravessador"></div>
@@ -461,13 +464,27 @@
         <div class="grid2"><button type="button" class="btn" id="pad">+ Outra parte</button><button type="button" class="btn ghost" id="pun">Uma forma só</button></div>`;
     }
     const centavos = v => Math.round((toNum(v) || 0) * 100);
+    /* venda: vendido − descontos = o que entra de fato (o meeiro ganha sobre ele) */
+    const somaDesc = () => F.tipo === 'venda' ? (F.descs || []).reduce((a, d) => a + centavos(d.valor), 0) : 0;
+    const liqC = () => centavos(F.valor) - somaDesc();
+    const liq = () => liqC() / 100;
+    const DS = () => S.descontos || [];
+    function descHtml() {
+      const ds = F.descs || [];
+      return `<div class="field"><span class="lbl">Descontos da venda (opcional): frete, caixa…</span>
+          ${ds.map((d, i) => { const t = DS().find(x => x.id === d.tipo) || { nome: d.tipo, icone: '' }; return `<div class="chq"><div class="between"><b>${esc(t.icone)} ${esc(t.nome)}</b><button type="button" class="btn sm" data-drm="${i}" aria-label="Tirar ${esc(t.nome)}">Tirar</button></div>
+            <div class="drow"><div class="field"><label for="dv${i}">Valor (R$)</label><input inputmode="decimal" id="dv${i}" data-dv="${i}" value="${esc(d.valor || '')}" placeholder="0,00"></div>
+            <div class="field"><label for="do${i}">${d.tipo === 'outro' ? 'O que foi' : 'Obs. (opcional)'}</label><input type="text" id="do${i}" data-do="${i}" maxlength="60" value="${esc(d.obs || '')}" placeholder="${d.tipo === 'outro' ? 'Ex.: pedágio' : ''}"></div></div></div>`; }).join('')}
+          <div class="chips">${DS().map(t => `<button type="button" class="chip" data-dadd="${esc(t.id)}">+ ${esc(t.icone)} ${esc(t.nome)}</button>`).join('')}</div></div>
+        <div class="liq" id="liqbox" ${ds.length ? '' : 'hidden'}><span>Recebe de fato</span><b id="liqv">${money(liq())}</b><small id="liqs">Vendido ${money(centavos(F.valor) / 100)} − descontos ${money(somaDesc() / 100)}</small></div>`;
+    }
     function somaTxt() {
-      const tot = centavos(F.valor), so = F.pags.reduce((a, x) => a + centavos(x.valor), 0), d = tot - so;
+      const tot = liqC(), so = F.pags.reduce((a, x) => a + centavos(x.valor), 0), d = tot - so;
       return 'Partes: <b>' + money(so / 100) + '</b> de ' + money(tot / 100) + (d === 0 ? ' ✓' : d > 0 ? ' · falta <b>' + money(d / 100) + '</b>' : ' · passou <b>' + money(-d / 100) + '</b>');
     }
     /* divide o total em n partes iguais (o último leva os centavos que sobram) */
     function emPartes(n, forma) {
-      const tot = centavos(F.valor), base = Math.floor(tot / n), velhos = F.pags;
+      const tot = liqC(), base = Math.floor(tot / n), velhos = F.pags;
       F.pags = Array.from({ length: n }, (_, k) => Object.assign({ forma, vence: '', cheque: {}, aberto: false }, velhos[k] && velhos[k].forma === forma ? { vence: velhos[k].vence, cheque: velhos[k].cheque, aberto: velhos[k].aberto } : {}, { forma, valor: tot ? numIn(((k === n - 1 ? tot - base * (n - 1) : base) / 100).toFixed(2)) : '' }));
       F.dividir = n > 1;
     }
@@ -480,7 +497,8 @@
       const a = toNum(F.tipo === 'venda' ? F.qtd : F.dias), b = toNum(F.preco);
       if ((F.tipo === 'venda' || F.categoria === 'diarista') && a > 0 && b > 0) { F.valor = numIn(r2(a * b)); fv.value = F.valor; fv.readOnly = true; }
       else if (fv.readOnly) { fv.readOnly = false; fv.value = ''; F.valor = ''; }
-      const v = toNum(F.valor), vn = $('#vnote'), r = F.rocaId && roca(F.rocaId);
+      const v = F.tipo === 'venda' ? liq() : toNum(F.valor), vn = $('#vnote'), r = F.rocaId && roca(F.rocaId);
+      const lv = $('#liqv'); if (lv) { lv.textContent = money(liq()); $('#liqs').textContent = 'Vendido ' + money(centavos(F.valor) / 100) + ' − descontos ' + money(somaDesc() / 100); $('#liqbox').classList.toggle('neg', liqC() <= 0); }
       if (vn && r) { vn.hidden = !(v > 0); vn.innerHTML = vendaNote(r, v); }
       const ps = $('#psoma'); if (ps) ps.innerHTML = somaTxt();
       const q = $('#qpv'); if (q && v > 0) q.innerHTML = Object.keys(F.partes || {}).filter(k => F.partes[k] > 0).map(k => esc(nomeParte(k)) + ': ' + money(v * F.partes[k] / 100)).join(' · ');
@@ -489,6 +507,8 @@
       const g = id => { const e = document.getElementById(id); return e ? e.value : undefined; };
       ['fv:valor', 'fd:data', 'fds:descricao', 'fq:qtd', 'fpr:preco', 'fc:comprador', 'fpn:pessoaNome', 'fdi:dias'].forEach(x => { const [id, k] = x.split(':'); const v = g(id); if (v !== undefined) F[k] = v; });
       document.querySelectorAll('[data-pp]').forEach(i => { F.partes = F.partes || {}; F.partes[i.dataset.pp] = toNum(i.value) || 0; });
+      document.querySelectorAll('#sheet [data-dv]').forEach(e => { const d = (F.descs || [])[+e.dataset.dv]; if (d) d.valor = e.value; });
+      document.querySelectorAll('#sheet [data-do]').forEach(e => { const d = (F.descs || [])[+e.dataset.do]; if (d) d.obs = e.value; });
       document.querySelectorAll('#sheet [data-pv]').forEach(e => { const x = F.pags[+e.dataset.pv]; if (x) x.valor = e.value; });
       document.querySelectorAll('#sheet [data-pvc]').forEach(e => { const x = F.pags[+e.dataset.pvc]; if (x) x.vence = e.value; });
       document.querySelectorAll('#sheet [data-pc]').forEach(e => { const [i, k] = e.dataset.pc.split(':'), x = F.pags[+i]; if (x) { x.cheque = Object.assign({}, x.cheque); x.cheque[k] = e.value; } });
@@ -502,14 +522,17 @@
       pn.querySelectorAll('[data-pe]').forEach(b => b.addEventListener('click', () => { keep(); F.pessoaId = b.dataset.pe; redraw(); }));
       pn.querySelectorAll('[data-un]').forEach(b => b.addEventListener('click', () => { keep(); F.unidade = F.unidade === b.dataset.un ? null : b.dataset.un; redraw(); }));
       pn.querySelectorAll('[data-pg]').forEach(b => b.addEventListener('click', () => { keep(); const x = F.pags[0]; if (x && x.forma === b.dataset.pg) F.pags = []; else F.pags = [Object.assign({ vence: '', cheque: {}, aberto: false }, x && x.forma === b.dataset.pg ? x : {}, { forma: b.dataset.pg, valor: '' })]; redraw(); }));
-      pn.querySelectorAll('[data-nch]').forEach(b => b.addEventListener('click', () => { keep(); if (!(toNum(F.valor) > 0) && +b.dataset.nch > 1) { $('#fe').textContent = 'Informe o total da venda antes de dividir.'; return; } emPartes(+b.dataset.nch, 'cheque'); redraw(); }));
-      const pdv = $('#pdv'); if (pdv) pdv.addEventListener('click', () => { keep(); const x = F.pags[0]; F.pags = [Object.assign({ forma: '', vence: '', cheque: {}, aberto: false }, x || {}, { valor: F.valor || '' }), { forma: '', valor: '', vence: '', cheque: {}, aberto: false }]; F.dividir = true; redraw(); });
+      pn.querySelectorAll('[data-nch]').forEach(b => b.addEventListener('click', () => { keep(); if (!(liqC() > 0) && +b.dataset.nch > 1) { $('#fe').textContent = 'Informe o total da venda antes de dividir.'; return; } emPartes(+b.dataset.nch, 'cheque'); redraw(); }));
+      const pdv = $('#pdv'); if (pdv) pdv.addEventListener('click', () => { keep(); const x = F.pags[0]; F.pags = [Object.assign({ forma: '', vence: '', cheque: {}, aberto: false }, x || {}, { valor: liqC() > 0 ? numIn((liqC() / 100).toFixed(2)) : '' }), { forma: '', valor: '', vence: '', cheque: {}, aberto: false }]; F.dividir = true; redraw(); });
       pn.querySelectorAll('[data-pf]').forEach(b => b.addEventListener('click', () => { keep(); const [i, f] = b.dataset.pf.split(':'); F.pags[+i].forma = f; redraw(); }));
       pn.querySelectorAll('[data-pab]').forEach(b => b.addEventListener('click', () => { keep(); F.pags[+b.dataset.pab].aberto = true; redraw(); }));
       pn.querySelectorAll('[data-prm]').forEach(b => b.addEventListener('click', () => { keep(); F.pags.splice(+b.dataset.prm, 1); if (F.pags.length < 2) F.dividir = false; if (F.pags.length === 1) F.pags[0].valor = ''; redraw(); }));
-      const pad = $('#pad'); if (pad) pad.addEventListener('click', () => { keep(); const falta = centavos(F.valor) - F.pags.reduce((a, x) => a + centavos(x.valor), 0); const ult = F.pags[F.pags.length - 1]; F.pags.push({ forma: ult && ult.forma === 'cheque' ? 'cheque' : '', valor: falta > 0 ? numIn((falta / 100).toFixed(2)) : '', vence: '', cheque: {}, aberto: false }); redraw(); });
+      const pad = $('#pad'); if (pad) pad.addEventListener('click', () => { keep(); const falta = liqC() - F.pags.reduce((a, x) => a + centavos(x.valor), 0); const ult = F.pags[F.pags.length - 1]; F.pags.push({ forma: ult && ult.forma === 'cheque' ? 'cheque' : '', valor: falta > 0 ? numIn((falta / 100).toFixed(2)) : '', vence: '', cheque: {}, aberto: false }); redraw(); });
       const pun = $('#pun'); if (pun) pun.addEventListener('click', () => { keep(); if (F.pags.filter(x => x.forma || toNum(x.valor) > 0).length > 1 && !confirm('Voltar para uma forma só apaga as partes (valores e vencimentos). Continuar?')) return; const fs = [...new Set(F.pags.map(x => x.forma).filter(Boolean))]; F.pags = fs.length === 1 ? [Object.assign({}, F.pags.find(x => x.forma === fs[0]), { valor: '' })] : []; F.dividir = false; redraw(); });
       pn.querySelectorAll('[data-pv]').forEach(e => e.addEventListener('input', upd));
+      pn.querySelectorAll('[data-dv]').forEach(e => e.addEventListener('input', upd));
+      pn.querySelectorAll('[data-dadd]').forEach(b => b.addEventListener('click', () => { keep(); F.descs = (F.descs || []).concat([{ tipo: b.dataset.dadd, valor: '', obs: '' }]); redraw(); const n = F.descs.length - 1, e = $('#dv' + n); if (e) e.focus(); }));
+      pn.querySelectorAll('[data-drm]').forEach(b => b.addEventListener('click', () => { keep(); F.descs.splice(+b.dataset.drm, 1); redraw(); }));
       pn.querySelectorAll('[data-ve]').forEach(b => b.addEventListener('click', () => { keep(); F.veiculoId = F.veiculoId === b.dataset.ve ? null : b.dataset.ve; redraw(); }));
       pn.querySelectorAll('[data-qp]').forEach(b => b.addEventListener('click', () => {
         keep(); const k = b.dataset.qp, r = roca(F.rocaId);
@@ -526,7 +549,7 @@
     async function salvar() {
       keep();
       const err = m => { $('#fe').textContent = m; };
-      const valor = toNum(F.valor);
+      let valor = toNum(F.valor);
       if (F.tipo !== 'despesa' && !F.rocaId) return err('Escolha a roça.');
       if (F.tipo === 'despesa' && !F.rocaId && !F.geral) return err('Escolha onde foi o gasto: a roça ou "Geral da fazenda".');
       if (F.tipo === 'despesa' && !F.categoria) return err('Escolha o tipo da despesa.');
@@ -541,8 +564,20 @@
         const soma = Object.values(partes).reduce((a, b) => a + Math.round(b * 100), 0) / 100;
         if (soma !== 100) return err('A divisão precisa somar 100% (agora soma ' + pctTxt(soma) + ').');
       }
+      let vendido = null, descontos = [];
+      if (F.tipo === 'venda' && (F.descs || []).length) {
+        for (const d of F.descs) {
+          const t = DS().find(x => x.id === d.tipo) || { nome: d.tipo }, dv = toNum(d.valor);
+          if (!(dv > 0)) return err('Informe o valor do desconto (' + t.nome + '), ou tire.');
+          if (d.tipo === 'outro' && String(d.obs || '').trim().length < 2) return err('No desconto "Outro", escreva o que foi.');
+          descontos.push(Object.assign({ tipo: d.tipo, valor: r2(dv) }, String(d.obs || '').trim() ? { obs: String(d.obs).trim() } : {}));
+        }
+        if (!(liqC() > 0)) return err('Os descontos passaram do valor vendido. Confira.');
+        vendido = valor; valor = liq();
+      }
       const b = { id: F.id || newId('l'), novo: !edit, tipo: F.tipo, rocaId: F.rocaId || null, data: F.data, valor, categoria: F.categoria || null, descricao: F.descricao || '', qtd: toNum(F.qtd), unidade: F.unidade || null, preco: toNum(F.preco), comprador: F.comprador || '', pessoaId: F.pessoaId || null, pessoaNome: F.pessoaNome || '', dias: toNum(F.dias), veiculoId: F.veiculoId || null, partes };
       if (F.tipo === 'venda') {
+        b.descontos = descontos; if (vendido != null) b.bruto = vendido;
         const ps = F.dividir ? F.pags : F.pags.filter(x => x.forma);
         const lista = [];
         for (let i = 0; i < ps.length; i++) {
@@ -560,7 +595,7 @@
       F.id = b.id; // tocar duas vezes não lança duas vezes
       const bt = $('#fs'); bt.disabled = true;
       try { await api('/api/rural/lanc', b); await reload(); closeSheet(); toast((edit ? 'Correção salva: ' : 'Lançado ✓ ') + money(valor)); render(); }
-      catch (e) { bt.disabled = false; if (e.status === 401 || e.login) { const keepF = Object.assign({}, F, { valor: numIn(valor) }); retomar = () => formLanc(keepF); return fail(e); } err(e.message); }
+      catch (e) { bt.disabled = false; if (e.status === 401 || e.login) { const keepF = Object.assign({}, F, { valor: numIn(vendido != null ? vendido : valor) }); retomar = () => formLanc(keepF); return fail(e); } err(e.message); }
     }
     draw();
   }
@@ -840,13 +875,14 @@
     const gerais = resumo(base.filter(l => !l.rocaId));
     const ps = {}; base.forEach(l => { Object.keys(partesDe(l)).forEach(k => { if (k !== 'dono') ps[k] = 1; }); if (l.tipo === 'adiantamento') ps[l.pessoaId] = 1; });
     const veic = M('r_veiculos') ? S.veiculos.map(v => ({ v, t: r2(base.filter(l => l.veiculoId === v.id).reduce((a, l) => a + l.valor, 0)) })).filter(o => o.t) : [];
+    const descR = (() => { const t = {}; base.forEach(l => { if (l.tipo === 'venda') (l.descontos || []).forEach(d => { t[d.tipo] = r2((t[d.tipo] || 0) + Number(d.valor)); }); }); const ks = Object.keys(t); return { tot: r2(ks.reduce((a, k) => a + t[k], 0)), nomes: ks.map(k => (((S.descontos || []).find(x => x.id === k) || { nome: k }).nome + ' ' + money(t[k]))).join(', ') }; })();
     const tituloRoca = relRoca === '' ? 'Todas as roças e gastos gerais' : relRoca === 'geral' ? 'Só gastos gerais' : (roca(relRoca) || {}).nome;
     $('#main').innerHTML = `<div class="between"><h1>Relatório</h1><button class="btn sm noprint" type="button" id="pr">Imprimir / PDF</button></div>
       <p class="muted small">${esc(DONO())} · ${esc(tituloRoca)} · ${esc(periodo().nome)}</p>
       ${perChips()}
       <div class="chips noprint"><button type="button" class="chip" data-rr="" aria-pressed="${relRoca === ''}">Tudo</button>${S.rocas.map(r => `<button type="button" class="chip" data-rr="${esc(r.id)}" aria-pressed="${relRoca === r.id}">${esc(r.nome)}</button>`).join('')}${M('r_gerais') || M('r_veiculos') ? `<button type="button" class="chip" data-rr="geral" aria-pressed="${relRoca === 'geral'}">Gastos gerais</button>` : ''}</div>
       <section class="card"><h2>Resultado</h2><table><tbody>
-        <tr><td>Vendido (bruto)</td><td class="n pos">${money(R.vendas)}</td></tr>
+        ${descR.tot ? `<tr><td>Vendido (antes dos descontos)</td><td class="n">${money(r2(R.vendas + descR.tot))}</td></tr><tr><td>Descontos da venda (${esc(descR.nomes)})</td><td class="n">− ${money(descR.tot)}</td></tr><tr><td>Vendido líquido</td><td class="n pos">${money(R.vendas)}</td></tr>` : `<tr><td>Vendido (bruto)</td><td class="n pos">${money(R.vendas)}</td></tr>`}
         ${R.parteMeeiros ? `<tr><td>Parte dos meeiros nas vendas</td><td class="n">− ${money(R.parteMeeiros)}</td></tr><tr><td>Vendas de ${esc(DONO())}</td><td class="n">${money(R.vendaDono)}</td></tr>` : ''}
         <tr><td>Gastos de ${esc(DONO())}</td><td class="n neg">− ${money(R.despDono)}</td></tr>
         <tr class="tot"><td>${R.resultado >= 0 ? 'Ganhou' : 'Perdeu'}</td><td class="n ${R.resultado >= 0 ? 'pos' : 'neg'}">${money(R.resultado)}</td></tr></tbody></table>
