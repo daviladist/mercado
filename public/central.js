@@ -202,7 +202,9 @@
         <div class="field" style="flex:1 1 200px"><label for="alog">${ramoOf(t) !== 'atacado' ? esc(RAMO_UI[ramoOf(t)].usuario) : 'Usuário do administrador'}</label><input type="text" id="alog" value="${esc(t.adminLogin || 'admin')}" maxlength="40" autocapitalize="off" spellcheck="false"></div>
         <button class="btn dark" type="button" id="agen" style="align-self:end">${t.adminLogin ? 'Gerar nova senha' : ramoOf(t) !== 'atacado' ? esc(RAMO_UI[ramoOf(t)].acesso) : 'Criar acesso do administrador'}</button>
       </div>
-      <div id="aout" aria-live="polite"></div>`}
+      <div id="aout" aria-live="polite"></div>
+      ${t.adminLogin ? `<div class="logo-row" style="align-items:center"><button class="btn" type="button" id="aent">🛟 Entrar como esta empresa</button>
+        <span class="small muted" style="flex:1 1 220px">Abre o app numa aba nova como o administrador, sem trocar a senha dele. Vale 1 hora, mostra um aviso vermelho e fica no histórico. Neste navegador fica aberta uma empresa por vez.</span></div>` : ''}`}
     </section>`;
   }
   async function genAdmin() {
@@ -221,6 +223,17 @@
     } catch (e) { if (e.status === 401) return showLogin('Sua sessão terminou. Entre de novo.'); toast(e.message); }
     finally { b.disabled = false; }
   }
+  /* suporte: abre o app da empresa numa aba nova, já entrado como o administrador */
+  async function entrar() {
+    const b = $('#aent'); b.disabled = true;
+    const w = window.open('', '_blank');
+    try {
+      const r = await api('/api/central/entrar', { id: draft.id });
+      if (w) { w.opener = null; w.location.href = r.url; }
+      else if (!dirty || confirm('O navegador bloqueou a aba nova. Abrir aqui mesmo (perde o que não foi salvo)?')) location.href = r.url;
+    } catch (e) { if (w) w.close(); if (e.status === 401) return showLogin('Sua sessão terminou. Entre de novo.'); toast(e.message); }
+    finally { b.disabled = false; }
+  }
   function touch() { dirty = true; const y = window.scrollY; renderEditor(); window.scrollTo(0, y); }
   function bindCommon() {
     const E = $('#editor');
@@ -233,6 +246,7 @@
     $('#undo').addEventListener('click', () => pick(sel));
     $('#save').addEventListener('click', save);
     const ag = $('#agen'); if (ag) ag.addEventListener('click', genAdmin);
+    const ae = $('#aent'); if (ae) ae.addEventListener('click', entrar);
     E.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Endereço copiado'); } catch (e) { toast('Não consegui copiar: selecione o endereço e copie.'); } }));
   }
   function bind() {
@@ -251,6 +265,7 @@
     $('#undo').addEventListener('click', () => pick(sel));
     $('#save').addEventListener('click', save);
     const ag = $('#agen'); if (ag) ag.addEventListener('click', genAdmin);
+    const ae = $('#aent'); if (ae) ae.addEventListener('click', entrar);
     E.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Endereço copiado'); } catch (e) { toast('Não consegui copiar: selecione o endereço e copie.'); } }));
     $('#segNew').addEventListener('click', () => { segUI = { edit: { id: null, name: '', modules: segMods(draft.modules) }, fromCo: true }; renderSegs(); });
     $('#segList').addEventListener('click', () => { segUI = { edit: null }; renderSegs(); });

@@ -490,3 +490,5 @@ alter table rural_lanc add column if not exists origem jsonb not null default '[
 -- venda da colheita: tipos do produto da roça (Top, Torto…) e, na venda, cada tipo com caixas, preços e as caixas de cada um
 alter table rural_rocas add column if not exists produtos jsonb not null default '[]'::jsonb;
 alter table rural_lanc add column if not exists itens jsonb not null default '[]'::jsonb;
+-- sessão aberta pela Central ("Entrar como esta empresa"): curta, marcada como suporte
+alter table sessions add column if not exists suporte boolean not null default false;
