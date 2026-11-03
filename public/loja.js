@@ -158,10 +158,11 @@
   const maisPedido = p => { const t = topCat().get(p.categoria); return !!(t && t.id === p.id); };
   function condicoes(C) {
     const L = [];
-    if (C.entrega) L.push('Entrega ' + (C.taxaEntrega ? moneyC(C.taxaEntrega) : 'grátis') + (C.taxaEntrega && C.entregaGratisDe ? ' · grátis acima de ' + moneyC(C.entregaGratisDe) : ''));
-    if (C.retirada) L.push('Retirada');
-    if (C.pedidoMinimo) L.push('mín. ' + moneyC(C.pedidoMinimo));
-    return L.join(' · ');
+    if (C.entrega) L.push('🛵 Entrega ' + (C.taxaEntrega ? moneyC(C.taxaEntrega) : 'grátis'));
+    if (C.entrega && C.taxaEntrega && C.entregaGratisDe) L.push('🎉 Grátis acima de ' + moneyC(C.entregaGratisDe));
+    if (C.retirada) L.push('🏪 Retirada');
+    if (C.pedidoMinimo) L.push('Mín. ' + moneyC(C.pedidoMinimo));
+    return L;
   }
   function vitrine() {
     const C = V.config, cli = mem.get('tino-cliente', {});
@@ -177,9 +178,9 @@
     $('#main').innerHTML = `
       ${!C.aberta ? '<p class="warn">A loja está fechada para pedidos no momento. Você pode olhar os produtos e voltar mais tarde.</p>' : ''}
       ${abandonado && nCart ? `<button type="button" class="aband" id="abd">🛒 Você deixou ${nCart} ${nCart === 1 ? 'item' : 'itens'} no carrinho <b>Continuar pedido ›</b></button>` : ''}
-      <section class="hero">${primeiroNome ? `<span class="oi">Oi, ${esc(primeiroNome)} 👋</span>` : ''}<h1>${esc(V.loja.nome)}</h1>
-        <p class="cond">${esc(condicoes(C))}</p>${C.boasVindas ? `<p class="bv">${esc(C.boasVindas)}</p>` : ''}</section>
-      <div class="toprow"><button class="btn sm" type="button" id="sobre">ℹ️ Sobre a loja</button>${meus.length ? `<button class="btn sm" type="button" id="mp">📦 Meus pedidos (${meus.length})</button>` : ''}<span class="selo">💬 Pedido direto no WhatsApp da loja</span></div>
+      <section class="hero"><p class="bv">${primeiroNome ? `<span class="oi">Oi, ${esc(primeiroNome)} 👋</span> ` : ''}${esc(C.boasVindas || 'Bem-vindo! Escolha, coloque no carrinho e envie o pedido.')}</p>
+        ${condicoes(C).length ? `<div class="cond">${condicoes(C).map(x => `<span>${esc(x)}</span>`).join('')}</div>` : ''}
+        <div class="toprow"><button class="btn sm" type="button" id="sobre">ℹ️ Sobre a loja</button>${meus.length ? `<button class="btn sm" type="button" id="mp">📦 Meus pedidos (${meus.length})</button>` : ''}<span class="selo">💬 Pedido direto no WhatsApp da loja</span></div></section>
       <div class="search"><input type="text" id="bq" placeholder="Buscar produto" value="${esc(busca)}" aria-label="Buscar produto" autocomplete="off"><select id="ord" aria-label="Ordenar">${[['rel', 'Relevância'], ['menor', 'Menor preço'], ['maior', 'Maior preço'], ['vend', 'Mais vendidos']].map(([k, n]) => `<option value="${k}" ${ordem === k ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
       ${toks.length && sug.length ? `<div class="sug" role="listbox" aria-label="Sugestões">${sug.map(p => `<button type="button" role="option" data-s="${esc(p.id)}"><span>${esc(p.nome)}</span><b>${money(p.preco)}</b></button>`).join('')}</div>` : ''}
       ${cats.length > 1 ? `<div class="cats-row" role="group" aria-label="Categorias"><button type="button" class="chip" data-c="" aria-pressed="${!filtroCat}">Tudo</button>${cats.map(c => `<button type="button" class="chip" data-c="${esc(c)}" aria-pressed="${filtroCat === c}">${esc(c)}</button>`).join('')}</div>` : ''}
@@ -200,16 +201,15 @@
   }
   /* prateleiras que rolam de lado; cada uma some quando está vazia */
   function montarPrateleiras(meus) {
-    const P = V.produtos, out = [];
-    const ofertas = P.filter(p => p.precoDe && disponivel(p));
-    if (ofertas.length) out.push({ titulo: '🏷️ Ofertas', itens: ofertas.slice(0, 12) });
-    const comVenda = P.filter(p => (p.vendidos || 0) > 0 && disponivel(p));
-    if (comVenda.length >= 3) out.push({ titulo: '🔥 Mais vendidos', itens: comVenda.slice().sort((a, b) => b.vendidos - a.vendidos).slice(0, 8) });
-    const dest = P.filter(p => p.destaque && disponivel(p));
-    if (dest.length) out.push({ titulo: '⭐ Destaques', itens: dest.slice(0, 12) });
+    const P = V.produtos, out = [], visto = new Set();
+    // cada produto entra em uma prateleira só (a primeira em que couber): a vitrine não repete o mesmo cartão 3 vezes
+    const poe = (titulo, L, min) => { const novos = L.filter(p => !visto.has(p.id)); if (novos.length < (min || 1)) return; novos.forEach(p => visto.add(p.id)); out.push({ titulo, itens: novos }); };
     const ids = []; meus.forEach(o => (o.itens || []).forEach(i => { if (i && i.produtoId && !ids.includes(i.produtoId)) ids.push(i.produtoId); }));
-    const ja = ids.map(id => prod(id)).filter(p => p && disponivel(p)).slice(0, 8);
-    if (ja.length) out.push({ titulo: '🔁 Você já pediu', itens: ja });
+    poe('🔁 Você já pediu', ids.map(id => prod(id)).filter(p => p && disponivel(p)).slice(0, 8));
+    poe('🏷️ Ofertas', P.filter(p => p.precoDe && disponivel(p)).slice(0, 12));
+    const comVenda = P.filter(p => (p.vendidos || 0) > 0 && disponivel(p));
+    if (comVenda.length >= 3) poe('🔥 Mais vendidos', comVenda.slice().sort((a, b) => b.vendidos - a.vendidos).slice(0, 8), 2);
+    poe('⭐ Destaques', P.filter(p => p.destaque && disponivel(p)).slice(0, 12));
     return out;
   }
   const zap = tel => { const d = String(tel || '').replace(/\D/g, ''); return d.length <= 11 ? '55' + d : d; };
@@ -224,7 +224,7 @@
   function card(p) {
     const f = (p.faixas || [])[0], off = !disponivel(p);
     const social = (p.vendidos || 0) >= 5 ? '🔥 Já vendeu ' + p.vendidos : p.restam ? '⚡ Só ' + p.restam + ' restantes' : '';
-    return `<div class="pc" data-id="${esc(p.id)}"><button type="button" class="pcb" data-p="${esc(p.id)}" aria-label="${esc(p.nome)}"><div class="im">${p.fotos[0] ? `<img alt="" loading="lazy" src="${esc(p.fotos[0].url)}">` : '🛍️'}${off ? '<span class="tag off">Esgotado</span>' : p.precoDe ? `<span class="tag">${esc(etiquetaOferta(p))}</span>` : p.destaque ? '<span class="tag">Destaque</span>' : ''}</div>
+    return `<div class="pc" data-id="${esc(p.id)}"><button type="button" class="pcb" data-p="${esc(p.id)}" aria-label="${esc(p.nome)}"><div class="im">${p.fotos[0] ? `<img alt="" loading="lazy" src="${esc(p.fotos[0].url)}">` : '🛍️'}${off ? '<span class="tag off">Esgotado</span>' : p.precoDe ? `<span class="tag of">${esc(etiquetaOferta(p))}</span>` : p.destaque ? '<span class="tag">Destaque</span>' : ''}</div>
       <div class="bd"><span class="nm">${esc(p.nome)}</span>${p.precoDe ? `<span class="de">${money(p.precoDe)}</span>` : ''}<span class="pr">${money(p.preco)}${p.unidade !== 'un' ? ' <small>/' + esc(UN[p.unidade] || p.unidade) + '</small>' : ''}</span>
       ${f ? `<span class="fx">A partir de ${f.min}: ${money(f.preco)} cada</span>` : ''}${social ? `<span class="soc">${social}</span>` : ''}</div></button>
       <div class="pf">${rodapeCartao(p)}</div></div>`;
@@ -282,7 +282,7 @@
       const prox = (p.faixas || []).find(f => f.min > jaNoCarrinho + qtd);
       openSheet(p.nome, `
         ${p.fotos.length ? `<div class="gal">${p.fotos.map(f => `<img alt="" src="${esc(f.url)}">`).join('')}</div>${p.fotos.length > 1 ? '<p class="small muted" style="text-align:center">Arraste para ver mais fotos</p>' : ''}` : ''}
-        <div><p>${p.precoDe ? `<span class="de" style="text-decoration:line-through;color:var(--muted)">${money(p.precoDe)}</span> <span class="tag inl">${esc(etiquetaOferta(p))}</span> ` : ''}<b style="font-size:24px;color:var(--brand-text)">${money(p.preco)}</b>${p.unidade !== 'un' ? ' / ' + esc(UN[p.unidade] || p.unidade) : ''}</p>
+        <div><p>${p.precoDe ? `<span class="de" style="text-decoration:line-through;color:var(--muted)">${money(p.precoDe)}</span> <span class="tag of inl">${esc(etiquetaOferta(p))}</span> ` : ''}<b style="font-size:24px;color:var(--brand-text)">${money(p.preco)}</b>${p.unidade !== 'un' ? ' / ' + esc(UN[p.unidade] || p.unidade) : ''}</p>
         ${selos.length ? `<div class="selos">${selos.map(s => `<span>${esc(s)}</span>`).join('')}</div>` : ''}
         ${(p.faixas || []).length ? `<div class="note">💰 Levando mais, paga menos:<br>${p.faixas.map(f => 'a partir de <b>' + f.min + '</b>: ' + money(f.preco) + ' cada').join('<br>')}${p.variacoes.length ? '<br><span class="small">(vale somando tamanhos e cores)</span>' : ''}</div>` : ''}</div>
         ${p.descricao ? `<p style="white-space:pre-line">${esc(p.descricao)}</p>` : ''}
@@ -440,7 +440,8 @@
   function sucesso(numero, chave, total, F, resumo) {
     history.pushState(null, '', '#pedido/' + chave);
     const C = V.config, prev = previsao(), msg = `Olá! Acabei de fazer o pedido nº ${numero} na loja online (${money(total)}). ${resumo}. Nome: ${F.nome}.`;
-    $('#main').innerHTML = `<div class="card empty"><div class="big">✅</div><h1>Pedido nº ${numero} enviado!</h1><p>A ${esc(V.loja.nome)} recebeu o seu pedido de <b>${money(total)}</b> e vai confirmar com você.</p>
+    $('#main').innerHTML = `<div class="card empty"><div class="big">✅</div><h1>Pedido nº ${numero} enviado!</h1><p>A ${esc(V.loja.nome)} recebeu o seu pedido de <b>${money(total)}</b> e vai confirmar com você pelo WhatsApp.</p>
+      <p class="small muted" style="margin-top:-6px">${esc(resumo)} · ${F.entrega === 'entrega' ? 'Entrega' : 'Retirada na loja'}</p>
       ${prev ? `<p class="note">⏱️ ${esc(prev)}</p>` : ''}
       ${C.whatsapp ? `<a class="btn pri full" href="https://wa.me/${esc(zap(C.whatsapp))}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">💬 Avisar a loja no WhatsApp</a>` : ''}
       <button class="btn full" type="button" id="acp">Acompanhar o pedido</button><button class="btn full" type="button" id="vt">Voltar para a loja</button>
@@ -484,7 +485,7 @@
   }
   function meusPedidos() {
     const L = mem.get('tino-pedidos', []);
-    openSheet('Meus pedidos', `<div class="list">${L.map((p, k) => `<div class="it"><button type="button" class="tx" data-k="${esc(p.chave)}"><b>Pedido nº ${esc(p.numero)}</b><span>${dataHora(p.em)} · ${money(p.total)}</span></button>${(p.itens || []).length && V.config.aberta ? `<button type="button" class="btn sm" data-again="${k}">🔁 Pedir de novo</button>` : ''}</div>`).join('')}</div><p class="small muted">Ficam guardados só neste aparelho.</p>`, pn => {
+    openSheet('Meus pedidos', `<div class="list">${L.map((p, k) => `<div class="it"><button type="button" class="tx" data-k="${esc(p.chave)}"><b>Pedido nº ${esc(p.numero)} · ${money(p.total)}</b><span>${dataHora(p.em)}${(p.itens || []).length ? ' · ' + esc(p.itens.map(i => { const x = prod(i.produtoId); return x ? i.qtd + 'x ' + x.nome : ''; }).filter(Boolean).slice(0, 3).join(', ')) : ''}</span></button>${(p.itens || []).length && V.config.aberta ? `<button type="button" class="btn sm" data-again="${k}">🔁 Pedir de novo</button>` : ''}</div>`).join('')}</div><p class="small muted">Ficam guardados só neste aparelho.</p>`, pn => {
       pn.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => { const k = b.dataset.k; closeSheet(); history.pushState(null, '', '#pedido/' + k); acompanhar(k); }));
       pn.querySelectorAll('[data-again]').forEach(b => b.addEventListener('click', () => pedirDeNovo((L[+b.dataset.again] || {}).itens)));
     });
