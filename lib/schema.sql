@@ -480,3 +480,13 @@ create table if not exists loja_staria (
   created_at timestamptz not null default now(),
   primary key (tenant_id, id)
 );
+-- pagamento da venda dividido em partes: [{forma, valor, vence, cheque}] (a soma fecha com o valor da venda)
+alter table rural_lanc add column if not exists pagamentos jsonb not null default '[]'::jsonb;
+-- valor para o meeiro (opcional): o patrão vende por valor (relatórios) e o meeiro ganha a % dele sobre base
+alter table rural_lanc add column if not exists base numeric(12,2);
+-- cada meeiro tem a parte dele na roça: pés (opcional) e a % dele sobre a venda da parte dele; a venda guarda de quem foi (origem)
+alter table rural_rocas add column if not exists pes jsonb not null default '{}'::jsonb;
+alter table rural_lanc add column if not exists origem jsonb not null default '[]'::jsonb;
+-- venda da colheita: tipos do produto da roça (Top, Torto…) e, na venda, cada tipo com caixas, preços e as caixas de cada um
+alter table rural_rocas add column if not exists produtos jsonb not null default '[]'::jsonb;
+alter table rural_lanc add column if not exists itens jsonb not null default '[]'::jsonb;
