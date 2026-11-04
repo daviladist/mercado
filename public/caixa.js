@@ -39,8 +39,6 @@
     if (cor && /^#[0-9a-f]{6}$/i.test(cor)) document.documentElement.style.setProperty('--brand', cor);
   }
   const isAdmin = () => !!(S && S.me.role === 'admin');
-  const isFinanceiro = () => !!(S && S.me.role === 'financeiro');
-  const podeDecidirCrediario = () => isAdmin() || isFinanceiro();
 
   /* ---------- entrar ---------- */
   function showLogin(msg) {
@@ -88,22 +86,17 @@
 
   /* ---------- ícone e texto de cada lançamento ---------- */
   function movIcon(m) { return m.tipo === 'venda_staria' ? '🔄' : m.tipo === 'crediario_staria' ? '💳' : m.tipo === 'sangria' ? '💵' : m.tipo === 'gaveta_entrada' ? '🧾' : m.tipo === 'gaveta_saida' ? '➖' : m.valor >= 0 ? '➕' : '➖'; }
+  function movFilial(m) { const fs = Object.keys((m.detalhe || {}).porFilial || {}); return fs.length === 1 ? ' · Filial ' + esc(fs[0]) : ''; }
   function movTitulo(m) {
-    if (m.tipo === 'venda_staria') return 'Vendas em dinheiro';
-    if (m.tipo === 'crediario_staria') return 'Recebimento de crediário';
+    if (m.tipo === 'venda_staria') return 'Vendas em dinheiro' + movFilial(m);
+    if (m.tipo === 'crediario_staria') return 'Crediário recebido em dinheiro' + movFilial(m);
     if (m.tipo === 'sangria') return m.destino === 'impostos' ? 'Sangria · gaveta de impostos' : 'Sangria';
     if (m.tipo === 'gaveta_entrada') return 'Entrada na gaveta (sangria)';
     if (m.tipo === 'gaveta_saida') return 'Pago com a gaveta';
     return 'Ajuste';
   }
-  function crediarioBadge(m) {
-    if (m.status === 'aprovado') return '<span class="pill ok">Aprovado' + (m.decididoPor ? ' · ' + esc(m.decididoPor) : '') + '</span>';
-    if (m.status === 'rejeitado') return '<span class="pill" style="background:var(--red-bg);color:var(--red)">Rejeitado · não entra no saldo</span>';
-    return '<span class="pill wa">Aguardando aprovação</span>';
-  }
   function movSub(m) {
-    if (m.tipo === 'venda_staria') return 'StarIA · ' + dBR(m.periodoIni) + ' a ' + dBR(m.periodoFim);
-    if (m.tipo === 'crediario_staria') return 'StarIA · ' + dBR(m.periodoIni) + ' a ' + dBR(m.periodoFim) + ' · ' + crediarioBadge(m);
+    if (m.tipo === 'venda_staria' || m.tipo === 'crediario_staria') return 'Sacola conferida · ' + dBR(m.periodoIni) + ' a ' + dBR(m.periodoFim);
     const dep = m.tipo === 'sangria' ? (m.depositadoEm ? ' · depositado em ' + dBR(m.depositadoEm) : ' · ainda não foi ao banco') : '';
     return esc(m.motivo || '') + dep + ' · ' + esc(m.criadoPor || '');
   }
@@ -130,33 +123,29 @@
       <section class="saldo ${cls}"><span>Saldo esperado em dinheiro (consolidado)</span><b>${money(S.saldo)}</b>
         <span class="small">desde ${dBR(S.cfg.dataInicial)}${isAdmin() ? ' · <a href="#" id="verCfg" style="color:inherit;font-weight:700">editar saldo inicial</a>' : ''}</span></section>
       ${pf.length ? `<section class="card"><h2>Por filial (já entrou no consolidado acima)</h2>
-        <table><thead><tr><th>Filial</th><th class="n">Vendas</th><th class="n">Crediário aprovado</th><th class="n">Total</th></tr></thead><tbody>
+        <table><thead><tr><th>Filial</th><th class="n">Vendas</th><th class="n">Crediário em dinheiro</th><th class="n">Total</th></tr></thead><tbody>
         ${pf.map(([f, v]) => `<tr><td>${esc(f)}</td><td class="n">${money(v.vendas)}</td><td class="n">${money(v.crediario)}</td><td class="n"><b>${money(r2(v.vendas + v.crediario))}</b></td></tr>`).join('')}
         </tbody></table></section>` : ''}
       <div class="row">
-        ${!isFinanceiro() ? '<button class="btn sm pri" type="button" id="btnConferir">⚖️ Conferir caixa</button>' : ''}
+        <button class="btn sm pri" type="button" id="btnConferir">⚖️ Conferir caixa</button>
         ${isAdmin() ? '<button class="btn sm" type="button" id="btnAjuste">✏️ Lançar ajuste</button>' : ''}
       </div>
       <section class="card">
         <h2>Lançamentos</h2>
-        ${lista.length ? `<div class="list">${lista.map(m => { const naoConta = m.tipo === 'crediario_staria' && m.status !== 'aprovado'; return `<div class="it">
+        ${lista.length ? `<div class="list">${lista.map(m => `<div class="it">
             <div class="ic">${movIcon(m)}</div>
             <div class="tx"><b>${esc(movTitulo(m))}</b><span>${movSub(m)}</span></div>
-            <div class="vl"><span class="${m.tipo === 'sangria' || m.valor < 0 ? 'neg' : 'pos'}" style="${naoConta ? 'opacity:.55' + (m.status === 'rejeitado' ? ';text-decoration:line-through' : '') : ''}">${m.tipo === 'sangria' ? '−' : m.valor < 0 ? '−' : '+'}${money(Math.abs(m.valor))}</span>
+            <div class="vl"><span class="${m.tipo === 'sangria' || m.valor < 0 ? 'neg' : 'pos'}">${m.tipo === 'sangria' ? '−' : m.valor < 0 ? '−' : '+'}${money(Math.abs(m.valor))}</span>
               <br><small class="muted">${dBR(m.data)}</small>
               ${m.tipo === 'sangria' && !m.depositadoEm ? `<br><button class="btn sm" type="button" data-dep="${esc(m.id)}" style="margin-top:4px">Marcar depositado</button>` : ''}
-              ${m.tipo === 'crediario_staria' && m.status === 'pendente' && podeDecidirCrediario() ? `<br><button class="btn sm pri" type="button" data-aprovar="${esc(m.id)}" style="margin-top:4px">Aprovar</button>
-                <button class="btn sm dan" type="button" data-rejeitar="${esc(m.id)}" style="margin-top:4px">Rejeitar</button>` : ''}
               ${isAdmin() && (m.tipo === 'sangria' || m.tipo === 'ajuste') ? `<br><button class="btn sm dan" type="button" data-delmov="${esc(m.id)}" style="margin-top:4px">Apagar</button>` : ''}
-            </div></div>`; }).join('')}</div>` : '<p class="muted">Nenhum lançamento ainda.</p>'}
+            </div></div>`).join('')}</div>` : '<p class="muted">Nenhum lançamento ainda.</p>'}
       </section>`;
     const vc = $('#verCfg'); if (vc) vc.addEventListener('click', e => { e.preventDefault(); sheetCfg(); });
     const ba = $('#btnAjuste'); if (ba) ba.addEventListener('click', sheetAjuste);
     const bc = $('#btnConferir'); if (bc) bc.addEventListener('click', sheetConferir);
     document.querySelectorAll('[data-dep]').forEach(b => b.addEventListener('click', () => post('/api/caixa/depositado', { id: b.dataset.dep, depositadoEm: hoje() }, 'Marcado como depositado')));
     document.querySelectorAll('[data-delmov]').forEach(b => b.addEventListener('click', () => { if (confirm('Apagar este lançamento?')) post('/api/caixa/mov/excluir', { id: b.dataset.delmov }, 'Lançamento apagado'); }));
-    document.querySelectorAll('[data-aprovar]').forEach(b => b.addEventListener('click', () => post('/api/caixa/crediario/decidir', { id: b.dataset.aprovar, acao: 'aprovar' }, 'Crediário aprovado: entrou no saldo')));
-    document.querySelectorAll('[data-rejeitar]').forEach(b => b.addEventListener('click', () => { if (confirm('Rejeitar este recebimento de crediário? Ele não vai entrar no saldo.')) post('/api/caixa/crediario/decidir', { id: b.dataset.rejeitar, acao: 'rejeitar' }, 'Crediário rejeitado'); }));
   }
   function sheetCfg() {
     openSheet(`<div class="tt"><h2>Editar saldo inicial</h2><button class="x" type="button" id="shxb">✕</button></div>
@@ -206,7 +195,6 @@
 
   /* ---------- Sangria ---------- */
   function renderSangria() {
-    if (isFinanceiro()) { view = 'inicio'; return render(); }
     $('#main').innerHTML = `<section class="card">
       <h1>Nova sangria</h1>
       <p class="muted small">Dinheiro que saiu do caixa principal. Pode ficar guardado alguns dias até o depósito; marque "depositado" quando chegar lá.</p>
@@ -262,16 +250,15 @@
   /* ---------- StarIA (admin) ---------- */
   function jobBadge(j) {
     if (j.status === 'pendente') return '<span class="pill wa">Aguardando o Claude</span>';
-    if (j.status === 'pronta') return '<span class="pill wa">Pronto · revise e aplique</span>';
-    return '<span class="pill ok">Aplicado ao caixa</span>';
+    return '<span class="pill ok">Trazido · veja em Sacolas</span>';
   }
   function renderStaria() {
     if (!isAdmin()) { view = 'inicio'; return render(); }
     const jobs = S.jobs;
     $('#main').innerHTML = `<section class="card">
       <h1>Puxar do StarIA</h1>
-      <p class="muted small">Pede o total de vendas em dinheiro e recebimento de crediário em dinheiro de todas as filiais, no período. Quem consulta e devolve o resultado é o Claude, pelo seu pedido no chat — depois disso, revise o número aqui antes de aplicar.</p>
-      <div class="note">Peça só para um período em que as sacolas das lojas já chegaram e já foram conferidas na matriz. O StarIA não sabe se a sacola chegou ou se o caixa foi batido — ele só sabe o que foi vendido; quem garante que o dinheiro já está (ou já devia estar) aqui é a conferência física, antes de pedir.</div>
+      <p class="muted small">Pede o total de vendas em dinheiro e de crediário recebido (em qualquer forma de pagamento) de todas as filiais, no período. Quem consulta e devolve o resultado é o Claude (pelo seu pedido no chat, ou pela importação automática da noite) — cada filial vira uma sacola em "Sacolas", esperando chegar na matriz e ser conferida.</p>
+      <div class="note">O StarIA só sabe o que foi vendido e recebido — não sabe se o dinheiro já chegou na matriz, nem quanto do crediário foi em dinheiro, cartão ou Pix. É por isso que existe a sacola: o valor daqui é só uma expectativa; o saldo só sobe depois da conferência física na matriz, com o valor realmente contado e a forma de pagamento decidida pelo financeiro.</div>
       <form id="fst">
         <div class="field"><label for="stIni">De</label><input type="date" id="stIni" max="${hoje()}" required></div>
         <div class="field"><label for="stFim">Até</label><input type="date" id="stFim" value="${hoje()}" max="${hoje()}" required></div>
@@ -282,19 +269,95 @@
         ${jobs.length ? jobs.map(j => `<div class="it" style="align-items:flex-start">
             <div class="ic">🔄</div>
             <div class="tx"><b>${dBR(j.periodoIni)} a ${dBR(j.periodoFim)}</b><span>${jobBadge(j)}</span>
-              ${j.status !== 'pendente' ? `<div class="small" style="margin-top:6px">${Object.entries(j.resultado.porFilial).map(([f, v]) => `Filial ${esc(f)}: ${money(v.vendasDinheiro)} vendas + ${money(v.recebCrediarioDinheiro)} crediário`).join('<br>')}
+              ${j.status !== 'pendente' ? `<div class="small" style="margin-top:6px">${Object.entries(j.resultado.porFilial).map(([f, v]) => `Filial ${esc(f)}: ${money(v.vendasDinheiro)} vendas + ${money(v.recebCrediario)} crediário`).join('<br>')}
                 <br><b>Total: ${money(j.resultado.total)}</b></div>` : ''}
             </div>
-            <div class="vl">${j.status === 'pronta' ? `<button class="btn sm pri" type="button" data-aplicar="${esc(j.id)}">Aplicar ao caixa</button>` : ''}</div>
           </div>`).join('') : '<p class="muted">Nenhuma consulta ainda.</p>'}
       </section>`;
     $('#fst').addEventListener('submit', e => { e.preventDefault(); post('/api/caixa/staria/pedir', { periodoIni: $('#stIni').value, periodoFim: $('#stFim').value }, 'Consulta pedida. Peça ao Claude para processar as consultas do StarIA.'); });
-    document.querySelectorAll('[data-aplicar]').forEach(b => b.addEventListener('click', () => { if (confirm('Aplicar este resultado ao caixa? As vendas em dinheiro entram direto no saldo; o recebimento de crediário entra como pendente, aguardando aprovação. Depois de aplicado não pode ser desfeito (lance um ajuste se precisar corrigir).')) post('/api/caixa/staria/aplicar', { id: b.dataset.aplicar }, 'Aplicado: vendas no saldo, crediário aguardando aprovação'); }));
   }
 
-  /* ---------- Acessos (admin): quem guarda o caixa (caixista), quem aprova o crediário (financeiro) e o acesso
-     de automação (só o Claude, importação noturna do StarIA) ---------- */
-  const papelLabel = p => p === 'financeiro' ? 'Financeiro · aprova o crediário' : p === 'automacao' ? 'Automação · só StarIA' : 'Caixista · guarda o dinheiro';
+  /* ---------- Sacolas (venda em dinheiro + crediário recebido, por filial): na filial -> chegou na matriz ->
+     conferida ---------- caixista e financeiro marcam a chegada; só financeiro (ou admin) confere o valor real de
+     vendas, decide a forma de pagamento do crediário e lança no saldo. A filial 1 (matriz) nunca "viaja": já
+     aparece pronta pra conferência, sem o passo de marcar chegada. */
+  function podeConferirSacola() { return isAdmin() || S.me.role === 'financeiro'; }
+  function sacolaStatus(s) {
+    if (s.conferidoEm) {
+      const okVenda = s.diferenca === 0, okCredi = !s.crediStaria || s.crediDiferenca === 0;
+      if (okVenda && okCredi) return '<span class="pill ok">Conferida · bateu certinho</span>';
+      const partes = [];
+      if (!okVenda) partes.push((s.diferenca > 0 ? 'vendas: sobrou ' : 'vendas: faltou ') + money(Math.abs(s.diferenca)));
+      if (!okCredi) partes.push((s.crediDiferenca > 0 ? 'crediário: sobrou ' : 'crediário: faltou ') + money(Math.abs(s.crediDiferenca)));
+      return '<span class="pill wa">Conferida · ' + partes.join(' · ') + '</span>';
+    }
+    if (s.chegouEm) return '<span class="pill wa">' + (s.precisaChegar ? 'Chegou na matriz · aguardando conferência' : 'Pronta pra conferência') + '</span>';
+    return '<span class="pill wa">Ainda na filial</span>';
+  }
+  function renderSacolas() {
+    const mc = S.miniCaixas || {};
+    const filiais = Object.keys(mc).sort((a, b) => a - b);
+    const pendentes = (S.sacolas || []).filter(s => !s.conferidoEm);
+    const conferidas = (S.sacolas || []).filter(s => s.conferidoEm);
+    $('#main').innerHTML = `<section class="card">
+      <h1>Sacolas</h1>
+      <p class="muted small">Cada filial manda uma sacola de dinheiro (vendas + crediário recebido) pra matriz. O StarIA diz quanto vendeu e recebeu; só depois que a sacola chega e é conferida de verdade é que esse dinheiro entra no saldo do caixa principal — com o valor realmente contado. A matriz (filial 1) não precisa chegar: já nasce pronta pra conferência.</p>
+      ${filiais.length ? `<div class="list">${filiais.map(f => `<div class="it">
+          <div class="ic">🏪</div><div class="tx"><b>Filial ${esc(f)}</b><span>${mc[f].naFilial ? 'Ainda na filial: ' + money(mc[f].naFilial) : ''}${mc[f].naFilial && mc[f].aguardandoConferencia ? ' · ' : ''}${mc[f].aguardandoConferencia ? 'Aguardando conferência: ' + money(mc[f].aguardandoConferencia) : ''}</span></div>
+        </div>`).join('')}</div>` : '<p class="muted">Nenhum valor pendente agora.</p>'}
+    </section>
+    <section class="card">
+      <h2>Pendentes</h2>
+      ${pendentes.length ? `<div class="list">${pendentes.map(s => `<div class="it" style="align-items:flex-start">
+          <div class="ic">📦</div>
+          <div class="tx"><b>Filial ${esc(s.filial)} · ${money(s.valorStaria)}${s.crediStaria ? ' + ' + money(s.crediStaria) + ' crediário' : ''}</b><span>${dBR(s.periodoIni)} a ${dBR(s.periodoFim)} · ${sacolaStatus(s)}</span></div>
+          <div class="vl">${!s.chegouEm ? `<button class="btn sm pri" type="button" data-chegou="${esc(s.id)}">Chegou na matriz</button>`
+            : podeConferirSacola() ? `<button class="btn sm pri" type="button" data-conferir="${esc(s.id)}">Conferir</button>` : ''}</div>
+        </div>`).join('')}</div>` : '<p class="muted">Nenhuma sacola pendente.</p>'}
+    </section>
+    ${conferidas.length ? `<section class="card"><h2>Conferidas</h2><div class="list">${conferidas.slice(0, 20).map(s => `<div class="it">
+        <div class="ic">📦</div><div class="tx"><b>Filial ${esc(s.filial)} · ${money(s.valorContado)}${s.crediDinheiro ? ' + ' + money(s.crediDinheiro) + ' crediário' : ''}</b><span>${dBR(s.periodoIni)} a ${dBR(s.periodoFim)} · ${sacolaStatus(s)}</span></div>
+      </div>`).join('')}</div></section>` : ''}
+    <div id="pOut"></div>`;
+    document.querySelectorAll('[data-chegou]').forEach(b => b.addEventListener('click', () => post('/api/caixa/sacola/chegou', { id: b.dataset.chegou }, 'Marcado: chegou na matriz')));
+    document.querySelectorAll('[data-conferir]').forEach(b => b.addEventListener('click', () => sheetConferirSacola(S.sacolas.find(s => s.id === b.dataset.conferir))));
+  }
+  function sheetConferirSacola(s) {
+    openSheet(`<div class="tt"><h2>Conferir sacola · Filial ${esc(s.filial)}</h2><button class="x" type="button" id="shxb">✕</button></div>
+      <p class="muted small">O StarIA apontou ${money(s.valorStaria)} em vendas dessa filial. Digite o que realmente veio dentro da sacola — é esse valor que entra no saldo do caixa principal.</p>
+      <form id="fcs">
+        <div class="field"><label for="csValor">Valor de vendas contado</label><input type="text" id="csValor" inputmode="decimal" placeholder="0,00" required></div>
+        ${s.crediStaria ? `<div class="note">O StarIA apontou ${money(s.crediStaria)} de crediário recebido nessa filial e período. Diga quanto disso foi em cada forma de pagamento — só o dinheiro entra no saldo.</div>
+        <div class="field"><label for="csCrediDinheiro">Crediário em dinheiro</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00"></div>
+        <div class="field"><label for="csCrediCartao">Crediário em cartão</label><input type="text" id="csCrediCartao" inputmode="decimal" placeholder="0,00"></div>
+        <div class="field"><label for="csCrediPix">Crediário em Pix</label><input type="text" id="csCrediPix" inputmode="decimal" placeholder="0,00"></div>` : ''}
+        <div class="field"><label for="csMotivo">Observação (se sobrou ou faltou)</label><input type="text" id="csMotivo" maxlength="300"></div>
+        <button class="btn pri full" type="submit">Confirmar conferência</button>
+      </form><div id="csOut"></div>`, () => {
+      $('#shxb').addEventListener('click', () => { closeSheet(); render(); });
+      $('#fcs').addEventListener('submit', async e => {
+        e.preventDefault(); const b = e.target.querySelector('button'); b.disabled = true;
+        try {
+          const cd = $('#csCrediDinheiro'), cc = $('#csCrediCartao'), cp = $('#csCrediPix');
+          const r = await api('/api/caixa/sacola/conferir', {
+            id: s.id, valorContado: $('#csValor').value, motivo: $('#csMotivo').value,
+            crediDinheiro: cd ? cd.value : undefined, crediCartao: cc ? cc.value : undefined, crediPix: cp ? cp.value : undefined
+          });
+          await reload();
+          $('#fcs').hidden = true;
+          const okVenda = r.diferenca === 0, okCredi = !s.crediStaria || r.crediDiferenca === 0;
+          $('#csOut').innerHTML = okVenda && okCredi
+            ? `<div class="note" style="background:var(--green-bg);color:var(--green)"><b>Bateu certinho!</b> O valor contado confere com o que o StarIA apontou.</div>`
+            : `<div class="warn">${!okVenda ? `<b>Vendas: ${r.diferenca > 0 ? 'sobrou' : 'faltou'} ${money(Math.abs(r.diferenca))}.</b><br>` : ''}${!okCredi ? `<b>Crediário: ${r.crediDiferenca > 0 ? 'sobrou' : 'faltou'} ${money(Math.abs(r.crediDiferenca))}.</b><br>` : ''}Ficou registrado na aba Ocorrências para o administrador.</div>`;
+        } catch (er) { fail(er); } finally { b.disabled = false; }
+      });
+    });
+  }
+
+  /* ---------- Acessos (admin): quem guarda o caixa (caixista), quem guarda o caixa e também confere as sacolas
+     (financeiro — não é obrigatório ter as duas pessoas, uma só como financeiro cobre o dia a dia) e o acesso de
+     automação (só o Claude, importação noturna do StarIA) ---------- */
+  const papelLabel = p => p === 'financeiro' ? 'Financeiro · guarda o caixa e confere as sacolas' : p === 'automacao' ? 'Automação · só StarIA' : 'Caixista · guarda o dinheiro';
   function renderAcessos() {
     if (!isAdmin()) { view = 'inicio'; return render(); }
     $('#main').innerHTML = `<section class="card">
@@ -304,7 +367,7 @@
           <div class="ic">${p.papel === 'financeiro' ? '✅' : p.papel === 'automacao' ? '🤖' : '👤'}</div><div class="tx"><b>${esc(p.nome)}</b><span>${esc(p.login)} · ${papelLabel(p.papel)}${p.ativo ? '' : ' · inativo'}${p.trocarSenha ? ' · ainda não trocou a senha provisória' : ''}</span></div>
           <div class="vl"><button class="btn sm" type="button" data-editp="${esc(p.login)}">Editar</button></div>
         </div>`).join('')}</div>` : '<p class="muted">Nenhum acesso criado ainda.</p>'}
-      <div class="row"><button class="btn pri" type="button" id="btnNovaCaixista">+ Nova pessoa do caixa</button><button class="btn pri" type="button" id="btnNovoFinanceiro">+ Novo aprovador (financeiro)</button></div>
+      <div class="row"><button class="btn pri" type="button" id="btnNovaCaixista">+ Nova pessoa do caixa</button><button class="btn pri" type="button" id="btnNovoFinanceiro">+ Novo acesso do financeiro</button></div>
       <div class="row"><button class="btn" type="button" id="btnNovaAutomacao">🤖 + Acesso de automação (StarIA)</button></div>
     </section>
     <div id="pOut"></div>`;
@@ -316,9 +379,9 @@
   function sheetPessoa(p, papelNovo) {
     const papel = p ? p.papel : papelNovo;
     const auto = papel === 'automacao';
-    const titulo = p ? 'Editar acesso' : auto ? 'Novo acesso de automação' : (papel === 'financeiro' ? 'Novo aprovador (financeiro)' : 'Nova pessoa do caixa');
+    const titulo = p ? 'Editar acesso' : auto ? 'Novo acesso de automação' : (papel === 'financeiro' ? 'Novo acesso do financeiro' : 'Nova pessoa do caixa');
     const sub = auto ? 'Só para o Claude usar na importação noturna do StarIA: pede e entrega a consulta, deixando pronta pra você revisar. Não vê saldo, extrato, pessoas nem ocorrências — mesmo assim, é uma senha guardada fora do app, então escolha uma forte e não reaproveite de outro lugar.'
-      : papel === 'financeiro' ? 'Só aprova ou rejeita o recebimento de crediário do StarIA; não lança sangria nem vê os acessos.' : 'Lança sangria, vê o saldo e marca quando um valor foi ao banco.';
+      : papel === 'financeiro' ? 'Faz tudo que a pessoa do caixa faz (lança sangria, marca quando um valor foi ao banco, confere o caixa físico) e também confere as sacolas das filiais: o valor real de vendas e a forma de pagamento do crediário recebido. Não é obrigatório ter as duas pessoas — pode ser só esta. Não vê os acessos nem a gaveta de impostos.' : 'Lança sangria, vê o saldo, marca quando um valor foi ao banco, confere o caixa físico e também pode marcar a chegada de uma sacola na matriz.';
     openSheet(`<div class="tt"><h2>${titulo}</h2><button class="x" type="button" id="shxb">✕</button></div>
       <p class="muted small">${sub}</p>
       <form id="fp">
@@ -350,20 +413,25 @@
 
   /* ---------- Ocorrências (admin): conferências com diferença + tudo que foi apagado, alterado ou decidido,
      inclusive pelo próprio admin — para dar transparência e segurança a quem trabalha com o dinheiro. Só leitura. */
-  function ocorIcon(o) { return o.tipo === 'conferencia' ? '⚖️' : '🛡️'; }
+  function ocorIcon(o) { return o.tipo === 'conferencia' ? '⚖️' : o.tipo === 'sacola' ? '📦' : '🛡️'; }
   function ocorDetalheTxt(o) {
     const d = o.detalhe || {};
     if (o.tipo === 'conferencia') {
       const sinal = d.diferenca > 0 ? 'Sobrou ' : 'Faltou ';
       return sinal + money(Math.abs(d.diferenca)) + ' (contado ' + money(d.valorContado) + ', esperado ' + money(d.saldoEsperado) + ')' + (d.motivo ? ' · ' + esc(d.motivo) : '') + ' · ' + esc(d.por || '');
     }
+    if (o.tipo === 'sacola') {
+      const partes = [];
+      if (d.diferenca) partes.push('vendas: ' + (d.diferenca > 0 ? 'sobrou ' : 'faltou ') + money(Math.abs(d.diferenca)) + ' (contado ' + money(d.valorContado) + ', StarIA apontava ' + money(d.valorStaria) + ')');
+      if (d.crediDiferenca) partes.push('crediário: ' + (d.crediDiferenca > 0 ? 'sobrou ' : 'faltou ') + money(Math.abs(d.crediDiferenca)) + ' (dinheiro+cartão+Pix somou ' + money(r2((d.crediDinheiro || 0) + (d.crediCartao || 0) + (d.crediPix || 0))) + ', StarIA apontava ' + money(d.crediStaria) + ')');
+      return 'Filial ' + esc(d.filial) + ': ' + partes.join(' · ') + (d.motivo ? ' · ' + esc(d.motivo) : '') + ' · ' + esc(d.por || '');
+    }
     if (o.titulo === 'Ajuste lançado') return (d.valor != null ? money(Number(d.valor)) : '') + ' · ' + esc(d.role || '');
     if (o.titulo === 'Saldo inicial alterado') return 'Novo saldo inicial: ' + money(Number(d.saldoInicial) || 0) + ' · ' + esc(d.role || '');
-    if (o.titulo === 'Crediário aprovado/rejeitado') return (d.acao === 'aprovar' ? 'Aprovado' : 'Rejeitado') + ' por ' + esc(d.role || '');
     if (o.titulo === 'Acesso criado ou alterado') return esc(d.login || '') + (d.papel ? ' · ' + esc(d.papel) : '') + ' · por ' + esc(d.role || '');
     if (o.titulo === 'Lançamento apagado') return 'por ' + esc(d.role || '');
     if (o.titulo === 'Consulta ao StarIA pedida') return 'Período: ' + (d.periodo || []).map(dBR).join(' a ') + ' · por ' + esc(d.role || '');
-    if (o.titulo === 'Consulta ao StarIA pronta para revisão') return 'Aguardando sua revisão e aplicação · por ' + esc(d.role || '');
+    if (o.titulo === 'Consulta ao StarIA aplicada, em sacolas por filial') return 'Já criou as sacolas por filial · por ' + esc(d.role || '');
     return esc(d.role || '');
   }
   function renderOcorrencias() {
@@ -383,9 +451,10 @@
   /* ---------- navegação ---------- */
   function render() {
     $('#bn').hidden = false; $('#sair').hidden = false;
-    $('#navSangria').hidden = isFinanceiro(); $('#navStaria').hidden = !isAdmin(); $('#navAcessos').hidden = !isAdmin(); $('#navGaveta').hidden = !isAdmin(); $('#navOcorrencias').hidden = !isAdmin();
+    $('#navStaria').hidden = !isAdmin(); $('#navAcessos').hidden = !isAdmin(); $('#navGaveta').hidden = !isAdmin(); $('#navOcorrencias').hidden = !isAdmin();
     document.querySelectorAll('#bn [data-go]').forEach(b => b.setAttribute('aria-current', b.dataset.go === view));
     if (view === 'sangria') return renderSangria();
+    if (view === 'sacolas') return renderSacolas();
     if (view === 'staria') return renderStaria();
     if (view === 'acessos') return renderAcessos();
     if (view === 'gaveta') return renderGaveta();
