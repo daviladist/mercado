@@ -84,68 +84,232 @@
     if (onMount) onMount();
   }
 
+  /* ---------- ícones (SVG em linha, sem biblioteca; herdam a cor do texto) ---------- */
+  const IC = {
+    home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+    bag: '<path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+    list: '<path d="M9 6h12M9 12h12M9 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
+    more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+    count: '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>',
+    out: '<path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',
+    in: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',
+    ok: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+    alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4"/><path d="M12 17h.01"/>',
+    chev: '<path d="m9 6 6 6-6 6"/>',
+    back: '<path d="m15 6-6 6 6 6"/>',
+    sync: '<path d="M20 12a8 8 0 0 1-14 5.3"/><path d="M4 12a8 8 0 0 1 14-5.3"/><path d="M18 3v4h-4"/><path d="M6 21v-4h4"/>',
+    users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/>',
+    shield: '<path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6z"/>',
+    tax: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+    bank: '<path d="M3 10h18L12 4z"/><path d="M5 10v8M9 10v8M15 10v8M19 10v8"/><path d="M3 20h18"/>',
+    truck: '<path d="M3 6h11v10H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+    store: '<path d="M4 10v10h16V10"/><path d="M3 10l2-6h14l2 6z"/><path d="M10 20v-5h4v5"/>'
+  };
+  const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
+  /* data e hora no fuso do aparelho (timestamps vêm em UTC; cortar a string dava o dia errado à noite) */
+  const dtBR = s => { const d = new Date(s); return isNaN(d) ? '' : d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
+  const plural = (n, um, varios) => n + ' ' + (n === 1 ? um : varios);
+
   /* ---------- ícone e texto de cada lançamento ---------- */
-  function movIcon(m) { return m.tipo === 'venda_staria' ? '🔄' : m.tipo === 'crediario_staria' ? '💳' : m.tipo === 'sangria' ? '💵' : m.tipo === 'gaveta_entrada' ? '🧾' : m.tipo === 'gaveta_saida' ? '➖' : m.valor >= 0 ? '➕' : '➖'; }
+  function movIcon(m) {
+    const n = m.tipo === 'venda_staria' || m.tipo === 'crediario_staria' || m.tipo === 'gaveta_entrada' ? 'in'
+      : m.tipo === 'sangria' || m.tipo === 'gaveta_saida' ? 'out' : 'edit';
+    return ic(n);
+  }
+  const movTom = m => m.tipo === 'sangria' || m.tipo === 'gaveta_saida' || m.valor < 0 ? '' : 'ok';
   function movFilial(m) { const fs = Object.keys((m.detalhe || {}).porFilial || {}); return fs.length === 1 ? ' · Filial ' + esc(fs[0]) : ''; }
   function movTitulo(m) {
     if (m.tipo === 'venda_staria') return 'Vendas em dinheiro' + movFilial(m);
-    if (m.tipo === 'crediario_staria') return 'Crediário recebido em dinheiro' + movFilial(m);
-    if (m.tipo === 'sangria') return m.destino === 'impostos' ? 'Sangria · gaveta de impostos' : 'Sangria';
-    if (m.tipo === 'gaveta_entrada') return 'Entrada na gaveta (sangria)';
+    if (m.tipo === 'crediario_staria') return 'Crediário em dinheiro' + movFilial(m);
+    if (m.tipo === 'sangria') return m.destino === 'impostos' ? 'Sangria para a gaveta de impostos' : 'Sangria';
+    if (m.tipo === 'gaveta_entrada') return 'Entrada na gaveta';
     if (m.tipo === 'gaveta_saida') return 'Pago com a gaveta';
     return 'Ajuste';
   }
+  // sangria lançada pela equipe que o dono ainda não confirmou no banco (a do próprio dono é retirada dele)
+  const semDeposito = m => m.tipo === 'sangria' && !m.depositadoEm && m.destino !== 'impostos' && m.criadoPorRole !== 'admin';
   function movSub(m) {
-    if (m.tipo === 'venda_staria' || m.tipo === 'crediario_staria') return 'Sacola conferida · ' + dBR(m.periodoIni) + ' a ' + dBR(m.periodoFim);
-    const dep = m.tipo === 'sangria' ? (m.depositadoEm ? ' · depositado em ' + dBR(m.depositadoEm) : ' · ainda não foi ao banco') : '';
-    return esc(m.motivo || '') + dep + ' · ' + esc(m.criadoPor || '');
+    if (m.tipo === 'venda_staria' || m.tipo === 'crediario_staria') return dBR(m.data) + ' · sacola conferida';
+    return dBR(m.data) + (m.motivo ? ' · ' + esc(m.motivo) : '') + (semDeposito(m) ? (isAdmin() ? ' · <b class="neg">falta confirmar no banco</b>' : ' · <b class="inf">aguardando o dono confirmar</b>') : '');
+  }
+  function sinal(m) { const s = m.tipo === 'sangria' || m.tipo === 'gaveta_saida' || m.valor < 0; return `<span class="${s ? 'neg' : 'pos'}">${s ? '−' : '+'}${money(Math.abs(m.valor))}</span>`; }
+  /* uma linha tocável: abre o painel com detalhes e ações (marcar depositado / apagar) */
+  const rowMov = m => `<button type="button" class="it" data-mov="${esc(m.id)}">
+      <div class="ic ${movTom(m)}">${movIcon(m)}</div>
+      <div class="tx"><b>${esc(movTitulo(m))}</b><span>${movSub(m)}</span></div>
+      <div class="vl">${sinal(m)}</div></button>`;
+  function ligarMovs(lista) {
+    document.querySelectorAll('[data-mov]').forEach(b => b.addEventListener('click', () => { const m = lista.find(x => x.id === b.dataset.mov); if (m) sheetMov(m); }));
+  }
+  function sheetMov(m) {
+    // só o dono confirma que o dinheiro chegou no banco (olhando o extrato): quem tira não confirma
+    const podeDep = semDeposito(m) && isAdmin();
+    const podeApagar = isAdmin() && ['sangria', 'ajuste', 'gaveta_saida', 'gaveta_entrada'].includes(m.tipo);
+    openSheet(`<div class="tt"><h2>${esc(movTitulo(m))}</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      <div style="font-size:30px;font-weight:800" class="num">${sinal(m)}</div>
+      <div>
+        <div class="kv"><span class="muted">Data</span><b>${dBR(m.data)}</b></div>
+        ${m.motivo ? `<div class="kv"><span class="muted">Motivo</span><b style="white-space:normal;text-align:right">${esc(m.motivo)}</b></div>` : ''}
+        ${m.criadoPor ? `<div class="kv"><span class="muted">Quem lançou</span><b>${esc(m.criadoPor)}</b></div>` : ''}
+        ${m.tipo === 'venda_staria' || m.tipo === 'crediario_staria' ? `<div class="kv"><span class="muted">Período</span><b>${dBR(m.periodoIni)} a ${dBR(m.periodoFim)}</b></div>` : ''}
+        ${m.tipo === 'sangria' && m.destino !== 'impostos' ? `<div class="kv"><span class="muted">Banco</span><b class="${m.depositadoEm ? 'pos' : 'neg'}">${m.depositadoEm ? 'confirmado em ' + dBR(m.depositadoEm) : isAdmin() ? 'você ainda não confirmou' : 'aguardando o dono confirmar'}</b></div>` : ''}
+      </div>
+      ${podeDep ? `<p class="small muted">Abra o extrato do banco. Se o depósito está lá, confirme.</p><button class="btn pri lg full" type="button" data-dep="${esc(m.id)}">${ic('bank')} Confirmei no banco</button>` : ''}
+      ${podeApagar ? `<button class="btn dan full" type="button" data-delmov="${esc(m.id)}">Apagar este lançamento</button>` : ''}`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      const d = document.querySelector('#sheet [data-dep]'); if (d) d.addEventListener('click', () => post('/api/caixa/depositado', { id: m.id, depositadoEm: hoje() }, 'Confirmado no banco'));
+      const x = document.querySelector('#sheet [data-delmov]'); if (x) x.addEventListener('click', () => { if (confirm('Apagar este lançamento? Fica registrado nas ocorrências.')) post('/api/caixa/mov/excluir', { id: m.id }, 'Lançamento apagado'); });
+    });
   }
 
-  /* ---------- Início ---------- */
+  /* ---------- o que precisa de atenção (calculado só com o que o /state já traz) ---------- */
+  function resumo() {
+    const admin = isAdmin(), fin = podeConferirSacola();
+    const desde = Date.now() - 7 * 864e5;
+    const alertas = admin ? (S.ocorrencias || []).filter(o => (o.tipo === 'conferencia' || o.tipo === 'sacola') && new Date(o.em).getTime() >= desde) : [];
+    const difs = alertas.map(o => o.tipo === 'conferencia' ? Number(o.detalhe.diferenca) || 0 : r2((Number(o.detalhe.diferenca) || 0) + (Number(o.detalhe.crediDiferenca) || 0)));
+    const faltou = r2(difs.filter(d => d < 0).reduce((a, d) => a - d, 0)), sobrou = r2(difs.filter(d => d > 0).reduce((a, d) => a + d, 0));
+    const sac = S.sacolas || [];
+    const tot = s => r2((s.valorStaria || 0) + (s.crediStaria || 0));
+    const soma = (arr, f) => r2(arr.reduce((a, x) => a + f(x), 0));
+    const naFilial = sac.filter(s => !s.conferidoEm && !s.chegouEm);
+    const aConferir = sac.filter(s => !s.conferidoEm && s.chegouEm);
+    const cxP = S.caixasPendentes || [];
+    const semDep = (S.mov || []).filter(semDeposito);
+    const jobP = admin ? (S.jobs || []).filter(j => j.status === 'pendente') : [];
+    const tarefas = [];
+    if (fin && aConferir.length) tarefas.push({ go: 'sacolas', ic: 'bag', urg: true, t: plural(aConferir.length, 'sacola para conferir', 'sacolas para conferir'), s: money(soma(aConferir, tot)) + ' já na matriz' });
+    if (fin && cxP.length) tarefas.push({ go: 'sacolas', ic: 'sync', urg: true, t: plural(cxP.length, 'caixa do StarIA para marcar', 'caixas do StarIA para marcar'), s: 'Marque os que estão em preto no StarIA' });
+    if (naFilial.length) tarefas.push({ go: 'sacolas', ic: 'truck', urg: !fin, t: plural(naFilial.length, 'sacola ainda na filial', 'sacolas ainda nas filiais'), s: 'Filial ' + [...new Set(naFilial.map(s => s.filial))].sort((a, b) => a - b).join(', ') + ' · ' + money(soma(naFilial, tot)) });
+    if (semDep.length) tarefas.push({ go: 'extrato', ic: 'bank', urg: true, t: plural(semDep.length, 'sangria falta confirmar no banco', 'sangrias falta confirmar no banco'), s: money(soma(semDep, m => m.valor)) + ' fora do cofre' });
+    if (jobP.length) tarefas.push({ go: 'staria', ic: 'clock', urg: false, t: 'Consulta ao StarIA esperando o Claude', s: 'Peça no chat: “processar as consultas do StarIA”' });
+    const caminho = { staria: soma(cxP, l => l.dinheiro), filial: soma(naFilial, tot), matriz: soma(aConferir, tot) };
+    caminho.total = r2(caminho.staria + caminho.filial + caminho.matriz);
+    let st;
+    if (faltou || sobrou) st = { k: 'bad', ic: 'alert', go: 'ocorrencias', t: faltou ? 'Faltou ' + money(faltou) + ' nos últimos 7 dias' : 'Sobrou ' + money(sobrou) + ' nos últimos 7 dias' };
+    else if (tarefas.some(t => t.urg)) { const n = tarefas.filter(t => t.urg).length; st = { k: 'wa', ic: 'clock', t: (admin ? 'Sem diferenças · ' : '') + plural(n, 'coisa para resolver', 'coisas para resolver') }; }
+    else st = { k: 'ok', ic: 'ok', t: admin ? 'Tudo certo · nenhuma diferença em 7 dias' : 'Tudo em dia' };
+    return { alertas, tarefas, caminho, st, pendSacolas: (fin ? aConferir.length + cxP.length : naFilial.length) };
+  }
+
+  /* ---------- Início: "quanto eu tenho agora e está tudo certo?" ---------- */
   function renderInicio() {
     if (!S.cfg) {
-      if (!isAdmin()) { $('#main').innerHTML = '<div class="empty card"><div class="big">⏳</div><p>O administrador ainda não configurou o saldo inicial. Volte mais tarde.</p></div>'; return; }
+      if (!isAdmin()) { $('#main').innerHTML = '<div class="empty card"><div class="big">' + ic('clock') + '</div><p>O dono ainda não informou o dinheiro inicial do cofre. Volte mais tarde.</p></div>'; return; }
       $('#main').innerHTML = `<section class="card">
-        <h1>Configurar o saldo inicial</h1>
-        <p class="muted small">A contagem física do dinheiro no dia em que você começa a usar o controle de caixa. Depois disso, tudo é lançamento (vendas em dinheiro do StarIA, sangria e ajuste).</p>
-        <form id="fcfg" class="card" style="padding:0;border:0">
-          <div class="field"><label for="cfSaldo">Quanto tem em dinheiro hoje (guardado na matriz)</label><input type="text" inputmode="decimal" id="cfSaldo" placeholder="0,00" value="0"></div>
-          <div class="field"><label for="cfData">Data desta contagem</label><input type="date" id="cfData" value="${hoje()}" max="${hoje()}"></div>
-          <button class="btn pri full" type="submit">Salvar e começar</button>
+        <h1>Vamos começar</h1>
+        <p class="muted">Conte o dinheiro que está hoje no cofre da matriz e digite aqui. A partir daí, o app soma o que entra e tira o que sai.</p>
+        <form id="fcfg">
+          <div class="field"><label for="cfSaldo">Quanto tem no cofre hoje</label><input type="text" inputmode="decimal" id="cfSaldo" placeholder="0,00" value="0"></div>
+          <div class="field"><label for="cfData">Dia desta contagem</label><input type="date" id="cfData" value="${hoje()}" max="${hoje()}"></div>
+          <button class="btn pri lg full" type="submit">Salvar e começar</button>
         </form></section>`;
       $('#fcfg').addEventListener('submit', e => { e.preventDefault(); post('/api/caixa/cfg', { saldoInicial: $('#cfSaldo').value, dataInicial: $('#cfData').value }, 'Saldo inicial salvo'); });
       return;
     }
-    const cls = S.saldo > 0 ? 'p' : S.saldo < 0 ? 'n' : 'z';
-    const lista = S.mov;
+    const admin = isAdmin();
+    const ultimos = (S.mov || []).slice(0, 4);
+    const acts = `<div class="acts">
+        <button class="btn gold" type="button" id="btnConferir">${ic('count')}Contar o cofre</button>
+        <button class="btn" type="button" id="btnSangria">${ic('out')}Fazer sangria</button>
+      </div>`;
+    // cada alerta/pendência leva direto para onde se resolve
+    const IR = { contar: 'contar', banco: 'extrato', sacolas: 'sacolas', ocorrencias: 'ocorrencias', staria: 'staria', inicio: 'inicio' };
+    const linhaAlerta = a => `<button type="button" class="it" ${a.ir === 'contar' ? 'data-contar="1"' : `data-go="${IR[a.ir] || 'inicio'}"`}>
+        <div class="ic ${a.nivel === 'vermelho' ? 'bad' : 'wa'}">${ic(a.nivel === 'vermelho' ? 'alert' : 'clock')}</div>
+        <div class="tx"><b>${esc(a.texto)}</b></div><span class="ch">${ic('chev')}</span></button>`;
+    const ultimas = `<section class="card"><div class="sec"><h2>${admin ? 'Últimas movimentações' : 'O que você lançou'}</h2><button class="lnk" type="button" data-go="extrato">Ver tudo</button></div>
+        ${ultimos.length ? `<div class="list">${ultimos.map(rowMov).join('')}</div>` : '<p class="muted small">Nada lançado ainda.</p>'}</section>`;
+    if (!admin) {
+      // equipe: contagem cega — nada de saldo nem valor esperado, só o que precisa ser feito
+      const pend = S.pendencias || [];
+      $('#main').innerHTML = `
+        <section class="hero" aria-label="Suas tarefas">
+          <span class="lb">Olá, ${esc((S.me.nome || '').split(' ')[0])}</span>
+          <span class="val" style="font-size:30px">${pend.length ? plural(pend.length, 'coisa para fazer', 'coisas para fazer') : 'Tudo em dia'}</span>
+          <span class="sub">Conte sempre sem pressa. Você não vê o valor esperado: o app só diz se bateu.</span>
+        </section>
+        ${acts}
+        ${pend.length ? `<section class="card" id="tarefas"><div class="sec"><h2>Para fazer</h2><span class="badge">${pend.length}</span></div>
+          <div class="list">${pend.map(linhaAlerta).join('')}</div></section>` : ''}
+        ${ultimas}`;
+    } else {
+      const R = S.resumo || { status: 'verde', naMatriz: S.saldo, alertas: [], nasLojas: { total: 0, porFilial: {} }, aCaminhoDoBanco: { total: 0, qtd: 0 }, gaveta: 0, tudo: S.saldo };
+      const v = R.naMatriz, reais = Math.trunc(Math.abs(v)), cent = money(v).split(',')[1] || '00';
+      const verm = R.alertas.filter(a => a.nivel === 'vermelho').length;
+      const st = R.status === 'verde' ? { k: 'ok', ic: 'ok', t: 'Tudo certo' }
+        : R.status === 'vermelho' ? { k: 'bad', ic: 'alert', t: plural(verm, 'problema', 'problemas') + (R.alertas.length > verm ? ' · ' + plural(R.alertas.length - verm, 'aviso', 'avisos') : '') }
+        : { k: 'wa', ic: 'clock', t: plural(R.alertas.length, 'coisa para olhar', 'coisas para olhar') };
+      const uc = R.ultimaContagem;
+      const ucTxt = !uc ? 'O cofre ainda não foi contado. Conte para confirmar.'
+        : 'Última contagem: ' + (uc.horas < 1 ? 'agora há pouco' : uc.horas < 24 ? 'há ' + uc.horas + ' h' : 'há ' + Math.floor(uc.horas / 24) + ' dia(s)') + ', ' + esc(uc.por || '') + ', ' + (uc.diferenca === 0 ? 'bateu' : (uc.diferenca < 0 ? 'faltou ' : 'sobrou ') + money(Math.abs(uc.diferenca)));
+      const pf = Object.entries(R.nasLojas.porFilial || {}).filter(([, x]) => x.caixasSemSacola || x.naFilial || x.chegouFaltaContar).sort((a, b) => a[0] - b[0]);
+      const jobP = (S.jobs || []).some(j => j.status === 'pendente');
+      $('#main').innerHTML = `
+        <section class="hero" aria-label="Dinheiro na matriz">
+          <span class="lb">Dinheiro na matriz agora</span>
+          <span class="val num"><small>R$</small>${v < 0 ? '−' : ''}${reais.toLocaleString('pt-BR')}<small style="margin:0 0 0 2px">,${cent}</small></span>
+          <span class="sub">${ucTxt}</span>
+          <button type="button" class="stat ${st.k}" data-alvo="tarefas">${ic(st.ic)}<span>${esc(st.t)}</span>${R.alertas.length ? `<span class="go-ar">${ic('chev')}</span>` : ''}</button>
+        </section>
+        ${acts}
+        ${R.alertas.length ? `<section class="card" id="tarefas"><div class="sec"><h2>O que olhar</h2><span class="badge${verm ? ' bad' : ''}">${R.alertas.length}</span></div>
+          <div class="list">${R.alertas.map(linhaAlerta).join('')}</div></section>` : ''}
+        <section class="card"><div class="sec"><h2>Todo o seu dinheiro</h2></div>
+          <div>
+            <div class="kv"><span>Na matriz (cofre)</span><b>${money(R.naMatriz)}</b></div>
+            ${R.nasLojas.total ? `<button type="button" class="kv" data-go="sacolas" style="width:100%;background:none;border:0;padding-left:0;padding-right:0;font:inherit;color:inherit;text-align:left"><span>Nas lojas e a caminho <span class="small muted">(valor do StarIA, ainda não contado)</span></span><b>${money(R.nasLojas.total)}</b></button>
+              ${pf.map(([f, x]) => `<div class="kv small muted" style="padding-left:12px"><span>Filial ${esc(f)}</span><span>${money(r2(x.caixasSemSacola + x.naFilial + x.chegouFaltaContar))}</span></div>`).join('')}` : ''}
+            ${R.aCaminhoDoBanco.total ? `<button type="button" class="kv" data-go="extrato" style="width:100%;background:none;border:0;padding-left:0;padding-right:0;font:inherit;color:inherit;text-align:left"><span>Saiu para o banco <span class="small muted">(${plural(R.aCaminhoDoBanco.qtd, 'sangria', 'sangrias')}, falta você confirmar)</span></span><b>${money(R.aCaminhoDoBanco.total)}</b></button>` : ''}
+            <button type="button" class="kv" data-go="gaveta" style="width:100%;background:none;border:0;padding-left:0;padding-right:0;font:inherit;color:inherit;text-align:left"><span>Gaveta de impostos</span><b>${money(R.gaveta)}</b></button>
+            <div class="kv tot"><span><b>Total</b></span><b>${money(R.tudo)}</b></div>
+          </div></section>
+        <section class="card"><div class="sec"><h2>StarIA</h2></div>
+          <p class="small muted" style="margin:0 0 10px">${R.stariaAte ? 'Números até ' + dBR(R.stariaAte) + '.' : 'Nenhum número do StarIA ainda.'} ${jobP ? '<b>Pedido feito: falta o Claude processar.</b> Peça no chat: “processar as consultas do StarIA”.' : 'As vendas de hoje entram amanhã.'}</p>
+          <button class="btn full" type="button" id="btnStaria">${ic('sync')} Atualizar números do StarIA</button></section>
+        ${ultimas}`;
+      $('#btnStaria').addEventListener('click', () => post('/api/caixa/staria/pedir', { auto: true }, 'Pedido feito. No chat, peça ao Claude: “processar as consultas do StarIA”.'));
+    }
+    $('#btnConferir').addEventListener('click', sheetConferir);
+    $('#btnSangria').addEventListener('click', sheetSangria);
+    document.querySelectorAll('#main [data-contar]').forEach(b => b.addEventListener('click', sheetConferir));
+    const al = document.querySelector('[data-alvo=tarefas]'); if (al) al.addEventListener('click', () => { const t = $('#tarefas'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    ligarMovs(ultimos);
+  }
+
+  /* ---------- Extrato: tudo que entrou e saiu (antes ficava embaixo do Início) ---------- */
+  function renderExtrato() {
     const pf = Object.entries(S.porFilial || {}).sort((a, b) => a[0] - b[0]);
-    $('#main').innerHTML = `
-      <section class="saldo ${cls}"><span>Saldo esperado em dinheiro (consolidado)</span><b>${money(S.saldo)}</b>
-        <span class="small">desde ${dBR(S.cfg.dataInicial)}${isAdmin() ? ' · <a href="#" id="verCfg" style="color:inherit;font-weight:700">editar saldo inicial</a>' : ''}</span></section>
-      ${pf.length ? `<section class="card"><h2>Por filial (já entrou no consolidado acima)</h2>
-        <table><thead><tr><th>Filial</th><th class="n">Vendas</th><th class="n">Crediário em dinheiro</th><th class="n">Total</th></tr></thead><tbody>
-        ${pf.map(([f, v]) => `<tr><td>${esc(f)}</td><td class="n">${money(v.vendas)}</td><td class="n">${money(v.crediario)}</td><td class="n"><b>${money(r2(v.vendas + v.crediario))}</b></td></tr>`).join('')}
-        </tbody></table></section>` : ''}
-      <div class="row">
-        <button class="btn sm pri" type="button" id="btnConferir">⚖️ Conferir caixa</button>
-        ${isAdmin() ? '<button class="btn sm" type="button" id="btnAjuste">✏️ Lançar ajuste</button>' : ''}
-      </div>
+    const lista = S.mov || [];
+    $('#main').innerHTML = `<div class="pagehd"><h1>Extrato</h1><p>${isAdmin() ? 'Tudo que entrou e saiu do cofre.' : 'O que você lançou.'} Toque numa linha para ver detalhes.</p></div>
+      ${pf.length ? `<section class="card"><h2>Quanto cada filial trouxe</h2><div>
+        ${pf.map(([f, v]) => `<div class="kv"><span>Filial ${esc(f)}${v.crediario ? ` <span class="small muted">(${money(v.crediario)} de crediário)</span>` : ''}</span><b>${money(r2(v.vendas + v.crediario))}</b></div>`).join('')}
+        </div></section>` : ''}
       <section class="card">
-        <h2>Lançamentos</h2>
-        ${lista.length ? `<div class="list">${lista.map(m => `<div class="it">
-            <div class="ic">${movIcon(m)}</div>
-            <div class="tx"><b>${esc(movTitulo(m))}</b><span>${movSub(m)}</span></div>
-            <div class="vl"><span class="${m.tipo === 'sangria' || m.valor < 0 ? 'neg' : 'pos'}">${m.tipo === 'sangria' ? '−' : m.valor < 0 ? '−' : '+'}${money(Math.abs(m.valor))}</span>
-              <br><small class="muted">${dBR(m.data)}</small>
-              ${m.tipo === 'sangria' && !m.depositadoEm ? `<br><button class="btn sm" type="button" data-dep="${esc(m.id)}" style="margin-top:4px">Marcar depositado</button>` : ''}
-              ${isAdmin() && (m.tipo === 'sangria' || m.tipo === 'ajuste') ? `<br><button class="btn sm dan" type="button" data-delmov="${esc(m.id)}" style="margin-top:4px">Apagar</button>` : ''}
-            </div></div>`).join('')}</div>` : '<p class="muted">Nenhum lançamento ainda.</p>'}
-      </section>`;
-    const vc = $('#verCfg'); if (vc) vc.addEventListener('click', e => { e.preventDefault(); sheetCfg(); });
+        ${lista.length ? `<div class="list">${lista.map(rowMov).join('')}</div>` : '<div class="empty"><p>Nenhum lançamento ainda.</p></div>'}
+      </section>
+      ${isAdmin() ? `<button class="btn full" type="button" id="btnAjuste">${ic('edit')} Lançar ajuste (correção)</button>` : ''}`;
     const ba = $('#btnAjuste'); if (ba) ba.addEventListener('click', sheetAjuste);
-    const bc = $('#btnConferir'); if (bc) bc.addEventListener('click', sheetConferir);
-    document.querySelectorAll('[data-dep]').forEach(b => b.addEventListener('click', () => post('/api/caixa/depositado', { id: b.dataset.dep, depositadoEm: hoje() }, 'Marcado como depositado')));
-    document.querySelectorAll('[data-delmov]').forEach(b => b.addEventListener('click', () => { if (confirm('Apagar este lançamento?')) post('/api/caixa/mov/excluir', { id: b.dataset.delmov }, 'Lançamento apagado'); }));
+    ligarMovs(lista);
+  }
+
+  /* ---------- Mais (só o dono): o que é raro fica aqui, fora da barra de baixo ---------- */
+  function renderMais() {
+    if (!isAdmin()) { view = 'inicio'; return render(); }
+    const R = resumo();
+    const jobP = (S.jobs || []).some(j => j.status === 'pendente');
+    const item = (go, i, t, s, extra) => `<button type="button" class="it" data-go="${go}"><div class="ic">${ic(i)}</div><div class="tx"><b>${t}</b><span>${s}</span></div>${extra || ''}<span class="ch">${ic('chev')}</span></button>`;
+    $('#main').innerHTML = `<div class="pagehd"><h1>Mais</h1></div>
+      <section class="card menu"><div class="list">
+        ${item('ocorrencias', 'shield', 'Ocorrências', 'Diferenças e tudo que foi apagado ou alterado', R.alertas.length ? `<span class="badge bad">${R.alertas.length}</span>` : '')}
+        ${item('staria', 'sync', 'Puxar do StarIA', jobP ? 'Uma consulta está esperando o Claude' : 'Pedir as vendas em dinheiro de um período')}
+        ${item('gaveta', 'tax', 'Gaveta de impostos', money(S.saldoImpostos || 0) + ' guardado à parte')}
+        ${item('acessos', 'users', 'Pessoas com acesso', plural((S.pessoas || []).length, 'pessoa', 'pessoas'))}
+        <button type="button" class="it" id="verCfg"><div class="ic">${ic('edit')}</div><div class="tx"><b>Dinheiro inicial do cofre</b><span>${money(S.cfg ? S.cfg.saldoInicial : 0)} em ${S.cfg ? dBR(S.cfg.dataInicial) : '—'}</span></div><span class="ch">${ic('chev')}</span></button>
+      </div></section>`;
+    $('#verCfg').addEventListener('click', () => { if (S.cfg) sheetCfg(); else { view = 'inicio'; render(); } });
   }
   function sheetCfg() {
     openSheet(`<div class="tt"><h2>Editar saldo inicial</h2><button class="x" type="button" id="shxb">✕</button></div>
@@ -158,12 +322,14 @@
     });
   }
   function sheetConferir() {
-    openSheet(`<div class="tt"><h2>Conferir caixa</h2><button class="x" type="button" id="shxb">✕</button></div>
-      <p class="muted small">Conte o dinheiro físico e digite quanto deu. O sistema compara com o saldo esperado agora (${money(S.saldo)}) e, se for diferente, fica registrado para o administrador.</p>
+    const cego = !isAdmin();
+    let tentativa = 0;
+    openSheet(`<div class="tt"><h2>Contar o cofre</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      <p class="muted small">Conte todo o dinheiro do cofre e digite o total. ${cego ? 'Você não vê o valor esperado: o app só diz se bateu. Se não bater, conte de novo.' : 'O app compara com o que deveria ter.'}</p>
       <form id="fcf">
         <div class="field"><label for="cfValor">Quanto você contou</label><input type="text" inputmode="decimal" id="cfValor" placeholder="0,00" required></div>
         <div class="field"><label for="cfObs">Observação (opcional)</label><textarea id="cfObs" placeholder="Ex.: nota rasgada, troco emprestado…"></textarea></div>
-        <button class="btn pri full" type="submit">Conferir</button>
+        <button class="btn pri lg full" type="submit">Comparar</button>
       </form><div id="cfOut"></div>`, () => {
       $('#shxb').addEventListener('click', closeSheet);
       $('#fcf').addEventListener('submit', async e => {
@@ -171,11 +337,18 @@
         try {
           const r = await api('/api/caixa/conferir', { valorContado: $('#cfValor').value, motivo: $('#cfObs').value });
           await reload();
-          const dif = Number(r.diferenca);
+          if (r.bateu) { $('#fcf').hidden = true; $('#cfOut').innerHTML = `<div class="okbox"><b>Bateu certinho!</b> O cofre confere.</div>`; return; }
+          if (cego && tentativa === 0) {
+            // não revela o valor: só pede para contar de novo (a 1ª contagem já ficou registrada para o dono)
+            tentativa++;
+            $('#cfOut').innerHTML = `<div class="warn"><b>Não bateu.</b> Conte de novo com calma e digite o total.</div>`;
+            $('#cfValor').value = ''; $('#cfValor').focus();
+            return;
+          }
           $('#fcf').hidden = true;
-          $('#cfOut').innerHTML = dif === 0
-            ? `<div class="note" style="background:var(--green-bg);color:var(--green)"><b>Bateu certinho!</b> O caixa confere com o esperado.</div>`
-            : `<div class="warn"><b>${dif > 0 ? 'Sobrou' : 'Faltou'} ${money(Math.abs(dif))}.</b> Ficou registrado na aba Ocorrências para o administrador.</div>`;
+          const dif = Number(r.diferenca);
+          $('#cfOut').innerHTML = cego ? `<div class="warn"><b>Registrado.</b> Não bateu com o esperado: o dono vai ver.</div>`
+            : `<div class="warn"><b>${dif > 0 ? 'Sobrou' : 'Faltou'} ${money(Math.abs(dif))}.</b> Ficou registrado nas Ocorrências.</div>`;
         } catch (er) { fail(er); } finally { b.disabled = false; }
       });
     });
@@ -193,24 +366,28 @@
     });
   }
 
-  /* ---------- Sangria ---------- */
-  function renderSangria() {
-    $('#main').innerHTML = `<section class="card">
-      <h1>Nova sangria</h1>
-      <p class="muted small">Dinheiro que saiu do caixa principal. Pode ficar guardado alguns dias até o depósito; marque "depositado" quando chegar lá.</p>
+  /* ---------- Sangria: agora é um painel de baixo (era uma aba inteira) ---------- */
+  function sheetSangria() {
+    openSheet(`<div class="tt"><h2>Fazer sangria</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      <p class="muted small">Dinheiro que saiu do cofre.${isAdmin() ? '' : ' Quando for para o banco, o dono confirma no extrato.'}</p>
       <form id="fsg">
-        <div class="field"><label for="sgValor">Valor</label><input type="text" inputmode="decimal" id="sgValor" placeholder="0,00" required></div>
-        <div class="field"><label for="sgData">Data</label><input type="date" id="sgData" value="${hoje()}" max="${hoje()}"></div>
-        <div class="field"><label for="sgMotivo">Motivo / observação</label><textarea id="sgMotivo" placeholder="Ex.: para depósito no Banco do Brasil" required></textarea></div>
-        ${isAdmin() ? `<div class="field"><label for="sgDestino">Destino</label>
-          <select id="sgDestino"><option value="">Retirada normal (vai para mim)</option><option value="impostos">Gaveta de impostos e financiamentos</option></select></div>` : ''}
-        <button class="btn pri full" type="submit">Lançar sangria</button>
-      </form></section>`;
-    $('#fsg').addEventListener('submit', async e => {
-      e.preventDefault();
-      const destino = isAdmin() ? $('#sgDestino').value : '';
-      const r = await post('/api/caixa/sangria', { valor: $('#sgValor').value, data: $('#sgData').value, motivo: $('#sgMotivo').value, destino: destino || undefined }, destino === 'impostos' ? 'Sangria lançada na gaveta de impostos' : 'Sangria lançada');
-      if (r) { view = 'inicio'; render(); }
+        <div class="field"><label for="sgValor">Quanto saiu</label><input type="text" inputmode="decimal" id="sgValor" placeholder="0,00" required></div>
+        <div class="field"><label for="sgMotivo">Para quê</label>
+          <div class="row" style="flex-wrap:wrap;gap:8px;margin-bottom:8px">${['Depósito no banco', 'Pagamento a fornecedor (com nota)', 'Outro: '].map(t => `<button type="button" class="pill mu" data-mot="${esc(t)}" style="border:0;cursor:pointer;min-height:36px">${esc(t.replace(': ', ''))}</button>`).join('')}</div>
+          <input type="text" id="sgMotivo" placeholder="Ex.: depósito no Sicoob" required maxlength="300"></div>
+        ${isAdmin() ? `<div class="field"><label for="sgDestino">Para onde vai</label>
+          <select id="sgDestino"><option value="">Retirada normal (para mim / banco)</option><option value="impostos">Gaveta de impostos e financiamentos</option></select></div>` : ''}
+        <div class="field"><label for="sgData">Dia</label><input type="date" id="sgData" value="${hoje()}" max="${hoje()}"></div>
+        <button class="btn pri lg full" type="submit">Lançar sangria</button>
+      </form>`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      setTimeout(() => { const v = $('#sgValor'); if (v) v.focus(); }, 50);
+      document.querySelectorAll('#sheet [data-mot]').forEach(b => b.addEventListener('click', () => { const m = $('#sgMotivo'); m.value = b.dataset.mot; m.focus(); }));
+      $('#fsg').addEventListener('submit', e => {
+        e.preventDefault();
+        const destino = isAdmin() ? $('#sgDestino').value : '';
+        post('/api/caixa/sangria', { valor: $('#sgValor').value, data: $('#sgData').value, motivo: $('#sgMotivo').value, destino: destino || undefined }, destino === 'impostos' ? 'Sangria lançada na gaveta de impostos' : 'Sangria lançada');
+      });
     });
   }
 
@@ -285,13 +462,14 @@
      aparece pronta pra conferência, sem o passo de marcar chegada. */
   function podeConferirSacola() { return isAdmin() || S.me.role === 'financeiro'; }
   function sacolaStatus(s) {
+    if (s.conferidoEm && s.diferenca == null) return s.bateu === false ? '<span class="pill bad">Não bateu</span>' : '<span class="pill ok">Conferida · bateu</span>';
     if (s.conferidoEm) {
-      const okVenda = s.diferenca === 0, okCredi = !s.crediStaria || s.crediDiferenca === 0;
+      const okVenda = s.diferenca === 0, okCredi = !s.crediStaria || !s.crediDiferenca;
       if (okVenda && okCredi) return '<span class="pill ok">Conferida · bateu certinho</span>';
       const partes = [];
       if (!okVenda) partes.push((s.diferenca > 0 ? 'vendas: sobrou ' : 'vendas: faltou ') + money(Math.abs(s.diferenca)));
       if (!okCredi) partes.push((s.crediDiferenca > 0 ? 'crediário: sobrou ' : 'crediário: faltou ') + money(Math.abs(s.crediDiferenca)));
-      return '<span class="pill wa">Conferida · ' + partes.join(' · ') + '</span>';
+      return '<span class="pill bad">Conferida · ' + partes.join(' · ') + '</span>';
     }
     if (s.chegouEm) return '<span class="pill wa">' + (s.precisaChegar ? 'Chegou na matriz · aguardando conferência' : 'Pronta pra conferência') + '</span>';
     return '<span class="pill wa">Ainda na filial</span>';
@@ -305,117 +483,140 @@
     const dias = [...new Set(cx.map(c => c.data))].sort();
     return 'Caixas ' + [...new Set(cx.map(c => c.ecf))].sort().map(esc).join(', ') + ' · ' + (dias.length === 1 ? dBR(dias[0]) : dBR(dias[0]) + ' a ' + dBR(dias[dias.length - 1]));
   }
+  const grupoDe = l => l.filial + '|' + l.data;
   function htmlCaixasPendentes() {
     const lista = S.caixasPendentes;
-    if (!lista) return '';
+    if (!lista || !lista.length) return '';
     for (const id of [...marcados]) if (!lista.some(l => l.id === id)) marcados.delete(id);
     const grupos = {};
-    for (const l of lista) (grupos[l.filial + '|' + l.data] = grupos[l.filial + '|' + l.data] || []).push(l);
+    for (const l of lista) (grupos[grupoDe(l)] = grupos[grupoDe(l)] || []).push(l);
     const chaves = Object.keys(grupos).sort((a, b) => { const [fa, da] = a.split('|'), [fb, db] = b.split('|'); return fa - fb || (da < db ? -1 : da > db ? 1 : 0); });
     return `<section class="card">
-      <h2>Caixas do StarIA para conferir</h2>
-      <p class="muted small">Abra no StarIA a tela <b>Fechamento de Caixa (PDV)</b> e marque aqui só os caixas que lá já estão em <b>preto</b> (conferidos). Os vermelhos ficam sem marcar: continuam aqui esperando, e a próxima consulta atualiza o valor deles.</p>
-      ${chaves.length ? chaves.map(k => {
+      <div class="sec"><h2>Caixas do StarIA para marcar</h2><span class="badge">${lista.length}</span></div>
+      <details class="how"><summary>Quais devo marcar?</summary>
+        <p>Abra no StarIA a tela <b>Fechamento de Caixa (PDV)</b>. Marque aqui só os caixas que lá estão em <b>preto</b> (já conferidos). Os vermelhos ficam sem marcar: continuam aqui e a próxima consulta atualiza o valor.</p></details>
+      <div>${chaves.map(k => {
         const ls = grupos[k], [f, d] = k.split('|');
-        const tudo = ls.every(l => marcados.has(l.id));
-        return `<div style="margin:12px 0 4px"><label class="row" style="gap:8px;font-weight:700"><input type="checkbox" data-grupo="${esc(k)}" ${tudo ? 'checked' : ''}> Filial ${esc(f)} · ${dBR(d)}</label></div>
-          <div class="list">${ls.map(l => `<label class="it" style="cursor:pointer">
-            <div class="ic"><input type="checkbox" data-cx="${esc(l.id)}" ${marcados.has(l.id) ? 'checked' : ''} style="width:20px;height:20px"></div>
-            <div class="tx"><b>Caixa ${esc(l.ecf)}</b><span>Dinheiro</span></div><div class="vl"><b>${money(l.dinheiro)}</b></div>
+        return `<div class="grp"><b>Filial ${esc(f)} · ${dBR(d)}</b><button type="button" class="lnk" data-grupo="${esc(k)}">Marcar todos</button></div>
+          <div class="list">${ls.map(l => `<label class="it${marcados.has(l.id) ? ' on' : ''}" data-cxrow="${esc(l.id)}">
+            <input type="checkbox" class="ck" data-cx="${esc(l.id)}" ${marcados.has(l.id) ? 'checked' : ''}>
+            <div class="tx"><b>Caixa ${esc(l.ecf)}</b></div>${l.dinheiro == null ? '' : `<div class="vl">${money(l.dinheiro)}</div>`}
           </label>`).join('')}</div>`;
-      }).join('') : '<p class="muted">Nenhum caixa esperando. Peça uma consulta na aba StarIA.</p>'}
-      ${chaves.length ? `<div id="cxResumo" class="small muted" style="margin:12px 0 8px"></div><button class="btn pri full" type="button" id="btnEnviarCx" disabled>Enviar marcados para a sacola</button>` : ''}
+      }).join('')}</div>
+      <div class="sbar"><div class="t" id="cxResumo"></div><button class="btn" type="button" id="btnEnviarCx" disabled>Enviar</button></div>
     </section>`;
   }
   function ligarCaixasPendentes() {
     const lista = S.caixasPendentes || [];
-    const resumo = () => {
+    const atualiza = () => {
       const sel = lista.filter(l => marcados.has(l.id));
-      const total = sel.reduce((a, l) => a + l.dinheiro, 0);
+      const total = r2(sel.reduce((a, l) => a + l.dinheiro, 0));
       const r = $('#cxResumo'), b = $('#btnEnviarCx');
-      if (r) r.textContent = sel.length ? sel.length + ' caixa(s) marcado(s) · ' + money(Math.round(total * 100) / 100) : 'Nenhum caixa marcado.';
-      if (b) b.disabled = !sel.length;
-      document.querySelectorAll('[data-grupo]').forEach(g => { const ls = lista.filter(l => l.filial + '|' + l.data === g.dataset.grupo); g.checked = ls.length > 0 && ls.every(l => marcados.has(l.id)); });
+      const comValor = sel.some(l => l.dinheiro != null);
+      if (r) r.innerHTML = sel.length ? `${plural(sel.length, 'caixa marcado', 'caixas marcados')}${comValor ? `<b>${money(total)}</b>` : ''}` : 'Marque os caixas que estão em preto no StarIA';
+      if (b) { b.disabled = !sel.length; b.textContent = sel.length ? 'Enviar para a sacola' : 'Enviar'; }
+      document.querySelectorAll('[data-cxrow]').forEach(x => x.classList.toggle('on', marcados.has(x.dataset.cxrow)));
+      document.querySelectorAll('[data-grupo]').forEach(g => { const ls = lista.filter(l => grupoDe(l) === g.dataset.grupo); g.textContent = ls.every(l => marcados.has(l.id)) ? 'Desmarcar' : 'Marcar todos'; });
     };
-    document.querySelectorAll('[data-cx]').forEach(c => c.addEventListener('change', () => { if (c.checked) marcados.add(c.dataset.cx); else marcados.delete(c.dataset.cx); resumo(); }));
-    document.querySelectorAll('[data-grupo]').forEach(g => g.addEventListener('change', () => {
-      lista.filter(l => l.filial + '|' + l.data === g.dataset.grupo).forEach(l => { if (g.checked) marcados.add(l.id); else marcados.delete(l.id); });
+    document.querySelectorAll('[data-cx]').forEach(c => c.addEventListener('change', () => { if (c.checked) marcados.add(c.dataset.cx); else marcados.delete(c.dataset.cx); atualiza(); }));
+    document.querySelectorAll('[data-grupo]').forEach(g => g.addEventListener('click', () => {
+      const ls = lista.filter(l => grupoDe(l) === g.dataset.grupo), todos = ls.every(l => marcados.has(l.id));
+      ls.forEach(l => { if (todos) marcados.delete(l.id); else marcados.add(l.id); });
       document.querySelectorAll('[data-cx]').forEach(c => { c.checked = marcados.has(c.dataset.cx); });
-      resumo();
+      atualiza();
     }));
     const b = $('#btnEnviarCx');
     if (b) b.addEventListener('click', async () => {
-      const ids = lista.filter(l => marcados.has(l.id)).map(l => l.id);
-      const total = lista.filter(l => marcados.has(l.id)).reduce((a, l) => a + l.dinheiro, 0);
-      if (!ids.length || !confirm('Enviar ' + ids.length + ' caixa(s), ' + money(Math.round(total * 100) / 100) + ' em dinheiro, para a sacola? Confira se todos estão em preto no StarIA.')) return;
+      const sel = lista.filter(l => marcados.has(l.id)), ids = sel.map(l => l.id);
+      const total = r2(sel.reduce((a, l) => a + l.dinheiro, 0));
+      const vtxt = sel.some(l => l.dinheiro != null) ? ' (' + money(total) + ')' : '';
+      if (!ids.length || !confirm('Enviar ' + plural(ids.length, 'caixa', 'caixas') + vtxt + ' para a sacola?\n\nConfira se todos estão em preto no StarIA.')) return;
       b.disabled = true;
       const r = await post('/api/caixa/caixas/aceitar', { ids }, 'Enviado para a sacola');
       if (r) marcados.clear(); else b.disabled = false;
       render();
     });
-    resumo();
+    atualiza();
+  }
+  /* cartão de uma sacola a receber: valor grande, de onde veio, 3 etapas e UMA ação */
+  function htmlSacola(s) {
+    const chegou = !!s.chegouEm, pode = podeConferirSacola();
+    const e1 = s.precisaChegar ? 'Na filial' : 'Na matriz';
+    const acao = !chegou ? `<button class="btn pri full" type="button" data-chegou="${esc(s.id)}">${ic('truck')} A sacola chegou na matriz</button>`
+      : pode ? `<button class="btn gold full" type="button" data-conferir="${esc(s.id)}">${ic('count')} Conferir agora</button>`
+      : '<span class="pill wa">Esperando o financeiro conferir</span>';
+    return `<div class="sac">
+      <div class="top"><div><b>Filial ${esc(s.filial)}</b><div class="small muted">${caixasDe(s) || dBR(s.periodoIni) + ' a ' + dBR(s.periodoFim)}</div></div>
+        ${s.valorStaria == null ? '' : `<div class="vl">${money(s.valorStaria)}</div>`}</div>
+      ${s.crediStaria ? `<p class="small muted">+ ${money(s.crediStaria)} de crediário recebido (informar na conferência)</p>` : ''}
+      <div><div class="steps"><span class="${chegou ? 'on' : 'cur'}"></span><span class="${chegou ? 'cur' : ''}"></span><span></span></div>
+        <div class="stepl" style="margin-top:4px"><span>${e1}</span><span>Chegou</span><span>Conferida</span></div></div>
+      ${acao}
+    </div>`;
   }
   function renderSacolas() {
-    const mc = S.miniCaixas || {};
-    const filiais = Object.keys(mc).sort((a, b) => a - b);
-    const pendentes = (S.sacolas || []).filter(s => !s.conferidoEm);
+    const pendentes = (S.sacolas || []).filter(s => !s.conferidoEm)
+      .sort((a, b) => (b.chegouEm ? 1 : 0) - (a.chegouEm ? 1 : 0) || a.filial - b.filial);
     const conferidas = (S.sacolas || []).filter(s => s.conferidoEm);
-    $('#main').innerHTML = htmlCaixasPendentes() + `<section class="card">
-      <h1>Sacolas</h1>
-      <p class="muted small">Cada filial manda uma sacola de dinheiro (vendas + crediário recebido) pra matriz. O StarIA diz quanto vendeu e recebeu; só depois que a sacola chega e é conferida de verdade é que esse dinheiro entra no saldo do caixa principal — com o valor realmente contado. A matriz (filial 1) não precisa chegar: já nasce pronta pra conferência.</p>
-      ${filiais.length ? `<div class="list">${filiais.map(f => `<div class="it">
-          <div class="ic">🏪</div><div class="tx"><b>Filial ${esc(f)}</b><span>${mc[f].naFilial ? 'Ainda na filial: ' + money(mc[f].naFilial) : ''}${mc[f].naFilial && mc[f].aguardandoConferencia ? ' · ' : ''}${mc[f].aguardandoConferencia ? 'Aguardando conferência: ' + money(mc[f].aguardandoConferencia) : ''}</span></div>
-        </div>`).join('')}</div>` : '<p class="muted">Nenhum valor pendente agora.</p>'}
-    </section>
+    $('#main').innerHTML = `<div class="pagehd"><h1>Sacolas</h1><p>O dinheiro de cada filial, do StarIA até entrar no cofre.</p></div>
+    ${htmlCaixasPendentes()}
     <section class="card">
-      <h2>Pendentes</h2>
-      ${pendentes.length ? `<div class="list">${pendentes.map(s => `<div class="it" style="align-items:flex-start">
-          <div class="ic">📦</div>
-          <div class="tx"><b>Filial ${esc(s.filial)} · ${money(s.valorStaria)}${s.crediStaria ? ' + ' + money(s.crediStaria) + ' crediário' : ''}</b><span>${caixasDe(s) || dBR(s.periodoIni) + ' a ' + dBR(s.periodoFim)} · ${sacolaStatus(s)}</span></div>
-          <div class="vl">${!s.chegouEm ? `<button class="btn sm pri" type="button" data-chegou="${esc(s.id)}">Chegou na matriz</button>`
-            : podeConferirSacola() ? `<button class="btn sm pri" type="button" data-conferir="${esc(s.id)}">Conferir</button>` : ''}</div>
-        </div>`).join('')}</div>` : '<p class="muted">Nenhuma sacola pendente.</p>'}
+      <div class="sec"><h2>A receber</h2>${pendentes.length ? `<span class="badge">${pendentes.length}</span>` : ''}</div>
+      ${pendentes.length ? pendentes.map(htmlSacola).join('') : `<div class="empty"><div class="big">${ic('ok')}</div><p>Nenhuma sacola pendente.</p></div>`}
     </section>
     ${conferidas.length ? `<section class="card"><h2>Conferidas</h2><div class="list">${conferidas.slice(0, 20).map(s => `<div class="it">
-        <div class="ic">📦</div><div class="tx"><b>Filial ${esc(s.filial)} · ${money(s.valorContado)}${s.crediDinheiro ? ' + ' + money(s.crediDinheiro) + ' crediário' : ''}</b><span>${caixasDe(s) || dBR(s.periodoIni) + ' a ' + dBR(s.periodoFim)} · ${sacolaStatus(s)}</span></div>
-      </div>`).join('')}</div></section>` : ''}
-    <div id="pOut"></div>`;
+        <div class="ic ${sacolaOk(s) ? 'ok' : 'bad'}">${ic(sacolaOk(s) ? 'ok' : 'alert')}</div>
+        <div class="tx"><b>Filial ${esc(s.filial)}</b><span>${caixasDe(s) || dBR(s.periodoIni) + ' a ' + dBR(s.periodoFim)}</span><span style="margin-top:4px">${sacolaStatus(s)}</span></div>
+        ${s.valorContado == null ? '' : `<div class="vl">${money(r2((s.valorContado || 0) + (s.crediDinheiro || 0)))}</div>`}
+      </div>`).join('')}</div></section>` : ''}`;
     ligarCaixasPendentes();
     document.querySelectorAll('[data-chegou]').forEach(b => b.addEventListener('click', () => post('/api/caixa/sacola/chegou', { id: b.dataset.chegou }, 'Marcado: chegou na matriz')));
     document.querySelectorAll('[data-conferir]').forEach(b => b.addEventListener('click', () => sheetConferirSacola(S.sacolas.find(s => s.id === b.dataset.conferir))));
   }
+  // a equipe recebe só "bateu" (contagem cega); o dono recebe a diferença
+  const sacolaOk = s => s.diferenca == null ? s.bateu !== false : s.diferenca === 0 && (!s.crediStaria || !s.crediDiferenca);
+  /* conferir a sacola. Para a equipe é às cegas: não vê o valor do StarIA, só conta e digita o total. Antes de
+     gravar, o app CHECA (sem gravar) se bateu; se não bateu, pede para contar de novo uma vez, e só então registra. */
   function sheetConferirSacola(s) {
-    openSheet(`<div class="tt"><h2>Conferir sacola · Filial ${esc(s.filial)}</h2><button class="x" type="button" id="shxb">✕</button></div>
-      <p class="muted small">O StarIA apontou ${money(s.valorStaria)} em vendas em dinheiro dessa filial${(s.caixas || []).length ? ':' : '.'} Digite o que realmente veio dentro da sacola — é esse valor que entra no saldo do caixa principal.</p>
-      ${(s.caixas || []).length ? `<div class="list small" style="margin-bottom:10px">${s.caixas.map(c => `<div class="it"><div class="tx"><b>Caixa ${esc(c.ecf)} · ${dBR(c.data)}</b></div><div class="vl">${money(c.dinheiro)}</div></div>`).join('')}</div>` : ''}
+    const cego = !isAdmin(), legado = !!s.crediStaria && !String(s.jobId || '').startsWith('lt');
+    const caixas = s.caixas || [];
+    openSheet(`<div class="tt"><h2>Conferir sacola · Filial ${esc(s.filial)}</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      <p class="muted small">${cego ? 'Conte todo o dinheiro de vendas que veio na sacola e digite o total. Você não vê o valor esperado: o app só diz se bateu.' : 'O StarIA apontou ' + money(s.valorStaria) + ' em vendas em dinheiro dessa filial. Digite o que realmente veio dentro da sacola: é esse valor que entra no cofre.'}</p>
+      ${caixas.length ? `<div class="list small" style="margin-bottom:10px">${caixas.map(c => `<div class="it"><div class="tx"><b>Caixa ${esc(c.ecf)}</b><span>${dBR(c.data)}</span></div>${c.dinheiro == null ? '' : `<div class="vl">${money(c.dinheiro)}</div>`}</div>`).join('')}</div>` : ''}
       <form id="fcs">
-        <div class="field"><label for="csValor">Valor de vendas contado</label><input type="text" id="csValor" inputmode="decimal" placeholder="0,00" required></div>
-        ${String(s.jobId || '').startsWith('lt') ? `<div class="note">Se veio também <b>crediário recebido</b> (cliente pagando a conta) nessa sacola, informe por forma de pagamento — só o dinheiro entra no saldo. Se não veio, deixe em branco.</div>
+        <div class="field"><label for="csValor">Total de vendas contado</label><input type="text" id="csValor" inputmode="decimal" placeholder="0,00" required></div>
+        ${legado && !cego ? `<div class="note">O StarIA apontou ${money(s.crediStaria)} de crediário recebido. Diga quanto disso foi em cada forma, só o dinheiro entra no cofre.</div>
         <div class="field"><label for="csCrediDinheiro">Crediário em dinheiro</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00"></div>
         <div class="field"><label for="csCrediCartao">Crediário em cartão</label><input type="text" id="csCrediCartao" inputmode="decimal" placeholder="0,00"></div>
         <div class="field"><label for="csCrediPix">Crediário em Pix</label><input type="text" id="csCrediPix" inputmode="decimal" placeholder="0,00"></div>`
-        : s.crediStaria ? `<div class="note">O StarIA apontou ${money(s.crediStaria)} de crediário recebido nessa filial e período. Diga quanto disso foi em cada forma de pagamento — só o dinheiro entra no saldo.</div>
-        <div class="field"><label for="csCrediDinheiro">Crediário em dinheiro</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00"></div>
-        <div class="field"><label for="csCrediCartao">Crediário em cartão</label><input type="text" id="csCrediCartao" inputmode="decimal" placeholder="0,00"></div>
-        <div class="field"><label for="csCrediPix">Crediário em Pix</label><input type="text" id="csCrediPix" inputmode="decimal" placeholder="0,00"></div>` : ''}
-        <div class="field"><label for="csMotivo">Observação (se sobrou ou faltou)</label><input type="text" id="csMotivo" maxlength="300"></div>
-        <button class="btn pri full" type="submit">Confirmar conferência</button>
+        : `<div class="field"><label for="csCrediDinheiro">Veio dinheiro de cliente pagando conta (crediário)? Quanto?</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00"></div>`}
+        <div class="field"><label for="csMotivo">Observação (opcional)</label><input type="text" id="csMotivo" maxlength="300" placeholder="Ex.: nota rasgada, envelope sem nome…"></div>
+        <button class="btn pri lg full" type="submit">${cego ? 'Verificar' : 'Confirmar conferência'}</button>
       </form><div id="csOut"></div>`, () => {
       $('#shxb').addEventListener('click', () => { closeSheet(); render(); });
+      let tentativa = 0;
+      const confirmar = async () => {
+        const cd = $('#csCrediDinheiro'), cc = $('#csCrediCartao'), cp = $('#csCrediPix');
+        const r = await api('/api/caixa/sacola/conferir', {
+          id: s.id, valorContado: $('#csValor').value, motivo: $('#csMotivo').value,
+          crediDinheiro: cd ? cd.value : undefined, crediCartao: cc ? cc.value : undefined, crediPix: cp ? cp.value : undefined
+        });
+        await reload();
+        $('#fcs').hidden = true;
+        if (r.bateu) $('#csOut').innerHTML = `<div class="okbox"><b>Bateu certinho!</b> O dinheiro entrou no cofre.</div>`;
+        else if (r.diferenca == null) $('#csOut').innerHTML = `<div class="warn"><b>Registrado.</b> Não bateu com o esperado: o dono vai ver.</div>`;
+        else $('#csOut').innerHTML = `<div class="warn">${r.diferenca ? `<b>Vendas: ${r.diferenca > 0 ? 'sobrou' : 'faltou'} ${money(Math.abs(r.diferenca))}.</b><br>` : ''}${r.crediDiferenca ? `<b>Crediário: ${r.crediDiferenca > 0 ? 'sobrou' : 'faltou'} ${money(Math.abs(r.crediDiferenca))}.</b><br>` : ''}Ficou registrado nas Ocorrências.</div>`;
+      };
       $('#fcs').addEventListener('submit', async e => {
         e.preventDefault(); const b = e.target.querySelector('button'); b.disabled = true;
         try {
-          const cd = $('#csCrediDinheiro'), cc = $('#csCrediCartao'), cp = $('#csCrediPix');
-          const r = await api('/api/caixa/sacola/conferir', {
-            id: s.id, valorContado: $('#csValor').value, motivo: $('#csMotivo').value,
-            crediDinheiro: cd ? cd.value : undefined, crediCartao: cc ? cc.value : undefined, crediPix: cp ? cp.value : undefined
-          });
-          await reload();
-          $('#fcs').hidden = true;
-          const okVenda = r.diferenca === 0, okCredi = !s.crediStaria || r.crediDiferenca === 0;
-          $('#csOut').innerHTML = okVenda && okCredi
-            ? `<div class="note" style="background:var(--green-bg);color:var(--green)"><b>Bateu certinho!</b> O valor contado confere com o que o StarIA apontou.</div>`
-            : `<div class="warn">${!okVenda ? `<b>Vendas: ${r.diferenca > 0 ? 'sobrou' : 'faltou'} ${money(Math.abs(r.diferenca))}.</b><br>` : ''}${!okCredi ? `<b>Crediário: ${r.crediDiferenca > 0 ? 'sobrou' : 'faltou'} ${money(Math.abs(r.crediDiferenca))}.</b><br>` : ''}Ficou registrado na aba Ocorrências para o administrador.</div>`;
+          if (!cego || tentativa >= 1) return await confirmar();
+          // equipe, 1ª vez: só checa (não grava). Bateu → grava; não bateu → conta de novo, e na 2ª grava o que der.
+          const c = await api('/api/caixa/sacola/checar', { id: s.id, valorContado: $('#csValor').value });
+          if (c.bateu) return await confirmar();
+          tentativa++;
+          $('#csOut').innerHTML = `<div class="warn"><b>Não bateu.</b> Conte de novo com calma e digite o total. Na próxima vez fica registrado o que você digitar.</div>`;
+          b.textContent = 'Registrar a contagem'; $('#csValor').select();
         } catch (er) { fail(er); } finally { b.disabled = false; }
       });
     });
@@ -534,32 +735,39 @@
   function renderOcorrencias() {
     if (!isAdmin()) { view = 'inicio'; return render(); }
     const lista = S.ocorrencias || [];
-    $('#main').innerHTML = `<section class="card">
-      <h1>Ocorrências</h1>
-      <p class="muted small">Conferências do caixa que não bateram, e tudo que foi apagado, alterado ou aprovado/rejeitado neste controle de caixa — inclusive por você. Só leitura.</p>
-      ${lista.length ? `<div class="list">${lista.map(o => `<div class="it">
-          <div class="ic">${ocorIcon(o)}</div>
-          <div class="tx"><b>${esc(o.titulo)}</b><span>${ocorDetalheTxt(o)}</span></div>
-          <div class="vl"><small class="muted">${dBR(o.em)} ${new Date(o.em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</small></div>
-        </div>`).join('')}</div>` : '<p class="muted">Nenhuma ocorrência registrada.</p>'}
+    $('#main').innerHTML = `<div class="pagehd"><h1>Ocorrências</h1><p>Contagens que não bateram e tudo que foi apagado ou alterado, inclusive por você. Ninguém consegue apagar esta lista.</p></div>
+      <section class="card">
+      ${lista.length ? `<div class="list">${lista.map(o => { const dif = o.tipo === 'conferencia' || o.tipo === 'sacola'; return `<div class="it" style="align-items:flex-start">
+          <div class="ic ${dif ? 'bad' : ''}">${ic(dif ? 'alert' : 'shield')}</div>
+          <div class="tx"><b>${esc(o.titulo)}</b><span>${ocorDetalheTxt(o)}</span><span>${dtBR(o.em)}</span></div>
+        </div>`; }).join('')}</div>` : `<div class="empty"><div class="big">${ic('ok')}</div><p>Nenhuma ocorrência registrada.</p></div>`}
       </section>`;
   }
 
-  /* ---------- navegação ---------- */
+  /* ---------- navegação: 3 abas para a equipe, 4 para o dono ---------- */
+  const SUB_MAIS = ['staria', 'acessos', 'gaveta', 'ocorrencias'];
   function render() {
     $('#bn').hidden = false; $('#sair').hidden = false;
-    $('#navStaria').hidden = !isAdmin(); $('#navAcessos').hidden = !isAdmin(); $('#navGaveta').hidden = !isAdmin(); $('#navOcorrencias').hidden = !isAdmin();
-    document.querySelectorAll('#bn [data-go]').forEach(b => b.setAttribute('aria-current', b.dataset.go === view));
-    if (view === 'sangria') return renderSangria();
-    if (view === 'sacolas') return renderSacolas();
-    if (view === 'staria') return renderStaria();
-    if (view === 'acessos') return renderAcessos();
-    if (view === 'gaveta') return renderGaveta();
-    if (view === 'ocorrencias') return renderOcorrencias();
-    return renderInicio();
+    if (view === 'sangria') { view = 'inicio'; setTimeout(sheetSangria, 0); }
+    $('#navMais').hidden = !isAdmin();
+    const aba = SUB_MAIS.includes(view) ? 'mais' : view;
+    document.querySelectorAll('#bn [data-go]').forEach(b => b.setAttribute('aria-current', b.dataset.go === aba));
+    const n = S && S.cfg ? resumo().pendSacolas : 0, dot = $('#navSacolasN');
+    if (dot) { dot.hidden = !n; dot.textContent = n > 9 ? '9+' : n; }
+    if (view === 'sacolas') renderSacolas();
+    else if (view === 'extrato') renderExtrato();
+    else if (view === 'mais') renderMais();
+    else if (view === 'staria') renderStaria();
+    else if (view === 'acessos') renderAcessos();
+    else if (view === 'gaveta') renderGaveta();
+    else if (view === 'ocorrencias') renderOcorrencias();
+    else renderInicio();
+    if (SUB_MAIS.includes(view) && isAdmin()) $('#main').insertAdjacentHTML('afterbegin', `<button type="button" class="lnk" data-go="mais" style="justify-self:start;display:inline-flex;align-items:center;gap:2px;margin:-8px 0 -8px -6px">${ic('back')} Mais</button>`);
   }
-  document.querySelectorAll('#bn [data-go]').forEach(b => b.addEventListener('click', () => { view = b.dataset.go; closeSheet(); render(); window.scrollTo(0, 0); }));
-
+  function irPara(go) { view = go; closeSheet(); render(); window.scrollTo(0, 0); }
+  document.querySelectorAll('#bn [data-go]').forEach(b => b.addEventListener('click', () => irPara(b.dataset.go)));
+  /* qualquer [data-go] dentro da tela (atalhos do Início, menu do Mais, "voltar") */
+  $('#main').addEventListener('click', e => { const g = e.target.closest('[data-go]'); if (g) { e.preventDefault(); irPara(g.dataset.go); } });
   async function start() {
     try { await reload(); render(); }
     catch (e) { fail(e); }
