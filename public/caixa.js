@@ -84,6 +84,22 @@
     if (onMount) onMount();
   }
 
+  /* confirmação dentro do app. A janelinha de confirmação do navegador some em alguns celulares, apps
+     instalados e no navegador do app Claude: o toque parecia não fazer nada. Resolve true/false. */
+  function perguntar(titulo, texto, okTxt, perigo) {
+    return new Promise(res => {
+      let feito = false; const fim = v => { if (feito) return; feito = true; closeSheet(); res(v); };
+      openSheet(`<div class="tt"><h2>${esc(titulo)}</h2><button class="x" type="button" id="cfx" aria-label="Fechar">✕</button></div>
+        ${texto ? `<p class="muted" style="margin:6px 0 16px;white-space:pre-line">${esc(texto)}</p>` : ''}
+        <div class="row" style="gap:10px"><button class="btn full" type="button" id="cfn">Cancelar</button><button class="btn ${perigo ? 'bad' : 'pri'} full" type="button" id="cfs">${esc(okTxt || 'Confirmar')}</button></div>`, () => {
+        $('#cfs').addEventListener('click', () => fim(true));
+        $('#cfn').addEventListener('click', () => fim(false));
+        $('#cfx').addEventListener('click', () => fim(false));
+        $('#shx').addEventListener('click', e => { if (e.target.id === 'shx') fim(false); });
+      });
+    });
+  }
+
   /* ---------- ícones (SVG em linha, sem biblioteca; herdam a cor do texto) ---------- */
   const IC = {
     home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -160,7 +176,7 @@
       ${podeApagar ? `<button class="btn dan full" type="button" data-delmov="${esc(m.id)}">Apagar este lançamento</button>` : ''}`, () => {
       $('#shxb').addEventListener('click', closeSheet);
       const d = document.querySelector('#sheet [data-dep]'); if (d) d.addEventListener('click', () => post('/api/caixa/depositado', { id: m.id, depositadoEm: hoje() }, 'Confirmado no banco'));
-      const x = document.querySelector('#sheet [data-delmov]'); if (x) x.addEventListener('click', () => { if (confirm('Apagar este lançamento? Fica registrado nas ocorrências.')) post('/api/caixa/mov/excluir', { id: m.id }, 'Lançamento apagado'); });
+      const x = document.querySelector('#sheet [data-delmov]'); if (x) x.addEventListener('click', async () => { if (await perguntar('Apagar este lançamento?', 'Fica registrado nas ocorrências.', 'Apagar', true)) post('/api/caixa/mov/excluir', { id: m.id }, 'Lançamento apagado'); });
     });
   }
 
@@ -410,7 +426,7 @@
             </div></div>`).join('')}</div>` : '<p class="muted">Nenhum lançamento ainda. Lance uma sangria com destino "Gaveta de impostos" na tela de Sangria para alimentar aqui.</p>'}
       </section>`;
     $('#btnGavetaSaida').addEventListener('click', sheetGavetaSaida);
-    document.querySelectorAll('[data-delmov]').forEach(b => b.addEventListener('click', () => { if (confirm('Apagar este lançamento da gaveta?')) post('/api/caixa/mov/excluir', { id: b.dataset.delmov }, 'Lançamento apagado'); }));
+    document.querySelectorAll('[data-delmov]').forEach(b => b.addEventListener('click', async () => { if (await perguntar('Apagar este lançamento da gaveta?', '', 'Apagar', true)) post('/api/caixa/mov/excluir', { id: b.dataset.delmov }, 'Lançamento apagado'); }));
   }
   function sheetGavetaSaida() {
     openSheet(`<div class="tt"><h2>Pagamento com a gaveta</h2><button class="x" type="button" id="shxb">✕</button></div>
@@ -501,6 +517,7 @@
     return 'Caixas ' + [...new Set(cx.map(c => c.ecf))].sort().map(esc).join(', ') + ' · ' + (dias.length === 1 ? dBR(dias[0]) : dBR(dias[0]) + ' a ' + dBR(dias[dias.length - 1]));
   }
   const grupoDe = l => l.filial + '|' + l.data;
+  const cxDiasAbertos = new Set(); // dias de cada filial abertos (começam minimizados)
   function htmlCaixasPendentes() {
     const lista = S.caixasPendentes;
     if (!lista || !lista.length) return '';
@@ -514,11 +531,14 @@
         <p>Abra no StarIA a tela <b>Fechamento de Caixa (PDV)</b>. Marque aqui só os caixas que lá estão em <b>preto</b> (já conferidos). Os vermelhos ficam sem marcar: continuam aqui e a próxima consulta atualiza o valor.</p></details>
       <div>${chaves.map(k => {
         const ls = grupos[k], [f, d] = k.split('|');
-        return `<div class="grp"><b>Filial ${esc(f)} · ${dBR(d)}</b><button type="button" class="lnk" data-grupo="${esc(k)}">Marcar todos</button></div>
+        const tot = ls.some(l => l.dinheiro != null) ? money(r2(ls.reduce((a, l) => a + (l.dinheiro || 0), 0))) : '';
+        return `<details class="crfil cxdia" data-cxdia="${esc(k)}"${cxDiasAbertos.has(k) ? ' open' : ''}>
+          <summary><span class="tx"><b>Filial ${esc(f)} · ${dBR(d)}</b><span class="small muted">${plural(ls.length, 'caixa', 'caixas')} · <span data-cxdiaresumo="${esc(k)}"></span></span></span><span class="vl">${tot}</span><span class="crfil-seta" aria-hidden="true"></span></summary>
+          <div class="grp" style="border-top:0;padding-top:0"><span class="small muted">Caixas deste dia</span><button type="button" class="lnk" data-grupo="${esc(k)}">Marcar todos</button></div>
           <div class="list">${ls.map(l => `<label class="it${marcados.has(l.id) ? ' on' : ''}" data-cxrow="${esc(l.id)}">
             <input type="checkbox" class="ck" data-cx="${esc(l.id)}" ${marcados.has(l.id) ? 'checked' : ''}>
             <div class="tx"><b>Caixa ${esc(l.ecf)}</b></div>${l.dinheiro == null ? '' : `<div class="vl">${money(l.dinheiro)}</div>`}
-          </label>`).join('')}</div>`;
+          </label>`).join('')}</div></details>`;
       }).join('')}</div>
       <div class="sbar"><div class="t" id="cxResumo"></div><button class="btn" type="button" id="btnEnviarCx" disabled>Enviar</button></div>
     </section>`;
@@ -534,7 +554,10 @@
       if (b) { b.disabled = !sel.length; b.textContent = sel.length ? 'Enviar para a sacola' : 'Enviar'; }
       document.querySelectorAll('[data-cxrow]').forEach(x => x.classList.toggle('on', marcados.has(x.dataset.cxrow)));
       document.querySelectorAll('[data-grupo]').forEach(g => { const ls = lista.filter(l => grupoDe(l) === g.dataset.grupo); g.textContent = ls.every(l => marcados.has(l.id)) ? 'Desmarcar' : 'Marcar todos'; });
+      document.querySelectorAll('[data-cxdiaresumo]').forEach(el => { const ls = lista.filter(l => grupoDe(l) === el.dataset.cxdiaresumo), n = ls.filter(l => marcados.has(l.id)).length;
+        el.textContent = !n ? 'nenhum marcado' : n === ls.length ? 'todos marcados' : n + ' de ' + ls.length + ' marcados'; el.style.color = n ? 'var(--ok)' : ''; el.style.fontWeight = n ? '700' : ''; });
     };
+    document.querySelectorAll('[data-cxdia]').forEach(d => d.addEventListener('toggle', () => { if (d.open) cxDiasAbertos.add(d.dataset.cxdia); else cxDiasAbertos.delete(d.dataset.cxdia); }));
     document.querySelectorAll('[data-cx]').forEach(c => c.addEventListener('change', () => { if (c.checked) marcados.add(c.dataset.cx); else marcados.delete(c.dataset.cx); atualiza(); }));
     document.querySelectorAll('[data-grupo]').forEach(g => g.addEventListener('click', () => {
       const ls = lista.filter(l => grupoDe(l) === g.dataset.grupo), todos = ls.every(l => marcados.has(l.id));
@@ -547,7 +570,8 @@
       const sel = lista.filter(l => marcados.has(l.id)), ids = sel.map(l => l.id);
       const total = r2(sel.reduce((a, l) => a + l.dinheiro, 0));
       const vtxt = sel.some(l => l.dinheiro != null) ? ' (' + money(total) + ')' : '';
-      if (!ids.length || !confirm('Enviar ' + plural(ids.length, 'caixa', 'caixas') + vtxt + ' para a sacola?\n\nConfira se todos estão em preto no StarIA.')) return;
+      if (!ids.length) return toast('Marque pelo menos um caixa antes de enviar.', true);
+      if (!await perguntar('Enviar ' + plural(ids.length, 'caixa', 'caixas') + vtxt + ' para a sacola?', 'Confira se todos estão em preto no StarIA.', 'Enviar para a sacola')) return;
       b.disabled = true;
       const r = await post('/api/caixa/caixas/aceitar', { ids }, 'Enviado para a sacola');
       if (r) marcados.clear(); else b.disabled = false;
@@ -676,13 +700,13 @@
         : `<div class="empty"><div class="big">${ic('ok')}</div><p>Nada para conferir agora.</p></div>`}
       </section>
       ${achados.length ? `<details class="how card"><summary>Já conferidos (${achados.length})</summary><div class="list">${achados.slice(0, 50).map(c => linha(c, '')).join('')}</div></details>` : ''}`;
-    document.querySelectorAll('[data-bk]').forEach(b => b.addEventListener('click', () => {
-      if (b.dataset.r === 'nao_achei' && !confirm('Não achou esse recebimento no extrato? Vai virar alerta e ocorrência.')) return;
+    document.querySelectorAll('[data-bk]').forEach(b => b.addEventListener('click', async () => {
+      if (b.dataset.r === 'nao_achei' && !await perguntar('Não achou no extrato?', 'Esse recebimento vai virar alerta e ocorrência.', 'Não achei', true)) return;
       post('/api/caixa/credi/banco', { ids: [b.dataset.bk], resultado: b.dataset.r }, b.dataset.r === 'achei' ? 'Conferido' : 'Marcado: não caiu no banco');
     }));
-    document.querySelectorAll('[data-bkdia]').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('[data-bkdia]').forEach(b => b.addEventListener('click', async () => {
       const ids = porDia[b.dataset.bkdia].map(c => c.id);
-      if (confirm('Achou no extrato todos os ' + ids.length + ' recebimentos de ' + dBR(b.dataset.bkdia) + '?')) post('/api/caixa/credi/banco', { ids, resultado: 'achei' }, 'Conferidos');
+      if (await perguntar('Achou todos no extrato?', 'Os ' + ids.length + ' recebimentos de ' + dBR(b.dataset.bkdia) + '.', 'Achei todos')) post('/api/caixa/credi/banco', { ids, resultado: 'achei' }, 'Conferidos');
     }));
   }
   function renderSacolas() {
