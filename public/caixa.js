@@ -576,6 +576,7 @@
      dono confere no extrato (Mais → Crediário: conferir no banco). */
   const FORMA_TXT = { dinheiro: 'Dinheiro', pix: 'Pix', cartao: 'Cartão', outro: 'Outro' };
   const escolhas = new Map();   // escolhas ainda não salvas: id -> forma
+  const crFilAbertas = new Set(); // filiais do crediário abertas (começam minimizadas)
   const sugestao = c => /CART/i.test(c.conta || '') ? 'cartao' : /SICOOB|BANCO|PIX/i.test(c.conta || '') ? 'pix' : null;
   function crediEsperado(s) {
     const ls = (S.crediarios || []).filter(c => c.filial === s.filial && c.forma === 'dinheiro' && !c.contado && c.data <= String(s.periodoFim).slice(0, 10));
@@ -598,8 +599,13 @@
       <div class="sec"><h2>Crediário: como o cliente pagou?</h2>${sem.length ? `<span class="badge">${sem.length}</span>` : ''}</div>
       <details class="how"><summary>Por que marcar?</summary>
         <p>O StarIA não diz como cada cliente pagou a conta. <b>Dinheiro</b> tem que vir na sacola da filial e é contado junto. <b>Pix</b> e <b>cartão</b> o dono confere no extrato. <b>Outro</b>: desconto em folha, cheque etc.</p></details>
-      ${chaves.map(k => { const [f, d] = k.split('|'); return `<div class="grp"><b>Filial ${esc(f)} · ${dBR(d)}</b><button type="button" class="lnk" data-crgrupo="${esc(k)}">Os sem marcar = Dinheiro</button></div>
+      ${[...new Set(chaves.map(k => k.split('|')[0]))].map(f => {
+        const ks = chaves.filter(k => k.split('|')[0] === f), itens = ks.flatMap(k => grupos[k]);
+        return `<details class="crfil" data-crfil="${esc(f)}"${crFilAbertas.has(f) ? ' open' : ''}>
+        <summary><span><b>Filial ${esc(f)}</b><span class="small muted"> · ${plural(itens.length, 'recebimento', 'recebimentos')} · ${money(r2(itens.reduce((a, c) => a + c.valor, 0)))}</span></span><span class="crfil-seta" aria-hidden="true"></span></summary>
+        ${ks.map(k => { const d = k.split('|')[1]; return `<div class="grp"><b>${dBR(d)}</b><button type="button" class="lnk" data-crgrupo="${esc(k)}">Os sem marcar = Dinheiro</button></div>
         <div class="list">${grupos[k].map(c => linha(c, escolhas.get(c.id))).join('')}</div>`; }).join('')}
+        </details>`; }).join('')}
       ${corrigiveis.length ? `<details class="how" style="margin-top:12px"><summary>Já marcados, ainda dá para corrigir (${corrigiveis.length})</summary>
         <div class="list">${corrigiveis.map(c => linha(c, escolhas.get(c.id) || c.forma)).join('')}</div></details>` : ''}
       <div class="sbar"><div class="t" id="crResumo"></div><button class="btn" type="button" id="btnSalvarCr" disabled>Salvar</button></div>
@@ -615,6 +621,7 @@
       if (r) r.innerHTML = m.length ? plural(m.length, 'recebimento para salvar', 'recebimentos para salvar') + (falta ? `<b>${plural(falta, 'sem marcar', 'sem marcar')}</b>` : '') : (falta ? 'Toque na forma de cada recebimento' : 'Tudo marcado');
       if (b) { b.disabled = !m.length; b.textContent = m.length ? 'Salvar ' + m.length : 'Salvar'; }
     };
+    document.querySelectorAll('[data-crfil]').forEach(d => d.addEventListener('toggle', () => { if (d.open) crFilAbertas.add(d.dataset.crfil); else crFilAbertas.delete(d.dataset.crfil); }));
     document.querySelectorAll('[data-cf]').forEach(b => b.addEventListener('click', () => { escolhas.set(b.dataset.cf, b.dataset.f); atualiza(); }));
     document.querySelectorAll('[data-crgrupo]').forEach(g => g.addEventListener('click', () => {
       lista.filter(c => !c.forma && c.filial + '|' + c.data === g.dataset.crgrupo && !escolhas.has(c.id)).forEach(c => escolhas.set(c.id, 'dinheiro')); atualiza();

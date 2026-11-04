@@ -157,6 +157,12 @@ details.how{background:var(--gold-soft);border-radius:var(--r);padding:0 14px;fo
 details.how summary{min-height:44px;display:flex;align-items:center;font-weight:700;cursor:pointer;list-style:none}
 details.how summary::-webkit-details-marker{display:none}
 details.how p{padding:0 0 12px}
+details.crfil{border:1px solid var(--line);border-radius:var(--r);padding:0 14px;margin-top:10px;background:var(--surface-2)}
+details.crfil summary{min-height:52px;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;list-style:none}
+details.crfil summary::-webkit-details-marker{display:none}
+.crfil-seta{width:10px;height:10px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);margin:0 6px 4px 0;transition:transform .15s}
+details.crfil[open] .crfil-seta{transform:rotate(-135deg);margin-bottom:-4px}
+details.crfil[open]{padding-bottom:10px}
 
 /* ===== Menu "Mais" ===== */
 .menu .it .tx b{font-size:16px}
