@@ -501,6 +501,7 @@
     return 'Caixas ' + [...new Set(cx.map(c => c.ecf))].sort().map(esc).join(', ') + ' · ' + (dias.length === 1 ? dBR(dias[0]) : dBR(dias[0]) + ' a ' + dBR(dias[dias.length - 1]));
   }
   const grupoDe = l => l.filial + '|' + l.data;
+  const cxDiasAbertos = new Set(); // dias de cada filial abertos (começam minimizados)
   function htmlCaixasPendentes() {
     const lista = S.caixasPendentes;
     if (!lista || !lista.length) return '';
@@ -514,11 +515,14 @@
         <p>Abra no StarIA a tela <b>Fechamento de Caixa (PDV)</b>. Marque aqui só os caixas que lá estão em <b>preto</b> (já conferidos). Os vermelhos ficam sem marcar: continuam aqui e a próxima consulta atualiza o valor.</p></details>
       <div>${chaves.map(k => {
         const ls = grupos[k], [f, d] = k.split('|');
-        return `<div class="grp"><b>Filial ${esc(f)} · ${dBR(d)}</b><button type="button" class="lnk" data-grupo="${esc(k)}">Marcar todos</button></div>
+        const tot = ls.some(l => l.dinheiro != null) ? money(r2(ls.reduce((a, l) => a + (l.dinheiro || 0), 0))) : '';
+        return `<details class="crfil cxdia" data-cxdia="${esc(k)}"${cxDiasAbertos.has(k) ? ' open' : ''}>
+          <summary><span class="tx"><b>Filial ${esc(f)} · ${dBR(d)}</b><span class="small muted">${plural(ls.length, 'caixa', 'caixas')} · <span data-cxdiaresumo="${esc(k)}"></span></span></span><span class="vl">${tot}</span><span class="crfil-seta" aria-hidden="true"></span></summary>
+          <div class="grp" style="border-top:0;padding-top:0"><span class="small muted">Caixas deste dia</span><button type="button" class="lnk" data-grupo="${esc(k)}">Marcar todos</button></div>
           <div class="list">${ls.map(l => `<label class="it${marcados.has(l.id) ? ' on' : ''}" data-cxrow="${esc(l.id)}">
             <input type="checkbox" class="ck" data-cx="${esc(l.id)}" ${marcados.has(l.id) ? 'checked' : ''}>
             <div class="tx"><b>Caixa ${esc(l.ecf)}</b></div>${l.dinheiro == null ? '' : `<div class="vl">${money(l.dinheiro)}</div>`}
-          </label>`).join('')}</div>`;
+          </label>`).join('')}</div></details>`;
       }).join('')}</div>
       <div class="sbar"><div class="t" id="cxResumo"></div><button class="btn" type="button" id="btnEnviarCx" disabled>Enviar</button></div>
     </section>`;
@@ -534,7 +538,10 @@
       if (b) { b.disabled = !sel.length; b.textContent = sel.length ? 'Enviar para a sacola' : 'Enviar'; }
       document.querySelectorAll('[data-cxrow]').forEach(x => x.classList.toggle('on', marcados.has(x.dataset.cxrow)));
       document.querySelectorAll('[data-grupo]').forEach(g => { const ls = lista.filter(l => grupoDe(l) === g.dataset.grupo); g.textContent = ls.every(l => marcados.has(l.id)) ? 'Desmarcar' : 'Marcar todos'; });
+      document.querySelectorAll('[data-cxdiaresumo]').forEach(el => { const ls = lista.filter(l => grupoDe(l) === el.dataset.cxdiaresumo), n = ls.filter(l => marcados.has(l.id)).length;
+        el.textContent = !n ? 'nenhum marcado' : n === ls.length ? 'todos marcados' : n + ' de ' + ls.length + ' marcados'; el.style.color = n ? 'var(--ok)' : ''; el.style.fontWeight = n ? '700' : ''; });
     };
+    document.querySelectorAll('[data-cxdia]').forEach(d => d.addEventListener('toggle', () => { if (d.open) cxDiasAbertos.add(d.dataset.cxdia); else cxDiasAbertos.delete(d.dataset.cxdia); }));
     document.querySelectorAll('[data-cx]').forEach(c => c.addEventListener('change', () => { if (c.checked) marcados.add(c.dataset.cx); else marcados.delete(c.dataset.cx); atualiza(); }));
     document.querySelectorAll('[data-grupo]').forEach(g => g.addEventListener('click', () => {
       const ls = lista.filter(l => grupoDe(l) === g.dataset.grupo), todos = ls.every(l => marcados.has(l.id));
