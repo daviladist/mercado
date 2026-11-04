@@ -133,7 +133,10 @@ do $$ begin if not exists (select 1 from pg_constraint where conname='photos_ten
 -- novo perfil de acesso: operador de caixa
 alter table users_t drop constraint if exists users_role_check;
 alter table users_t drop constraint if exists users_t_role_check;
-alter table users_t add constraint users_role_check check (role in ('admin','cliente','vendedor','conferente','faturamento','entregador','operador_caixa'));
+-- "not valid": este selo é substituído mais abaixo por um com a lista completa de papéis; sem "not valid" aqui,
+-- reaplicar o arquivo inteiro do zero travaria nesta linha sempre que já existir alguém com um papel mais novo
+-- (caixista, financeiro, automação), mesmo sem nenhum problema real nos dados.
+alter table users_t add constraint users_role_check check (role in ('admin','cliente','vendedor','conferente','faturamento','entregador','operador_caixa')) not valid;
 -- turnos de caixa: abertura com fundo de troco, fechamento às cegas
 create table if not exists caixas (
   tenant_id text not null references tenants(id),
