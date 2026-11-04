@@ -47,7 +47,7 @@ s, html, h = C(None).req('/t/' + TID + '/', raw=True)
 check(s == 200 and 'caixa.js' in html and '<title>Dávila Supermercados</title>' in html, 'endereço da empresa abre o app de controle de caixa')
 s, html, h = C(None).req('/t/' + TID + '/cliente', raw=True); check(s == 302 and h.get('Location') == '/t/' + TID + '/', '/cliente de empresa de caixa volta para o app')
 s, html, h = C(None).req('/t/' + TID + '/pdv', raw=True); check(s == 302, '/pdv de empresa de caixa volta para o app')
-s, mf = C(None).req('/api/manifest?t=' + TID); check(s == 200 and mf.get('name') == 'Dávila Supermercados Caixa', 'app instalado no celular tem nome próprio')
+s, mf = C(None).req('/api/manifest?t=' + TID); check(s == 200 and mf.get('name') == 'Dávila Supermercados Painel', 'app instalado no celular tem nome próprio')
 
 A = C(TID)
 s, _ = A.req('/api/caixa/state'); check(s == 401, 'sem login não lê nada')

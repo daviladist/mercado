@@ -35,7 +35,7 @@ PNG = 'data:image/png;base64,' + base64.b64encode(bytes.fromhex('89504e470d0a1a0
 print('== Central: quatro segmentos fixos')
 cen = C(None); s, _ = cen.req('/api/central/login', {'login': 'super_admin', 'password': CPW}); check(s == 200, 'super_admin entra')
 s, st = cen.req('/api/central/state')
-check([r['id'] for r in st['ramos']] == ['atacado', 'rural', 'loja', 'caixa'] and [r['name'] for r in st['ramos']] == ['Atacado e varejo', 'Rural', 'Loja online', 'Controle de caixa'], 'segmentos: Atacado e varejo, Rural, Loja online e Controle de caixa')
+check([r['id'] for r in st['ramos']] == ['atacado', 'rural', 'loja', 'caixa'] and [r['name'] for r in st['ramos']] == ['Atacado e varejo', 'Rural', 'Loja online', 'Painel gerencial'], 'segmentos: Atacado e varejo, Rural, Loja online e Painel gerencial')
 check(len(st.get('lojaModules', [])) >= 5, 'Central conhece as funções da Loja online')
 s, r = cen.req('/api/central/tenant', {'name': 'Ateliê Maria', 'ramo': 'loja', 'modules': {'pagar': True}}); check(s == 400, 'módulo do atacado é recusado na loja online')
 s, r = cen.req('/api/central/tenant', {'name': 'Ateliê Maria', 'ramo': 'loja', 'color': '#B4410F'}); T = r.get('tenant', {}); TID = T.get('id')
