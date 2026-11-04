@@ -689,3 +689,15 @@ create table if not exists caixa_credi (
   unique (tenant_id, chave)
 );
 create index if not exists caixa_credi_filial on caixa_credi(tenant_id, filial, data);
+-- pessoa da loja (filiais): é um acesso 'caixista' ligado a uma filial. Só vê os recebimentos de crediário da
+-- própria filial (nome e valor) e confirma que o comprovante/dinheiro vai na sacola. Não marca forma de pagamento
+-- (isso é do financeiro na matriz), não vê saldo, cofre, sangria nem as outras filiais.
+create table if not exists caixa_loja_pessoa (
+  tenant_id text not null,
+  ref_id text not null,
+  filial int not null check (filial between 1 and 3),
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, ref_id)
+);
+alter table caixa_credi add column if not exists loja_ok_em timestamptz;
+alter table caixa_credi add column if not exists loja_ok_por text;
