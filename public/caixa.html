@@ -54,6 +54,7 @@ svg.i{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .mods button.on{opacity:1;color:#fff;border-bottom-color:var(--gold)}
 .hd .atu{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);padding:0 12px}
 .hd .atu.gira svg{animation:gira .8s linear infinite}
+@media (max-width:400px){.hd .atu span{display:none}.hd .atu{padding:0 10px}}
 @keyframes gira{to{transform:rotate(360deg)}}
 
 main{max-width:720px;margin:0 auto;padding:16px 16px calc(var(--nav-h) + 40px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:16px}
@@ -150,11 +151,14 @@ button.it,a.it,label.it{min-height:60px;cursor:pointer}
 .seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;width:100%;background:var(--line-2);border-radius:var(--r-sm);padding:3px}
 .seg button{min-height:40px;border:0;border-radius:8px;background:transparent;font:inherit;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
 .seg button.on{background:var(--brand);color:#fff;box-shadow:var(--sh-1)}
+.seg.vazio{background:#fff;box-shadow:inset 0 0 0 1.5px var(--gold)}
+.seg.vazio button{color:var(--ink)}
 .ck{width:26px;height:26px;accent-color:var(--brand);flex:none;margin:0}
 label.it.on{background:var(--ok-bg);border-radius:var(--r);margin:0 -8px;padding-left:8px;padding-right:8px;width:calc(100% + 16px)}
 .sbar{position:sticky;bottom:calc(var(--nav-h) + 8px + env(safe-area-inset-bottom));z-index:4;background:var(--brand);color:#fff;border-radius:var(--r-lg);padding:10px 10px 10px 16px;display:flex;align-items:center;gap:10px;box-shadow:var(--sh-2)}
 .sbar .t{flex:1;min-width:0;font-size:13px;line-height:1.3}.sbar .t b{display:block;font-size:16px;font-variant-numeric:tabular-nums}
 .sbar .btn{background:var(--gold);border-color:var(--gold);color:#2A1E05;min-height:48px}
+.sbar .btn:disabled{opacity:1;background:transparent;border:1px dashed rgba(242,230,207,.55);color:rgba(242,230,207,.8)}
 .sac{border:1px solid var(--line);border-radius:var(--r-lg);padding:14px;display:grid;gap:10px;background:var(--surface)}
 .sac .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
 .sac .top b{font-size:16px}.sac .top .vl{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -163,9 +167,15 @@ label.it.on{background:var(--ok-bg);border-radius:var(--r);margin:0 -8px;padding
 .steps span.on{background:var(--ok)}.steps span.cur{background:var(--gold)}
 .stepl{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:11px;color:var(--muted);font-weight:600}
 details.how{background:var(--gold-soft);border-radius:var(--r);padding:0 14px;font-size:14px;color:#5C3D00}
-details.how summary{min-height:44px;display:flex;align-items:center;font-weight:700;cursor:pointer;list-style:none}
+details.how summary{min-height:44px;display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer;list-style:none}
+details.how summary::after{content:"";margin-left:auto;flex:none;width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin-right:4px;margin-bottom:3px;opacity:.7;transition:transform .15s}
+details.how[open]>summary::after{transform:rotate(-135deg);margin-bottom:-3px}
+details.how.ajuda>summary::before{content:"?";flex:none;width:22px;height:22px;border-radius:50%;background:#5C3D00;color:var(--gold-soft);font-size:13px;display:grid;place-items:center}
+details.how.neutro{background:var(--surface-2);border:1px solid var(--line);color:var(--ink)}
 details.how summary::-webkit-details-marker{display:none}
 details.how p{padding:0 0 12px}
+.card:has(> .sbar) > .list:last-of-type, .card:has(> .sbar) > details:last-of-type{margin-bottom:8px}
+.sbar{margin-top:12px}
 .passos{margin:4px 0 0 20px;display:grid;gap:10px;font-size:15px;line-height:1.4}
 details.crfil{border:1px solid var(--line);border-radius:var(--r);padding:0 14px;margin-top:10px;background:var(--surface-2)}
 details.crfil summary{min-height:52px;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;list-style:none}
