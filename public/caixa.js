@@ -1,5 +1,5 @@
 'use strict';
-/* Tino — Controle de caixa (ramo 'caixa'). Só a tela: tudo o que grava é conferido no servidor (lib/caixa.js). */
+/* Tino — Painel gerencial (ramo 'caixa'); por enquanto com uma área só: Caixa (controle de caixa). Só a tela: tudo o que grava é conferido no servidor (lib/caixa.js). */
 (() => {
   const $ = s => document.querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -42,7 +42,7 @@
 
   /* ---------- entrar ---------- */
   function showLogin(msg) {
-    S = null; $('#bn').hidden = true; $('#sair').hidden = true; $('#atualizar').hidden = true; closeSheet();
+    S = null; $('#bn').hidden = true; $('#sair').hidden = true; $('#atualizar').hidden = true; $('#mods').hidden = true; closeSheet();
     $('#main').innerHTML = `<div class="login"><form class="card" id="lf" autocomplete="on">
       <h1>Entrar</h1><p class="muted small">${esc(brand.name || 'Tino')} · controle de caixa</p>
       <div class="field"><label for="lu">Usuário</label><input type="text" id="lu" autocomplete="username" autocapitalize="off" spellcheck="false" required></div>
@@ -765,8 +765,9 @@
         <div class="field"><label for="csCrediPix">Crediário em Pix</label><input type="text" id="csCrediPix" inputmode="decimal" placeholder="0,00"></div>`
         : (() => { const e = crediEsperado(s); return `<div class="field"><label for="csCrediDinheiro">Dinheiro de crediário que veio na sacola (clientes pagando conta)</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00" value="${e.total ? numIn(e.total) : ''}"></div>
           ${e.pend ? `<div class="warn small" style="margin-top:-6px"><b>${plural(e.pend, 'recebimento desta filial está', 'recebimentos desta filial estão')} sem a forma salva.</b> Volte em Crediário, marque e toque em Salvar antes de conferir: só o que está salvo como Dinheiro entra aqui.</div>` : ''}
+          ${(() => { const sem = s.filial !== 1 ? e.itens.filter(c => !c.lojaOk) : []; return sem.length ? `<div class="warn small" style="margin-top:-6px"><b>A loja não confirmou ${plural(sem.length, 'recebimento', 'recebimentos')} em dinheiro (${money(r2(sem.reduce((a, c) => a + c.valor, 0)))}).</b> Confira com atenção se esse dinheiro veio mesmo na sacola.</div>` : ''; })()}
           ${e.n ? `<details class="how" style="margin-top:-6px"><summary>Vem de ${plural(e.n, 'recebimento marcado', 'recebimentos marcados')} como Dinheiro: ${money(e.total)}</summary>
-            <div class="list small">${e.itens.map(c => `<div class="it"><div class="tx"><b>${esc(c.cliente || 'Cliente')}</b><span>Título ${esc(c.numero || '—')} · ${dBR(c.data)}</span></div><div class="vl">${money(c.valor)}</div></div>`).join('')}</div>
+            <div class="list small">${e.itens.map(c => `<div class="it"><div class="tx"><b>${esc(c.cliente || 'Cliente')}</b><span>Título ${esc(c.numero || '—')} · ${dBR(c.data)}${s.filial !== 1 ? (c.lojaOk ? ' · <span style="color:var(--ok)">✓ loja confirmou</span>' : ' · <span style="color:var(--wa)">loja não confirmou</span>') : ''}</span></div><div class="vl">${money(c.valor)}</div></div>`).join('')}</div>
             <p>Confira se esse dinheiro está mesmo na sacola. Se veio diferente, troque o valor.</p></details>`
           : `<p class="small muted" style="margin-top:-6px">Nenhum recebimento de crediário desta filial marcado como Dinheiro.</p>`}`; })()}
         <div class="field"><label for="csMotivo">Observação (opcional)</label><input type="text" id="csMotivo" maxlength="300" placeholder="Ex.: nota rasgada, envelope sem nome…"></div>
@@ -1017,11 +1018,11 @@
   const SUB_MAIS = ['staria', 'acessos', 'gaveta', 'ocorrencias', 'crediario'];
   function render() {
     if (S && S.loja) {
-      $('#bn').hidden = true; $('#sair').hidden = false; $('#atualizar').hidden = false; renderLoja();
+      $('#bn').hidden = true; $('#sair').hidden = false; $('#atualizar').hidden = false; $('#mods').hidden = false; renderLoja();
       if (!instalado()) { $('#main').insertAdjacentHTML('beforeend', `<button type="button" class="btn full" id="atalhoIni">${ic('pin')} Criar atalho na área de trabalho</button>`); $('#atalhoIni').addEventListener('click', criarAtalho); }
       return;
     }
-    $('#bn').hidden = false; $('#sair').hidden = false; $('#atualizar').hidden = false;
+    $('#bn').hidden = false; $('#sair').hidden = false; $('#atualizar').hidden = false; $('#mods').hidden = false;
     if (view === 'sangria') { view = 'inicio'; setTimeout(sheetSangria, 0); }
     $('#navMais').hidden = !isAdmin();
     const aba = SUB_MAIS.includes(view) ? 'mais' : view;
