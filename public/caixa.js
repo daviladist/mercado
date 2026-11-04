@@ -286,7 +286,7 @@
           <div>
             <div class="kv"><span>Na matriz (cofre)</span><b>${money(R.naMatriz)}</b></div>
             ${R.nasLojas.total ? `<button type="button" class="kv" data-go="sacolas" style="width:100%;background:none;border:0;padding-left:0;padding-right:0;font:inherit;color:inherit;text-align:left"><span>Nas lojas e a caminho <span class="small muted">(valor do StarIA, ainda não contado)</span></span><b>${money(R.nasLojas.total)}</b></button>
-              ${pf.map(([f, x]) => `<div class="kv small muted" style="padding-left:12px"><span>Filial ${esc(f)}</span><span>${money(r2(x.caixasSemSacola + x.naFilial + x.chegouFaltaContar + (x.crediario || 0)))}${x.crediario ? ` <span class="small">(${money(x.crediario)} de crediário)</span>` : ''}}</span></div>`).join('')}` : ''}
+              ${pf.map(([f, x]) => `<div class="kv small muted" style="padding-left:12px"><span>Filial ${esc(f)}</span><span>${money(r2(x.caixasSemSacola + x.naFilial + x.chegouFaltaContar + (x.crediario || 0)))}${x.crediario ? ` <span class="small">(${money(x.crediario)} de crediário)</span>` : ''}</span></div>`).join('')}` : ''}
             ${R.aCaminhoDoBanco.total ? `<button type="button" class="kv" data-go="extrato" style="width:100%;background:none;border:0;padding-left:0;padding-right:0;font:inherit;color:inherit;text-align:left"><span>Saiu para o banco <span class="small muted">(${plural(R.aCaminhoDoBanco.qtd, 'sangria', 'sangrias')}, falta você confirmar)</span></span><b>${money(R.aCaminhoDoBanco.total)}</b></button>` : ''}
             <button type="button" class="kv" data-go="gaveta" style="width:100%;background:none;border:0;padding-left:0;padding-right:0;font:inherit;color:inherit;text-align:left"><span>Gaveta de impostos</span><b>${money(R.gaveta)}</b></button>
             <div class="kv tot"><span><b>Total</b></span><b>${money(R.tudo)}</b></div>
@@ -763,12 +763,16 @@
         <div class="field"><label for="csCrediDinheiro">Crediário em dinheiro</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00"></div>
         <div class="field"><label for="csCrediCartao">Crediário em cartão</label><input type="text" id="csCrediCartao" inputmode="decimal" placeholder="0,00"></div>
         <div class="field"><label for="csCrediPix">Crediário em Pix</label><input type="text" id="csCrediPix" inputmode="decimal" placeholder="0,00"></div>`
-        : (() => { const e = crediEsperado(s); return `<div class="field"><label for="csCrediDinheiro">Dinheiro de crediário que veio na sacola (clientes pagando conta)</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00" value="${e.total ? numIn(e.total) : ''}"></div>
-          ${e.pend ? `<div class="warn small" style="margin-top:-6px"><b>${plural(e.pend, 'recebimento desta filial está', 'recebimentos desta filial estão')} sem a forma salva.</b> Volte em Crediário, marque e toque em Salvar antes de conferir: só o que está salvo como Dinheiro entra aqui.</div>` : ''}
-          ${(() => { const sem = s.filial !== 1 ? e.itens.filter(c => !c.lojaOk) : []; return sem.length ? `<div class="warn small" style="margin-top:-6px"><b>A loja não confirmou ${plural(sem.length, 'recebimento', 'recebimentos')} em dinheiro (${money(r2(sem.reduce((a, c) => a + c.valor, 0)))}).</b> Confira com atenção se esse dinheiro veio mesmo na sacola.</div>` : ''; })()}
-          ${e.n ? `<details class="how" style="margin-top:-6px"><summary>Vem de ${plural(e.n, 'recebimento marcado', 'recebimentos marcados')} como Dinheiro: ${money(e.total)}</summary>
-            <div class="list small">${e.itens.map(c => `<div class="it"><div class="tx"><b>${esc(c.cliente || 'Cliente')}</b><span>Título ${esc(c.numero || '—')} · ${dBR(c.data)}${s.filial !== 1 ? (c.lojaOk ? ' · <span style="color:var(--ok)">✓ loja confirmou</span>' : ' · <span style="color:var(--wa)">loja não confirmou</span>') : ''}</span></div><div class="vl">${money(c.valor)}</div></div>`).join('')}</div>
-            <p>Confira se esse dinheiro está mesmo na sacola. Se veio diferente, troque o valor.</p></details>`
+        : (() => { const e = crediEsperado(s);
+          // dono: vê e já vem preenchido. Equipe: conta às cegas (campo vazio, só os nomes, sem valores nem total)
+          const sem = s.filial !== 1 ? e.itens.filter(c => !c.lojaOk) : [];
+          const tagLoja = c => s.filial !== 1 ? (c.lojaOk ? ' · <span style="color:var(--ok)">✓ loja confirmou</span>' : ' · <span style="color:var(--wa)">loja não confirmou</span>') : '';
+          return `<div class="field"><label for="csCrediDinheiro">Dinheiro de crediário que veio na sacola (clientes pagando conta)</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="${cego ? 'Conte e digite o total' : '0,00'}" value="${!cego && e.total ? numIn(e.total) : ''}"></div>
+          ${e.pend ? `<div class="warn small" style="margin-top:-6px"><b>${plural(e.pend, 'recebimento desta filial está', 'recebimentos desta filial estão')} sem a forma salva.</b> Volte em Crediário, marque e toque em Salvar antes de conferir.</div>` : ''}
+          ${sem.length ? `<div class="warn small" style="margin-top:-6px"><b>A loja não confirmou ${plural(sem.length, 'recebimento', 'recebimentos')} em dinheiro${cego ? '' : ' (' + money(r2(sem.reduce((a, c) => a + c.valor, 0))) + ')'}.</b> Confira com atenção se esse dinheiro veio mesmo na sacola.</div>` : ''}
+          ${e.n ? `<details class="how" style="margin-top:-6px"><summary>${cego ? 'Papéis de crediário em dinheiro para procurar na sacola (' + e.n + ')' : 'Vem de ' + plural(e.n, 'recebimento marcado', 'recebimentos marcados') + ' como Dinheiro: ' + money(e.total)}</summary>
+            <div class="list small">${e.itens.map(c => `<div class="it"><div class="tx"><b>${esc(c.cliente || 'Cliente')}</b><span>Título ${esc(c.numero || '—')} · ${dBR(c.data)}${tagLoja(c)}</span></div>${cego ? '' : `<div class="vl">${money(c.valor)}</div>`}</div>`).join('')}</div>
+            <p>${cego ? 'Separe o dinheiro de crediário desses clientes, conte e digite o total acima. O app diz se bateu.' : 'Confira se esse dinheiro está mesmo na sacola. Se veio diferente, troque o valor.'}</p></details>`
           : `<p class="small muted" style="margin-top:-6px">Nenhum recebimento de crediário desta filial marcado como Dinheiro.</p>`}`; })()}
         <div class="field"><label for="csMotivo">Observação (opcional)</label><input type="text" id="csMotivo" maxlength="300" placeholder="Ex.: nota rasgada, envelope sem nome…"></div>
         <button class="btn pri lg full" type="submit">${cego ? 'Verificar' : 'Confirmar conferência'}</button>
@@ -913,7 +917,11 @@
     if (o.titulo === 'Ajuste lançado') return (d.valor != null ? money(Number(d.valor)) : '') + ' · ' + esc(d.role || '');
     if (o.titulo === 'Saldo inicial alterado') return 'Novo saldo inicial: ' + money(Number(d.saldoInicial) || 0) + ' · ' + esc(d.role || '');
     if (o.titulo === 'Acesso criado ou alterado') return esc(d.login || '') + (d.papel ? ' · ' + esc(d.papel) : '') + ' · por ' + esc(d.role || '');
-    if (o.titulo === 'Lançamento apagado') return 'por ' + esc(d.role || '');
+    if (o.titulo === 'Lançamento apagado') {
+      const tipoTxt = { sangria: 'Sangria', ajuste: 'Ajuste', gaveta_entrada: 'Entrada na gaveta', gaveta_saida: 'Pagamento com a gaveta' }[d.tipo] || 'Lançamento';
+      return d.valor != null ? tipoTxt + ' de ' + money(Number(d.valor)) + (d.data ? ' em ' + dBR(d.data) : '') + (d.motivo ? ' · ' + esc(d.motivo) : '') + (d.lancadoPor ? ' · lançado por ' + esc(d.lancadoPor) : '') + ' · apagado por ' + esc(d.role || '') : 'por ' + esc(d.role || '');
+    }
+    if (o.titulo === 'Forma do crediário trocada') { const F = { dinheiro: 'Dinheiro', pix: 'Pix', cartao: 'Cartão', outro: 'Outro' }; return 'Filial ' + esc(d.filial) + ' · ' + esc(d.cliente || '') + ' · título ' + esc(d.numero || '') + ' · ' + money(Number(d.valor) || 0) + ' · de ' + (F[d.de] || esc(d.de)) + ' para ' + (F[d.para] || 'sem forma') + (d.lojaConfirmou ? ' · a loja tinha confirmado que foi na sacola' : '') + ' · por ' + esc(d.por || d.role || ''); }
     if (o.titulo === 'Consulta ao StarIA pedida') return 'Período: ' + (d.periodo || []).map(dBR).join(' a ') + ' · por ' + esc(d.role || '');
     if (o.titulo === 'Consulta ao StarIA aplicada, em sacolas por filial') return 'Já criou as sacolas por filial · por ' + esc(d.role || '');
     if (o.titulo === 'Caixas do StarIA enviados para a sacola') return (Number(d.caixas) || 0) + ' caixa(s) · ' + money(Number(d.total) || 0) + ' em dinheiro · por ' + esc(d.role || '');
@@ -925,7 +933,7 @@
     const lista = S.ocorrencias || [];
     $('#main').innerHTML = `<div class="pagehd"><h1>Ocorrências</h1><p>Contagens que não bateram e tudo que foi apagado ou alterado, inclusive por você. Ninguém consegue apagar esta lista.</p></div>
       <section class="card">
-      ${lista.length ? `<div class="list">${lista.map(o => { const dif = o.tipo === 'conferencia' || o.tipo === 'sacola' || o.tipo === 'credi'; return `<div class="it" style="align-items:flex-start">
+      ${lista.length ? `<div class="list">${lista.map(o => { const dif = o.tipo === 'conferencia' || o.tipo === 'sacola' || o.tipo === 'credi' || (o.titulo === 'Forma do crediário trocada' && (o.detalhe || {}).de === 'dinheiro'); return `<div class="it" style="align-items:flex-start">
           <div class="ic ${dif ? 'bad' : ''}">${ic(dif ? 'alert' : 'shield')}</div>
           <div class="tx"><b>${esc(o.titulo)}</b><span>${ocorDetalheTxt(o)}</span><span>${dtBR(o.em)}</span></div>
         </div>`; }).join('')}</div>` : `<div class="empty"><div class="big">${ic('ok')}</div><p>Nenhuma ocorrência registrada.</p></div>`}

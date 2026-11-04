@@ -331,7 +331,8 @@ s, _ = F.req('/api/caixa/caixas/aceitar', {'ids': []}); check(s == 400, 'sem nen
 s, _ = F.req('/api/caixa/caixas/aceitar', {'ids': ['lffffffffffffffff']}); check(s == 404, 'caixa que não existe, recusa')
 s, r = F.req('/api/caixa/caixas/aceitar', {'ids': IDS})
 sacs = {x['filial']: x for x in r.get('sacolas', [])}
-check(s == 200 and r.get('caixas') == 3 and sacs.get(2, {}).get('total') == 300.5 and sacs.get(1, {}).get('total') == 50, 'financeiro envia 3 caixas: vira uma sacola por filial (filial 2: 300,50; matriz: 50) (%s)' % r)
+check(s == 200 and r.get('caixas') == 3 and sacs.get(2, {}).get('caixas') == 2 and sacs.get(1, {}).get('caixas') == 1, 'financeiro envia 3 caixas: vira uma sacola por filial (filial 2 com 2 caixas, matriz com 1) (%s)' % r)
+check('total' not in r and all('total' not in x for x in r.get('sacolas', [])), 'a resposta de enviar para a sacola não traz o valor esperado para o financeiro (contagem cega)')
 s, _ = F.req('/api/caixa/caixas/aceitar', {'ids': IDS}); check(s == 409, 'os mesmos caixas não entram duas vezes')
 s, st = A.req('/api/caixa/state'); cp = st['caixasPendentes']
 check(len(cp) == 1 and cp[0]['ecf'] == '101' and cp[0]['data'] == '2026-10-30', 'só o caixa não marcado continua esperando')
@@ -455,6 +456,31 @@ s, st = A.req('/api/caixa/state')
 check(st['saldo'] == round(saldo0 + 1450, 2) and st['resumo']['nasLojas']['porFilial'].get('2', {}).get('crediario', 0) == 0, 'o saldo sobe 1.450 e o crediário em dinheiro sai de "nas lojas"')
 check(all(c['contado'] for c in st['crediarios'] if c['numero'] in ('7001', '7002')), 'os dois recebimentos em dinheiro ficam como contados (presos a essa sacola)')
 s, r = F.req('/api/caixa/credi/forma', {'itens': [{'id': porNum['7001'][0], 'forma': 'pix'}]}); check(r['travadas'] == 1, 'dinheiro já contado não muda mais de forma')
+
+print('== antifraude: troca de forma registrada, contagem do cofre limitada, apagado guarda cópia, equipe sem valores contados')
+CR2 = [cr('7101', 'Gil Prado', 210), cr('7102', 'Hugo Reis', 90)]
+s, r = A.req('/api/caixa/staria/pedir', {'periodoIni': _dc, 'periodoFim': _dc}); A.req('/api/caixa/staria/resultado', {'id': r['id'], 'resultado': {'crediario': CR2}})
+s, stf = F.req('/api/caixa/state'); n71 = {c['numero']: c['id'] for c in stf['crediarios'] if c['numero'] in ('7101', '7102')}
+F.req('/api/caixa/credi/forma', {'itens': [{'id': n71['7101'], 'forma': 'dinheiro'}, {'id': n71['7102'], 'forma': 'dinheiro'}]})
+s, r = F.req('/api/caixa/credi/forma', {'itens': [{'id': n71['7101'], 'forma': 'pix'}]}); check(s == 200 and r['alteradas'] == 1 and 'trocas' not in r, 'o financeiro troca dinheiro por Pix (a resposta não expõe detalhes)')
+s, oc = A.req('/api/caixa/ocorrencias'); tr = [o for o in oc['ocorrencias'] if o['titulo'] == 'Forma do crediário trocada']
+check(tr and tr[0]['detalhe'].get('de') == 'dinheiro' and tr[0]['detalhe'].get('para') == 'pix' and tr[0]['detalhe'].get('valor') == 210 and tr[0]['detalhe'].get('cliente') == 'Gil Prado', 'a troca de forma aparece nas ocorrências: cliente, valor, de dinheiro para Pix e quem trocou')
+s, r = F.req('/api/caixa/credi/forma', {'itens': [{'id': n71['7102'], 'forma': 'dinheiro'}]}); s, oc2 = A.req('/api/caixa/ocorrencias')
+check(len([o for o in oc2['ocorrencias'] if o['titulo'] == 'Forma do crediário trocada']) == len(tr), 'salvar a mesma forma de novo não vira ocorrência')
+s, st = A.req('/api/caixa/state'); al = [a for a in st['resumo']['alertas'] if a['codigo'] == 'CREDI_CONFERIR_BANCO']
+check(al and al[0]['nivel'] == 'vermelho', 'Pix/cartão de crediário com mais de 3 dias sem o dono conferir no banco vira alerta vermelho')
+# equipe não recebe o que foi contado em sacolas antigas
+s, stf = F.req('/api/caixa/state'); conf = [x for x in stf['sacolas'] if x.get('conferidoEm')]
+check(conf and all(x.get('valorContado') is None and x.get('crediDinheiro') is None and x.get('valorStaria') is None for x in conf), 'a equipe não vê quanto foi contado nas sacolas (não dá para calcular o saldo do cofre)')
+# contagem do cofre: no máximo 3 por hora para a equipe
+res = [F.req('/api/caixa/conferir', {'valorContado': str(1 + i)})[0] for i in range(4)]
+check(res[-1] == 429 and res.count(200) <= 3 and res.index(429) == res.count(200), 'a equipe conta o cofre no máximo 3 vezes por hora (%s)' % res)
+s, st = A.req('/api/caixa/state'); al = [a for a in st['resumo']['alertas'] if a['codigo'] == 'COFRE_DIFERENCA']
+check(al and al[0]['nivel'] == 'vermelho', 'a diferença do cofre fica acesa até o dono contar')
+s, r = A.req('/api/caixa/sangria', {'valor': '12,34', 'data': _dc, 'motivo': 'teste apagar'}); MID = r['id']
+s, _ = A.req('/api/caixa/mov/excluir', {'id': MID}); s, oc3 = A.req('/api/caixa/ocorrencias')
+ap1 = [o for o in oc3['ocorrencias'] if o['titulo'] == 'Lançamento apagado' and o['detalhe'].get('id') == MID]
+check(ap1 and ap1[0]['detalhe'].get('valor') == 12.34 and ap1[0]['detalhe'].get('tipo') == 'sangria' and ap1[0]['detalhe'].get('motivo') == 'teste apagar', 'lançamento apagado deixa cópia nas ocorrências: tipo, valor e motivo')
 
 print('== zerar os dados (recomeçar do zero): só o admin, com a senha dele e digitando ZERAR')
 # a outra empresa de caixa ganha dados próprios, para provar que zerar uma não mexe na outra
