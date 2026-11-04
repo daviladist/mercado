@@ -305,7 +305,7 @@
       <section class="card menu"><div class="list">
         ${item('ocorrencias', 'shield', 'Ocorrências', 'Diferenças e tudo que foi apagado ou alterado', R.alertas.length ? `<span class="badge bad">${R.alertas.length}</span>` : '')}
         ${item('crediario', 'bank', 'Crediário: conferir no banco', (() => { const p = (S.crediarios || []).filter(c => c.forma && c.forma !== 'dinheiro' && c.banco !== 'achei'); return p.length ? plural(p.length, 'recebimento', 'recebimentos') + ' para conferir no extrato' : 'Pix e cartões de clientes pagando conta'; })())}
-        ${item('staria', 'sync', 'Puxar do StarIA', jobP ? 'Uma consulta está esperando o Claude' : 'Pedir as vendas em dinheiro de um período')}
+        ${item('staria', 'sync', 'Puxar do StarIA', jobP ? 'Uma consulta está esperando o Claude' : 'Pedir as vendas em dinheiro de um dia')}
         ${item('gaveta', 'tax', 'Gaveta de impostos', money(S.saldoImpostos || 0) + ' guardado à parte')}
         ${item('acessos', 'users', 'Pessoas com acesso', plural((S.pessoas || []).length, 'pessoa', 'pessoas'))}
         <button type="button" class="it" id="verCfg"><div class="ic">${ic('edit')}</div><div class="tx"><b>Dinheiro inicial do cofre</b><span>${money(S.cfg ? S.cfg.saldoInicial : 0)} em ${S.cfg ? dBR(S.cfg.dataInicial) : '—'}</span></div><span class="ch">${ic('chev')}</span></button>
