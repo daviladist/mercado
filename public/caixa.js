@@ -39,7 +39,6 @@
     if (cor && /^#[0-9a-f]{6}$/i.test(cor)) document.documentElement.style.setProperty('--brand', cor);
   }
   const isAdmin = () => !!(S && S.me.role === 'admin');
-  const isFinanceiro = () => !!(S && S.me.role === 'financeiro');
 
   /* ---------- entrar ---------- */
   function showLogin(msg) {
@@ -128,7 +127,7 @@
         ${pf.map(([f, v]) => `<tr><td>${esc(f)}</td><td class="n">${money(v.vendas)}</td><td class="n">${money(v.crediario)}</td><td class="n"><b>${money(r2(v.vendas + v.crediario))}</b></td></tr>`).join('')}
         </tbody></table></section>` : ''}
       <div class="row">
-        ${!isFinanceiro() ? '<button class="btn sm pri" type="button" id="btnConferir">⚖️ Conferir caixa</button>' : ''}
+        <button class="btn sm pri" type="button" id="btnConferir">⚖️ Conferir caixa</button>
         ${isAdmin() ? '<button class="btn sm" type="button" id="btnAjuste">✏️ Lançar ajuste</button>' : ''}
       </div>
       <section class="card">
@@ -196,7 +195,6 @@
 
   /* ---------- Sangria ---------- */
   function renderSangria() {
-    if (isFinanceiro()) { view = 'inicio'; return render(); }
     $('#main').innerHTML = `<section class="card">
       <h1>Nova sangria</h1>
       <p class="muted small">Dinheiro que saiu do caixa principal. Pode ficar guardado alguns dias até o depósito; marque "depositado" quando chegar lá.</p>
@@ -356,9 +354,10 @@
     });
   }
 
-  /* ---------- Acessos (admin): quem guarda o caixa (caixista), quem confere as sacolas (financeiro) e o acesso
-     de automação (só o Claude, importação noturna do StarIA) ---------- */
-  const papelLabel = p => p === 'financeiro' ? 'Financeiro · confere as sacolas' : p === 'automacao' ? 'Automação · só StarIA' : 'Caixista · guarda o dinheiro';
+  /* ---------- Acessos (admin): quem guarda o caixa (caixista), quem guarda o caixa e também confere as sacolas
+     (financeiro — não é obrigatório ter as duas pessoas, uma só como financeiro cobre o dia a dia) e o acesso de
+     automação (só o Claude, importação noturna do StarIA) ---------- */
+  const papelLabel = p => p === 'financeiro' ? 'Financeiro · guarda o caixa e confere as sacolas' : p === 'automacao' ? 'Automação · só StarIA' : 'Caixista · guarda o dinheiro';
   function renderAcessos() {
     if (!isAdmin()) { view = 'inicio'; return render(); }
     $('#main').innerHTML = `<section class="card">
@@ -382,7 +381,7 @@
     const auto = papel === 'automacao';
     const titulo = p ? 'Editar acesso' : auto ? 'Novo acesso de automação' : (papel === 'financeiro' ? 'Novo acesso do financeiro' : 'Nova pessoa do caixa');
     const sub = auto ? 'Só para o Claude usar na importação noturna do StarIA: pede e entrega a consulta, deixando pronta pra você revisar. Não vê saldo, extrato, pessoas nem ocorrências — mesmo assim, é uma senha guardada fora do app, então escolha uma forte e não reaproveite de outro lugar.'
-      : papel === 'financeiro' ? 'Confere as sacolas das filiais: o valor real de vendas e a forma de pagamento do crediário recebido. Também pode marcar a chegada de uma sacola na matriz. Não lança sangria nem vê os acessos.' : 'Lança sangria, vê o saldo, marca quando um valor foi ao banco e também pode marcar a chegada de uma sacola na matriz.';
+      : papel === 'financeiro' ? 'Faz tudo que a pessoa do caixa faz (lança sangria, marca quando um valor foi ao banco, confere o caixa físico) e também confere as sacolas das filiais: o valor real de vendas e a forma de pagamento do crediário recebido. Não é obrigatório ter as duas pessoas — pode ser só esta. Não vê os acessos nem a gaveta de impostos.' : 'Lança sangria, vê o saldo, marca quando um valor foi ao banco, confere o caixa físico e também pode marcar a chegada de uma sacola na matriz.';
     openSheet(`<div class="tt"><h2>${titulo}</h2><button class="x" type="button" id="shxb">✕</button></div>
       <p class="muted small">${sub}</p>
       <form id="fp">
@@ -452,7 +451,7 @@
   /* ---------- navegação ---------- */
   function render() {
     $('#bn').hidden = false; $('#sair').hidden = false;
-    $('#navSangria').hidden = isFinanceiro(); $('#navStaria').hidden = !isAdmin(); $('#navAcessos').hidden = !isAdmin(); $('#navGaveta').hidden = !isAdmin(); $('#navOcorrencias').hidden = !isAdmin();
+    $('#navStaria').hidden = !isAdmin(); $('#navAcessos').hidden = !isAdmin(); $('#navGaveta').hidden = !isAdmin(); $('#navOcorrencias').hidden = !isAdmin();
     document.querySelectorAll('#bn [data-go]').forEach(b => b.setAttribute('aria-current', b.dataset.go === view));
     if (view === 'sangria') return renderSangria();
     if (view === 'sacolas') return renderSacolas();
