@@ -571,10 +571,12 @@ create table if not exists caixa_jobs (
   primary key (tenant_id, id)
 );
 create index if not exists caixa_jobs_tenant on caixa_jobs(tenant_id, status);
--- sacola física de cada filial (venda em dinheiro apontada pelo StarIA): fica "na filial" até alguém (caixista ou
--- financeiro) marcar que chegou na matriz; só depois disso o financeiro confere o valor REAL que veio dentro e
--- lança no saldo — com o valor contado, não o do StarIA. Qualquer diferença vira ocorrência. O crediário não passa
--- por aqui (não vem em sacola física): continua só no fluxo de aprovar/rejeitar, de quando a consulta é entregue.
+-- sacola física de cada filial (venda em dinheiro + crediário recebido, apontados pelo StarIA): fica "na filial"
+-- até alguém (caixista ou financeiro) marcar que chegou na matriz; só depois disso o financeiro confere o valor
+-- REAL de vendas que veio dentro E decide, do crediário recebido naquele período/filial, quanto foi em dinheiro,
+-- cartão ou Pix — só o dinheiro (de vendas e de crediário) lança no saldo, com o valor contado, não o do StarIA.
+-- Qualquer diferença (de vendas ou de crediário) vira ocorrência. A filial 1 (matriz) nunca "viaja": sua sacola já
+-- nasce com chegou_em preenchido, pronta pra conferência direto, sem o passo de marcar chegada.
 create table if not exists caixa_sacola (
   tenant_id text not null references tenants(id),
   id text primary key,
@@ -583,16 +585,22 @@ create table if not exists caixa_sacola (
   periodo_ini date not null,
   periodo_fim date not null,
   valor_staria numeric(14,2) not null,
+  credi_staria numeric(14,2) not null default 0,
   chegou_em timestamptz,
   chegou_por text,
   chegou_por_role text,
   valor_contado numeric(14,2),
   diferenca numeric(14,2),
+  credi_dinheiro numeric(14,2),
+  credi_cartao numeric(14,2),
+  credi_pix numeric(14,2),
+  credi_diferenca numeric(14,2),
   motivo text,
   conferido_em timestamptz,
   conferido_por text,
   conferido_por_role text,
   mov_id text,
+  credi_mov_id text,
   created_at timestamptz not null default now(),
   unique(job_id, filial)
 );
