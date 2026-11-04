@@ -267,10 +267,10 @@
             <div class="kv tot"><span><b>Total</b></span><b>${money(R.tudo)}</b></div>
           </div></section>
         <section class="card"><div class="sec"><h2>StarIA</h2></div>
-          <p class="small muted" style="margin:0 0 10px">${R.stariaAte ? 'Números até ' + dBR(R.stariaAte) + '.' : 'Nenhum número do StarIA ainda.'} ${jobP ? '<b>Pedido feito: falta o Claude processar.</b> Peça no chat: “processar as consultas do StarIA”.' : 'As vendas de hoje entram amanhã.'}</p>
-          <button class="btn full" type="button" id="btnStaria">${ic('sync')} Atualizar números do StarIA</button></section>
+          <p class="small muted" style="margin:0 0 10px">${R.stariaAte ? 'Números até ' + dBR(R.stariaAte) + '.' : 'Nenhum número do StarIA ainda.'} ${jobP ? '<b>Pedido feito: falta o Claude processar.</b> Peça no chat: “processar as consultas do StarIA”.' : 'Um dia por vez, igual à tela de Fechamento de Caixa.'}</p>
+          ${seletorDia()}</section>
         ${ultimas}`;
-      $('#btnStaria').addEventListener('click', () => post('/api/caixa/staria/pedir', { auto: true }, 'Pedido feito. No chat, peça ao Claude: “processar as consultas do StarIA”.'));
+      ligarSeletorDia();
     }
     $('#btnConferir').addEventListener('click', sheetConferir);
     $('#btnSangria').addEventListener('click', sheetSangria);
@@ -305,7 +305,7 @@
       <section class="card menu"><div class="list">
         ${item('ocorrencias', 'shield', 'Ocorrências', 'Diferenças e tudo que foi apagado ou alterado', R.alertas.length ? `<span class="badge bad">${R.alertas.length}</span>` : '')}
         ${item('crediario', 'bank', 'Crediário: conferir no banco', (() => { const p = (S.crediarios || []).filter(c => c.forma && c.forma !== 'dinheiro' && c.banco !== 'achei'); return p.length ? plural(p.length, 'recebimento', 'recebimentos') + ' para conferir no extrato' : 'Pix e cartões de clientes pagando conta'; })())}
-        ${item('staria', 'sync', 'Puxar do StarIA', jobP ? 'Uma consulta está esperando o Claude' : 'Pedir as vendas em dinheiro de um período')}
+        ${item('staria', 'sync', 'Puxar do StarIA', jobP ? 'Uma consulta está esperando o Claude' : 'Pedir as vendas em dinheiro de um dia')}
         ${item('gaveta', 'tax', 'Gaveta de impostos', money(S.saldoImpostos || 0) + ' guardado à parte')}
         ${item('acessos', 'users', 'Pessoas com acesso', plural((S.pessoas || []).length, 'pessoa', 'pessoas'))}
         <button type="button" class="it" id="verCfg"><div class="ic">${ic('edit')}</div><div class="tx"><b>Dinheiro inicial do cofre</b><span>${money(S.cfg ? S.cfg.saldoInicial : 0)} em ${S.cfg ? dBR(S.cfg.dataInicial) : '—'}</span></div><span class="ch">${ic('chev')}</span></button>
@@ -425,6 +425,26 @@
     });
   }
 
+  /* ---------- escolher o dia da consulta ao StarIA: sempre UM dia, padrão ontem ---------- */
+  const diaMenos = n => { const d = new Date(hoje() + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); };
+  let diaStaria = null;
+  function seletorDia() {
+    if (!diaStaria || diaStaria > hoje()) diaStaria = diaMenos(1);
+    const ops = [[0, 'Hoje'], [1, 'Ontem'], [2, '2 dias atrás'], [3, '3 dias atrás'], [4, '4 dias atrás']];
+    return `<div class="row" style="gap:6px;margin-bottom:8px">${ops.map(([n, t]) => `<button type="button" class="pill ${diaMenos(n) === diaStaria ? 'ok' : 'mu'}" data-dia="${diaMenos(n)}" style="border:0;cursor:pointer;min-height:36px;padding:0 12px">${t}</button>`).join('')}</div>
+      <div class="field"><label for="stDia">Ou outro dia</label><input type="date" id="stDia" value="${diaStaria}" max="${hoje()}"></div>
+      <button class="btn pri full" type="button" id="btnStaria">${ic('sync')} Buscar o dia ${dBR(diaStaria)}</button>`;
+  }
+  function ligarSeletorDia() {
+    const atual = () => { $('#stDia').value = diaStaria; $('#btnStaria').innerHTML = ic('sync') + ' Buscar o dia ' + dBR(diaStaria);
+      document.querySelectorAll('[data-dia]').forEach(b => { b.className = 'pill ' + (b.dataset.dia === diaStaria ? 'ok' : 'mu'); }); };
+    document.querySelectorAll('[data-dia]').forEach(b => b.addEventListener('click', () => { diaStaria = b.dataset.dia; atual(); }));
+    $('#stDia').addEventListener('change', () => { if ($('#stDia').value) { diaStaria = $('#stDia').value; atual(); } });
+    $('#btnStaria').addEventListener('click', async () => {
+      const r = await post('/api/caixa/staria/pedir', { dia: diaStaria }, null);
+      if (r) toast((r.jaPedido ? 'O dia ' + dBR(r.periodoIni) + ' já estava pedido.' : 'Pedido o dia ' + dBR(r.periodoIni) + '.') + ' No chat, peça ao Claude: “processar as consultas do StarIA”.');
+    });
+  }
   /* ---------- StarIA (admin) ---------- */
   function jobBadge(j) {
     if (j.status === 'pendente') return '<span class="pill wa">Aguardando o Claude</span>';
@@ -435,18 +455,14 @@
     const jobs = S.jobs;
     $('#main').innerHTML = `<section class="card">
       <h1>Puxar do StarIA</h1>
-      <p class="muted small">Pede o dinheiro de cada caixa (ECF), dia a dia, de todas as filiais no período — igual à tela "Fechamento de Caixa (PDV)" do StarIA. Quem consulta e devolve é o Claude (pelo seu pedido no chat). Os caixas aparecem em "Sacolas", para o financeiro marcar os que já estão conferidos no StarIA.</p>
+      <p class="muted small">Pede, de UM dia, o dinheiro de cada caixa e os recebimentos de crediário das 3 filiais, igual à tela "Fechamento de Caixa (PDV)" do StarIA. Quem consulta e devolve é o Claude (pelo seu pedido no chat). Tudo aparece em "Sacolas", para o financeiro marcar.</p>
       <div class="note">O StarIA não diz se o caixa já foi conferido lá (linha preta) ou não (vermelha). Por isso nada entra sozinho: só os caixas que o financeiro marcar viram sacola. Os outros ficam esperando, e a próxima consulta atualiza o valor deles.</div>
-      <form id="fst">
-        <div class="field"><label for="stIni">De</label><input type="date" id="stIni" max="${hoje()}" required></div>
-        <div class="field"><label for="stFim">Até</label><input type="date" id="stFim" value="${hoje()}" max="${hoje()}" required></div>
-        <button class="btn pri full" type="submit">Pedir consulta</button>
-      </form></section>
+      ${seletorDia()}</section>
       <section class="card">
         <h2>Consultas</h2>
         ${jobs.length ? jobs.map(j => `<div class="it" style="align-items:flex-start">
             <div class="ic">🔄</div>
-            <div class="tx"><b>${dBR(j.periodoIni)} a ${dBR(j.periodoFim)}</b><span>${jobBadge(j)}</span>
+            <div class="tx"><b>${j.periodoIni === j.periodoFim ? 'Dia ' + dBR(j.periodoIni) : dBR(j.periodoIni) + ' a ' + dBR(j.periodoFim)}</b><span>${jobBadge(j)}</span>
               ${j.status !== 'pendente' && j.resultado ? (j.resultado.porCaixa
                 ? `<div class="small" style="margin-top:6px">${j.resultado.linhas} caixa(s) com dinheiro · ${j.resultado.novas} novo(s), ${j.resultado.atualizadas} atualizado(s)${j.resultado.jaAceitas ? ', ' + j.resultado.jaAceitas + ' já estavam em sacola' : ''}<br><b>Dinheiro: ${money(j.resultado.total)}</b></div>`
                 : `<div class="small" style="margin-top:6px">${Object.entries(j.resultado.porFilial || {}).map(([f, v]) => `Filial ${esc(f)}: ${money(v.vendasDinheiro)} vendas + ${money(v.recebCrediario)} crediário`).join('<br>')}
@@ -454,7 +470,7 @@
             </div>
           </div>`).join('') : '<p class="muted">Nenhuma consulta ainda.</p>'}
       </section>`;
-    $('#fst').addEventListener('submit', e => { e.preventDefault(); post('/api/caixa/staria/pedir', { periodoIni: $('#stIni').value, periodoFim: $('#stFim').value }, 'Consulta pedida. Peça ao Claude para processar as consultas do StarIA.'); });
+    ligarSeletorDia();
   }
 
   /* ---------- Sacolas (venda em dinheiro + crediário recebido, por filial): na filial -> chegou na matriz ->
@@ -560,6 +576,8 @@
      dono confere no extrato (Mais → Crediário: conferir no banco). */
   const FORMA_TXT = { dinheiro: 'Dinheiro', pix: 'Pix', cartao: 'Cartão', outro: 'Outro' };
   const escolhas = new Map();   // escolhas ainda não salvas: id -> forma
+  const crFilAbertas = new Set(); // filiais do crediário abertas (começam minimizadas)
+  const crCliAbertos = new Set(); // clientes com vários títulos abertos (filial|data|nome)
   const sugestao = c => /CART/i.test(c.conta || '') ? 'cartao' : /SICOOB|BANCO|PIX/i.test(c.conta || '') ? 'pix' : null;
   function crediEsperado(s) {
     const ls = (S.crediarios || []).filter(c => c.filial === s.filial && c.forma === 'dinheiro' && !c.contado && c.data <= String(s.periodoFim).slice(0, 10));
@@ -577,13 +595,27 @@
     const grupos = {};
     for (const c of sem) (grupos[c.filial + '|' + c.data] = grupos[c.filial + '|' + c.data] || []).push(c);
     const chaves = Object.keys(grupos).sort((a, b) => { const [fa, da] = a.split('|'), [fb, db] = b.split('|'); return fa - fb || (da < db ? -1 : da > db ? 1 : 0); });
-    const linha = (c, atual) => `<div class="it cr"><div class="tx"><b>${esc(c.cliente || 'Cliente')}</b><span>Título ${esc(c.numero || '—')}${c.conta ? ' · no StarIA: ' + esc(c.conta) : ''}</span></div><div class="vl">${money(c.valor)}</div>${segFormas(c, atual)}</div>`;
+    // cliente com mais de um título no mesmo dia/filial: fica num bloco minimizado, com "todos" de uma vez
+    const porCliente = (k, itens) => {
+      const m = new Map(); for (const c of itens) { const n = c.cliente || 'Cliente'; (m.get(n) || m.set(n, []).get(n)).push(c); }
+      return [...m.entries()].map(([nome, cs]) => cs.length === 1 ? linha(cs[0], escolhas.get(cs[0].id)) :
+        `<details class="crcli" data-crcli="${esc(k + '|' + nome)}"${crCliAbertos.has(k + '|' + nome) ? ' open' : ''}>
+          <summary><span class="tx"><b>${esc(nome)}</b><span>${plural(cs.length, 'título', 'títulos')} · <span data-crcliresumo="${esc(k + '|' + nome)}"></span></span></span><span class="vl">${money(r2(cs.reduce((a, c) => a + c.valor, 0)))}</span><span class="crfil-seta" aria-hidden="true"></span></summary>
+          <div class="crcli-todos"><span class="small muted">Todos:</span>${Object.keys(FORMA_TXT).map(f => `<button type="button" class="lnk" data-crtodos="${esc(k + '|' + nome)}" data-f="${f}">${FORMA_TXT[f]}</button>`).join('')}</div>
+          <div class="list">${cs.map(c => linha(c, escolhas.get(c.id), true)).join('')}</div></details>`).join('');
+    };
+    const linha = (c, atual, soTitulo) => `<div class="it cr"><div class="tx">${soTitulo ? `<b>Título ${esc(c.numero || '—')}</b><span>${c.conta ? 'no StarIA: ' + esc(c.conta) : ''}</span>` : `<b>${esc(c.cliente || 'Cliente')}</b><span>Título ${esc(c.numero || '—')}${c.conta ? ' · no StarIA: ' + esc(c.conta) : ''}</span>`}</div><div class="vl">${money(c.valor)}</div>${segFormas(c, atual)}</div>`;
     return `<section class="card">
       <div class="sec"><h2>Crediário: como o cliente pagou?</h2>${sem.length ? `<span class="badge">${sem.length}</span>` : ''}</div>
       <details class="how"><summary>Por que marcar?</summary>
         <p>O StarIA não diz como cada cliente pagou a conta. <b>Dinheiro</b> tem que vir na sacola da filial e é contado junto. <b>Pix</b> e <b>cartão</b> o dono confere no extrato. <b>Outro</b>: desconto em folha, cheque etc.</p></details>
-      ${chaves.map(k => { const [f, d] = k.split('|'); return `<div class="grp"><b>Filial ${esc(f)} · ${dBR(d)}</b><button type="button" class="lnk" data-crgrupo="${esc(k)}">Os sem marcar = Dinheiro</button></div>
-        <div class="list">${grupos[k].map(c => linha(c, escolhas.get(c.id))).join('')}</div>`; }).join('')}
+      ${[...new Set(chaves.map(k => k.split('|')[0]))].map(f => {
+        const ks = chaves.filter(k => k.split('|')[0] === f), itens = ks.flatMap(k => grupos[k]);
+        return `<details class="crfil" data-crfil="${esc(f)}"${crFilAbertas.has(f) ? ' open' : ''}>
+        <summary><span><b>Filial ${esc(f)}</b><span class="small muted"> · ${plural(itens.length, 'recebimento', 'recebimentos')} · ${money(r2(itens.reduce((a, c) => a + c.valor, 0)))}</span></span><span class="crfil-seta" aria-hidden="true"></span></summary>
+        ${ks.map(k => { const d = k.split('|')[1]; return `<div class="grp"><b>${dBR(d)}</b><button type="button" class="lnk" data-crgrupo="${esc(k)}">Os sem marcar = Dinheiro</button></div>
+        <div class="list">${porCliente(k, grupos[k])}</div>`; }).join('')}
+        </details>`; }).join('')}
       ${corrigiveis.length ? `<details class="how" style="margin-top:12px"><summary>Já marcados, ainda dá para corrigir (${corrigiveis.length})</summary>
         <div class="list">${corrigiveis.map(c => linha(c, escolhas.get(c.id) || c.forma)).join('')}</div></details>` : ''}
       <div class="sbar"><div class="t" id="crResumo"></div><button class="btn" type="button" id="btnSalvarCr" disabled>Salvar</button></div>
@@ -594,11 +626,20 @@
     const mudancas = () => [...escolhas.entries()].filter(([id, f]) => { const c = lista.find(x => x.id === id); return c && c.forma !== f; });
     const atualiza = () => {
       document.querySelectorAll('[data-cf]').forEach(b => { const c = lista.find(x => x.id === b.dataset.cf); const on = (escolhas.get(b.dataset.cf) || (c && c.forma)) === b.dataset.f; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+      document.querySelectorAll('[data-crcliresumo]').forEach(el => {
+        const cs = doCli(el.dataset.crcliresumo), marc = cs.filter(c => escolhas.has(c.id));
+        const fs = [...new Set(marc.map(c => FORMA_TXT[escolhas.get(c.id)]))];
+        el.textContent = !marc.length ? 'sem marcar' : marc.length < cs.length ? (cs.length - marc.length) + ' sem marcar' : fs.join(' + ');
+      });
       const m = mudancas(), r = $('#crResumo'), b = $('#btnSalvarCr');
       const falta = lista.filter(c => !c.forma && !escolhas.has(c.id)).length;
       if (r) r.innerHTML = m.length ? plural(m.length, 'recebimento para salvar', 'recebimentos para salvar') + (falta ? `<b>${plural(falta, 'sem marcar', 'sem marcar')}</b>` : '') : (falta ? 'Toque na forma de cada recebimento' : 'Tudo marcado');
       if (b) { b.disabled = !m.length; b.textContent = m.length ? 'Salvar ' + m.length : 'Salvar'; }
     };
+    document.querySelectorAll('[data-crfil]').forEach(d => d.addEventListener('toggle', () => { if (d.open) crFilAbertas.add(d.dataset.crfil); else crFilAbertas.delete(d.dataset.crfil); }));
+    document.querySelectorAll('[data-crcli]').forEach(d => d.addEventListener('toggle', () => { if (d.open) crCliAbertos.add(d.dataset.crcli); else crCliAbertos.delete(d.dataset.crcli); }));
+    const doCli = key => { const [f, d, ...n] = key.split('|'); const nome = n.join('|'); return lista.filter(c => !c.forma && String(c.filial) === f && c.data === d && (c.cliente || 'Cliente') === nome); };
+    document.querySelectorAll('[data-crtodos]').forEach(b => b.addEventListener('click', () => { doCli(b.dataset.crtodos).forEach(c => escolhas.set(c.id, b.dataset.f)); atualiza(); }));
     document.querySelectorAll('[data-cf]').forEach(b => b.addEventListener('click', () => { escolhas.set(b.dataset.cf, b.dataset.f); atualiza(); }));
     document.querySelectorAll('[data-crgrupo]').forEach(g => g.addEventListener('click', () => {
       lista.filter(c => !c.forma && c.filial + '|' + c.data === g.dataset.crgrupo && !escolhas.has(c.id)).forEach(c => escolhas.set(c.id, 'dinheiro')); atualiza();
