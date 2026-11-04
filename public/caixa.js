@@ -42,7 +42,7 @@
 
   /* ---------- entrar ---------- */
   function showLogin(msg) {
-    S = null; $('#bn').hidden = true; $('#sair').hidden = true; closeSheet();
+    S = null; $('#bn').hidden = true; $('#sair').hidden = true; $('#atualizar').hidden = true; closeSheet();
     $('#main').innerHTML = `<div class="login"><form class="card" id="lf" autocomplete="on">
       <h1>Entrar</h1><p class="muted small">${esc(brand.name || 'Tino')} · controle de caixa</p>
       <div class="field"><label for="lu">Usuário</label><input type="text" id="lu" autocomplete="username" autocapitalize="off" spellcheck="false" required></div>
@@ -74,6 +74,14 @@
       catch (er) { $('#re').textContent = er.message; } finally { b.disabled = false; }
     });
   }
+  // botão Atualizar no topo (em todas as telas): busca os dados de novo, inclusive a importação do StarIA
+  $('#atualizar').addEventListener('click', async () => {
+    const b = $('#atualizar'); if (b.disabled) return;
+    b.disabled = true; b.classList.add('gira');
+    try { await reload(); if (!$('#sheet').innerHTML) { const y = window.scrollY; render(); window.scrollTo(0, y); } toast('Atualizado'); }
+    catch (e) { fail(e); }
+    finally { b.disabled = false; b.classList.remove('gira'); }
+  });
   $('#sair').addEventListener('click', async () => { try { await api('/api/logout', {}); } catch (e) { /* segue */ } showLogin(); });
 
   /* ---------- sheet (formulário em baixo) ---------- */
@@ -1009,11 +1017,11 @@
   const SUB_MAIS = ['staria', 'acessos', 'gaveta', 'ocorrencias', 'crediario'];
   function render() {
     if (S && S.loja) {
-      $('#bn').hidden = true; $('#sair').hidden = false; renderLoja();
+      $('#bn').hidden = true; $('#sair').hidden = false; $('#atualizar').hidden = false; renderLoja();
       if (!instalado()) { $('#main').insertAdjacentHTML('beforeend', `<button type="button" class="btn full" id="atalhoIni">${ic('pin')} Criar atalho na área de trabalho</button>`); $('#atalhoIni').addEventListener('click', criarAtalho); }
       return;
     }
-    $('#bn').hidden = false; $('#sair').hidden = false;
+    $('#bn').hidden = false; $('#sair').hidden = false; $('#atualizar').hidden = false;
     if (view === 'sangria') { view = 'inicio'; setTimeout(sheetSangria, 0); }
     $('#navMais').hidden = !isAdmin();
     const aba = SUB_MAIS.includes(view) ? 'mais' : view;
