@@ -601,6 +601,9 @@
   /* ---------- crediário recebido (cliente pagando a conta), um por um ----------
      O financeiro diz como cada um pagou. Dinheiro: vem na sacola da filial e é contado junto. Pix/cartão/outro: o
      dono confere no extrato (Mais → Crediário: conferir no banco). */
+  // a loja confirmou que o comprovante/dinheiro desse recebimento foi na sacola? (só aparece para a filial ≠ matriz ou quando houver confirmação)
+  const lojaTag = c => c.lojaOk ? `<span style="color:var(--ok);font-weight:600">✓ Loja confirmou que foi na sacola${c.lojaOkPor ? ' (' + esc(c.lojaOkPor) + ')' : ''}</span>`
+    : c.filial !== 1 ? '<span style="color:var(--wa)">Loja ainda não confirmou</span>' : '';
   const FORMA_TXT = { dinheiro: 'Dinheiro', pix: 'Pix', cartao: 'Cartão', outro: 'Outro' };
   const escolhas = new Map();   // escolhas ainda não salvas: id -> forma
   const crFilAbertas = new Set(); // filiais do crediário abertas (começam minimizadas)
@@ -631,7 +634,7 @@
           <div class="crcli-todos"><span class="small muted">Todos:</span>${Object.keys(FORMA_TXT).map(f => `<button type="button" class="lnk" data-crtodos="${esc(k + '|' + nome)}" data-f="${f}">${FORMA_TXT[f]}</button>`).join('')}</div>
           <div class="list">${cs.map(c => linha(c, escolhas.get(c.id), true)).join('')}</div></details>`).join('');
     };
-    const linha = (c, atual, soTitulo) => `<div class="it cr"><div class="tx">${soTitulo ? `<b>Título ${esc(c.numero || '—')}</b><span>${c.conta ? 'no StarIA: ' + esc(c.conta) : ''}</span>` : `<b>${esc(c.cliente || 'Cliente')}</b><span>Título ${esc(c.numero || '—')}${c.conta ? ' · no StarIA: ' + esc(c.conta) : ''}</span>`}</div><div class="vl">${money(c.valor)}</div>${segFormas(c, atual)}</div>`;
+    const linha = (c, atual, soTitulo) => `<div class="it cr"><div class="tx">${soTitulo ? `<b>Título ${esc(c.numero || '—')}</b><span>${c.conta ? 'no StarIA: ' + esc(c.conta) : ''}</span>` : `<b>${esc(c.cliente || 'Cliente')}</b><span>Título ${esc(c.numero || '—')}${c.conta ? ' · no StarIA: ' + esc(c.conta) : ''}</span>`}${lojaTag(c)}</div><div class="vl">${money(c.valor)}</div>${segFormas(c, atual)}</div>`;
     return `<section class="card">
       <div class="sec"><h2>Crediário: como o cliente pagou?</h2>${sem.length ? `<span class="badge">${sem.length}</span>` : ''}</div>
       <details class="how"><summary>Por que marcar?</summary>
@@ -787,17 +790,18 @@
   /* ---------- Acessos (admin): quem guarda o caixa (caixista), quem guarda o caixa e também confere as sacolas
      (financeiro — não é obrigatório ter as duas pessoas, uma só como financeiro cobre o dia a dia) e o acesso de
      automação (só o Claude, importação noturna do StarIA) ---------- */
-  const papelLabel = p => p === 'financeiro' ? 'Financeiro · guarda o caixa e confere as sacolas' : p === 'automacao' ? 'Automação · só StarIA' : 'Caixista · guarda o dinheiro';
+  const papelLabel = (p, f) => p === 'loja' ? 'Loja · Filial ' + (f || '?') + ' · confirma o crediário que vai na sacola' : p === 'financeiro' ? 'Financeiro · guarda o caixa e confere as sacolas' : p === 'automacao' ? 'Automação · só StarIA' : 'Caixista · guarda o dinheiro';
   function renderAcessos() {
     if (!isAdmin()) { view = 'inicio'; return render(); }
     $('#main').innerHTML = `<section class="card">
       <h1>Acessos</h1>
       <p class="muted small">Quem pode entrar neste controle de caixa. Ninguém vê custo ou margem (não existe nada disso aqui), e ninguém apaga ou cancela nada — isso é só pelo seu usuário.</p>
       ${S.pessoas.length ? `<div class="list">${S.pessoas.map(p => `<div class="it">
-          <div class="ic">${p.papel === 'financeiro' ? '✅' : p.papel === 'automacao' ? '🤖' : '👤'}</div><div class="tx"><b>${esc(p.nome)}</b><span>${esc(p.login)} · ${papelLabel(p.papel)}${p.ativo ? '' : ' · inativo'}${p.trocarSenha ? ' · ainda não trocou a senha provisória' : ''}</span></div>
+          <div class="ic">${p.papel === 'financeiro' ? '✅' : p.papel === 'automacao' ? '🤖' : p.papel === 'loja' ? '🏪' : '👤'}</div><div class="tx"><b>${esc(p.nome)}</b><span>${esc(p.login)} · ${papelLabel(p.papel, p.filial)}${p.ativo ? '' : ' · inativo'}${p.trocarSenha ? ' · ainda não trocou a senha provisória' : ''}</span></div>
           <div class="vl"><button class="btn sm" type="button" data-editp="${esc(p.login)}">Editar</button></div>
         </div>`).join('')}</div>` : '<p class="muted">Nenhum acesso criado ainda.</p>'}
       <div class="row"><button class="btn pri" type="button" id="btnNovaCaixista">+ Nova pessoa do caixa</button><button class="btn pri" type="button" id="btnNovoFinanceiro">+ Novo acesso do financeiro</button></div>
+      <div class="row"><button class="btn pri" type="button" id="btnNovaLoja">🏪 + Pessoa da loja (filial)</button></div>
       <div class="row"><button class="btn" type="button" id="btnNovaAutomacao">🤖 + Acesso de automação (StarIA)</button></div>
     </section>
     <section class="card">
@@ -810,19 +814,23 @@
     $('#btnNovaCaixista').addEventListener('click', () => sheetPessoa(null, 'caixista'));
     $('#btnNovoFinanceiro').addEventListener('click', () => sheetPessoa(null, 'financeiro'));
     $('#btnNovaAutomacao').addEventListener('click', () => sheetPessoa(null, 'automacao'));
+    $('#btnNovaLoja').addEventListener('click', () => sheetPessoa(null, 'loja'));
     document.querySelectorAll('[data-editp]').forEach(b => b.addEventListener('click', () => sheetPessoa(S.pessoas.find(p => p.login === b.dataset.editp))));
   }
   function sheetPessoa(p, papelNovo) {
     const papel = p ? p.papel : papelNovo;
     const auto = papel === 'automacao';
-    const titulo = p ? 'Editar acesso' : auto ? 'Novo acesso de automação' : (papel === 'financeiro' ? 'Novo acesso do financeiro' : 'Nova pessoa do caixa');
-    const sub = auto ? 'Só para o Claude usar na importação noturna do StarIA: pede e entrega a consulta, deixando pronta pra você revisar. Não vê saldo, extrato, pessoas nem ocorrências — mesmo assim, é uma senha guardada fora do app, então escolha uma forte e não reaproveite de outro lugar.'
+    const loja = papel === 'loja';
+    const titulo = p ? 'Editar acesso' : auto ? 'Novo acesso de automação' : loja ? 'Nova pessoa da loja' : (papel === 'financeiro' ? 'Novo acesso do financeiro' : 'Nova pessoa do caixa');
+    const sub = loja ? 'Para quem manda a sacola da filial para a matriz. Vê só os recebimentos de crediário da própria filial (nome e valor) e confirma que o comprovante e o dinheiro vão na sacola. Não marca se foi Pix, dinheiro ou cartão (isso é do financeiro na matriz) e não vê saldo, cofre, sangria nem as outras filiais.'
+      : auto ? 'Só para o Claude usar na importação noturna do StarIA: pede e entrega a consulta, deixando pronta pra você revisar. Não vê saldo, extrato, pessoas nem ocorrências — mesmo assim, é uma senha guardada fora do app, então escolha uma forte e não reaproveite de outro lugar.'
       : papel === 'financeiro' ? 'Faz tudo que a pessoa do caixa faz (lança sangria, marca quando um valor foi ao banco, confere o caixa físico) e também confere as sacolas das filiais: o valor real de vendas e a forma de pagamento do crediário recebido. Não é obrigatório ter as duas pessoas — pode ser só esta. Não vê os acessos nem a gaveta de impostos.' : 'Lança sangria, vê o saldo, marca quando um valor foi ao banco, confere o caixa físico e também pode marcar a chegada de uma sacola na matriz.';
     openSheet(`<div class="tt"><h2>${titulo}</h2><button class="x" type="button" id="shxb">✕</button></div>
       <p class="muted small">${sub}</p>
       <form id="fp">
         <div class="field"><label for="pLogin">Usuário</label><input type="text" id="pLogin" value="${esc((p || {}).login || '')}" autocapitalize="off" spellcheck="false" ${p ? 'readonly' : ''} required></div>
         <div class="field"><label for="pNome">Nome</label><input type="text" id="pNome" value="${esc((p || {}).nome || '')}" ${auto ? '' : 'required'} placeholder="${auto ? 'Automação (StarIA)' : ''}"></div>
+        ${loja ? `<div class="field"><label for="pFilial">Filial</label><select id="pFilial">${[1, 2, 3].map(f => `<option value="${f}" ${((p && p.filial) || 2) === f ? 'selected' : ''}>Filial ${f}</option>`).join('')}</select></div>` : ''}
         ${auto ? `<div class="field"><label for="pSenha">${p ? 'Nova senha (deixe em branco para manter a atual)' : 'Senha'}</label>
             <input type="text" id="pSenha" autocapitalize="off" spellcheck="false" minlength="12" ${p ? '' : 'required'}></div>
           <p class="small muted">Pelo menos 12 caracteres, com letras e números.</p>` : ''}
@@ -836,6 +844,7 @@
         try {
           const body = { login: $('#pLogin').value.trim().toLowerCase(), nome: $('#pNome').value, papel, ativo: p ? $('#pAtivo').checked : true };
           if (auto) { if ($('#pSenha').value) body.senha = $('#pSenha').value; } else body.novaSenha = p ? $('#pNova').checked : true;
+          if (loja) body.filial = Number($('#pFilial').value);
           const r = await api('/api/caixa/pessoa', body);
           await reload();
           if (r.password) $('#pOutS').innerHTML = `<div class="note" style="display:grid;gap:6px"><b>Anote agora: esta senha aparece só uma vez.</b>
@@ -939,9 +948,64 @@
     });
   }
 
+  /* ---------- pessoa da loja: só confirma o crediário que vai na sacola ---------- */
+  const lojaMarc = new Set();
+  function renderLoja() {
+    const L = S.crediLoja || [], f = S.loja.filial;
+    for (const id of [...lojaMarc]) if (!L.some(c => c.id === id && !c.ok)) lojaMarc.delete(id);
+    const falta = L.filter(c => !c.ok), feitos = L.filter(c => c.ok);
+    const dias = [...new Set(falta.map(c => c.data))];
+    const linha = c => `<label class="it${lojaMarc.has(c.id) ? ' on' : ''}" data-lrow="${esc(c.id)}"><input type="checkbox" class="ck" data-lj="${esc(c.id)}" ${lojaMarc.has(c.id) ? 'checked' : ''}>
+      <div class="tx"><b>${esc(c.cliente || 'Cliente')}</b><span>Título ${esc(c.numero || '—')}</span></div><div class="vl">${money(c.valor)}</div></label>`;
+    const sac = S.sacolasLoja || [];
+    $('#main').innerHTML = `<div class="pagehd"><h1>Filial ${esc(f)}</h1><p>Olá, ${esc(S.me.nome)}. Confirme os recebimentos de crediário que vão na sacola para a matriz.</p></div>
+      <section class="card">
+        <div class="sec"><h2>Crediário para mandar na sacola</h2>${falta.length ? `<span class="badge">${falta.length}</span>` : ''}</div>
+        <details class="how"><summary>Como fazer</summary><p>Para cada cliente da lista, confira se o papel do recebimento (e o dinheiro, se foi em dinheiro) está indo na sacola. Marque e toque em <b>Confirmar</b>. Não precisa dizer se foi Pix, dinheiro ou cartão: a matriz faz isso pelo papel.</p></details>
+        ${dias.length ? dias.map(d => { const ls = falta.filter(c => c.data === d); return `<div class="grp"><b>${dBR(d)}</b><button type="button" class="lnk" data-ljdia="${esc(d)}">Marcar todos</button></div>
+          <div class="list">${ls.map(linha).join('')}</div>`; }).join('')
+        : `<div class="empty"><div class="big">${ic('ok')}</div><p>Nada para confirmar agora.</p></div>`}
+        ${falta.length ? `<div class="sbar"><div class="t" id="ljResumo"></div><button class="btn" type="button" id="btnLj" disabled>Confirmar</button></div>` : ''}
+      </section>
+      ${feitos.length ? `<details class="how card"><summary>Já confirmados (${feitos.length})</summary><div class="list">${feitos.map(c => `<div class="it"><div class="ic ok">${ic('ok')}</div>
+        <div class="tx"><b>${esc(c.cliente || 'Cliente')}</b><span>Título ${esc(c.numero || '—')} · ${dBR(c.data)}${c.okPor ? ' · por ' + esc(c.okPor) : ''}</span></div><div class="vl">${money(c.valor)}</div></div>`).join('')}</div>
+        <p class="small">Confirmou errado? Avise a matriz.</p></details>` : ''}
+      ${sac.length ? `<section class="card"><h2>Sacolas da filial</h2><div class="list">${sac.map(s => `<div class="it"><div class="tx"><b>${s.periodoIni === s.periodoFim ? dBR(s.periodoIni) : dBR(s.periodoIni) + ' a ' + dBR(s.periodoFim)}</b></div>
+        <span class="pill ${s.conferida ? 'ok' : s.chegou ? 'wa' : ''}">${s.conferida ? 'Conferida na matriz' : s.chegou ? 'Chegou na matriz' : 'Na filial'}</span></div>`).join('')}</div></section>` : ''}`;
+    const atualiza = () => {
+      const sel = falta.filter(c => lojaMarc.has(c.id)), r = $('#ljResumo'), b = $('#btnLj');
+      if (r) r.innerHTML = sel.length ? `${plural(sel.length, 'recebimento marcado', 'recebimentos marcados')}<b>${money(r2(sel.reduce((a, c) => a + c.valor, 0)))}</b>` : 'Marque o que vai na sacola';
+      if (b) { b.disabled = !sel.length; b.textContent = sel.length ? 'Confirmar ' + sel.length : 'Confirmar'; }
+      document.querySelectorAll('[data-lrow]').forEach(x => x.classList.toggle('on', lojaMarc.has(x.dataset.lrow)));
+      document.querySelectorAll('[data-ljdia]').forEach(g => { const ls = falta.filter(c => c.data === g.dataset.ljdia); g.textContent = ls.every(c => lojaMarc.has(c.id)) ? 'Desmarcar' : 'Marcar todos'; });
+    };
+    document.querySelectorAll('[data-lj]').forEach(c => c.addEventListener('change', () => { if (c.checked) lojaMarc.add(c.dataset.lj); else lojaMarc.delete(c.dataset.lj); atualiza(); }));
+    document.querySelectorAll('[data-ljdia]').forEach(g => g.addEventListener('click', () => {
+      const ls = falta.filter(c => c.data === g.dataset.ljdia), todos = ls.every(c => lojaMarc.has(c.id));
+      ls.forEach(c => { if (todos) lojaMarc.delete(c.id); else lojaMarc.add(c.id); });
+      document.querySelectorAll('[data-lj]').forEach(c => { c.checked = lojaMarc.has(c.dataset.lj); }); atualiza();
+    }));
+    const b = $('#btnLj');
+    if (b) b.addEventListener('click', async () => {
+      const ids = [...lojaMarc];
+      if (!ids.length) return toast('Marque pelo menos um recebimento.', true);
+      if (!await perguntar('Confirmar ' + plural(ids.length, 'recebimento', 'recebimentos') + '?', 'Confira se o papel de cada um está indo na sacola para a matriz.', 'Confirmar')) return;
+      b.disabled = true;
+      const r = await post('/api/caixa/credi/loja', { ids }, 'Confirmado');
+      if (r) lojaMarc.clear(); else b.disabled = false;
+      render();
+    });
+    atualiza();
+  }
+
   /* ---------- navegação: 3 abas para a equipe, 4 para o dono ---------- */
   const SUB_MAIS = ['staria', 'acessos', 'gaveta', 'ocorrencias', 'crediario'];
   function render() {
+    if (S && S.loja) {
+      $('#bn').hidden = true; $('#sair').hidden = false; renderLoja();
+      if (!instalado()) { $('#main').insertAdjacentHTML('beforeend', `<button type="button" class="btn full" id="atalhoIni">${ic('pin')} Criar atalho na área de trabalho</button>`); $('#atalhoIni').addEventListener('click', criarAtalho); }
+      return;
+    }
     $('#bn').hidden = false; $('#sair').hidden = false;
     if (view === 'sangria') { view = 'inicio'; setTimeout(sheetSangria, 0); }
     $('#navMais').hidden = !isAdmin();
