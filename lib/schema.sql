@@ -605,6 +605,14 @@ create table if not exists caixa_sacola (
   unique(job_id, filial)
 );
 create index if not exists caixa_sacola_tenant on caixa_sacola(tenant_id, created_at desc);
+-- crediário entrou na mesma sacola (antes era um fluxo pendente/aprovado/rejeitado separado): quem já tinha a
+-- tabela criada (sem essas colunas) precisa ganhá-las aqui.
+alter table caixa_sacola add column if not exists credi_staria numeric(14,2) not null default 0;
+alter table caixa_sacola add column if not exists credi_dinheiro numeric(14,2);
+alter table caixa_sacola add column if not exists credi_cartao numeric(14,2);
+alter table caixa_sacola add column if not exists credi_pix numeric(14,2);
+alter table caixa_sacola add column if not exists credi_diferenca numeric(14,2);
+alter table caixa_sacola add column if not exists credi_mov_id text;
 -- conferência física do caixa principal: a caixista (ou o admin) digita quanto contou em dinheiro; o servidor
 -- compara com o saldo esperado NA HORA e grava a diferença (pode ser 0). Nunca editada nem excluída: é um
 -- retrato do que foi contado naquele momento. Toda conferência com diferença ≠ 0 vira uma ocorrência (ver abaixo).
