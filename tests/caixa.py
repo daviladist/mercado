@@ -122,10 +122,11 @@ s, _ = A.req('/api/caixa/mov/excluir', {'id': AJ}); check(s == 200, 'admin apaga
 s, st = A.req('/api/caixa/state'); check(st['saldo'] == 14500 and not any(m['id'] == AJ for m in st['mov']), 'saldo volta e o ajuste desaparece')
 
 print('== consulta ao StarIA: pendente -> entregue (Claude) -> aplicada direto, em sacolas por filial (a matriz já nasce pronta pra conferir)')
-s, r = A.req('/api/caixa/staria/pedir', {'periodoIni': '2026-10-01', 'periodoFim': '2026-10-07'}); JOB = r.get('id')
-check(s == 200 and JOB, 'admin pede a consulta de 01 a 07/10')
-s, r = A.req('/api/caixa/staria/pedir', {'periodoIni': '2026-10-01', 'periodoFim': '2026-10-07'}); check(s == 409, 'pedir de novo o mesmo período (ainda pendente) é recusado')
-s, r = A.req('/api/caixa/staria/pedir', {'periodoIni': '2026-10-07', 'periodoFim': '2026-10-01'}); check(s == 400, 'data final antes da inicial recusada')
+s, r = A.req('/api/caixa/staria/pedir', {'dia': '2026-10-07'}); JOB = r.get('id')
+check(s == 200 and JOB and r['periodoIni'] == r['periodoFim'] == '2026-10-07', 'admin pede a consulta de um dia (07/10)')
+s, r = A.req('/api/caixa/staria/pedir', {'dia': '2026-10-07'}); check(s == 200 and r.get('jaPedido') is True and r['id'] == JOB, 'pedir de novo o mesmo dia (ainda pendente) não cria outra: avisa que já está pedido')
+s, r = A.req('/api/caixa/staria/pedir', {'periodoIni': '2026-10-01', 'periodoFim': '2026-10-07'}); check(s == 400, 'consulta de vários dias de uma vez é recusada (é sempre um dia só)')
+s, r = A.req('/api/caixa/staria/pedir', {'dia': '2099-01-01'}); check(s == 400, 'dia no futuro recusado')
 s, st = A.req('/api/caixa/state'); job = next(j for j in st['jobs'] if j['id'] == JOB); check(job['status'] == 'pendente' and job['resultado'] is None, 'consulta fica pendente, aguardando o Claude')
 s, _ = M.req('/api/caixa/staria/resultado', {'id': JOB, 'resultado': {'porFilial': {'1': {'vendasDinheiro': 100, 'recebCrediario': 0}}}}); check(s == 403, 'caixista não entrega resultado do StarIA (nem o Claude usaria essa conta)')
 s, _ = A.req('/api/caixa/staria/resultado', {'id': JOB, 'resultado': {'porFilial': {'x': {'vendasDinheiro': 100, 'recebCrediario': 0}}}}); check(s == 400, 'filial inválida no resultado recusada')
@@ -156,8 +157,8 @@ check(s == 200 and r.get('diferenca') == 0 and r.get('crediDiferenca') == 0, 'ad
 A.req('/api/caixa/sacola/chegou', {'id': sac3['id']})
 s, r = A.req('/api/caixa/sacola/conferir', {'id': sac3['id'], 'valorContado': '1500', 'crediDinheiro': '200'})
 check(s == 200 and r.get('diferenca') == 0 and r.get('crediDiferenca') == 0, 'admin confere a sacola 3: 1.500 de venda + 200 de crediário, tudo em dinheiro')
-s, st = A.req('/api/caixa/state'); mvs = [m for m in st['mov'] if m['tipo'] == 'venda_staria' and m['periodoIni'] == '2026-10-01']
-crmvs = [m for m in st['mov'] if m['tipo'] == 'crediario_staria' and m['periodoIni'] == '2026-10-01']
+s, st = A.req('/api/caixa/state'); mvs = [m for m in st['mov'] if m['tipo'] == 'venda_staria' and m['periodoIni'] == '2026-10-07']
+crmvs = [m for m in st['mov'] if m['tipo'] == 'crediario_staria' and m['periodoIni'] == '2026-10-07']
 check(len(mvs) == 3 and sum(m['valor'] for m in mvs) == 12500, 'uma venda_staria por sacola conferida, só com o valor real contado (8.000+3.000+1.500 = 12.500)')
 check(len(crmvs) == 2 and sum(m['valor'] for m in crmvs) == 700 and all(m['status'] == 'aprovado' for m in crmvs), 'um crediario_staria por sacola que teve crediário em dinheiro (500+200 = 700), já aprovado direto — sem passo de revisão separado')
 check(st['saldo'] == 14500 + 12500 + 700, 'saldo soma vendas e crediário em dinheiro conforme cada sacola é conferida: 14.500 + 12.500 + 700 = 27.700')
@@ -306,7 +307,7 @@ M2 = C(TID); s, me3 = M2.req('/api/login', {'role': 'admin', 'login': 'caixista1
 
 print('== consulta por caixa (ECF) e por dia: o financeiro marca os conferidos no StarIA, só esses viram sacola')
 NPC2 = pw(); s, _ = M2.req('/api/password', {'current': SENHA1, 'next': NPC2}); check(s == 200, 'caixista cria a senha dela de novo')
-s, r = A.req('/api/caixa/staria/pedir', {'periodoIni': '2026-10-29', 'periodoFim': '2026-10-30'}); JL = r.get('id'); check(s == 200 and JL, 'pede a consulta por caixa')
+s, r = A.req('/api/caixa/staria/pedir', {'dia': '2026-10-30'}); JL = r.get('id'); check(s == 200 and JL, 'pede a consulta por caixa')
 def lin(f, e, d, v): return {'filial': f, 'ecf': e, 'data': d, 'dinheiro': v}
 s, _ = A.req('/api/caixa/staria/resultado', {'id': JL, 'resultado': {'linhas': [lin(2, '1 01', '2026-10-29', 10)]}}); check(s == 400, 'caixa (ECF) com espaço recusado')
 s, _ = A.req('/api/caixa/staria/resultado', {'id': JL, 'resultado': {'linhas': [lin(2, '101', '2026-10-29', 10), lin(2, '101', '2026-10-29', 20)]}}); check(s == 400, 'mesmo caixa repetido no mesmo dia recusado')
@@ -338,7 +339,7 @@ s2 = next(x for x in st['sacolas'] if x['id'] == sacs[2]['id']); s1 = next(x for
 check(not s2['chegouEm'] and s2['valorStaria'] == 300.5 and sorted(c['ecf'] for c in s2['caixas']) == ['101', '102'], 'a sacola da filial 2 ainda está na filial e diz de quais caixas veio')
 check(s1['chegouEm'] and s1['valorStaria'] == 50, 'a sacola da matriz já nasce pronta para conferir')
 check(st['saldo'] == saldo_a, 'enviar para a sacola ainda não mexe no saldo (só a conferência)')
-s, r = A.req('/api/caixa/staria/pedir', {'periodoIni': '2026-10-29', 'periodoFim': '2026-10-30'}); JL2 = r.get('id')
+s, r = A.req('/api/caixa/staria/pedir', {'dia': '2026-10-30'}); JL2 = r.get('id')
 s, r = A.req('/api/caixa/staria/resultado', {'id': JL2, 'resultado': {'linhas': [lin(2, '101', '2026-10-30', 310), lin(2, '101', '2026-10-29', 999), lin(2, '103', '2026-10-30', 80)]}})
 check(s == 200 and r.get('novas') == 1 and r.get('atualizadas') == 1 and r.get('jaAceitas') == 1, 'nova consulta do mesmo período: atualiza o que espera, ignora o que já foi para a sacola, traz o novo (%s)' % r)
 s, st = A.req('/api/caixa/state'); cp = st['caixasPendentes']
@@ -397,7 +398,14 @@ s, _ = F.req('/api/caixa/sacola/checar', {'id': SCH, 'valorContado': '120'}); ch
 s, st = A.req('/api/caixa/state'); check(next(x for x in st['sacolas'] if x['id'] == SCH)['conferidoEm'] is None, 'checar não grava nada: a sacola continua sem conferência')
 s, r = F.req('/api/caixa/sacola/conferir', {'id': SCH, 'valorContado': '120'}); check(s == 200 and r['bateu'] is True, 'depois de checar, confirma a conferência normalmente')
 print('== "Atualizar números do StarIA": últimos 7 dias até ontem, sem erro se já pedido')
-s, r = A.req('/api/caixa/staria/pedir', {'auto': True}); check(s == 200 and r.get('id') and r['periodoFim'] < r['periodoIni'][:0] + '9999' and not r.get('jaPedido'), 'pede os últimos 7 dias até ontem (%s a %s)' % (r.get('periodoIni'), r.get('periodoFim')))
+import datetime as _dt2
+_ontem = (_dt2.datetime.utcnow() - _dt2.timedelta(hours=3) - _dt2.timedelta(days=1)).strftime('%Y-%m-%d')
+_3dias = (_dt2.datetime.utcnow() - _dt2.timedelta(hours=3) - _dt2.timedelta(days=3)).strftime('%Y-%m-%d')
+_hoje = (_dt2.datetime.utcnow() - _dt2.timedelta(hours=3)).strftime('%Y-%m-%d')
+s, r = A.req('/api/caixa/staria/pedir', {'auto': True}); check(s == 200 and r.get('id') and r['periodoIni'] == r['periodoFim'] == _ontem and not r.get('jaPedido'), 'o botão do Início pede só ONTEM (%s a %s)' % (r.get('periodoIni'), r.get('periodoFim')))
+s, r3 = A.req('/api/caixa/staria/pedir', {'diasAtras': 3}); check(s == 200 and r3['periodoIni'] == r3['periodoFim'] == _3dias, '"3 dias atrás" pede só aquele dia')
+s, r0 = A.req('/api/caixa/staria/pedir', {'diasAtras': 0}); check(s == 200 and r0['periodoIni'] == _hoje, '"hoje" também pode (um dia só)')
+s, _ = A.req('/api/caixa/staria/pedir', {'diasAtras': -1}); check(s == 400, 'dias atrás negativo recusado')
 s, r2_ = A.req('/api/caixa/staria/pedir', {'auto': True}); check(s == 200 and r2_.get('jaPedido') is True and r2_['id'] == r['id'], 'apertar de novo não dá erro: avisa que já está pedido')
 s, _ = F.req('/api/caixa/staria/pedir', {'auto': True}); check(s == 403, 'financeiro não pede consulta')
 

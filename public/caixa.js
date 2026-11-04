@@ -267,10 +267,10 @@
             <div class="kv tot"><span><b>Total</b></span><b>${money(R.tudo)}</b></div>
           </div></section>
         <section class="card"><div class="sec"><h2>StarIA</h2></div>
-          <p class="small muted" style="margin:0 0 10px">${R.stariaAte ? 'Números até ' + dBR(R.stariaAte) + '.' : 'Nenhum número do StarIA ainda.'} ${jobP ? '<b>Pedido feito: falta o Claude processar.</b> Peça no chat: “processar as consultas do StarIA”.' : 'As vendas de hoje entram amanhã.'}</p>
-          <button class="btn full" type="button" id="btnStaria">${ic('sync')} Atualizar números do StarIA</button></section>
+          <p class="small muted" style="margin:0 0 10px">${R.stariaAte ? 'Números até ' + dBR(R.stariaAte) + '.' : 'Nenhum número do StarIA ainda.'} ${jobP ? '<b>Pedido feito: falta o Claude processar.</b> Peça no chat: “processar as consultas do StarIA”.' : 'Um dia por vez, igual à tela de Fechamento de Caixa.'}</p>
+          ${seletorDia()}</section>
         ${ultimas}`;
-      $('#btnStaria').addEventListener('click', () => post('/api/caixa/staria/pedir', { auto: true }, 'Pedido feito. No chat, peça ao Claude: “processar as consultas do StarIA”.'));
+      ligarSeletorDia();
     }
     $('#btnConferir').addEventListener('click', sheetConferir);
     $('#btnSangria').addEventListener('click', sheetSangria);
@@ -425,6 +425,26 @@
     });
   }
 
+  /* ---------- escolher o dia da consulta ao StarIA: sempre UM dia, padrão ontem ---------- */
+  const diaMenos = n => { const d = new Date(hoje() + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); };
+  let diaStaria = null;
+  function seletorDia() {
+    if (!diaStaria || diaStaria > hoje()) diaStaria = diaMenos(1);
+    const ops = [[0, 'Hoje'], [1, 'Ontem'], [2, '2 dias atrás'], [3, '3 dias atrás'], [4, '4 dias atrás']];
+    return `<div class="row" style="gap:6px;margin-bottom:8px">${ops.map(([n, t]) => `<button type="button" class="pill ${diaMenos(n) === diaStaria ? 'ok' : 'mu'}" data-dia="${diaMenos(n)}" style="border:0;cursor:pointer;min-height:36px;padding:0 12px">${t}</button>`).join('')}</div>
+      <div class="field"><label for="stDia">Ou outro dia</label><input type="date" id="stDia" value="${diaStaria}" max="${hoje()}"></div>
+      <button class="btn pri full" type="button" id="btnStaria">${ic('sync')} Buscar o dia ${dBR(diaStaria)}</button>`;
+  }
+  function ligarSeletorDia() {
+    const atual = () => { $('#stDia').value = diaStaria; $('#btnStaria').innerHTML = ic('sync') + ' Buscar o dia ' + dBR(diaStaria);
+      document.querySelectorAll('[data-dia]').forEach(b => { b.className = 'pill ' + (b.dataset.dia === diaStaria ? 'ok' : 'mu'); }); };
+    document.querySelectorAll('[data-dia]').forEach(b => b.addEventListener('click', () => { diaStaria = b.dataset.dia; atual(); }));
+    $('#stDia').addEventListener('change', () => { if ($('#stDia').value) { diaStaria = $('#stDia').value; atual(); } });
+    $('#btnStaria').addEventListener('click', async () => {
+      const r = await post('/api/caixa/staria/pedir', { dia: diaStaria }, null);
+      if (r) toast((r.jaPedido ? 'O dia ' + dBR(r.periodoIni) + ' já estava pedido.' : 'Pedido o dia ' + dBR(r.periodoIni) + '.') + ' No chat, peça ao Claude: “processar as consultas do StarIA”.');
+    });
+  }
   /* ---------- StarIA (admin) ---------- */
   function jobBadge(j) {
     if (j.status === 'pendente') return '<span class="pill wa">Aguardando o Claude</span>';
@@ -435,18 +455,14 @@
     const jobs = S.jobs;
     $('#main').innerHTML = `<section class="card">
       <h1>Puxar do StarIA</h1>
-      <p class="muted small">Pede o dinheiro de cada caixa (ECF), dia a dia, de todas as filiais no período — igual à tela "Fechamento de Caixa (PDV)" do StarIA. Quem consulta e devolve é o Claude (pelo seu pedido no chat). Os caixas aparecem em "Sacolas", para o financeiro marcar os que já estão conferidos no StarIA.</p>
+      <p class="muted small">Pede, de UM dia, o dinheiro de cada caixa e os recebimentos de crediário das 3 filiais, igual à tela "Fechamento de Caixa (PDV)" do StarIA. Quem consulta e devolve é o Claude (pelo seu pedido no chat). Tudo aparece em "Sacolas", para o financeiro marcar.</p>
       <div class="note">O StarIA não diz se o caixa já foi conferido lá (linha preta) ou não (vermelha). Por isso nada entra sozinho: só os caixas que o financeiro marcar viram sacola. Os outros ficam esperando, e a próxima consulta atualiza o valor deles.</div>
-      <form id="fst">
-        <div class="field"><label for="stIni">De</label><input type="date" id="stIni" max="${hoje()}" required></div>
-        <div class="field"><label for="stFim">Até</label><input type="date" id="stFim" value="${hoje()}" max="${hoje()}" required></div>
-        <button class="btn pri full" type="submit">Pedir consulta</button>
-      </form></section>
+      ${seletorDia()}</section>
       <section class="card">
         <h2>Consultas</h2>
         ${jobs.length ? jobs.map(j => `<div class="it" style="align-items:flex-start">
             <div class="ic">🔄</div>
-            <div class="tx"><b>${dBR(j.periodoIni)} a ${dBR(j.periodoFim)}</b><span>${jobBadge(j)}</span>
+            <div class="tx"><b>${j.periodoIni === j.periodoFim ? 'Dia ' + dBR(j.periodoIni) : dBR(j.periodoIni) + ' a ' + dBR(j.periodoFim)}</b><span>${jobBadge(j)}</span>
               ${j.status !== 'pendente' && j.resultado ? (j.resultado.porCaixa
                 ? `<div class="small" style="margin-top:6px">${j.resultado.linhas} caixa(s) com dinheiro · ${j.resultado.novas} novo(s), ${j.resultado.atualizadas} atualizado(s)${j.resultado.jaAceitas ? ', ' + j.resultado.jaAceitas + ' já estavam em sacola' : ''}<br><b>Dinheiro: ${money(j.resultado.total)}</b></div>`
                 : `<div class="small" style="margin-top:6px">${Object.entries(j.resultado.porFilial || {}).map(([f, v]) => `Filial ${esc(f)}: ${money(v.vendasDinheiro)} vendas + ${money(v.recebCrediario)} crediário`).join('<br>')}
@@ -454,7 +470,7 @@
             </div>
           </div>`).join('') : '<p class="muted">Nenhuma consulta ainda.</p>'}
       </section>`;
-    $('#fst').addEventListener('submit', e => { e.preventDefault(); post('/api/caixa/staria/pedir', { periodoIni: $('#stIni').value, periodoFim: $('#stFim').value }, 'Consulta pedida. Peça ao Claude para processar as consultas do StarIA.'); });
+    ligarSeletorDia();
   }
 
   /* ---------- Sacolas (venda em dinheiro + crediário recebido, por filial): na filial -> chegou na matriz ->
