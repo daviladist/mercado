@@ -250,15 +250,15 @@
   /* ---------- StarIA (admin) ---------- */
   function jobBadge(j) {
     if (j.status === 'pendente') return '<span class="pill wa">Aguardando o Claude</span>';
-    return '<span class="pill ok">Trazido · veja em Sacolas</span>';
+    return '<span class="pill ok">' + (j.resultado && j.resultado.porCaixa ? 'Trazido · marque os caixas em Sacolas' : 'Trazido · veja em Sacolas') + '</span>';
   }
   function renderStaria() {
     if (!isAdmin()) { view = 'inicio'; return render(); }
     const jobs = S.jobs;
     $('#main').innerHTML = `<section class="card">
       <h1>Puxar do StarIA</h1>
-      <p class="muted small">Pede o total de vendas em dinheiro e de crediário recebido (em qualquer forma de pagamento) de todas as filiais, no período. Quem consulta e devolve o resultado é o Claude (pelo seu pedido no chat, ou pela importação automática da noite) — cada filial vira uma sacola em "Sacolas", esperando chegar na matriz e ser conferida.</p>
-      <div class="note">O StarIA só sabe o que foi vendido e recebido — não sabe se o dinheiro já chegou na matriz, nem quanto do crediário foi em dinheiro, cartão ou Pix. É por isso que existe a sacola: o valor daqui é só uma expectativa; o saldo só sobe depois da conferência física na matriz, com o valor realmente contado e a forma de pagamento decidida pelo financeiro.</div>
+      <p class="muted small">Pede o dinheiro de cada caixa (ECF), dia a dia, de todas as filiais no período — igual à tela "Fechamento de Caixa (PDV)" do StarIA. Quem consulta e devolve é o Claude (pelo seu pedido no chat). Os caixas aparecem em "Sacolas", para o financeiro marcar os que já estão conferidos no StarIA.</p>
+      <div class="note">O StarIA não diz se o caixa já foi conferido lá (linha preta) ou não (vermelha). Por isso nada entra sozinho: só os caixas que o financeiro marcar viram sacola. Os outros ficam esperando, e a próxima consulta atualiza o valor deles.</div>
       <form id="fst">
         <div class="field"><label for="stIni">De</label><input type="date" id="stIni" max="${hoje()}" required></div>
         <div class="field"><label for="stFim">Até</label><input type="date" id="stFim" value="${hoje()}" max="${hoje()}" required></div>
@@ -269,8 +269,10 @@
         ${jobs.length ? jobs.map(j => `<div class="it" style="align-items:flex-start">
             <div class="ic">🔄</div>
             <div class="tx"><b>${dBR(j.periodoIni)} a ${dBR(j.periodoFim)}</b><span>${jobBadge(j)}</span>
-              ${j.status !== 'pendente' ? `<div class="small" style="margin-top:6px">${Object.entries(j.resultado.porFilial).map(([f, v]) => `Filial ${esc(f)}: ${money(v.vendasDinheiro)} vendas + ${money(v.recebCrediario)} crediário`).join('<br>')}
-                <br><b>Total: ${money(j.resultado.total)}</b></div>` : ''}
+              ${j.status !== 'pendente' && j.resultado ? (j.resultado.porCaixa
+                ? `<div class="small" style="margin-top:6px">${j.resultado.linhas} caixa(s) com dinheiro · ${j.resultado.novas} novo(s), ${j.resultado.atualizadas} atualizado(s)${j.resultado.jaAceitas ? ', ' + j.resultado.jaAceitas + ' já estavam em sacola' : ''}<br><b>Dinheiro: ${money(j.resultado.total)}</b></div>`
+                : `<div class="small" style="margin-top:6px">${Object.entries(j.resultado.porFilial || {}).map(([f, v]) => `Filial ${esc(f)}: ${money(v.vendasDinheiro)} vendas + ${money(v.recebCrediario)} crediário`).join('<br>')}
+                <br><b>Total: ${money(j.resultado.total)}</b></div>`) : ''}
             </div>
           </div>`).join('') : '<p class="muted">Nenhuma consulta ainda.</p>'}
       </section>`;
@@ -294,12 +296,71 @@
     if (s.chegouEm) return '<span class="pill wa">' + (s.precisaChegar ? 'Chegou na matriz · aguardando conferência' : 'Pronta pra conferência') + '</span>';
     return '<span class="pill wa">Ainda na filial</span>';
   }
+  /* caixas do StarIA (um por ECF por dia, só dinheiro) esperando o financeiro marcar os que já estão conferidos lá
+     (linha preta na tela "Fechamento de Caixa"): só os marcados viram sacola. Agrupados por filial e dia. */
+  const marcados = new Set();
+  function caixasDe(s) {
+    const cx = s.caixas || [];
+    if (!cx.length) return '';
+    const dias = [...new Set(cx.map(c => c.data))].sort();
+    return 'Caixas ' + [...new Set(cx.map(c => c.ecf))].sort().map(esc).join(', ') + ' · ' + (dias.length === 1 ? dBR(dias[0]) : dBR(dias[0]) + ' a ' + dBR(dias[dias.length - 1]));
+  }
+  function htmlCaixasPendentes() {
+    const lista = S.caixasPendentes;
+    if (!lista) return '';
+    for (const id of [...marcados]) if (!lista.some(l => l.id === id)) marcados.delete(id);
+    const grupos = {};
+    for (const l of lista) (grupos[l.filial + '|' + l.data] = grupos[l.filial + '|' + l.data] || []).push(l);
+    const chaves = Object.keys(grupos).sort((a, b) => { const [fa, da] = a.split('|'), [fb, db] = b.split('|'); return fa - fb || (da < db ? -1 : da > db ? 1 : 0); });
+    return `<section class="card">
+      <h2>Caixas do StarIA para conferir</h2>
+      <p class="muted small">Abra no StarIA a tela <b>Fechamento de Caixa (PDV)</b> e marque aqui só os caixas que lá já estão em <b>preto</b> (conferidos). Os vermelhos ficam sem marcar: continuam aqui esperando, e a próxima consulta atualiza o valor deles.</p>
+      ${chaves.length ? chaves.map(k => {
+        const ls = grupos[k], [f, d] = k.split('|');
+        const tudo = ls.every(l => marcados.has(l.id));
+        return `<div style="margin:12px 0 4px"><label class="row" style="gap:8px;font-weight:700"><input type="checkbox" data-grupo="${esc(k)}" ${tudo ? 'checked' : ''}> Filial ${esc(f)} · ${dBR(d)}</label></div>
+          <div class="list">${ls.map(l => `<label class="it" style="cursor:pointer">
+            <div class="ic"><input type="checkbox" data-cx="${esc(l.id)}" ${marcados.has(l.id) ? 'checked' : ''} style="width:20px;height:20px"></div>
+            <div class="tx"><b>Caixa ${esc(l.ecf)}</b><span>Dinheiro</span></div><div class="vl"><b>${money(l.dinheiro)}</b></div>
+          </label>`).join('')}</div>`;
+      }).join('') : '<p class="muted">Nenhum caixa esperando. Peça uma consulta na aba StarIA.</p>'}
+      ${chaves.length ? `<div id="cxResumo" class="small muted" style="margin:12px 0 8px"></div><button class="btn pri full" type="button" id="btnEnviarCx" disabled>Enviar marcados para a sacola</button>` : ''}
+    </section>`;
+  }
+  function ligarCaixasPendentes() {
+    const lista = S.caixasPendentes || [];
+    const resumo = () => {
+      const sel = lista.filter(l => marcados.has(l.id));
+      const total = sel.reduce((a, l) => a + l.dinheiro, 0);
+      const r = $('#cxResumo'), b = $('#btnEnviarCx');
+      if (r) r.textContent = sel.length ? sel.length + ' caixa(s) marcado(s) · ' + money(Math.round(total * 100) / 100) : 'Nenhum caixa marcado.';
+      if (b) b.disabled = !sel.length;
+      document.querySelectorAll('[data-grupo]').forEach(g => { const ls = lista.filter(l => l.filial + '|' + l.data === g.dataset.grupo); g.checked = ls.length > 0 && ls.every(l => marcados.has(l.id)); });
+    };
+    document.querySelectorAll('[data-cx]').forEach(c => c.addEventListener('change', () => { if (c.checked) marcados.add(c.dataset.cx); else marcados.delete(c.dataset.cx); resumo(); }));
+    document.querySelectorAll('[data-grupo]').forEach(g => g.addEventListener('change', () => {
+      lista.filter(l => l.filial + '|' + l.data === g.dataset.grupo).forEach(l => { if (g.checked) marcados.add(l.id); else marcados.delete(l.id); });
+      document.querySelectorAll('[data-cx]').forEach(c => { c.checked = marcados.has(c.dataset.cx); });
+      resumo();
+    }));
+    const b = $('#btnEnviarCx');
+    if (b) b.addEventListener('click', async () => {
+      const ids = lista.filter(l => marcados.has(l.id)).map(l => l.id);
+      const total = lista.filter(l => marcados.has(l.id)).reduce((a, l) => a + l.dinheiro, 0);
+      if (!ids.length || !confirm('Enviar ' + ids.length + ' caixa(s), ' + money(Math.round(total * 100) / 100) + ' em dinheiro, para a sacola? Confira se todos estão em preto no StarIA.')) return;
+      b.disabled = true;
+      const r = await post('/api/caixa/caixas/aceitar', { ids }, 'Enviado para a sacola');
+      if (r) marcados.clear(); else b.disabled = false;
+      render();
+    });
+    resumo();
+  }
   function renderSacolas() {
     const mc = S.miniCaixas || {};
     const filiais = Object.keys(mc).sort((a, b) => a - b);
     const pendentes = (S.sacolas || []).filter(s => !s.conferidoEm);
     const conferidas = (S.sacolas || []).filter(s => s.conferidoEm);
-    $('#main').innerHTML = `<section class="card">
+    $('#main').innerHTML = htmlCaixasPendentes() + `<section class="card">
       <h1>Sacolas</h1>
       <p class="muted small">Cada filial manda uma sacola de dinheiro (vendas + crediário recebido) pra matriz. O StarIA diz quanto vendeu e recebeu; só depois que a sacola chega e é conferida de verdade é que esse dinheiro entra no saldo do caixa principal — com o valor realmente contado. A matriz (filial 1) não precisa chegar: já nasce pronta pra conferência.</p>
       ${filiais.length ? `<div class="list">${filiais.map(f => `<div class="it">
@@ -310,24 +371,30 @@
       <h2>Pendentes</h2>
       ${pendentes.length ? `<div class="list">${pendentes.map(s => `<div class="it" style="align-items:flex-start">
           <div class="ic">📦</div>
-          <div class="tx"><b>Filial ${esc(s.filial)} · ${money(s.valorStaria)}${s.crediStaria ? ' + ' + money(s.crediStaria) + ' crediário' : ''}</b><span>${dBR(s.periodoIni)} a ${dBR(s.periodoFim)} · ${sacolaStatus(s)}</span></div>
+          <div class="tx"><b>Filial ${esc(s.filial)} · ${money(s.valorStaria)}${s.crediStaria ? ' + ' + money(s.crediStaria) + ' crediário' : ''}</b><span>${caixasDe(s) || dBR(s.periodoIni) + ' a ' + dBR(s.periodoFim)} · ${sacolaStatus(s)}</span></div>
           <div class="vl">${!s.chegouEm ? `<button class="btn sm pri" type="button" data-chegou="${esc(s.id)}">Chegou na matriz</button>`
             : podeConferirSacola() ? `<button class="btn sm pri" type="button" data-conferir="${esc(s.id)}">Conferir</button>` : ''}</div>
         </div>`).join('')}</div>` : '<p class="muted">Nenhuma sacola pendente.</p>'}
     </section>
     ${conferidas.length ? `<section class="card"><h2>Conferidas</h2><div class="list">${conferidas.slice(0, 20).map(s => `<div class="it">
-        <div class="ic">📦</div><div class="tx"><b>Filial ${esc(s.filial)} · ${money(s.valorContado)}${s.crediDinheiro ? ' + ' + money(s.crediDinheiro) + ' crediário' : ''}</b><span>${dBR(s.periodoIni)} a ${dBR(s.periodoFim)} · ${sacolaStatus(s)}</span></div>
+        <div class="ic">📦</div><div class="tx"><b>Filial ${esc(s.filial)} · ${money(s.valorContado)}${s.crediDinheiro ? ' + ' + money(s.crediDinheiro) + ' crediário' : ''}</b><span>${caixasDe(s) || dBR(s.periodoIni) + ' a ' + dBR(s.periodoFim)} · ${sacolaStatus(s)}</span></div>
       </div>`).join('')}</div></section>` : ''}
     <div id="pOut"></div>`;
+    ligarCaixasPendentes();
     document.querySelectorAll('[data-chegou]').forEach(b => b.addEventListener('click', () => post('/api/caixa/sacola/chegou', { id: b.dataset.chegou }, 'Marcado: chegou na matriz')));
     document.querySelectorAll('[data-conferir]').forEach(b => b.addEventListener('click', () => sheetConferirSacola(S.sacolas.find(s => s.id === b.dataset.conferir))));
   }
   function sheetConferirSacola(s) {
     openSheet(`<div class="tt"><h2>Conferir sacola · Filial ${esc(s.filial)}</h2><button class="x" type="button" id="shxb">✕</button></div>
-      <p class="muted small">O StarIA apontou ${money(s.valorStaria)} em vendas dessa filial. Digite o que realmente veio dentro da sacola — é esse valor que entra no saldo do caixa principal.</p>
+      <p class="muted small">O StarIA apontou ${money(s.valorStaria)} em vendas em dinheiro dessa filial${(s.caixas || []).length ? ':' : '.'} Digite o que realmente veio dentro da sacola — é esse valor que entra no saldo do caixa principal.</p>
+      ${(s.caixas || []).length ? `<div class="list small" style="margin-bottom:10px">${s.caixas.map(c => `<div class="it"><div class="tx"><b>Caixa ${esc(c.ecf)} · ${dBR(c.data)}</b></div><div class="vl">${money(c.dinheiro)}</div></div>`).join('')}</div>` : ''}
       <form id="fcs">
         <div class="field"><label for="csValor">Valor de vendas contado</label><input type="text" id="csValor" inputmode="decimal" placeholder="0,00" required></div>
-        ${s.crediStaria ? `<div class="note">O StarIA apontou ${money(s.crediStaria)} de crediário recebido nessa filial e período. Diga quanto disso foi em cada forma de pagamento — só o dinheiro entra no saldo.</div>
+        ${String(s.jobId || '').startsWith('lt') ? `<div class="note">Se veio também <b>crediário recebido</b> (cliente pagando a conta) nessa sacola, informe por forma de pagamento — só o dinheiro entra no saldo. Se não veio, deixe em branco.</div>
+        <div class="field"><label for="csCrediDinheiro">Crediário em dinheiro</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00"></div>
+        <div class="field"><label for="csCrediCartao">Crediário em cartão</label><input type="text" id="csCrediCartao" inputmode="decimal" placeholder="0,00"></div>
+        <div class="field"><label for="csCrediPix">Crediário em Pix</label><input type="text" id="csCrediPix" inputmode="decimal" placeholder="0,00"></div>`
+        : s.crediStaria ? `<div class="note">O StarIA apontou ${money(s.crediStaria)} de crediário recebido nessa filial e período. Diga quanto disso foi em cada forma de pagamento — só o dinheiro entra no saldo.</div>
         <div class="field"><label for="csCrediDinheiro">Crediário em dinheiro</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00"></div>
         <div class="field"><label for="csCrediCartao">Crediário em cartão</label><input type="text" id="csCrediCartao" inputmode="decimal" placeholder="0,00"></div>
         <div class="field"><label for="csCrediPix">Crediário em Pix</label><input type="text" id="csCrediPix" inputmode="decimal" placeholder="0,00"></div>` : ''}
@@ -460,6 +527,7 @@
     if (o.titulo === 'Lançamento apagado') return 'por ' + esc(d.role || '');
     if (o.titulo === 'Consulta ao StarIA pedida') return 'Período: ' + (d.periodo || []).map(dBR).join(' a ') + ' · por ' + esc(d.role || '');
     if (o.titulo === 'Consulta ao StarIA aplicada, em sacolas por filial') return 'Já criou as sacolas por filial · por ' + esc(d.role || '');
+    if (o.titulo === 'Caixas do StarIA enviados para a sacola') return (Number(d.caixas) || 0) + ' caixa(s) · ' + money(Number(d.total) || 0) + ' em dinheiro · por ' + esc(d.role || '');
     if (o.titulo === 'Dados do caixa zerados (recomeço do zero)') return 'Apagados: ' + (Number(d.lancamentos) || 0) + ' lançamentos, ' + (Number(d.consultas) || 0) + ' consultas, ' + (Number(d.sacolas) || 0) + ' sacolas, ' + (Number(d.conferencias) || 0) + ' conferências · por ' + esc(d.role || '');
     return esc(d.role || '');
   }

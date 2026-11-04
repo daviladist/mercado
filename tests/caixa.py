@@ -304,6 +304,57 @@ s, r = A.req('/api/caixa/pessoa', {'login': 'caixista1', 'nome': 'Menina do caix
 check(s == 200 and SENHA1 and SENHA1 != SENHA0, 'admin reativa e gera uma nova senha provisória')
 M2 = C(TID); s, me3 = M2.req('/api/login', {'role': 'admin', 'login': 'caixista1', 'password': SENHA1}); check(s == 200 and me3.get('mustReset'), 'caixista entra de novo com a nova senha provisória')
 
+print('== consulta por caixa (ECF) e por dia: o financeiro marca os conferidos no StarIA, só esses viram sacola')
+NPC2 = pw(); s, _ = M2.req('/api/password', {'current': SENHA1, 'next': NPC2}); check(s == 200, 'caixista cria a senha dela de novo')
+s, r = A.req('/api/caixa/staria/pedir', {'periodoIni': '2026-10-29', 'periodoFim': '2026-10-30'}); JL = r.get('id'); check(s == 200 and JL, 'pede a consulta por caixa')
+def lin(f, e, d, v): return {'filial': f, 'ecf': e, 'data': d, 'dinheiro': v}
+s, _ = A.req('/api/caixa/staria/resultado', {'id': JL, 'resultado': {'linhas': [lin(2, '1 01', '2026-10-29', 10)]}}); check(s == 400, 'caixa (ECF) com espaço recusado')
+s, _ = A.req('/api/caixa/staria/resultado', {'id': JL, 'resultado': {'linhas': [lin(2, '101', '2026-10-29', 10), lin(2, '101', '2026-10-29', 20)]}}); check(s == 400, 'mesmo caixa repetido no mesmo dia recusado')
+s, _ = A.req('/api/caixa/staria/resultado', {'id': JL, 'resultado': {'linhas': [lin(2, '101', '2099-01-01', 10)]}}); check(s == 400, 'dia no futuro recusado')
+s, _ = A.req('/api/caixa/staria/resultado', {'id': JL, 'resultado': {'linhas': [lin(2, '101', '2026-10-29', -1)]}}); check(s == 400, 'dinheiro negativo recusado')
+s, _ = A.req('/api/caixa/staria/resultado', {'id': JL, 'resultado': {'linhas': [lin(0, '101', '2026-10-29', 1)]}}); check(s == 400, 'filial 0 recusada')
+s, st_a = A.req('/api/caixa/state'); n_sac_antes = len(st_a['sacolas']); saldo_a = st_a['saldo']
+LINHAS1 = [lin(2, '101', '2026-10-29', 100), lin(2, '102', '2026-10-29', '200.5'), lin(2, '101', '2026-10-30', 300), lin(1, '201', '2026-10-30', 50), lin(3, '301', '2026-10-30', 0)]
+s, r = A.req('/api/caixa/staria/resultado', {'id': JL, 'resultado': {'linhas': LINHAS1}})
+check(s == 200 and r.get('linhas') == 4 and r.get('novas') == 4 and r.get('total') == 650.5, 'entrega por caixa: 4 caixas com dinheiro (o de R$ 0 é ignorado), total 650,50 (%s)' % r)
+s, st = A.req('/api/caixa/state'); cp = st.get('caixasPendentes', [])
+check(len(cp) == 4 and len(st['sacolas']) == n_sac_antes and st['saldo'] == saldo_a, 'os caixas ficam esperando: nenhuma sacola nova e o saldo não muda')
+def cx(lista, f, e, d): return next((l for l in lista if l['filial'] == f and l['ecf'] == e and l['data'] == d), None)
+check(cx(cp, 2, '102', '2026-10-29')['dinheiro'] == 200.5, 'cada caixa com o dinheiro dele')
+s, stf = F.req('/api/caixa/state'); check(len(stf.get('caixasPendentes', [])) == 4, 'o financeiro vê os caixas para marcar')
+s, stm = M2.req('/api/caixa/state'); check(s == 200 and 'caixasPendentes' not in stm, 'a caixista não vê a lista (não é ela quem marca)')
+IDS = [cx(cp, 2, '101', '2026-10-29')['id'], cx(cp, 2, '102', '2026-10-29')['id'], cx(cp, 1, '201', '2026-10-30')['id']]
+s, _ = M2.req('/api/caixa/caixas/aceitar', {'ids': IDS}); check(s == 403, 'caixista não envia caixas para a sacola')
+s, _ = AU.req('/api/caixa/caixas/aceitar', {'ids': IDS}); check(s == 403, 'automação não envia caixas para a sacola')
+s, _ = F.req('/api/caixa/caixas/aceitar', {'ids': []}); check(s == 400, 'sem nenhum caixa marcado, recusa')
+s, _ = F.req('/api/caixa/caixas/aceitar', {'ids': ['lffffffffffffffff']}); check(s == 404, 'caixa que não existe, recusa')
+s, r = F.req('/api/caixa/caixas/aceitar', {'ids': IDS})
+sacs = {x['filial']: x for x in r.get('sacolas', [])}
+check(s == 200 and r.get('caixas') == 3 and sacs.get(2, {}).get('total') == 300.5 and sacs.get(1, {}).get('total') == 50, 'financeiro envia 3 caixas: vira uma sacola por filial (filial 2: 300,50; matriz: 50) (%s)' % r)
+s, _ = F.req('/api/caixa/caixas/aceitar', {'ids': IDS}); check(s == 409, 'os mesmos caixas não entram duas vezes')
+s, st = A.req('/api/caixa/state'); cp = st['caixasPendentes']
+check(len(cp) == 1 and cp[0]['ecf'] == '101' and cp[0]['data'] == '2026-10-30', 'só o caixa não marcado continua esperando')
+s2 = next(x for x in st['sacolas'] if x['id'] == sacs[2]['id']); s1 = next(x for x in st['sacolas'] if x['id'] == sacs[1]['id'])
+check(not s2['chegouEm'] and s2['valorStaria'] == 300.5 and sorted(c['ecf'] for c in s2['caixas']) == ['101', '102'], 'a sacola da filial 2 ainda está na filial e diz de quais caixas veio')
+check(s1['chegouEm'] and s1['valorStaria'] == 50, 'a sacola da matriz já nasce pronta para conferir')
+check(st['saldo'] == saldo_a, 'enviar para a sacola ainda não mexe no saldo (só a conferência)')
+s, r = A.req('/api/caixa/staria/pedir', {'periodoIni': '2026-10-29', 'periodoFim': '2026-10-30'}); JL2 = r.get('id')
+s, r = A.req('/api/caixa/staria/resultado', {'id': JL2, 'resultado': {'linhas': [lin(2, '101', '2026-10-30', 310), lin(2, '101', '2026-10-29', 999), lin(2, '103', '2026-10-30', 80)]}})
+check(s == 200 and r.get('novas') == 1 and r.get('atualizadas') == 1 and r.get('jaAceitas') == 1, 'nova consulta do mesmo período: atualiza o que espera, ignora o que já foi para a sacola, traz o novo (%s)' % r)
+s, st = A.req('/api/caixa/state'); cp = st['caixasPendentes']
+check(cx(cp, 2, '101', '2026-10-30')['dinheiro'] == 310 and cx(cp, 2, '103', '2026-10-30')['dinheiro'] == 80 and cx(cp, 2, '101', '2026-10-29') is None, 'caixa esperando teve o valor atualizado; o que já está na sacola não voltou')
+s2 = next(x for x in st['sacolas'] if x['id'] == sacs[2]['id']); check(s2['valorStaria'] == 300.5, 'a sacola não mudou com a nova consulta')
+s, r = F.req('/api/caixa/sacola/conferir', {'id': sacs[1]['id'], 'valorContado': '50', 'crediDinheiro': '20', 'crediCartao': '5'})
+check(s == 200 and r.get('diferenca') == 0 and r.get('crediDiferenca') is None, 'conferir a sacola da matriz: venda bateu, e o crediário informado pelo financeiro não vira "diferença"')
+s, st = A.req('/api/caixa/state'); check(st['saldo'] == round(saldo_a + 70, 2), 'saldo sobe com a venda contada (50) e o crediário em dinheiro (20); o cartão não entra')
+F.req('/api/caixa/sacola/chegou', {'id': sacs[2]['id']})
+s, r = F.req('/api/caixa/sacola/conferir', {'id': sacs[2]['id'], 'valorContado': '300', 'motivo': 'faltou 50 centavos'}); check(s == 200 and r.get('diferenca') == -0.5, 'sacola da filial 2 conferida: faltaram 50 centavos')
+s, oc = A.req('/api/caixa/ocorrencias'); tt = [o['titulo'] for o in oc['ocorrencias']]
+check('Caixas do StarIA enviados para a sacola' in tt, 'enviar caixas para a sacola aparece nas ocorrências')
+sac_oc = [o for o in oc['ocorrencias'] if o['tipo'] == 'sacola']
+check(any(o['detalhe']['diferenca'] == -0.5 for o in sac_oc) and not any(o['detalhe']['filial'] == 1 and o['detalhe']['valorContado'] == 50 for o in sac_oc), 'só a sacola com falta vira ocorrência (a da matriz bateu)')
+s, st = A.req('/api/caixa/state'); j = next(x for x in st['jobs'] if x['id'] == JL); check(j['resultado'].get('porCaixa') is True and j['status'] == 'aplicada', 'a consulta mostra o resumo por caixa')
+
 print('== zerar os dados (recomeçar do zero): só o admin, com a senha dele e digitando ZERAR')
 # a outra empresa de caixa ganha dados próprios, para provar que zerar uma não mexe na outra
 s, r = cen.req('/api/central/tenant-admin', {'id': TX, 'login': 'donox'}); PX0 = r.get('password')
@@ -324,6 +375,7 @@ ap = r.get('apagados', {})
 check(s == 200 and ap.get('lancamentos', 0) > 0 and ap.get('consultas', 0) > 0 and ap.get('sacolas', 0) > 0 and ap.get('conferencias', 0) > 0 and ap.get('saldoInicial') == 1, 'admin zera (aceita "zerar" minúsculo) e diz quanto apagou: %s' % ap)
 s, st2 = A.req('/api/caixa/state')
 check(s == 200 and st2['cfg'] is None and st2['saldo'] == 0 and st2['mov'] == [] and st2['jobs'] == [] and st2['sacolas'] == [], 'depois de zerar: sem saldo inicial, sem lançamentos, sem consultas, sem sacolas (volta ao começo)')
+check(ap.get('caixas', 0) > 0 and st2['caixasPendentes'] == [], 'os caixas do StarIA (esperando ou já em sacola) também são apagados')
 check(st2['saldoImpostos'] == 0 and st2['movImpostos'] == [] and st2['porFilial'] == {} and st2['miniCaixas'] in ([], {}), 'gaveta de impostos, relatório por filial e mini caixas zerados também')
 check({p['login'] for p in st2['pessoas']} >= {'caixista1', 'financeiro1', 'automacao1'}, 'as pessoas e acessos continuam')
 s, _ = F.req('/api/caixa/state'); check(s == 200, 'o financeiro continua entrando normalmente')

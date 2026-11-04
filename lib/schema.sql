@@ -634,3 +634,27 @@ create table if not exists caixa_conferencia (
   primary key (tenant_id, id)
 );
 create index if not exists caixa_conferencia_tenant on caixa_conferencia(tenant_id, created_at desc);
+-- caixas do StarIA por dia (filial + ECF + data, só o dinheiro): a importação traz uma linha por caixa por dia, que
+-- fica 'pendente' até o financeiro (ou o admin) marcar que ela já está conferida no StarIA (linha preta na tela de
+-- Fechamento de Caixa). Só as marcadas viram sacola (uma por filial, com a soma); as outras esperam e são
+-- atualizadas na próxima importação. Uma linha 'aceita' nunca volta nem muda: não tem como entrar duas vezes.
+create table if not exists caixa_linha (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  filial int not null,
+  ecf text not null,
+  data date not null,
+  dinheiro numeric(14,2) not null,
+  job_id text,
+  status text not null default 'pendente' check (status in ('pendente','aceita')),
+  sacola_id text,
+  aceita_em timestamptz,
+  aceita_por text,
+  aceita_por_role text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, id),
+  unique (tenant_id, filial, ecf, data)
+);
+create index if not exists caixa_linha_status on caixa_linha(tenant_id, status, data);
+create index if not exists caixa_linha_sacola on caixa_linha(tenant_id, sacola_id);
