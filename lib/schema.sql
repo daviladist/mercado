@@ -508,7 +508,9 @@ alter table loja_pedidos add column if not exists avaliacao_em timestamptz;
 -- (não lança sangria, não cancela nada: cancelar/excluir é só pelo usuário do admin, o dono).
 alter table users_t drop constraint if exists users_role_check;
 alter table users_t drop constraint if exists users_t_role_check;
-alter table users_t add constraint users_role_check check (role in ('admin','cliente','vendedor','conferente','faturamento','entregador','operador_caixa','caixista','financeiro','automacao'));
+-- "not valid": não reprova o deploy por causa de uma linha antiga que não bate (continua valendo pra tudo que
+-- entrar ou mudar a partir de agora); sem isso, uma linha ruim travaria a migração pra sempre (e o site inteiro).
+alter table users_t add constraint users_role_check check (role in ('admin','cliente','vendedor','conferente','faturamento','entregador','operador_caixa','caixista','financeiro','automacao')) not valid;
 -- 'automacao': acesso de uso só pelo Claude, para a importação noturna do StarIA (pede e entrega a consulta,
 -- deixando pronta pra revisão; nunca aplica sozinha). Não vê saldo, extrato, pessoas nem ocorrências.
 -- saldo de partida (contagem física no dia em que começou a usar o controle): tudo depois disso é lançamento
