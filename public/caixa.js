@@ -973,5 +973,21 @@
     try { await reload(); render(); }
     catch (e) { fail(e); }
   }
+  /* atualiza sozinho: ao voltar para o app (trocou de aba, desbloqueou o celular) e, enquanto uma consulta ao
+     StarIA espera o Claude, a cada 20 s. Não atualiza com um painel aberto (contagem, sangria) para não
+     atrapalhar quem está digitando; marcações ainda não salvas continuam marcadas. */
+  let ultimaAtual = Date.now();
+  async function atualizaSozinho(forcar) {
+    if (!S || document.hidden || $('#sheet').innerHTML) return;
+    if (!forcar && Date.now() - ultimaAtual < 15000) return;
+    ultimaAtual = Date.now();
+    const antes = JSON.stringify([(S.jobs || []).map(j => j.status), (S.caixasPendentes || []).length, (S.crediarios || []).length, (S.sacolas || []).length, S.saldo]);
+    try { await reload(); } catch (e) { return; }
+    const depois = JSON.stringify([(S.jobs || []).map(j => j.status), (S.caixasPendentes || []).length, (S.crediarios || []).length, (S.sacolas || []).length, S.saldo]);
+    if (antes !== depois && !$('#sheet').innerHTML) { const y = window.scrollY; render(); window.scrollTo(0, y); }
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) atualizaSozinho(true); });
+  window.addEventListener('focus', () => atualizaSozinho(false));
+  setInterval(() => { if (S && (S.jobs || []).some(j => j.status === 'pendente')) atualizaSozinho(true); }, 20000);
   start();
 })();
