@@ -121,7 +121,8 @@
     truck: '<path d="M3 6h11v10H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
-    store: '<path d="M4 10v10h16V10"/><path d="M3 10l2-6h14l2 6z"/><path d="M10 20v-5h4v5"/>'
+    store: '<path d="M4 10v10h16V10"/><path d="M3 10l2-6h14l2 6z"/><path d="M10 20v-5h4v5"/>',
+    pin: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M12 7v6M9 10l3 3 3-3"/>'
   };
   const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ''}</svg>`;
   /* data e hora no fuso do aparelho (timestamps vêm em UTC; cortar a string dava o dia errado à noite) */
@@ -324,9 +325,11 @@
         ${item('staria', 'sync', 'Puxar do StarIA', jobP ? 'Uma consulta está esperando o Claude' : 'Pedir as vendas em dinheiro de um dia')}
         ${item('gaveta', 'tax', 'Gaveta de impostos', money(S.saldoImpostos || 0) + ' guardado à parte')}
         ${item('acessos', 'users', 'Pessoas com acesso', plural((S.pessoas || []).length, 'pessoa', 'pessoas'))}
+        ${instalado() ? '' : `<button type="button" class="it" id="atalhoMais"><div class="ic">${ic('pin')}</div><div class="tx"><b>Criar atalho na área de trabalho</b><span>Ícone no computador ou na tela inicial do celular</span></div><span class="ch">${ic('chev')}</span></button>`}
         <button type="button" class="it" id="verCfg"><div class="ic">${ic('edit')}</div><div class="tx"><b>Dinheiro inicial do cofre</b><span>${money(S.cfg ? S.cfg.saldoInicial : 0)} em ${S.cfg ? dBR(S.cfg.dataInicial) : '—'}</span></div><span class="ch">${ic('chev')}</span></button>
       </div></section>`;
     $('#verCfg').addEventListener('click', () => { if (S.cfg) sheetCfg(); else { view = 'inicio'; render(); } });
+    if ($('#atalhoMais')) $('#atalhoMais').addEventListener('click', criarAtalho);
   }
   function sheetCfg() {
     openSheet(`<div class="tt"><h2>Editar saldo inicial</h2><button class="x" type="button" id="shxb">✕</button></div>
@@ -904,6 +907,38 @@
       </section>`;
   }
 
+  /* ---------- atalho na área de trabalho / tela inicial ----------
+     No Chrome e no Edge (computador e Android) o navegador oferece instalar: o app ganha um ícone na área de
+     trabalho e abre em janela própria. Onde não oferece (iPhone, Firefox, Safari), mostra o passo a passo. */
+  let pedidoInstalar = null;
+  const instalado = () => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } };
+  try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {}); } catch (e) { /* sem service worker */ }
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); pedidoInstalar = e; });
+  window.addEventListener('appinstalled', () => { pedidoInstalar = null; toast('Atalho criado. Procure o ícone na área de trabalho ou na tela inicial.'); if (S) render(); });
+  async function criarAtalho() {
+    if (instalado()) return toast('O app já está aberto pelo atalho.');
+    if (pedidoInstalar) {
+      const p = pedidoInstalar; pedidoInstalar = null;
+      try { await p.prompt(); const r = await p.userChoice; if (r && r.outcome === 'accepted') return; } catch (e) { /* segue para o passo a passo */ }
+      return;
+    }
+    const ua = navigator.userAgent || '';
+    const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/.test(ua);
+    const edge = /Edg\//.test(ua), chrome = /Chrome\//.test(ua) && !edge, safari = /Safari\//.test(ua) && !/Chrome|Chromium|Edg/.test(ua);
+    const passos = ios ? ['Abra este endereço no <b>Safari</b>.', 'Toque em <b>Compartilhar</b> (o quadrado com a seta para cima).', 'Toque em <b>Adicionar à Tela de Início</b> e depois em <b>Adicionar</b>.']
+      : android ? ['Abra este endereço no <b>Chrome</b>.', 'Toque nos <b>três pontinhos</b> (⋮), no canto de cima.', 'Toque em <b>Adicionar à tela inicial</b> (ou <b>Instalar app</b>) e confirme.']
+      : edge ? ['Clique nos <b>três pontinhos</b> (…), no canto de cima à direita.', 'Vá em <b>Aplicativos</b> → <b>Instalar este site como um aplicativo</b>.', 'Clique em <b>Instalar</b>. Marque a opção de criar atalho na <b>área de trabalho</b>, se aparecer.']
+      : chrome ? ['Clique nos <b>três pontinhos</b> (⋮), no canto de cima à direita.', 'Vá em <b>Transmitir, salvar e compartilhar</b> → <b>Instalar página como app</b> (ou <b>Criar atalho</b>).', 'Clique em <b>Instalar</b>. Se pedir, marque <b>Abrir como janela</b>.']
+      : safari ? ['No menu <b>Arquivo</b>, clique em <b>Adicionar ao Dock</b>.', 'Clique em <b>Adicionar</b>. O ícone fica no Dock e no Launchpad.']
+      : ['Abra este endereço no <b>Google Chrome</b> ou no <b>Microsoft Edge</b>.', 'Volte em <b>Criar atalho na área de trabalho</b> e siga os passos.'];
+    openSheet(`<div class="tt"><h2>Criar atalho</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      <p class="muted">O app ganha um ícone ${ios || android ? 'na tela inicial do celular' : 'na área de trabalho'} e abre direto, sem precisar digitar o endereço.</p>
+      <ol class="passos">${passos.map(t => `<li>${t}</li>`).join('')}</ol>
+      <button class="btn pri full" type="button" id="atOk">Entendi</button>`, () => {
+      $('#shxb').addEventListener('click', closeSheet); $('#atOk').addEventListener('click', closeSheet);
+    });
+  }
+
   /* ---------- navegação: 3 abas para a equipe, 4 para o dono ---------- */
   const SUB_MAIS = ['staria', 'acessos', 'gaveta', 'ocorrencias', 'crediario'];
   function render() {
@@ -923,6 +958,11 @@
     else if (view === 'gaveta') renderGaveta();
     else if (view === 'ocorrencias') renderOcorrencias();
     else renderInicio();
+    // equipe não tem a aba Mais: o atalho fica no fim do Início
+    if (view === 'inicio' && !isAdmin() && !instalado()) {
+      $('#main').insertAdjacentHTML('beforeend', `<button type="button" class="btn full" id="atalhoIni">${ic('pin')} Criar atalho na área de trabalho</button>`);
+      $('#atalhoIni').addEventListener('click', criarAtalho);
+    }
     if (SUB_MAIS.includes(view) && isAdmin()) $('#main').insertAdjacentHTML('afterbegin', `<button type="button" class="lnk" data-go="mais" style="justify-self:start;display:inline-flex;align-items:center;gap:2px;margin:-8px 0 -8px -6px">${ic('back')} Mais</button>`);
   }
   function irPara(go) { view = go; closeSheet(); render(); window.scrollTo(0, 0); }
