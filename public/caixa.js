@@ -607,8 +607,11 @@
   const crCliAbertos = new Set(); // clientes com vários títulos abertos (filial|data|nome)
   const sugestao = c => /CART/i.test(c.conta || '') ? 'cartao' : /SICOOB|BANCO|PIX/i.test(c.conta || '') ? 'pix' : null;
   function crediEsperado(s) {
-    const ls = (S.crediarios || []).filter(c => c.filial === s.filial && c.forma === 'dinheiro' && !c.contado && c.data <= String(s.periodoFim).slice(0, 10));
-    return { n: ls.length, total: r2(ls.reduce((a, c) => a + c.valor, 0)) };
+    const fim = String(s.periodoFim).slice(0, 10);
+    const ls = (S.crediarios || []).filter(c => c.filial === s.filial && c.forma === 'dinheiro' && !c.contado && c.data <= fim);
+    // da mesma filial e período, ainda sem forma salva (ou com escolha na tela ainda não salva)
+    const pend = (S.crediarios || []).filter(c => c.filial === s.filial && !c.contado && c.data <= fim && (!c.forma || (escolhas.has(c.id) && escolhas.get(c.id) !== c.forma)));
+    return { n: ls.length, total: r2(ls.reduce((a, c) => a + c.valor, 0)), itens: ls, pend: pend.length };
   }
   const segFormas = (c, atual) => `<div class="seg" role="group" aria-label="Forma de pagamento">${Object.keys(FORMA_TXT).map(f =>
     `<button type="button" data-cf="${esc(c.id)}" data-f="${f}" class="${atual === f ? 'on' : ''}" aria-pressed="${atual === f}">${FORMA_TXT[f]}</button>`).join('')}</div>`;
@@ -749,8 +752,12 @@
         <div class="field"><label for="csCrediDinheiro">Crediário em dinheiro</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00"></div>
         <div class="field"><label for="csCrediCartao">Crediário em cartão</label><input type="text" id="csCrediCartao" inputmode="decimal" placeholder="0,00"></div>
         <div class="field"><label for="csCrediPix">Crediário em Pix</label><input type="text" id="csCrediPix" inputmode="decimal" placeholder="0,00"></div>`
-        : `<div class="field"><label for="csCrediDinheiro">Dinheiro de crediário que veio na sacola (clientes pagando conta)</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00"></div>
-          ${!cego ? (() => { const e = crediEsperado(s); return `<p class="small muted" style="margin-top:-6px">Esperado de crediário em dinheiro: <b>${money(e.total)}</b> (${plural(e.n, 'recebimento marcado', 'recebimentos marcados')} como dinheiro).</p>`; })() : ''}`}
+        : (() => { const e = crediEsperado(s); return `<div class="field"><label for="csCrediDinheiro">Dinheiro de crediário que veio na sacola (clientes pagando conta)</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00" value="${e.total ? numIn(e.total) : ''}"></div>
+          ${e.pend ? `<div class="warn small" style="margin-top:-6px"><b>${plural(e.pend, 'recebimento desta filial está', 'recebimentos desta filial estão')} sem a forma salva.</b> Volte em Crediário, marque e toque em Salvar antes de conferir: só o que está salvo como Dinheiro entra aqui.</div>` : ''}
+          ${e.n ? `<details class="how" style="margin-top:-6px"><summary>Vem de ${plural(e.n, 'recebimento marcado', 'recebimentos marcados')} como Dinheiro: ${money(e.total)}</summary>
+            <div class="list small">${e.itens.map(c => `<div class="it"><div class="tx"><b>${esc(c.cliente || 'Cliente')}</b><span>Título ${esc(c.numero || '—')} · ${dBR(c.data)}</span></div><div class="vl">${money(c.valor)}</div></div>`).join('')}</div>
+            <p>Confira se esse dinheiro está mesmo na sacola. Se veio diferente, troque o valor.</p></details>`
+          : `<p class="small muted" style="margin-top:-6px">Nenhum recebimento de crediário desta filial marcado como Dinheiro.</p>`}`; })()}
         <div class="field"><label for="csMotivo">Observação (opcional)</label><input type="text" id="csMotivo" maxlength="300" placeholder="Ex.: nota rasgada, envelope sem nome…"></div>
         <button class="btn pri lg full" type="submit">${cego ? 'Verificar' : 'Confirmar conferência'}</button>
       </form><div id="csOut"></div>`, () => {
