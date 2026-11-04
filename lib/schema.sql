@@ -658,3 +658,34 @@ create table if not exists caixa_linha (
 );
 create index if not exists caixa_linha_status on caixa_linha(tenant_id, status, data);
 create index if not exists caixa_linha_sacola on caixa_linha(tenant_id, sacola_id);
+-- recebimentos de crediário do StarIA (cliente pagando a conta), um por um: filial, data do pagamento, título,
+-- cliente e valor. O StarIA não diz direito como foi pago, então o financeiro marca a forma (dinheiro, Pix, cartão,
+-- outro). Dinheiro: passa a ser esperado na sacola da filial (conferida às cegas; sacola_id = onde foi contado).
+-- Pix/cartão/outro: o dono confere no extrato do banco ou da maquininha (banco = 'achei' | 'nao_achei').
+-- chave: filial|título|data|valor|nº da repetição (o mesmo título pode ter pagamentos parciais no mesmo dia).
+create table if not exists caixa_credi (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  chave text not null,
+  filial int not null,
+  data date not null,
+  numero text,
+  cliente text,
+  valor numeric(14,2) not null,
+  conta_staria text,
+  tipo_conta text,
+  job_id text,
+  forma text check (forma is null or forma in ('dinheiro','pix','cartao','outro')),
+  forma_por text,
+  forma_por_role text,
+  forma_em timestamptz,
+  sacola_id text,
+  banco text check (banco is null or banco in ('achei','nao_achei')),
+  banco_por text,
+  banco_em timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, id),
+  unique (tenant_id, chave)
+);
+create index if not exists caixa_credi_filial on caixa_credi(tenant_id, filial, data);

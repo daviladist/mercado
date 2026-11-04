@@ -191,7 +191,7 @@
     if (faltou || sobrou) st = { k: 'bad', ic: 'alert', go: 'ocorrencias', t: faltou ? 'Faltou ' + money(faltou) + ' nos últimos 7 dias' : 'Sobrou ' + money(sobrou) + ' nos últimos 7 dias' };
     else if (tarefas.some(t => t.urg)) { const n = tarefas.filter(t => t.urg).length; st = { k: 'wa', ic: 'clock', t: (admin ? 'Sem diferenças · ' : '') + plural(n, 'coisa para resolver', 'coisas para resolver') }; }
     else st = { k: 'ok', ic: 'ok', t: admin ? 'Tudo certo · nenhuma diferença em 7 dias' : 'Tudo em dia' };
-    return { alertas, tarefas, caminho, st, pendSacolas: (fin ? aConferir.length + cxP.length : naFilial.length) };
+    return { alertas, tarefas, caminho, st, pendSacolas: (fin ? aConferir.length + cxP.length + (S.crediarios || []).filter(c => !c.forma).length : naFilial.length) };
   }
 
   /* ---------- Início: "quanto eu tenho agora e está tudo certo?" ---------- */
@@ -216,7 +216,7 @@
         <button class="btn" type="button" id="btnSangria">${ic('out')}Fazer sangria</button>
       </div>`;
     // cada alerta/pendência leva direto para onde se resolve
-    const IR = { contar: 'contar', banco: 'extrato', sacolas: 'sacolas', ocorrencias: 'ocorrencias', staria: 'staria', inicio: 'inicio' };
+    const IR = { contar: 'contar', banco: 'extrato', sacolas: 'sacolas', ocorrencias: 'ocorrencias', staria: 'staria', inicio: 'inicio', crediario: 'crediario' };
     const linhaAlerta = a => `<button type="button" class="it" ${a.ir === 'contar' ? 'data-contar="1"' : `data-go="${IR[a.ir] || 'inicio'}"`}>
         <div class="ic ${a.nivel === 'vermelho' ? 'bad' : 'wa'}">${ic(a.nivel === 'vermelho' ? 'alert' : 'clock')}</div>
         <div class="tx"><b>${esc(a.texto)}</b></div><span class="ch">${ic('chev')}</span></button>`;
@@ -245,7 +245,7 @@
       const uc = R.ultimaContagem;
       const ucTxt = !uc ? 'O cofre ainda não foi contado. Conte para confirmar.'
         : 'Última contagem: ' + (uc.horas < 1 ? 'agora há pouco' : uc.horas < 24 ? 'há ' + uc.horas + ' h' : 'há ' + Math.floor(uc.horas / 24) + ' dia(s)') + ', ' + esc(uc.por || '') + ', ' + (uc.diferenca === 0 ? 'bateu' : (uc.diferenca < 0 ? 'faltou ' : 'sobrou ') + money(Math.abs(uc.diferenca)));
-      const pf = Object.entries(R.nasLojas.porFilial || {}).filter(([, x]) => x.caixasSemSacola || x.naFilial || x.chegouFaltaContar).sort((a, b) => a[0] - b[0]);
+      const pf = Object.entries(R.nasLojas.porFilial || {}).filter(([, x]) => x.caixasSemSacola || x.naFilial || x.chegouFaltaContar || x.crediario).sort((a, b) => a[0] - b[0]);
       const jobP = (S.jobs || []).some(j => j.status === 'pendente');
       $('#main').innerHTML = `
         <section class="hero" aria-label="Dinheiro na matriz">
@@ -261,7 +261,7 @@
           <div>
             <div class="kv"><span>Na matriz (cofre)</span><b>${money(R.naMatriz)}</b></div>
             ${R.nasLojas.total ? `<button type="button" class="kv" data-go="sacolas" style="width:100%;background:none;border:0;padding-left:0;padding-right:0;font:inherit;color:inherit;text-align:left"><span>Nas lojas e a caminho <span class="small muted">(valor do StarIA, ainda não contado)</span></span><b>${money(R.nasLojas.total)}</b></button>
-              ${pf.map(([f, x]) => `<div class="kv small muted" style="padding-left:12px"><span>Filial ${esc(f)}</span><span>${money(r2(x.caixasSemSacola + x.naFilial + x.chegouFaltaContar))}</span></div>`).join('')}` : ''}
+              ${pf.map(([f, x]) => `<div class="kv small muted" style="padding-left:12px"><span>Filial ${esc(f)}</span><span>${money(r2(x.caixasSemSacola + x.naFilial + x.chegouFaltaContar + (x.crediario || 0)))}${x.crediario ? ` <span class="small">(${money(x.crediario)} de crediário)</span>` : ''}}</span></div>`).join('')}` : ''}
             ${R.aCaminhoDoBanco.total ? `<button type="button" class="kv" data-go="extrato" style="width:100%;background:none;border:0;padding-left:0;padding-right:0;font:inherit;color:inherit;text-align:left"><span>Saiu para o banco <span class="small muted">(${plural(R.aCaminhoDoBanco.qtd, 'sangria', 'sangrias')}, falta você confirmar)</span></span><b>${money(R.aCaminhoDoBanco.total)}</b></button>` : ''}
             <button type="button" class="kv" data-go="gaveta" style="width:100%;background:none;border:0;padding-left:0;padding-right:0;font:inherit;color:inherit;text-align:left"><span>Gaveta de impostos</span><b>${money(R.gaveta)}</b></button>
             <div class="kv tot"><span><b>Total</b></span><b>${money(R.tudo)}</b></div>
@@ -304,6 +304,7 @@
     $('#main').innerHTML = `<div class="pagehd"><h1>Mais</h1></div>
       <section class="card menu"><div class="list">
         ${item('ocorrencias', 'shield', 'Ocorrências', 'Diferenças e tudo que foi apagado ou alterado', R.alertas.length ? `<span class="badge bad">${R.alertas.length}</span>` : '')}
+        ${item('crediario', 'bank', 'Crediário: conferir no banco', (() => { const p = (S.crediarios || []).filter(c => c.forma && c.forma !== 'dinheiro' && c.banco !== 'achei'); return p.length ? plural(p.length, 'recebimento', 'recebimentos') + ' para conferir no extrato' : 'Pix e cartões de clientes pagando conta'; })())}
         ${item('staria', 'sync', 'Puxar do StarIA', jobP ? 'Uma consulta está esperando o Claude' : 'Pedir as vendas em dinheiro de um período')}
         ${item('gaveta', 'tax', 'Gaveta de impostos', money(S.saldoImpostos || 0) + ' guardado à parte')}
         ${item('acessos', 'users', 'Pessoas com acesso', plural((S.pessoas || []).length, 'pessoa', 'pessoas'))}
@@ -554,11 +555,101 @@
       ${acao}
     </div>`;
   }
+  /* ---------- crediário recebido (cliente pagando a conta), um por um ----------
+     O financeiro diz como cada um pagou. Dinheiro: vem na sacola da filial e é contado junto. Pix/cartão/outro: o
+     dono confere no extrato (Mais → Crediário: conferir no banco). */
+  const FORMA_TXT = { dinheiro: 'Dinheiro', pix: 'Pix', cartao: 'Cartão', outro: 'Outro' };
+  const escolhas = new Map();   // escolhas ainda não salvas: id -> forma
+  const sugestao = c => /CART/i.test(c.conta || '') ? 'cartao' : /SICOOB|BANCO|PIX/i.test(c.conta || '') ? 'pix' : null;
+  function crediEsperado(s) {
+    const ls = (S.crediarios || []).filter(c => c.filial === s.filial && c.forma === 'dinheiro' && !c.contado && c.data <= String(s.periodoFim).slice(0, 10));
+    return { n: ls.length, total: r2(ls.reduce((a, c) => a + c.valor, 0)) };
+  }
+  const segFormas = (c, atual) => `<div class="seg" role="group" aria-label="Forma de pagamento">${Object.keys(FORMA_TXT).map(f =>
+    `<button type="button" data-cf="${esc(c.id)}" data-f="${f}" class="${atual === f ? 'on' : ''}" aria-pressed="${atual === f}">${FORMA_TXT[f]}</button>`).join('')}</div>`;
+  function htmlCrediFormas() {
+    if (!podeConferirSacola() || !S.crediarios) return '';
+    const sem = S.crediarios.filter(c => !c.forma);
+    const corrigiveis = S.crediarios.filter(c => c.forma && !c.contado && c.banco !== 'achei' && c.banco !== 'nao_achei');
+    for (const c of sem) if (!escolhas.has(c.id) && sugestao(c)) escolhas.set(c.id, sugestao(c));
+    for (const id of [...escolhas.keys()]) if (!S.crediarios.some(c => c.id === id)) escolhas.delete(id);
+    if (!sem.length && !corrigiveis.length) return '';
+    const grupos = {};
+    for (const c of sem) (grupos[c.filial + '|' + c.data] = grupos[c.filial + '|' + c.data] || []).push(c);
+    const chaves = Object.keys(grupos).sort((a, b) => { const [fa, da] = a.split('|'), [fb, db] = b.split('|'); return fa - fb || (da < db ? -1 : da > db ? 1 : 0); });
+    const linha = (c, atual) => `<div class="it cr"><div class="tx"><b>${esc(c.cliente || 'Cliente')}</b><span>Título ${esc(c.numero || '—')}${c.conta ? ' · no StarIA: ' + esc(c.conta) : ''}</span></div><div class="vl">${money(c.valor)}</div>${segFormas(c, atual)}</div>`;
+    return `<section class="card">
+      <div class="sec"><h2>Crediário: como o cliente pagou?</h2>${sem.length ? `<span class="badge">${sem.length}</span>` : ''}</div>
+      <details class="how"><summary>Por que marcar?</summary>
+        <p>O StarIA não diz como cada cliente pagou a conta. <b>Dinheiro</b> tem que vir na sacola da filial e é contado junto. <b>Pix</b> e <b>cartão</b> o dono confere no extrato. <b>Outro</b>: desconto em folha, cheque etc.</p></details>
+      ${chaves.map(k => { const [f, d] = k.split('|'); return `<div class="grp"><b>Filial ${esc(f)} · ${dBR(d)}</b><button type="button" class="lnk" data-crgrupo="${esc(k)}">Os sem marcar = Dinheiro</button></div>
+        <div class="list">${grupos[k].map(c => linha(c, escolhas.get(c.id))).join('')}</div>`; }).join('')}
+      ${corrigiveis.length ? `<details class="how" style="margin-top:12px"><summary>Já marcados, ainda dá para corrigir (${corrigiveis.length})</summary>
+        <div class="list">${corrigiveis.map(c => linha(c, escolhas.get(c.id) || c.forma)).join('')}</div></details>` : ''}
+      <div class="sbar"><div class="t" id="crResumo"></div><button class="btn" type="button" id="btnSalvarCr" disabled>Salvar</button></div>
+    </section>`;
+  }
+  function ligarCrediFormas() {
+    const lista = S.crediarios || [];
+    const mudancas = () => [...escolhas.entries()].filter(([id, f]) => { const c = lista.find(x => x.id === id); return c && c.forma !== f; });
+    const atualiza = () => {
+      document.querySelectorAll('[data-cf]').forEach(b => { const c = lista.find(x => x.id === b.dataset.cf); const on = (escolhas.get(b.dataset.cf) || (c && c.forma)) === b.dataset.f; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+      const m = mudancas(), r = $('#crResumo'), b = $('#btnSalvarCr');
+      const falta = lista.filter(c => !c.forma && !escolhas.has(c.id)).length;
+      if (r) r.innerHTML = m.length ? plural(m.length, 'recebimento para salvar', 'recebimentos para salvar') + (falta ? `<b>${plural(falta, 'sem marcar', 'sem marcar')}</b>` : '') : (falta ? 'Toque na forma de cada recebimento' : 'Tudo marcado');
+      if (b) { b.disabled = !m.length; b.textContent = m.length ? 'Salvar ' + m.length : 'Salvar'; }
+    };
+    document.querySelectorAll('[data-cf]').forEach(b => b.addEventListener('click', () => { escolhas.set(b.dataset.cf, b.dataset.f); atualiza(); }));
+    document.querySelectorAll('[data-crgrupo]').forEach(g => g.addEventListener('click', () => {
+      lista.filter(c => !c.forma && c.filial + '|' + c.data === g.dataset.crgrupo && !escolhas.has(c.id)).forEach(c => escolhas.set(c.id, 'dinheiro')); atualiza();
+    }));
+    const b = $('#btnSalvarCr');
+    if (b) b.addEventListener('click', async () => {
+      const itens = mudancas().map(([id, forma]) => ({ id, forma }));
+      if (!itens.length) return;
+      b.disabled = true;
+      const r = await post('/api/caixa/credi/forma', { itens }, 'Forma do crediário salva');
+      if (r) { itens.forEach(i => escolhas.delete(i.id)); if (r.travadas) toast(plural(r.travadas, 'recebimento já estava conferido e não mudou', 'recebimentos já estavam conferidos e não mudaram'), true); }
+      render();
+    });
+    atualiza();
+  }
+  /* dono: confere no extrato do banco/maquininha o que foi marcado como Pix, cartão ou outro */
+  function renderCrediarioBanco() {
+    if (!isAdmin()) { view = 'inicio'; return render(); }
+    const todos = (S.crediarios || []).filter(c => c.forma && c.forma !== 'dinheiro');
+    const naoAchei = todos.filter(c => c.banco === 'nao_achei');
+    const pend = todos.filter(c => !c.banco);
+    const achados = todos.filter(c => c.banco === 'achei');
+    const porDia = {};
+    for (const c of pend) (porDia[c.data] = porDia[c.data] || []).push(c);
+    const dias = Object.keys(porDia).sort().reverse();
+    const linha = (c, acoes) => `<div class="it cr"><div class="tx"><b>${esc(c.cliente || 'Cliente')} · ${money(c.valor)}</b><span>${FORMA_TXT[c.forma]} · Filial ${esc(c.filial)} · ${dBR(c.data)} · marcado por ${esc(c.formaPor || '')}</span></div>${acoes}</div>`;
+    const botoes = c => `<div class="row" style="width:100%;justify-content:flex-end"><button type="button" class="btn sm" data-bk="${esc(c.id)}" data-r="nao_achei">Não achei</button><button type="button" class="btn sm pri" data-bk="${esc(c.id)}" data-r="achei">Achei</button></div>`;
+    $('#main').innerHTML = `<div class="pagehd"><h1>Crediário no banco</h1><p>Abra o extrato do banco (e da maquininha, para cartão). Para cada recebimento, toque em <b>Achei</b> ou <b>Não achei</b>. O que não cair vira alerta.</p></div>
+      ${naoAchei.length ? `<section class="card"><div class="sec"><h2 style="color:var(--bad)">Não caiu no banco</h2><span class="badge bad">${naoAchei.length}</span></div>
+        <div class="list">${naoAchei.map(c => linha(c, `<div class="row" style="width:100%;justify-content:flex-end"><button type="button" class="btn sm" data-bk="${esc(c.id)}" data-r="achei">Caiu depois: achei</button></div>`)).join('')}</div></section>` : ''}
+      <section class="card"><div class="sec"><h2>Para conferir</h2>${pend.length ? `<span class="badge">${pend.length}</span>` : ''}</div>
+        ${dias.length ? dias.map(d => `<div class="grp"><b>${dBR(d)} · ${money(r2(porDia[d].reduce((a, c) => a + c.valor, 0)))}</b><button type="button" class="lnk" data-bkdia="${esc(d)}">Achei todos</button></div>
+          <div class="list">${porDia[d].map(c => linha(c, botoes(c))).join('')}</div>`).join('')
+        : `<div class="empty"><div class="big">${ic('ok')}</div><p>Nada para conferir agora.</p></div>`}
+      </section>
+      ${achados.length ? `<details class="how card"><summary>Já conferidos (${achados.length})</summary><div class="list">${achados.slice(0, 50).map(c => linha(c, '')).join('')}</div></details>` : ''}`;
+    document.querySelectorAll('[data-bk]').forEach(b => b.addEventListener('click', () => {
+      if (b.dataset.r === 'nao_achei' && !confirm('Não achou esse recebimento no extrato? Vai virar alerta e ocorrência.')) return;
+      post('/api/caixa/credi/banco', { ids: [b.dataset.bk], resultado: b.dataset.r }, b.dataset.r === 'achei' ? 'Conferido' : 'Marcado: não caiu no banco');
+    }));
+    document.querySelectorAll('[data-bkdia]').forEach(b => b.addEventListener('click', () => {
+      const ids = porDia[b.dataset.bkdia].map(c => c.id);
+      if (confirm('Achou no extrato todos os ' + ids.length + ' recebimentos de ' + dBR(b.dataset.bkdia) + '?')) post('/api/caixa/credi/banco', { ids, resultado: 'achei' }, 'Conferidos');
+    }));
+  }
   function renderSacolas() {
     const pendentes = (S.sacolas || []).filter(s => !s.conferidoEm)
       .sort((a, b) => (b.chegouEm ? 1 : 0) - (a.chegouEm ? 1 : 0) || a.filial - b.filial);
     const conferidas = (S.sacolas || []).filter(s => s.conferidoEm);
     $('#main').innerHTML = `<div class="pagehd"><h1>Sacolas</h1><p>O dinheiro de cada filial, do StarIA até entrar no cofre.</p></div>
+    ${htmlCrediFormas()}
     ${htmlCaixasPendentes()}
     <section class="card">
       <div class="sec"><h2>A receber</h2>${pendentes.length ? `<span class="badge">${pendentes.length}</span>` : ''}</div>
@@ -570,6 +661,7 @@
         ${s.valorContado == null ? '' : `<div class="vl">${money(r2((s.valorContado || 0) + (s.crediDinheiro || 0)))}</div>`}
       </div>`).join('')}</div></section>` : ''}`;
     ligarCaixasPendentes();
+    ligarCrediFormas();
     document.querySelectorAll('[data-chegou]').forEach(b => b.addEventListener('click', () => post('/api/caixa/sacola/chegou', { id: b.dataset.chegou }, 'Marcado: chegou na matriz')));
     document.querySelectorAll('[data-conferir]').forEach(b => b.addEventListener('click', () => sheetConferirSacola(S.sacolas.find(s => s.id === b.dataset.conferir))));
   }
@@ -589,7 +681,8 @@
         <div class="field"><label for="csCrediDinheiro">Crediário em dinheiro</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00"></div>
         <div class="field"><label for="csCrediCartao">Crediário em cartão</label><input type="text" id="csCrediCartao" inputmode="decimal" placeholder="0,00"></div>
         <div class="field"><label for="csCrediPix">Crediário em Pix</label><input type="text" id="csCrediPix" inputmode="decimal" placeholder="0,00"></div>`
-        : `<div class="field"><label for="csCrediDinheiro">Veio dinheiro de cliente pagando conta (crediário)? Quanto?</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00"></div>`}
+        : `<div class="field"><label for="csCrediDinheiro">Dinheiro de crediário que veio na sacola (clientes pagando conta)</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00"></div>
+          ${!cego ? (() => { const e = crediEsperado(s); return `<p class="small muted" style="margin-top:-6px">Esperado de crediário em dinheiro: <b>${money(e.total)}</b> (${plural(e.n, 'recebimento marcado', 'recebimentos marcados')} como dinheiro).</p>`; })() : ''}`}
         <div class="field"><label for="csMotivo">Observação (opcional)</label><input type="text" id="csMotivo" maxlength="300" placeholder="Ex.: nota rasgada, envelope sem nome…"></div>
         <button class="btn pri lg full" type="submit">${cego ? 'Verificar' : 'Confirmar conferência'}</button>
       </form><div id="csOut"></div>`, () => {
@@ -612,7 +705,8 @@
         try {
           if (!cego || tentativa >= 1) return await confirmar();
           // equipe, 1ª vez: só checa (não grava). Bateu → grava; não bateu → conta de novo, e na 2ª grava o que der.
-          const c = await api('/api/caixa/sacola/checar', { id: s.id, valorContado: $('#csValor').value });
+          const cdv = $('#csCrediDinheiro');
+          const c = await api('/api/caixa/sacola/checar', { id: s.id, valorContado: $('#csValor').value, crediDinheiro: cdv ? cdv.value : undefined });
           if (c.bateu) return await confirmar();
           tentativa++;
           $('#csOut').innerHTML = `<div class="warn"><b>Não bateu.</b> Conte de novo com calma e digite o total. Na próxima vez fica registrado o que você digitar.</div>`;
@@ -722,6 +816,7 @@
       if (d.crediDiferenca) partes.push('crediário: ' + (d.crediDiferenca > 0 ? 'sobrou ' : 'faltou ') + money(Math.abs(d.crediDiferenca)) + ' (dinheiro+cartão+Pix somou ' + money(r2((d.crediDinheiro || 0) + (d.crediCartao || 0) + (d.crediPix || 0))) + ', StarIA apontava ' + money(d.crediStaria) + ')');
       return 'Filial ' + esc(d.filial) + ': ' + partes.join(' · ') + (d.motivo ? ' · ' + esc(d.motivo) : '') + ' · ' + esc(d.por || '');
     }
+    if (o.tipo === 'credi') return 'Filial ' + esc(d.filial) + ' · ' + esc(d.cliente || '') + ' · ' + money(d.valor) + ' em ' + dBR(d.data) + ' · marcado por ' + esc(d.formaPor || '');
     if (o.titulo === 'Ajuste lançado') return (d.valor != null ? money(Number(d.valor)) : '') + ' · ' + esc(d.role || '');
     if (o.titulo === 'Saldo inicial alterado') return 'Novo saldo inicial: ' + money(Number(d.saldoInicial) || 0) + ' · ' + esc(d.role || '');
     if (o.titulo === 'Acesso criado ou alterado') return esc(d.login || '') + (d.papel ? ' · ' + esc(d.papel) : '') + ' · por ' + esc(d.role || '');
@@ -737,7 +832,7 @@
     const lista = S.ocorrencias || [];
     $('#main').innerHTML = `<div class="pagehd"><h1>Ocorrências</h1><p>Contagens que não bateram e tudo que foi apagado ou alterado, inclusive por você. Ninguém consegue apagar esta lista.</p></div>
       <section class="card">
-      ${lista.length ? `<div class="list">${lista.map(o => { const dif = o.tipo === 'conferencia' || o.tipo === 'sacola'; return `<div class="it" style="align-items:flex-start">
+      ${lista.length ? `<div class="list">${lista.map(o => { const dif = o.tipo === 'conferencia' || o.tipo === 'sacola' || o.tipo === 'credi'; return `<div class="it" style="align-items:flex-start">
           <div class="ic ${dif ? 'bad' : ''}">${ic(dif ? 'alert' : 'shield')}</div>
           <div class="tx"><b>${esc(o.titulo)}</b><span>${ocorDetalheTxt(o)}</span><span>${dtBR(o.em)}</span></div>
         </div>`; }).join('')}</div>` : `<div class="empty"><div class="big">${ic('ok')}</div><p>Nenhuma ocorrência registrada.</p></div>`}
@@ -745,7 +840,7 @@
   }
 
   /* ---------- navegação: 3 abas para a equipe, 4 para o dono ---------- */
-  const SUB_MAIS = ['staria', 'acessos', 'gaveta', 'ocorrencias'];
+  const SUB_MAIS = ['staria', 'acessos', 'gaveta', 'ocorrencias', 'crediario'];
   function render() {
     $('#bn').hidden = false; $('#sair').hidden = false;
     if (view === 'sangria') { view = 'inicio'; setTimeout(sheetSangria, 0); }
@@ -758,6 +853,7 @@
     else if (view === 'extrato') renderExtrato();
     else if (view === 'mais') renderMais();
     else if (view === 'staria') renderStaria();
+    else if (view === 'crediario') renderCrediarioBanco();
     else if (view === 'acessos') renderAcessos();
     else if (view === 'gaveta') renderGaveta();
     else if (view === 'ocorrencias') renderOcorrencias();

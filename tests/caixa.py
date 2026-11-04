@@ -344,8 +344,13 @@ check(s == 200 and r.get('novas') == 1 and r.get('atualizadas') == 1 and r.get('
 s, st = A.req('/api/caixa/state'); cp = st['caixasPendentes']
 check(cx(cp, 2, '101', '2026-10-30')['dinheiro'] == 310 and cx(cp, 2, '103', '2026-10-30')['dinheiro'] == 80 and cx(cp, 2, '101', '2026-10-29') is None, 'caixa esperando teve o valor atualizado; o que já está na sacola não voltou')
 s2 = next(x for x in st['sacolas'] if x['id'] == sacs[2]['id']); check(s2['valorStaria'] == 300.5, 'a sacola não mudou com a nova consulta')
-s, r = F.req('/api/caixa/sacola/conferir', {'id': sacs[1]['id'], 'valorContado': '50', 'crediDinheiro': '20', 'crediCartao': '5'})
-check(s == 200 and r.get('bateu') is True, 'conferir a sacola da matriz: venda bateu, e o crediário informado pelo financeiro não vira "diferença"')
+# um cliente pagou R$ 20 de crediário na matriz em 30/10, em dinheiro: vem do StarIA, o financeiro marca a forma
+s, r = A.req('/api/caixa/staria/pedir', {'periodoIni': '2026-10-30', 'periodoFim': '2026-10-30'}); JCR0 = r['id']
+A.req('/api/caixa/staria/resultado', {'id': JCR0, 'resultado': {'crediario': [{'filial': 1, 'data': '2026-10-30', 'numero': '900', 'cliente': 'Cliente da matriz', 'valor': 20, 'conta': 'CONVENIOS', 'tipo': 'CONVENIO'}]}})
+s, st = F.req('/api/caixa/state'); c900 = next(c for c in st['crediarios'] if c['numero'] == '900')
+s, _ = F.req('/api/caixa/credi/forma', {'itens': [{'id': c900['id'], 'forma': 'dinheiro'}]}); check(s == 200, 'financeiro marca o crediário da matriz como dinheiro')
+s, r = F.req('/api/caixa/sacola/conferir', {'id': sacs[1]['id'], 'valorContado': '50', 'crediDinheiro': '20'})
+check(s == 200 and r.get('bateu') is True, 'conferir a sacola da matriz: venda bateu e o crediário em dinheiro (20) bateu com o que foi marcado')
 s, st = A.req('/api/caixa/state'); check(st['saldo'] == round(saldo_a + 70, 2), 'saldo sobe com a venda contada (50) e o crediário em dinheiro (20); o cartão não entra')
 F.req('/api/caixa/sacola/chegou', {'id': sacs[2]['id']})
 s, r = F.req('/api/caixa/sacola/conferir', {'id': sacs[2]['id'], 'valorContado': '300', 'motivo': 'faltou 50 centavos'}); check(s == 200 and r.get('bateu') is False, 'sacola da filial 2 conferida: faltaram 50 centavos')
@@ -396,6 +401,53 @@ s, r = A.req('/api/caixa/staria/pedir', {'auto': True}); check(s == 200 and r.ge
 s, r2_ = A.req('/api/caixa/staria/pedir', {'auto': True}); check(s == 200 and r2_.get('jaPedido') is True and r2_['id'] == r['id'], 'apertar de novo não dá erro: avisa que já está pedido')
 s, _ = F.req('/api/caixa/staria/pedir', {'auto': True}); check(s == 403, 'financeiro não pede consulta')
 
+print('== crediário recebido, um por um: o financeiro marca a forma, o dinheiro é contado na sacola, o dono confere Pix/cartão no banco')
+_dc = (_dt.datetime.utcnow() - _dt.timedelta(hours=3) - _dt.timedelta(days=5)).strftime('%Y-%m-%d')
+def cr(n, cli, v, conta='CONVENIOS'): return {'filial': 2, 'data': _dc, 'numero': n, 'cliente': cli, 'valor': v, 'conta': conta, 'tipo': 'CONVENIO'}
+s, r = A.req('/api/caixa/staria/pedir', {'periodoIni': _dc, 'periodoFim': _dc}); JCR = r['id']
+s, _ = A.req('/api/caixa/staria/resultado', {'id': JCR, 'resultado': {'crediario': [cr('1', 'X', -5)]}}); check(s == 400, 'crediário com valor negativo recusado')
+s, _ = A.req('/api/caixa/staria/resultado', {'id': JCR, 'resultado': {'crediario': [dict(cr('1', 'X', 5), data='2099-01-01')]}}); check(s == 400, 'crediário com data no futuro recusado')
+CRED = [cr('7001', 'Ana Paula', 300), cr('7002', 'Bruno Lima', 150), cr('7003', 'Carla Dias', 200, 'CARTOES'), cr('7004', 'Davi Rocha', 120, 'SICOOB JOATUBA'), cr('7005', 'Eva Souza', 80), cr('7005', 'Eva Souza', 80)]
+s, r = A.req('/api/caixa/staria/resultado', {'id': JCR, 'resultado': {'crediario': CRED}})
+check(s == 200 and r.get('crediario') == 6 and r.get('crediNovos') == 6 and r.get('crediTotal') == 930, 'entrega os recebimentos de crediário um por um (o pagamento parcial repetido conta duas vezes) (%s)' % r)
+s, r = A.req('/api/caixa/staria/pedir', {'periodoIni': _dc, 'periodoFim': _dc}); JCR2 = r['id']
+s, r = A.req('/api/caixa/staria/resultado', {'id': JCR2, 'resultado': {'crediario': CRED}}); check(s == 200 and r.get('crediNovos') == 0, 'entregar de novo o mesmo dia não duplica nada')
+s, stf = F.req('/api/caixa/state'); meus = [c for c in stf['crediarios'] if c['data'] == _dc and c['filial'] == 2]
+check(len(meus) == 6 and all(c['valor'] > 0 and c['cliente'] for c in meus) and all('banco' not in c for c in meus), 'o financeiro vê cliente e valor para marcar a forma (mas não vê se o dono já conferiu no banco)')
+s, stm = M2.req('/api/caixa/state'); check('crediarios' not in stm, 'a caixista não vê os recebimentos de crediário')
+porNum = {}
+for c in meus: porNum.setdefault(c['numero'], []).append(c['id'])
+s, st = A.req('/api/caixa/state'); check('CREDI_SEM_FORMA' in [a['codigo'] for a in st['resumo']['alertas']], 'recebimento sem forma marcada há dias vira alerta')
+s, _ = M2.req('/api/caixa/credi/forma', {'itens': [{'id': porNum['7001'][0], 'forma': 'dinheiro'}]}); check(s == 403, 'caixista não marca a forma')
+s, _ = F.req('/api/caixa/credi/forma', {'itens': [{'id': porNum['7001'][0], 'forma': 'boleto'}]}); check(s == 400, 'forma inválida recusada')
+FORMAS = [(porNum['7001'][0], 'dinheiro'), (porNum['7002'][0], 'dinheiro'), (porNum['7003'][0], 'cartao'), (porNum['7004'][0], 'pix'), (porNum['7005'][0], 'pix'), (porNum['7005'][1], 'outro')]
+s, r = F.req('/api/caixa/credi/forma', {'itens': [{'id': i, 'forma': f} for i, f in FORMAS]}); check(s == 200 and r['alteradas'] == 6, 'financeiro marca a forma dos 6 de uma vez')
+s, st = A.req('/api/caixa/state'); rs = st['resumo']; cods = [a['codigo'] for a in rs['alertas']]
+check(rs['nasLojas']['porFilial']['2']['crediario'] == 450, 'o crediário em dinheiro (300 + 150) aparece como dinheiro nas lojas, ainda não contado')
+check('CREDI_CONFERIR_BANCO' in cods and 'CREDI_SEM_FORMA' not in cods and 'CREDI_DINHEIRO_PARADO' in cods, 'alertas: Pix/cartão para o dono conferir, e dinheiro do crediário parado há dias')
+s, _ = F.req('/api/caixa/credi/banco', {'ids': [porNum['7004'][0]], 'resultado': 'achei'}); check(s == 403, 'financeiro não confere no banco (só o dono)')
+s, _ = A.req('/api/caixa/credi/banco', {'ids': [porNum['7001'][0]], 'resultado': 'achei'}); check(s == 409, 'dinheiro não se confere no banco (é contado na sacola)')
+s, r = A.req('/api/caixa/credi/banco', {'ids': [porNum['7003'][0], porNum['7004'][0], porNum['7005'][1]], 'resultado': 'achei'}); check(s == 200 and r['conferidos'] == 3 and r['total'] == 400, 'o dono acha no extrato o cartão, o Pix e o "outro"')
+s, r = A.req('/api/caixa/credi/banco', {'ids': [porNum['7005'][0]], 'resultado': 'nao_achei'}); check(s == 200, 'o dono não acha um Pix no banco')
+s, st = A.req('/api/caixa/state'); al = [a for a in st['resumo']['alertas'] if a['codigo'] == 'CREDI_NAO_ACHEI']
+check(al and al[0]['nivel'] == 'vermelho' and st['resumo']['status'] == 'vermelho', 'Pix que não caiu no banco vira alerta vermelho')
+s, oc = A.req('/api/caixa/ocorrencias'); check(any(o['tipo'] == 'credi' and o['detalhe']['cliente'] == 'Eva Souza' and o['detalhe']['valor'] == 80 for o in oc['ocorrencias']), 'e fica nas ocorrências, com cliente e valor')
+s, r = F.req('/api/caixa/credi/forma', {'itens': [{'id': porNum['7005'][0], 'forma': 'dinheiro'}]}); check(s == 200 and r['travadas'] == 1 and r['alteradas'] == 0, 'depois que o dono conferiu no banco, o financeiro não muda mais a forma')
+s, r = A.req('/api/caixa/credi/banco', {'ids': [porNum['7005'][0]], 'resultado': 'achei'}); s2, st = A.req('/api/caixa/state')
+check(s == 200 and 'CREDI_NAO_ACHEI' not in [a['codigo'] for a in st['resumo']['alertas']], 'achou depois (caiu atrasado): o dono corrige e o alerta some')
+# a sacola da filial 2 daquele dia traz as vendas e o crediário em dinheiro (300 + 150)
+s, r = A.req('/api/caixa/staria/pedir', {'periodoIni': _dc, 'periodoFim': _dc}); JCR3 = r['id']
+A.req('/api/caixa/staria/resultado', {'id': JCR3, 'resultado': {'linhas': [lin(2, '105', _dc, 1000)]}})
+s, st = A.req('/api/caixa/state'); saldo0 = st['saldo']; l105 = cx(st['caixasPendentes'], 2, '105', _dc)['id']
+s, r = F.req('/api/caixa/caixas/aceitar', {'ids': [l105]}); SCR = r['sacolas'][0]['id']; F.req('/api/caixa/sacola/chegou', {'id': SCR})
+s, r = F.req('/api/caixa/sacola/checar', {'id': SCR, 'valorContado': '1000', 'crediDinheiro': '400'}); check(s == 200 and r['bateu'] is False, 'checar: as vendas batem mas o crediário em dinheiro não (faltam 50)')
+s, r = F.req('/api/caixa/sacola/checar', {'id': SCR, 'valorContado': '1000', 'crediDinheiro': '450'}); check(s == 200 and r['bateu'] is True, 'recontou: vendas 1.000 e crediário 450, bateu')
+s, r = F.req('/api/caixa/sacola/conferir', {'id': SCR, 'valorContado': '1000', 'crediDinheiro': '450'}); check(s == 200 and r['bateu'] is True, 'confere a sacola com vendas e crediário')
+s, st = A.req('/api/caixa/state')
+check(st['saldo'] == round(saldo0 + 1450, 2) and st['resumo']['nasLojas']['porFilial'].get('2', {}).get('crediario', 0) == 0, 'o saldo sobe 1.450 e o crediário em dinheiro sai de "nas lojas"')
+check(all(c['contado'] for c in st['crediarios'] if c['numero'] in ('7001', '7002')), 'os dois recebimentos em dinheiro ficam como contados (presos a essa sacola)')
+s, r = F.req('/api/caixa/credi/forma', {'itens': [{'id': porNum['7001'][0], 'forma': 'pix'}]}); check(r['travadas'] == 1, 'dinheiro já contado não muda mais de forma')
+
 print('== zerar os dados (recomeçar do zero): só o admin, com a senha dele e digitando ZERAR')
 # a outra empresa de caixa ganha dados próprios, para provar que zerar uma não mexe na outra
 s, r = cen.req('/api/central/tenant-admin', {'id': TX, 'login': 'donox'}); PX0 = r.get('password')
@@ -416,7 +468,7 @@ ap = r.get('apagados', {})
 check(s == 200 and ap.get('lancamentos', 0) > 0 and ap.get('consultas', 0) > 0 and ap.get('sacolas', 0) > 0 and ap.get('conferencias', 0) > 0 and ap.get('saldoInicial') == 1, 'admin zera (aceita "zerar" minúsculo) e diz quanto apagou: %s' % ap)
 s, st2 = A.req('/api/caixa/state')
 check(s == 200 and st2['cfg'] is None and st2['saldo'] == 0 and st2['mov'] == [] and st2['jobs'] == [] and st2['sacolas'] == [], 'depois de zerar: sem saldo inicial, sem lançamentos, sem consultas, sem sacolas (volta ao começo)')
-check(ap.get('caixas', 0) > 0 and st2['caixasPendentes'] == [], 'os caixas do StarIA (esperando ou já em sacola) também são apagados')
+check(ap.get('caixas', 0) > 0 and ap.get('crediarios', 0) > 0 and st2['caixasPendentes'] == [] and st2['crediarios'] == [], 'os caixas do StarIA (esperando ou já em sacola) também são apagados')
 check(st2['saldoImpostos'] == 0 and st2['movImpostos'] == [] and st2['porFilial'] == {} and st2['miniCaixas'] in ([], {}), 'gaveta de impostos, relatório por filial e mini caixas zerados também')
 check({p['login'] for p in st2['pessoas']} >= {'caixista1', 'financeiro1', 'automacao1'}, 'as pessoas e acessos continuam')
 s, _ = F.req('/api/caixa/state'); check(s == 200, 'o financeiro continua entrando normalmente')

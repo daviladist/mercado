@@ -137,6 +137,10 @@ button.it,a.it,label.it{min-height:60px;cursor:pointer}
 .grp:first-of-type{border-top:0}
 .grp b{font-size:14px}
 .grp .lnk{font-size:13px;padding:6px 0;min-height:36px}
+.it.cr{flex-wrap:wrap;row-gap:8px}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;width:100%;background:var(--line-2);border-radius:var(--r-sm);padding:3px}
+.seg button{min-height:40px;border:0;border-radius:8px;background:transparent;font:inherit;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
+.seg button.on{background:var(--brand);color:#fff;box-shadow:var(--sh-1)}
 .ck{width:26px;height:26px;accent-color:var(--brand);flex:none;margin:0}
 label.it.on{background:var(--ok-bg);border-radius:var(--r);margin:0 -8px;padding-left:8px;padding-right:8px;width:calc(100% + 16px)}
 .sbar{position:sticky;bottom:calc(var(--nav-h) + 8px + env(safe-area-inset-bottom));z-index:4;background:var(--brand);color:#fff;border-radius:var(--r-lg);padding:10px 10px 10px 16px;display:flex;align-items:center;gap:10px;box-shadow:var(--sh-2)}
