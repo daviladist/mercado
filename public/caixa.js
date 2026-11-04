@@ -370,7 +370,13 @@
       <div class="row"><button class="btn pri" type="button" id="btnNovaCaixista">+ Nova pessoa do caixa</button><button class="btn pri" type="button" id="btnNovoFinanceiro">+ Novo acesso do financeiro</button></div>
       <div class="row"><button class="btn" type="button" id="btnNovaAutomacao">🤖 + Acesso de automação (StarIA)</button></div>
     </section>
+    <section class="card">
+      <h2>Recomeçar do zero</h2>
+      <p class="muted small">Apaga o saldo inicial, todos os lançamentos (sangrias, ajustes, gaveta de impostos), as consultas ao StarIA, as sacolas e as conferências. As pessoas e senhas acima continuam. Não dá para desfazer.</p>
+      <div class="row"><button class="btn" type="button" id="btnZerar" style="color:var(--red,#b42318);border-color:currentColor">Zerar dados do caixa</button></div>
+    </section>
     <div id="pOut"></div>`;
+    $('#btnZerar').addEventListener('click', sheetZerar);
     $('#btnNovaCaixista').addEventListener('click', () => sheetPessoa(null, 'caixista'));
     $('#btnNovoFinanceiro').addEventListener('click', () => sheetPessoa(null, 'financeiro'));
     $('#btnNovaAutomacao').addEventListener('click', () => sheetPessoa(null, 'automacao'));
@@ -411,6 +417,28 @@
     });
   }
 
+  function sheetZerar() {
+    openSheet(`<div class="tt"><h2>Zerar dados do caixa</h2><button class="x" type="button" id="shxb">✕</button></div>
+      <div class="warn"><b>Isto apaga tudo e não dá para desfazer:</b> saldo inicial, lançamentos (inclusive gaveta de impostos), consultas ao StarIA, sacolas e conferências. As pessoas e senhas continuam. Fica registrado nas Ocorrências.</div>
+      <form id="fz">
+        <div class="field"><label for="zSenha">Sua senha de administrador</label><input type="password" id="zSenha" autocomplete="current-password" required></div>
+        <div class="field"><label for="zConf">Para confirmar, digite ZERAR</label><input type="text" id="zConf" autocapitalize="characters" spellcheck="false" autocomplete="off" required></div>
+        <button class="btn pri full" type="submit" disabled>Zerar tudo</button>
+      </form>`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      const btn = $('#fz').querySelector('button');
+      $('#zConf').addEventListener('input', () => { btn.disabled = $('#zConf').value.trim().toUpperCase() !== 'ZERAR'; });
+      $('#fz').addEventListener('submit', async e => {
+        e.preventDefault(); btn.disabled = true;
+        try {
+          await api('/api/caixa/zerar', { senha: $('#zSenha').value, confirmacao: $('#zConf').value });
+          $('#zSenha').value = '';
+          await reload(); closeSheet(); view = 'inicio'; render(); toast('Dados zerados. Configure o saldo inicial para recomeçar.');
+        } catch (er) { fail(er); btn.disabled = $('#zConf').value.trim().toUpperCase() !== 'ZERAR'; }
+      });
+    });
+  }
+
   /* ---------- Ocorrências (admin): conferências com diferença + tudo que foi apagado, alterado ou decidido,
      inclusive pelo próprio admin — para dar transparência e segurança a quem trabalha com o dinheiro. Só leitura. */
   function ocorIcon(o) { return o.tipo === 'conferencia' ? '⚖️' : o.tipo === 'sacola' ? '📦' : '🛡️'; }
@@ -432,6 +460,7 @@
     if (o.titulo === 'Lançamento apagado') return 'por ' + esc(d.role || '');
     if (o.titulo === 'Consulta ao StarIA pedida') return 'Período: ' + (d.periodo || []).map(dBR).join(' a ') + ' · por ' + esc(d.role || '');
     if (o.titulo === 'Consulta ao StarIA aplicada, em sacolas por filial') return 'Já criou as sacolas por filial · por ' + esc(d.role || '');
+    if (o.titulo === 'Dados do caixa zerados (recomeço do zero)') return 'Apagados: ' + (Number(d.lancamentos) || 0) + ' lançamentos, ' + (Number(d.consultas) || 0) + ' consultas, ' + (Number(d.sacolas) || 0) + ' sacolas, ' + (Number(d.conferencias) || 0) + ' conferências · por ' + esc(d.role || '');
     return esc(d.role || '');
   }
   function renderOcorrencias() {
