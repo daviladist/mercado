@@ -165,7 +165,7 @@ s, r = B.req('/api/sync', {'changes': [{'c': 'meta', 'id': 'payments', 'op': 'pu
     {'c': 'customers', 'id': 'cp', 'op': 'put', 'doc': {'id': 'cp', 'name': 'Cliente Paralelo', 'login': 'cli.par', 'pass': CP2, 'creditLimit': 100, 'pays': ['PIX', 'Boleto 28 dias']}}]})
 check(s == 200 and not r.get('rejected'), 'produto com 1 un. e cliente com limite de R$ 100 gravados: %s' % (r.get('rejected') or r.get('error') or ''))
 cps = [login(tid, 'cliente', 'cli.par', CP2)] + [C(tid) for _ in range(9)]
-for c in cps[1:]: c.req('/api/login', {'role': 'cliente', 'login': 'cli.par', 'password': CP2 + 'N'})
+for c in cps[1:]: c.req('/api/login', {'role': 'cliente', 'login': 'cli.par', 'password': CP2 + 'N7'})
 def manda(k, pid, pay):
     return cps[k].req('/api/sync', {'changes': [{'c': 'orders', 'id': 'par-%s-%d' % (pid, k), 'op': 'put', 'doc': {'items': [{'pid': pid, 'q': 1}], 'mode': 'retirada', 'pay': pay}}]})
 with cf.ThreadPoolExecutor(10) as ex: R = list(ex.map(lambda k: manda(k, 'pu', 'PIX'), range(10)))
