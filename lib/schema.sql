@@ -710,3 +710,56 @@ create table if not exists caixa_pessoa_rel (
 );
 alter table caixa_credi add column if not exists loja_ok_em timestamptz;
 alter table caixa_credi add column if not exists loja_ok_por text;
+
+-- Folha de pagamento (painel gerencial, ao lado do Caixa): pessoas por filial (1 a 3), o que se paga a cada uma no
+-- mês (linha por competência, copiada do cadastro e editável) e os encargos/rescisões da filial no mês.
+-- "por_fora" (combinado à parte) fica dentro de valores e só o dono vê. Quem mais abre a folha: caixa_pessoa_folha.
+create table if not exists folha_func (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  filial int not null check (filial between 1 and 3),
+  nome text not null,
+  cargo text,
+  admissao date,
+  demissao date,
+  ativo boolean not null default true,
+  valores jsonb not null default '{}'::jsonb,
+  obs text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+create table if not exists folha_linha (
+  tenant_id text not null references tenants(id),
+  competencia text not null check (competencia ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  func_id text not null,
+  filial int not null check (filial between 1 and 3),
+  nome text not null,
+  cargo text,
+  valores jsonb not null default '{}'::jsonb,
+  obs text,
+  atualizado_por text,
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, competencia, func_id)
+);
+create index if not exists folha_linha_mes on folha_linha(tenant_id, competencia, filial);
+create table if not exists folha_encargo (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  competencia text not null check (competencia ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  filial int not null check (filial between 1 and 3),
+  tipo text not null check (tipo in ('inss','fgts','irrf','rescisao','ferias','decimo','sindical','medicina','outro')),
+  descricao text,
+  valor numeric(14,2) not null check (valor >= 0),
+  pago_em date,
+  criado_por text,
+  created_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+create index if not exists folha_encargo_mes on folha_encargo(tenant_id, competencia, filial);
+create table if not exists caixa_pessoa_folha (
+  tenant_id text not null,
+  ref_id text not null,
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, ref_id)
+);
