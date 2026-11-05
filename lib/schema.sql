@@ -699,5 +699,12 @@ create table if not exists caixa_loja_pessoa (
   updated_at timestamptz not null default now(),
   primary key (tenant_id, ref_id)
 );
+-- Controle de caixa: o dono liga, por pessoa do financeiro, o botão Relatórios (painel ao vivo do StarIA). Linha = habilitado.
+create table if not exists caixa_pessoa_rel (
+  tenant_id text not null,
+  ref_id text not null,
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, ref_id)
+);
 alter table caixa_credi add column if not exists loja_ok_em timestamptz;
 alter table caixa_credi add column if not exists loja_ok_por text;
