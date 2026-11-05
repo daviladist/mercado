@@ -763,3 +763,15 @@ create table if not exists caixa_pessoa_folha (
   updated_at timestamptz not null default now(),
   primary key (tenant_id, ref_id)
 );
+-- vendas do mês por filial (StarIA, entregue pelo Claude, ou digitada pelo dono): para a folha mostrar quanto ela é
+-- das vendas, sempre comparando com um mês já fechado
+create table if not exists folha_venda (
+  tenant_id text not null references tenants(id),
+  competencia text not null check (competencia ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  filial int not null check (filial between 1 and 3),
+  valor numeric(14,2) not null check (valor >= 0),
+  fonte text,
+  atualizado_por text,
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, competencia, filial)
+);
