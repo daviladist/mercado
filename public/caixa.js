@@ -1132,8 +1132,14 @@
     R.total = r2(R.salario + R.extras + R.ticket + R.beneficios + R.encargos + (mostraPF() ? R.porFora : 0));
     R.anterior = r2(filiais.reduce((a, f) => a + (FS.anterior.porFilial[f] || 0), 0));
     R.provisao = r2((R.salario + R.extras) * PROVISAO);
+    // vendas de um mês fechado (o próprio mês, se já fechou; senão o último fechado), para dizer quanto a folha pesa
+    const vp = (FS.vendas && FS.vendas.porFilial) || {};
+    R.temVendas = filiais.every(f => vp[f] != null);
+    R.vendas = r2(filiais.reduce((a, f) => a + (Number(vp[f]) || 0), 0));
+    R.pct = R.temVendas && R.vendas > 0 ? R.total / R.vendas * 100 : null;
     return R;
   }
+  const pctTxt = n => n == null ? '—' : n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
   const kv = (t, v, cls) => `<div class="kv${cls ? ' ' + cls : ''}"><span>${t}</span><b>${money(v)}</b></div>`;
   function blocoResumo(R, titulo) {
     const varia = FS.anterior.temDados && R.anterior ? r2(R.total - R.anterior) : null;
@@ -1147,6 +1153,8 @@
         ${kv('Total do mês', R.total, 'tot')}
         ${R.pessoas ? kv('Custo médio por pessoa', r2(R.total / R.pessoas)) : ''}
       </div>
+      ${R.temVendas ? `<div class="kv tot"><span>Folha sobre as vendas de ${esc(MESES[+FS.vendas.mes.slice(5, 7) - 1])} <span class="small muted">(vendas ${money(R.vendas)})</span></span><b>${pctTxt(R.pct)}</b></div>`
+        : `<p class="small muted noprint">As vendas de ${esc(mesTxt(FS.vendas.mes))} ainda não vieram do StarIA. Peça no chat do Claude: “vendas da folha”.${isAdmin() ? ' <button type="button" class="lnk" data-fvendas="1" style="min-height:0;padding:0">Ou digite aqui</button>' : ''}</p>`}
       ${varia != null ? `<p class="small muted">Em ${esc(mesTxt(FS.anterior.mes))}: ${money(R.anterior)} (${varia === 0 ? 'igual' : (varia > 0 ? '<b class="neg">subiu ' : '<b class="pos">caiu ') + money(Math.abs(varia)) + '</b>'}).</p>` : ''}
       ${R.provisao ? `<p class="small muted">Para não ser pego de surpresa no 13º e nas férias, guarde por mês cerca de <b>${money(R.provisao)}</b> (19,44% dos salários e extras, sem os encargos em cima). Não entra no total.</p>` : ''}
     </section>`;
@@ -1181,8 +1189,8 @@
   function htmlGeral() {
     const Rs = [1, 2, 3].map(f => resumoFolha([f])), G = resumoFolha([1, 2, 3]);
     const pf = mostraPF();
-    const col = R => [R.pessoas, money(r2(R.salario + R.extras)), money(r2(R.ticket + R.beneficios)), money(R.encargos)].concat(pf ? [money(R.porFora)] : []).concat([money(R.total)]);
-    const cab = ['Pessoas', 'Salários e extras', 'Ticket e benefícios', 'Encargos e rescisões'].concat(pf ? ['À parte'] : []).concat(['Total']);
+    const col = R => [R.pessoas, money(r2(R.salario + R.extras)), money(r2(R.ticket + R.beneficios)), money(R.encargos)].concat(pf ? [money(R.porFora)] : []).concat([money(R.total), pctTxt(R.pct)]);
+    const cab = ['Pessoas', 'Salários e extras', 'Ticket e benefícios', 'Encargos e rescisões'].concat(pf ? ['À parte'] : []).concat(['Total', '% das vendas de ' + MESES[+FS.vendas.mes.slice(5, 7) - 1].slice(0, 3)]);
     return `<section class="card"><h2>Comparativo por filial</h2><div class="ftab"><table>
         <thead><tr><th></th>${cab.map(c => `<th class="n">${c}</th>`).join('')}</tr></thead>
         <tbody>${Rs.map((R, i) => `<tr><td>Filial ${i + 1}</td>${col(R).map(c => `<td class="n">${c}</td>`).join('')}</tr>`).join('')}
@@ -1213,6 +1221,7 @@
     document.querySelectorAll('[data-flin]').forEach(b => b.addEventListener('click', () => sheetPessoaFolha(FS.linhas.find(l => l.funcId === b.dataset.flin))));
     document.querySelectorAll('[data-fabrir]').forEach(b => b.addEventListener('click', () => post('/api/caixa/folha/abrir', { mes: folhaMes, filial: Number(b.dataset.fabrir) }, 'Pessoas incluídas no mês')));
     document.querySelectorAll('[data-freligar]').forEach(b => b.addEventListener('click', () => post('/api/caixa/folha/situacao', { funcId: b.dataset.freligar, ativo: true }, 'Pessoa ativa de novo')));
+    document.querySelectorAll('[data-fvendas]').forEach(b => b.addEventListener('click', sheetVendas));
     document.querySelectorAll('[data-fenc]').forEach(b => b.addEventListener('click', () => sheetEncargo(null, Number(b.dataset.fenc))));
     document.querySelectorAll('[data-fencid]').forEach(b => b.addEventListener('click', () => sheetEncargo(FS.encargos.find(e => e.id === b.dataset.fencid))));
   }
@@ -1265,6 +1274,19 @@
         if (await perguntar('Tirar ' + l.nome + ' de ' + mesTxt(folhaMes) + '?', 'Ela continua no cadastro e volta quando você incluir de novo.', 'Tirar deste mês')) post('/api/caixa/folha/linha/tirar', { mes: folhaMes, funcId: l.funcId }, 'Tirada deste mês');
       });
       if ($('#fpDeslig')) $('#fpDeslig').addEventListener('click', () => sheetDesligar(l));
+    });
+  }
+  function sheetVendas() {
+    const vm = FS.vendas.mes, vp = FS.vendas.porFilial || {};
+    openSheet(`<div class="tt"><h2>Vendas de ${esc(mesTxt(vm))}</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      <p class="muted small">Total vendido por filial no mês (igual ao StarIA). Serve para mostrar quanto a folha pesa nas vendas.</p>
+      <form id="fvd"><div class="fgrid">${[1, 2, 3].map(f => campo('vd' + f, 'Filial ' + f, vp[f])).join('')}</div>
+        <button class="btn pri lg full" type="submit" style="margin-top:12px">Salvar</button></form>`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      $('#fvd').addEventListener('submit', e => {
+        e.preventDefault(); const pf = {}; [1, 2, 3].forEach(f => { const v = $('#vd' + f).value; if (v !== '') pf[f] = v; });
+        post('/api/caixa/folha/vendas', { mes: vm, porFilial: pf, fonte: 'digitado' }, 'Vendas salvas');
+      });
     });
   }
   function sheetDesligar(l) {

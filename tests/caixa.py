@@ -596,6 +596,20 @@ s, fs = A.req('/api/caixa/folha?mes=2026-12'); check(fs['linhas'] == [] and any(
 s, _ = A.req('/api/caixa/folha/encargo/excluir', {'id': ENC}); check(s == 200, 'apaga a rescisão')
 s, _ = A.req('/api/caixa/folha?mes=2026-11', tenant=TX); check(s == 401, 'sessão do dono não vale na folha de outra empresa')
 
+print('== folha: vendas do último mês fechado (StarIA) para a % da folha')
+import datetime
+_hoje = (datetime.datetime.utcnow() - datetime.timedelta(hours=3)).date().replace(day=1)
+FECH = (_hoje - datetime.timedelta(days=1)).strftime('%Y-%m'); ATUAL = _hoje.strftime('%Y-%m')
+s, fs = A.req('/api/caixa/folha?mes=' + ATUAL); check(s == 200 and fs['vendas']['mes'] == FECH and fs['vendas']['temDados'] is False, 'folha do mês corrente compara com as vendas do último mês fechado')
+s, fs = A.req('/api/caixa/folha?mes=2026-01'); check(fs['vendas']['mes'] == '2026-01', 'mês que já fechou compara com as vendas dele mesmo')
+s, _ = A.req('/api/caixa/folha/vendas', {'mes': ATUAL, 'porFilial': {'1': 1000}}); check(s == 400, 'vendas de mês ainda aberto recusadas')
+s, _ = A.req('/api/caixa/folha/vendas', {'mes': FECH, 'porFilial': {'4': 1000}}); check(s == 400, 'filial 4 recusada nas vendas')
+s, _ = A.req('/api/caixa/folha/vendas', {'mes': FECH, 'porFilial': {'1': '565.983,96', '2': 973597.32, '3': 137367.89}, 'fonte': 'StarIA'}); check(s == 200, 'dono (ou o Claude, pelo navegador dele) grava as vendas do mês fechado por filial')
+s, fs = A.req('/api/caixa/folha?mes=' + ATUAL); check(fs['vendas']['porFilial'] == {'1': 565983.96, '2': 973597.32, '3': 137367.89} and fs['vendas']['fonte'] == 'StarIA', 'a folha recebe as vendas por filial')
+s, _ = A.req('/api/caixa/pessoa', {'login': 'financeiro1', 'nome': 'Fulano do financeiro', 'papel': 'financeiro', 'ativo': True, 'folha': True})
+s, _ = F.req('/api/caixa/folha/vendas', {'mes': FECH, 'porFilial': {'1': 1}}); check(s == 403, 'financeiro liberado na folha não grava vendas (só o dono)')
+s, fs = F.req('/api/caixa/folha?mes=' + ATUAL); check(s == 200 and fs['vendas']['porFilial']['1'] == 565983.96, 'mas vê as vendas para a %')
+
 print(f'\n{ok} OK, {len(fails)} falha(s)')
 if fails:
     print('\nFALHAS:')
