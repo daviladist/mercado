@@ -851,7 +851,7 @@
       <h1>Acessos</h1>
       <p class="muted small">Quem pode entrar neste controle de caixa. Ninguém vê custo ou margem (não existe nada disso aqui), e ninguém apaga ou cancela nada — isso é só pelo seu usuário.</p>
       ${S.pessoas.length ? `<div class="list">${S.pessoas.map(p => `<div class="it">
-          <div class="ic">${p.papel === 'financeiro' ? '✅' : p.papel === 'automacao' ? '🤖' : p.papel === 'loja' ? '🏪' : '👤'}</div><div class="tx"><b>${esc(p.nome)}</b><span>${esc(p.login)} · ${papelLabel(p.papel, p.filial)}${p.ativo ? '' : ' · inativo'}${p.trocarSenha ? ' · ainda não trocou a senha provisória' : ''}</span></div>
+          <div class="ic">${p.papel === 'financeiro' ? '✅' : p.papel === 'automacao' ? '🤖' : p.papel === 'loja' ? '🏪' : '👤'}</div><div class="tx"><b>${esc(p.nome)}</b><span>${esc(p.login)} · ${papelLabel(p.papel, p.filial)}${p.relatorios ? ' · abre os Relatórios' : ''}${p.ativo ? '' : ' · inativo'}${p.trocarSenha ? ' · ainda não trocou a senha provisória' : ''}</span></div>
           <div class="vl"><button class="btn sm" type="button" data-editp="${esc(p.login)}">Editar</button></div>
         </div>`).join('')}</div>` : '<p class="muted">Nenhum acesso criado ainda.</p>'}
       <div class="row"><button class="btn pri" type="button" id="btnNovaCaixista">+ Nova pessoa do caixa</button><button class="btn pri" type="button" id="btnNovoFinanceiro">+ Novo acesso do financeiro</button></div>
@@ -888,6 +888,7 @@
         ${auto ? `<div class="field"><label for="pSenha">${p ? 'Nova senha (deixe em branco para manter a atual)' : 'Senha'}</label>
             <input type="text" id="pSenha" autocapitalize="off" spellcheck="false" minlength="12" ${p ? '' : 'required'}></div>
           <p class="small muted">Pelo menos 12 caracteres, com letras e números.</p>` : ''}
+        ${papel === 'financeiro' ? `<label class="row"><input type="checkbox" id="pRel" ${p && p.relatorios ? 'checked' : ''}> Pode abrir os Relatórios (painel ao vivo do StarIA)</label>` : ''}
         ${p ? `<label class="row"><input type="checkbox" id="pAtivo" ${p.ativo ? 'checked' : ''}> Acesso ativo</label>
           ${auto ? '' : '<label class="row"><input type="checkbox" id="pNova"> Gerar nova senha provisória</label>'}` : ''}
         <button class="btn pri full" type="submit">${p ? 'Salvar' : 'Criar acesso'}</button>
@@ -899,6 +900,7 @@
           const body = { login: $('#pLogin').value.trim().toLowerCase(), nome: $('#pNome').value, papel, ativo: p ? $('#pAtivo').checked : true };
           if (auto) { if ($('#pSenha').value) body.senha = $('#pSenha').value; } else body.novaSenha = p ? $('#pNova').checked : true;
           if (loja) body.filial = Number($('#pFilial').value);
+          if (papel === 'financeiro') body.relatorios = $('#pRel').checked;
           const r = await api('/api/caixa/pessoa', body);
           await reload();
           if (r.password) $('#pOutS').innerHTML = `<div class="note" style="display:grid;gap:6px"><b>Anote agora: esta senha aparece só uma vez.</b>
@@ -1078,8 +1080,8 @@
       return;
     }
     $('#bn').hidden = false; $('#sair').hidden = false; $('#atualizar').hidden = false; $('#mods').hidden = false;
-    // Relatórios ao vivo do StarIA: painel no Claude do dono, só para o administrador da Dávila Supermercados
-    if ($('#modRel')) $('#modRel').hidden = !(isAdmin() && slug === 'fundo-de-caixa');
+    // Relatórios ao vivo do StarIA: painel no Claude do dono, para o administrador da Dávila Supermercados e para o financeiro que o dono habilitar
+    if ($('#modRel')) $('#modRel').hidden = !((isAdmin() || (S && S.me.role === 'financeiro' && S.me.relatorios)) && slug === 'fundo-de-caixa');
     if (view === 'sangria') { view = 'inicio'; setTimeout(sheetSangria, 0); }
     $('#navMais').hidden = !isAdmin();
     const aba = SUB_MAIS.includes(view) ? 'mais' : view;
