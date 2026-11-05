@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><script src="/firme.js"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><script src="/firme.js"></script><script src="/tema.js"></script>
 <meta name="theme-color" content="#1F3D2B">
 <link rel="manifest" href="/cliente.webmanifest">
 <link rel="apple-touch-icon" href="/icons/tino-180.png">
@@ -113,6 +113,22 @@ main{padding-bottom:110px;gap:12px}
   :root:not([data-theme="light"]) .bar.gratis .tr{background:rgba(255,255,255,.12)}
   :root:not([data-theme="light"]) a.btn{color:var(--ink)}:root:not([data-theme="light"]) a.btn.pri{color:#fff}
 }
+/* escolha manual: escuro */
+  :root[data-theme="dark"]{--cream:#141915;--surface:#1E2520;--surface-2:#242D27;--line:#2F3A32;--line-2:#28322B;--input:#46524A;--muted:#A3B0A6;--ink:#EDE8DC;--gold-soft:#3A2D10;--green:#5BC77C;--green-bg:#1C2F22;--red:#F28B82;--red-bg:#3B1F1C;--brand-text:color-mix(in srgb,var(--brand) 45%,#fff)}
+  :root[data-theme="dark"] .tino b{color:var(--brand-text)}
+  :root[data-theme="dark"] .qty input{background:var(--surface);color:var(--ink)}:root[data-theme="dark"] .toast{color:var(--cream)}:root[data-theme="dark"] .toast.err{color:#fff}
+  :root[data-theme="dark"] body{background:var(--cream)}
+  :root[data-theme="dark"] .btn,:root[data-theme="dark"] .chip,:root[data-theme="dark"] .qty,:root[data-theme="dark"] .qty button,:root[data-theme="dark"] .sheet .x,:root[data-theme="dark"] .k,:root[data-theme="dark"] .it .ic,
+  :root[data-theme="dark"] input[type=text],:root[data-theme="dark"] input[type=tel],:root[data-theme="dark"] input[inputmode],:root[data-theme="dark"] select,:root[data-theme="dark"] textarea{background:var(--surface);color:var(--ink)}
+  :root[data-theme="dark"] .btn.pri{background:var(--brand);color:#fff}:root[data-theme="dark"] .chip[aria-pressed=true]{background:var(--brand);color:#fff}
+  :root[data-theme="dark"] .field>label,:root[data-theme="dark"] .lbl{color:var(--muted)}
+  :root[data-theme="dark"] .note{color:#F3D79A}:root[data-theme="dark"] .hero .cond span{background:var(--cream);color:var(--ink)}:root[data-theme="dark"] .aband,:root[data-theme="dark"] .selos span{color:#F3D79A}:root[data-theme="dark"] .aband b{color:#F3D79A}
+  :root[data-theme="dark"] .hero .cond .nota{color:#F3D79A}
+  :root[data-theme="dark"] .pc{box-shadow:none}
+  :root[data-theme="dark"] .cartbar{background:linear-gradient(transparent,rgba(20,25,21,.95) 30%)}
+  :root[data-theme="dark"] .pc .im img,:root[data-theme="dark"] .gal img{filter:brightness(.9)}
+  :root[data-theme="dark"] .bar.gratis .tr{background:rgba(255,255,255,.12)}
+  :root[data-theme="dark"] a.btn{color:var(--ink)}:root[data-theme="dark"] a.btn.pri{color:#fff}
 </style>
 <link rel="stylesheet" href="/design.css">
 </head><body>
