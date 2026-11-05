@@ -610,6 +610,53 @@ s, _ = A.req('/api/caixa/pessoa', {'login': 'financeiro1', 'nome': 'Fulano do fi
 s, _ = F.req('/api/caixa/folha/vendas', {'mes': FECH, 'porFilial': {'1': 1}}); check(s == 403, 'financeiro liberado na folha não grava vendas (só o dono)')
 s, fs = F.req('/api/caixa/folha?mes=' + ATUAL); check(s == 200 and fs['vendas']['porFilial']['1'] == 565983.96, 'mas vê as vendas para a %')
 
+print('== DRE: só o dono; StarIA, despesas avulsas, sangrias com categoria')
+import hmac, hashlib
+s, _ = F.req('/api/caixa/dre?mes=' + FECH); check(s == 403, 'financeiro não abre o DRE (nem com a folha liberada)')
+s, d = A.req('/api/caixa/dre?mes=' + FECH); check(s == 200 and d['staria'] == {} and 'combustivel' in d['cats'], 'dono abre o DRE do mês fechado, ainda sem StarIA')
+s, _ = A.req('/api/caixa/dre/staria', {'mes': FECH, 'porFilial': {'5': {'vendas': 1}}}); check(s == 400, 'filial 5 recusada')
+s, _ = A.req('/api/caixa/dre/staria', {'mes': FECH, 'porFilial': {'1': {'vendas': 565983.96, 'impostos': 44051.25, 'cmv': 379814.33, 'contas': {'PAGAMENTO DE MERCADORIAS': 300000, 'ENERGIA': 2500.5, 'FGTS': 900}}, '4': {'vendas': 28372.65, 'impostos': 4608.87, 'cmv': 17021.08}}})
+check(s == 200, 'Claude grava os números do StarIA (filial 1 com contas a pagar, filial 4 só vendas)')
+s, d = A.req('/api/caixa/dre?mes=' + FECH); check(d['staria']['1']['contas']['ENERGIA'] == 2500.5 and d['staria']['4']['vendas'] == 28372.65, 'DRE recebe vendas, impostos, custo e contas por centro')
+s, fs = A.req('/api/caixa/folha?mes=' + ATUAL); check(fs['vendas']['porFilial']['1'] == 565983.96, 'as vendas vão também para a % da Folha')
+s, _ = A.req('/api/caixa/dre/despesa', {'valor': '400', 'data': FECH + '-10', 'categoria': 'nada'}); check(s == 400, 'categoria inválida recusada')
+s, _ = A.req('/api/caixa/dre/despesa', {'valor': '400', 'data': '2099-01-01', 'categoria': 'combustivel'}); check(s == 400, 'despesa no futuro recusada')
+s, r = A.req('/api/caixa/dre/despesa', {'valor': '400,00', 'data': FECH + '-10', 'categoria': 'combustivel', 'filial': 1, 'descricao': 'diesel do caminhão'}); DD = r.get('id'); check(s == 200 and DD, 'dono lança despesa avulsa na tela')
+s, d = A.req('/api/caixa/dre?mes=' + FECH); check(any(x['id'] == DD and x['valor'] == 400 and x['origem'] == 'tela' for x in d['despesas']), 'despesa aparece no DRE do mês')
+s, r = A.req('/api/caixa/sangria', {'valor': '50', 'data': ATUAL + '-01', 'motivo': 'Outro: TOMATES'}); SGX = r.get('id'); check(s == 200 and SGX, 'sangria do cofre para comprar tomate')
+s, _ = A.req('/api/caixa/dre/sangria', {'movId': SGX, 'categoria': 'mercadoria', 'filial': 2}); check(s == 200, 'dono dá categoria para uma sangria')
+s, _ = A.req('/api/caixa/dre/sangria', {'movId': 'naoexiste', 'categoria': 'mercadoria'}); check(s == 404, 'sangria inexistente recusada')
+s, _ = A.req('/api/caixa/dre/sangria', {'movId': SGX, 'categoria': 'ignorar'}); check(s == 200, 'ou marca que não é despesa')
+s, _ = A.req('/api/caixa/dre/despesa/excluir', {'id': DD}); check(s == 200, 'apaga a despesa')
+
+print('== robô do WhatsApp: só números cadastrados, assinatura da Meta, sem repetir')
+s, _ = A.req('/api/caixa/dre/remetente', {'telefone': '123', 'nome': 'Éder'}); check(s == 400, 'telefone inválido recusado')
+s, _ = A.req('/api/caixa/dre/remetente', {'telefone': '(27) 99999-1234', 'nome': 'Éder', 'filial': 1}); check(s == 200, 'cadastra o Éder (filial 1 por padrão)')
+s, d = A.req('/api/caixa/dre?mes=' + ATUAL); check(any(r['telefone'] == '5527999991234' for r in d['remetentes']), 'número guardado com o 55')
+WS = os.environ.get('WA_APP_SECRET')
+def wa(de, texto, mid, sign=True):
+    body = json.dumps({'entry': [{'changes': [{'value': {'messages': [{'id': mid, 'from': de, 'type': 'text', 'text': {'body': texto}}]}}]}]}).encode()
+    h = {'Content-Type': 'application/json'}
+    if sign: h['X-Hub-Signature-256'] = 'sha256=' + hmac.new(WS.encode(), body, hashlib.sha256).hexdigest()
+    r = urllib.request.Request(BASE + '/api/wa/webhook', data=body, headers=h, method='POST')
+    try:
+        with urllib.request.urlopen(r) as x: return x.status
+    except urllib.error.HTTPError as e: return e.code
+if WS:
+    s = wa('5527999991234', 'Éder pôs R$ 400 de diesel no caminhão', 'wamid.1', sign=False); check(s == 401, 'aviso sem assinatura da Meta é recusado')
+    s = wa('552799991234', 'Éder pôs R$ 400 de diesel no caminhão', 'wamid.1'); check(s == 200, 'mensagem assinada chega (número sem o 9, como o WhatsApp às vezes manda)')
+    s = wa('552799991234', 'Éder pôs R$ 400 de diesel no caminhão', 'wamid.1'); check(s == 200, 'a Meta repetindo o mesmo aviso não duplica')
+    s = wa('5511988887777', 'gasolina 200', 'wamid.2'); check(s == 200, 'número não cadastrado: aceita o aviso e ignora')
+    s = wa('5527999991234', 'conserto do freezer filial 2 R$ 350', 'wamid.3'); check(s == 200, 'segunda despesa, na filial 2')
+    s, d = A.req('/api/caixa/dre?mes=' + ATUAL); w = [x for x in d['despesas'] if x['origem'] == 'whatsapp']
+    check(len(w) == 2 and any(x['valor'] == 400 and x['categoria'] == 'combustivel' and x['filial'] == 1 and x['criadoPor'] == 'Éder' for x in w), 'diesel R$ 400 virou Combustível, filial 1, com o nome do Éder (uma vez só)')
+    check(any(x['valor'] == 350 and x['categoria'] == 'loja' and x['filial'] == 2 for x in w), 'conserto do freezer virou Manutenção da loja, filial 2')
+    s = wa('5527999991234', 'apagar', 'wamid.4'); s, d = A.req('/api/caixa/dre?mes=' + ATUAL)
+    check(len([x for x in d['despesas'] if x['origem'] == 'whatsapp']) == 1, '"apagar" desfaz a última que ele mandou')
+    s, _ = A.req('/api/caixa/dre/remetente', {'telefone': '5527999991234', 'nome': 'Éder', 'filial': 1, 'ativo': False})
+    s = wa('5527999991234', 'diesel 100', 'wamid.5'); s, d = A.req('/api/caixa/dre?mes=' + ATUAL)
+    check(len([x for x in d['despesas'] if x['origem'] == 'whatsapp']) == 1, 'número desligado não lança mais')
+
 print(f'\n{ok} OK, {len(fails)} falha(s)')
 if fails:
     print('\nFALHAS:')

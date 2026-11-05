@@ -775,3 +775,61 @@ create table if not exists folha_venda (
   updated_at timestamptz not null default now(),
   primary key (tenant_id, competencia, filial)
 );
+-- DRE (painel gerencial, aba ao lado da Folha). Números do StarIA de um mês por filial (vendas, impostos, custo
+-- das mercadorias e contas a pagar por centro de custo), entregues pelo Claude; despesas avulsas (WhatsApp ou
+-- tela) e a categoria de cada sangria do cofre. Filial 1 a 4 (a 4 tem vendas, não tem folha).
+create table if not exists dre_staria (
+  tenant_id text not null references tenants(id),
+  competencia text not null check (competencia ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  filial int not null check (filial between 1 and 4),
+  vendas numeric(14,2) not null default 0,
+  impostos numeric(14,2) not null default 0,
+  cmv numeric(14,2) not null default 0,
+  contas jsonb not null default '{}'::jsonb,
+  atualizado_por text,
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, competencia, filial)
+);
+create table if not exists dre_despesa (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  data date not null,
+  competencia text not null check (competencia ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  filial int check (filial is null or filial between 1 and 4),
+  categoria text not null,
+  descricao text,
+  valor numeric(14,2) not null check (valor > 0),
+  origem text not null default 'tela' check (origem in ('tela','whatsapp')),
+  telefone text,
+  wa_msg_id text,
+  criado_por text,
+  created_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+create index if not exists dre_despesa_mes on dre_despesa(tenant_id, competencia);
+create unique index if not exists dre_despesa_wa on dre_despesa(tenant_id, wa_msg_id) where wa_msg_id is not null;
+create table if not exists dre_sangria (
+  tenant_id text not null,
+  mov_id text not null,
+  categoria text not null,
+  filial int check (filial is null or filial between 1 and 4),
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, mov_id)
+);
+create table if not exists wa_remetente (
+  tenant_id text not null references tenants(id),
+  telefone text not null check (telefone ~ '^[0-9]{10,15}$'),
+  nome text not null,
+  filial int check (filial is null or filial between 1 and 4),
+  ativo boolean not null default true,
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, telefone)
+);
+create table if not exists wa_msg (
+  id text primary key,
+  tenant_id text,
+  telefone text,
+  texto text,
+  resultado text,
+  created_at timestamptz not null default now()
+);

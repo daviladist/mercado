@@ -25,7 +25,7 @@
   }
   function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, err ? 5200 : 2800); }
   function fail(e) { if (e.status === 401 || e.login) return showLogin('Entre de novo.'); if (e.mustReset) return showReset(); toast(e.message, true); }
-  async function reload() { S = await api('/api/caixa/state'); applyBrand(); if (modulo === 'folha' && podeFolha()) await carregaFolha(); }
+  async function reload() { S = await api('/api/caixa/state'); applyBrand(); if (modulo === 'folha' && podeFolha()) await carregaFolha(); if (modulo === 'dre' && isAdmin()) await carregaDre(); }
   async function post(path, body, okMsg) {
     try { const r = await api(path, body); await reload(); if (okMsg) toast(okMsg); closeSheet(); render(); return r; }
     catch (e) { fail(e); return null; }
@@ -1325,6 +1325,165 @@
   $('#modCaixa').addEventListener('click', () => irModulo('caixa'));
   $('#modFolha').addEventListener('click', () => irModulo('folha'));
 
+  /* ---------- DRE (só o dono): StarIA + Folha + despesas avulsas (WhatsApp/tela) + sangrias com categoria ----------
+     O servidor manda as partes (lib/dre.js); aqui viram as linhas do DRE, por filial (1 a 4) e no geral. */
+  const semAc = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+  // centros de custo do StarIA que NÃO entram como despesa do mês: compra de mercadoria (já está no custo das
+  // mercadorias vendidas) e o ICMS das vendas (já está nos impostos); os de pessoal só entram se a folha do mês
+  // estiver vazia (senão contaria duas vezes); investimento fica abaixo do resultado
+  const CENTRO_FORA = [/^PAGAMENTO DE MERCADORIAS$/, /^ICMS COMERCIO$/, /^\(-\) ICMS/, /^ICMS$/];
+  const CENTRO_PESSOAL = [/^FGTS$/, /^INSS$/, /^PLANO DE SAUDE$/, /^PLANO ODONTOLOGICO$/, /^SEGURO FUNCIONARIOS$/, /^CONTRIBUICAO SINDICAL$/, /SALARIO/, /^FERIAS/, /RESCIS/, /^13/, /DECIMO/, /^VALE TRANSPORTE/, /^TICKET/, /VALE ALIMENTACAO/];
+  const CENTRO_INVEST = [/^IMOBILIZADO$/, /^MAQUINAS E EQUIPAMENTOS$/, /^MAQUINAS E INSTALACOES$/];
+  const tipoCentro = c => { const n = semAc(c); return CENTRO_FORA.some(r => r.test(n)) ? 'fora' : CENTRO_PESSOAL.some(r => r.test(n)) ? 'pessoal' : CENTRO_INVEST.some(r => r.test(n)) ? 'invest' : 'desp'; };
+  const nomeCentro = c => { const s = String(c || '').toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); };
+  const mesFechado = () => mesMais(hoje().slice(0, 7), -1);
+  let DS = null, dreMes = mesFechado(), dreAba = 'geral';
+  async function carregaDre() { DS = await api('/api/caixa/dre?mes=' + encodeURIComponent(dreMes)); }
+  function calcDre(filiais, geral) {
+    const R = { receita: 0, impostos: 0, cmv: 0, pessoal: 0, pessoalDe: [], desp: {}, despTot: 0, av: {}, avTot: 0, sg: {}, sgTot: 0, invest: 0, falta: [], semCat: 0 };
+    const add = (o, k, v) => { o[k] = r2((o[k] || 0) + v); };
+    for (const f of filiais) {
+      const s = DS.staria[f], fo = DS.folha[f];
+      if (!s) { R.falta.push(f); } else { R.receita += s.vendas; R.impostos += s.impostos; R.cmv += s.cmv; }
+      const temFolha = fo && (fo.qtd > 0 || fo.encargos > 0);
+      if (temFolha) { R.pessoal += fo.pessoas + fo.encargos + (verPF ? fo.porFora : 0); R.pessoalDe.push('folha ' + f); }
+      for (const [c, v] of Object.entries((s && s.contas) || {})) {
+        const t = tipoCentro(c);
+        if (t === 'fora') continue;
+        if (t === 'pessoal') { if (!temFolha) { R.pessoal += v; if (!R.pessoalDe.includes('StarIA ' + f)) R.pessoalDe.push('StarIA ' + f); } continue; }
+        if (t === 'invest') { R.invest += v; continue; }
+        add(R.desp, nomeCentro(c), v); R.despTot += v;
+      }
+    }
+    const naFilial = x => geral ? true : filiais.includes(x.filial);
+    for (const d of DS.despesas) if (naFilial(d)) { add(R.av, d.categoria, d.valor); R.avTot += d.valor; }
+    for (const s of DS.sangrias) {
+      if (!s.categoria) { if (geral) R.semCat += s.valor; continue; }
+      if (s.categoria === 'ignorar' || !naFilial(s)) continue;
+      add(R.sg, s.categoria, s.valor); R.sgTot += s.valor;
+    }
+    ['receita', 'impostos', 'cmv', 'pessoal', 'despTot', 'avTot', 'sgTot', 'invest', 'semCat'].forEach(k => { R[k] = r2(R[k]); });
+    R.recLiq = r2(R.receita - R.impostos); R.bruto = r2(R.recLiq - R.cmv);
+    R.resultado = r2(R.bruto - R.pessoal - R.despTot - R.avTot - R.sgTot);
+    return R;
+  }
+  function htmlDre(filiais, geral, interativo) {
+    const R = calcDre(filiais, geral);
+    const pc = v => R.receita > 0 ? pctTxt(v / R.receita * 100) : '';
+    const ln = (t, v, o) => `<div class="kv${o && o.tot ? ' tot' : ''}"${o && o.forte ? ' style="font-weight:700"' : ''}><span>${t}</span><b>${v < 0 ? '−' + money(-v) : money(v)} <span class="small muted" style="font-weight:500;display:inline-block;min-width:44px;text-align:right">${o && o.semPct ? '' : pc(Math.abs(v))}</span></b></div>`;
+    const det = (titulo, total, obj, nomes) => {
+      const ks = Object.keys(obj).sort((a, b) => obj[b] - obj[a]);
+      if (!ks.length) return ln(titulo, -total);
+      return `<details class="dred"><summary>${ln(titulo, -total)}</summary><div style="padding-left:12px;border-left:3px solid var(--line-2)">${ks.map(k => `<div class="kv small"><span>${esc(nomes ? (nomes[k] || k) : k)}</span><b>${money(obj[k])}</b></div>`).join('')}</div></details>`;
+    };
+    const nomeF = filiais.length > 1 ? 'Geral' : 'Filial ' + filiais[0];
+    const avs = DS.despesas.filter(d => geral || filiais.includes(d.filial));
+    return `${R.falta.length ? `<div class="note noprint">${R.falta.length === filiais.length ? 'Os números do StarIA de ' + esc(mesTxt(dreMes)) + ' ainda não vieram.' : 'Faltam os números do StarIA da filial ' + R.falta.join(', ') + '.'} Peça no chat do Claude: “DRE de ${esc(mesTxt(dreMes))}”.</div>` : ''}
+      <section class="card"><h2>DRE · ${nomeF} · ${esc(mesTxt(dreMes))}</h2><div>
+        ${ln('Receita bruta (vendas)', R.receita, { forte: 1 })}
+        ${ln('(−) Impostos sobre as vendas', -R.impostos)}
+        ${ln('= Receita líquida', R.recLiq, { forte: 1 })}
+        ${ln('(−) Custo das mercadorias vendidas', -R.cmv)}
+        ${ln('= Lucro bruto', R.bruto, { tot: 1 })}
+        ${ln('(−) Pessoal' + (R.pessoalDe.length ? ' <span class="small muted">(' + esc(R.pessoalDe.join(', ')) + ')</span>' : ''), -R.pessoal)}
+        ${det('(−) Despesas do StarIA (contas a pagar)', R.despTot, R.desp)}
+        ${det('(−) Despesas avulsas (WhatsApp e app)', R.avTot, R.av, DS.cats)}
+        ${det('(−) Sangrias do cofre com categoria', R.sgTot, R.sg, DS.cats)}
+        ${ln('= Resultado do mês', R.resultado, { tot: 1 })}
+      </div>
+      ${R.invest ? `<p class="small muted">Fora do resultado: ${money(R.invest)} em investimento (imobilizado, máquinas e instalações).</p>` : ''}
+      ${R.semCat ? `<p class="small neg noprint"><b>${money(R.semCat)} em sangrias sem categoria</b> ficaram fora do DRE. Classifique na lista de sangrias abaixo.</p>` : ''}
+      <p class="small muted">Despesas do StarIA pelo vencimento no mês. Compra de mercadoria não entra (já está no custo das mercadorias vendidas) e o ICMS das vendas já está nos impostos.${R.pessoalDe.some(x => x.startsWith('folha')) ? ' FGTS, INSS e planos do StarIA não entram onde a Folha do mês já está preenchida, para não contar duas vezes.' : ''}</p>
+      </section>
+      <section class="card"><div class="sec"><h2>Despesas avulsas${geral ? '' : ' da filial ' + filiais[0]}</h2>${interativo ? `<button class="lnk noprint" type="button" data-dnova="${geral ? '' : filiais[0]}">+ Despesa</button>` : ''}</div>
+        ${avs.length ? `<div class="list">${avs.map(d => `<${interativo ? 'button type="button"' : 'div'} class="it" data-desp="${esc(d.id)}"><div class="tx"><b>${esc(DS.cats[d.categoria] || d.categoria)}</b><span>${dBR(d.data)} · ${d.filial ? 'filial ' + d.filial : 'sem filial'} · ${d.origem === 'whatsapp' ? '💬 ' : ''}${esc(d.criadoPor || '')}${d.descricao ? ' · ' + esc(d.descricao) : ''}</span></div><div class="vl">${money(d.valor)}</div>${interativo ? `<span class="ch">${ic('chev')}</span>` : ''}</${interativo ? 'button' : 'div'}>`).join('')}</div>`
+          : '<p class="muted small">Nada lançado. Pelo WhatsApp ou aqui: combustível, conserto, frete, diária…</p>'}
+      </section>`;
+  }
+  function htmlSangrias() {
+    const L = DS.sangrias;
+    return `<section class="card"><h2>Sangrias do cofre em ${esc(mesTxt(dreMes))}</h2>
+      <p class="small muted">Diga o que é cada uma. Depósito no banco, salário que já está na Folha ou dinheiro que voltou não é despesa.</p>
+      ${L.length ? `<div class="list">${L.map(s => `<button type="button" class="it" data-dsg="${esc(s.id)}"><div class="tx"><b>${esc(s.motivo || 'Sangria')}</b><span>${dBR(s.data)} · ${s.categoria ? (s.categoria === 'ignorar' ? 'não é despesa' : esc(DS.cats[s.categoria]) + (s.filial ? ' · filial ' + s.filial : '')) : '<b class="neg">sem categoria</b>'}</span></div><div class="vl">${money(s.valor)}</div><span class="ch">${ic('chev')}</span></button>`).join('')}</div>` : '<p class="muted small">Nenhuma sangria neste mês.</p>'}
+    </section>`;
+  }
+  function htmlRemetentes() {
+    const L = DS.remetentes;
+    return `<section class="card noprint"><div class="sec"><h2>Quem manda despesa pelo WhatsApp</h2><button class="lnk" type="button" id="dRemNovo">+ Número</button></div>
+      <p class="small muted">${DS.whatsapp ? 'Robô ligado. Só estes números são aceitos; cada despesa fica com o nome de quem mandou.' : 'O robô ainda não está ligado (falta configurar o número na Meta). Já dá para cadastrar os números.'}</p>
+      ${L.length ? `<div class="list">${L.map(r => `<button type="button" class="it" data-drem="${esc(r.telefone)}"><div class="tx"><b>${esc(r.nome)}</b><span>${esc(r.telefone.replace(/^55(\d{2})(\d+)(\d{4})$/, '($1) $2-$3'))} · ${r.filial ? 'filial ' + r.filial + ' por padrão' : 'sem filial padrão'}${r.ativo ? '' : ' · desligado'}</span></div><span class="ch">${ic('chev')}</span></button>`).join('')}</div>` : ''}
+    </section>`;
+  }
+  function renderDre() {
+    if (!DS || DS.mes !== dreMes) { $('#main').innerHTML = '<div class="card sk" aria-busy="true"><i class="t"></i><i class="b"></i></div>'; carregaDre().then(render, fail); return; }
+    const abas = [['1', 'Filial 1'], ['2', 'Filial 2'], ['3', 'Filial 3'], ['4', 'Filial 4'], ['geral', 'Geral']];
+    const geral = dreAba === 'geral', fil = geral ? [1, 2, 3, 4] : [Number(dreAba)];
+    $('#main').innerHTML = `<div class="pagehd"><h1>DRE</h1><p class="printonly">${esc(brand.name || '')} · impresso em ${dtBR(new Date())}</p></div>
+      <section class="card noprint" style="gap:10px">
+        <div class="mesnav"><button class="btn sm" type="button" id="dMesAnt" aria-label="Mês anterior">${ic('back')}</button><b>${esc(mesTxt(dreMes).replace(/^./, c => c.toUpperCase()))}</b><button class="btn sm" type="button" id="dMesProx" aria-label="Próximo mês" ${dreMes >= hoje().slice(0, 7) ? 'disabled' : ''}>${ic('chev')}</button></div>
+        <div class="seg" role="tablist" style="grid-template-columns:repeat(5,1fr)">${abas.map(([k, t]) => `<button type="button" role="tab" data-daba="${k}" class="${dreAba === k ? 'on' : ''}" aria-selected="${dreAba === k}">${t}</button>`).join('')}</div>
+        <div class="row" style="justify-content:space-between"><label class="row small" style="gap:6px"><input type="checkbox" id="dPF" ${verPF ? 'checked' : ''}> Contar o combinado à parte</label><button class="btn sm" type="button" id="dPrint">Imprimir / PDF</button></div>
+      </section>
+      ${dreMes >= hoje().slice(0, 7) ? '<div class="note noprint">Mês ainda aberto: as vendas e as contas do StarIA só entram depois que o mês fecha. As despesas avulsas já vão aparecendo.</div>' : ''}
+      ${htmlDre(fil, geral, true)}
+      ${geral ? htmlSangrias() + htmlRemetentes() : ''}`;
+    $('#dMesAnt').addEventListener('click', () => { dreMes = mesMais(dreMes, -1); render(); });
+    $('#dMesProx').addEventListener('click', () => { dreMes = mesMais(dreMes, 1); render(); });
+    document.querySelectorAll('[data-daba]').forEach(b => b.addEventListener('click', () => { dreAba = b.dataset.daba; render(); }));
+    $('#dPF').addEventListener('change', e => { verPF = e.target.checked; try { localStorage.setItem('tino-folha-pf', verPF ? '1' : '0'); } catch (er) { /* ok */ } render(); });
+    $('#dPrint').addEventListener('click', () => { document.querySelectorAll('details.dred').forEach(d => { d.open = true; }); window.print(); });
+    document.querySelectorAll('[data-dnova]').forEach(b => b.addEventListener('click', () => sheetDespesa(null, b.dataset.dnova ? Number(b.dataset.dnova) : null)));
+    document.querySelectorAll('[data-desp]').forEach(b => b.addEventListener('click', () => sheetDespesa(DS.despesas.find(d => d.id === b.dataset.desp))));
+    document.querySelectorAll('[data-dsg]').forEach(b => b.addEventListener('click', () => sheetSangriaCat(DS.sangrias.find(s => s.id === b.dataset.dsg))));
+    if ($('#dRemNovo')) $('#dRemNovo').addEventListener('click', () => sheetRemetente(null));
+    document.querySelectorAll('[data-drem]').forEach(b => b.addEventListener('click', () => sheetRemetente(DS.remetentes.find(r => r.telefone === b.dataset.drem))));
+  }
+  const optCats = (sel, comIgnorar) => (comIgnorar ? `<option value="ignorar" ${sel === 'ignorar' ? 'selected' : ''}>Não é despesa (depósito, salário da Folha…)</option>` : '') + Object.keys(DS.cats).map(k => `<option value="${k}" ${sel === k ? 'selected' : ''}>${esc(DS.cats[k])}</option>`).join('');
+  const optFiliais = sel => `<option value="">Sem filial (só no Geral)</option>` + [1, 2, 3, 4].map(f => `<option value="${f}" ${sel === f ? 'selected' : ''}>Filial ${f}</option>`).join('');
+  function sheetDespesa(d, filialNova) {
+    const dataPadrao = d ? d.data : (dreMes === hoje().slice(0, 7) ? hoje() : fimMesIso(dreMes));
+    openSheet(`<div class="tt"><h2>${d ? 'Editar despesa' : 'Nova despesa'}</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      <form id="fdd"><div class="fgrid">
+        ${campo('ddValor', 'Valor', d ? d.valor : '')}
+        <div class="field"><label for="ddData">Dia</label><input type="date" id="ddData" value="${esc(dataPadrao)}" max="${hoje()}"></div>
+        <div class="field w2"><label for="ddCat">Categoria</label><select id="ddCat">${optCats(d ? d.categoria : 'combustivel')}</select></div>
+        <div class="field w2"><label for="ddFil">Filial</label><select id="ddFil">${optFiliais(d ? d.filial : filialNova)}</select></div>
+        <div class="field w2"><label for="ddDesc">Descrição (opcional)</label><input type="text" id="ddDesc" value="${esc(d ? d.descricao || '' : '')}" maxlength="200" placeholder="Ex.: diesel do caminhão, Éder"></div>
+      </div><button class="btn pri lg full" type="submit" style="margin-top:12px">Salvar</button></form>
+      ${d ? '<button class="btn dan full" type="button" id="ddDel" style="margin-top:8px">Apagar</button>' : ''}`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      if (!d) setTimeout(() => { const v = $('#ddValor'); if (v) v.focus(); }, 50);
+      $('#fdd').addEventListener('submit', e => { e.preventDefault(); post('/api/caixa/dre/despesa', { id: d ? d.id : undefined, valor: $('#ddValor').value, data: $('#ddData').value, categoria: $('#ddCat').value, filial: $('#ddFil').value || null, descricao: $('#ddDesc').value }, 'Despesa salva'); });
+      if ($('#ddDel')) $('#ddDel').addEventListener('click', async () => { if (await perguntar('Apagar esta despesa?', '', 'Apagar', true)) post('/api/caixa/dre/despesa/excluir', { id: d.id }, 'Apagada'); });
+    });
+  }
+  const fimMesIso = m => new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7), 0)).toISOString().slice(0, 10);
+  function sheetSangriaCat(s) {
+    openSheet(`<div class="tt"><h2>${esc(s.motivo || 'Sangria')}</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      <p class="muted small">${money(s.valor)} em ${dBR(s.data)}${s.criadoPor ? ' · lançada por ' + esc(s.criadoPor) : ''}</p>
+      <form id="fsc"><div class="field"><label for="scCat">O que é</label><select id="scCat"><option value="">Sem categoria (fica fora do DRE)</option>${optCats(s.categoria, true)}</select></div>
+        <div class="field"><label for="scFil">Filial</label><select id="scFil">${optFiliais(s.filial)}</select></div>
+        <button class="btn pri lg full" type="submit">Salvar</button></form>`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      $('#fsc').addEventListener('submit', e => { e.preventDefault(); post('/api/caixa/dre/sangria', { movId: s.id, categoria: $('#scCat').value || null, filial: $('#scFil').value || null }, 'Sangria classificada'); });
+    });
+  }
+  function sheetRemetente(r) {
+    openSheet(`<div class="tt"><h2>${r ? esc(r.nome) : 'Novo número do WhatsApp'}</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      <p class="muted small">A pessoa manda a despesa para o número do robô; o valor, a categoria e o dia saem da mensagem. Se ela não disser a filial, vale a filial padrão.</p>
+      <form id="frm"><div class="field"><label for="rmNome">Nome</label><input type="text" id="rmNome" value="${esc(r ? r.nome : '')}" maxlength="60" required placeholder="Ex.: Éder"></div>
+        <div class="field"><label for="rmTel">WhatsApp (com DDD)</label><input type="text" id="rmTel" inputmode="tel" value="${esc(r ? r.telefone.replace(/^55/, '') : '')}" ${r ? 'readonly' : ''} placeholder="27 99999-9999" required></div>
+        <div class="field"><label for="rmFil">Filial padrão</label><select id="rmFil">${optFiliais(r ? r.filial : null)}</select></div>
+        ${r ? `<label class="row"><input type="checkbox" id="rmAtivo" ${r.ativo ? 'checked' : ''}> Pode mandar</label>` : ''}
+        <button class="btn pri lg full" type="submit">Salvar</button></form>
+      ${r ? '<button class="btn dan full" type="button" id="rmDel" style="margin-top:8px">Tirar este número</button>' : ''}`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      $('#frm').addEventListener('submit', e => { e.preventDefault(); post('/api/caixa/dre/remetente', { telefone: r ? r.telefone : $('#rmTel').value, nome: $('#rmNome').value, filial: $('#rmFil').value || null, ativo: r ? $('#rmAtivo').checked : true }, 'Número salvo'); });
+      if ($('#rmDel')) $('#rmDel').addEventListener('click', async () => { if (await perguntar('Tirar ' + r.nome + '?', 'O robô deixa de aceitar mensagens deste número. As despesas que ele já mandou continuam.', 'Tirar', true)) post('/api/caixa/dre/remetente/excluir', { telefone: r.telefone }, 'Número tirado'); });
+    });
+  }
+  $('#modDre').addEventListener('click', () => irModulo('dre'));
+
   /* ---------- navegação: 3 abas para a equipe, 4 para o dono ---------- */
   const SUB_MAIS = ['staria', 'acessos', 'gaveta', 'ocorrencias', 'crediario'];
   function render() {
@@ -1337,6 +1496,10 @@
     // Folha de pagamento: aba no topo, para o dono e quem ele liberar
     $('#modFolha').hidden = !podeFolha();
     if (modulo === 'folha' && !podeFolha()) modulo = 'caixa';
+    $('#modDre').hidden = !isAdmin();
+    if (modulo === 'dre' && !isAdmin()) modulo = 'caixa';
+    $('#modDre').classList.toggle('on', modulo === 'dre'); $('#modDre').setAttribute('aria-current', modulo === 'dre' ? 'page' : 'false');
+    if (modulo === 'dre') { $('#bn').hidden = true; renderDre(); return; }
     $('#modCaixa').classList.toggle('on', modulo === 'caixa'); $('#modCaixa').setAttribute('aria-current', modulo === 'caixa' ? 'page' : 'false');
     $('#modFolha').classList.toggle('on', modulo === 'folha'); $('#modFolha').setAttribute('aria-current', modulo === 'folha' ? 'page' : 'false');
     if (modulo === 'folha') { $('#bn').hidden = true; renderFolha(); return; }
