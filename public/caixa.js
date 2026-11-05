@@ -263,12 +263,16 @@
       // equipe: contagem cega — nada de saldo nem valor esperado, só o que precisa ser feito
       const pend = S.pendencias || [];
       $('#main').innerHTML = `
-        <section class="hero" aria-label="Suas tarefas">
+        ${isFin() && S.saldo != null ? (() => { const v = S.saldo, reais = Math.trunc(Math.abs(v)), cent = money(v).split(',')[1] || '00';
+          return `<section class="hero" aria-label="Dinheiro no cofre">
+          <span class="lb">Dinheiro no cofre agora</span>
+          <span class="val num"><small>R$</small>${v < 0 ? '−' : ''}${reais.toLocaleString('pt-BR')}<small style="margin:0 0 0 2px">,${cent}</small></span>
+          <span class="sub">Olá, ${esc((S.me.nome || '').split(' ')[0])} · ${pend.length ? plural(pend.length, 'coisa para fazer', 'coisas para fazer') : 'tudo em dia'}</span>
+        </section>`; })() : `<section class="hero" aria-label="Suas tarefas">
           <span class="lb">Olá, ${esc((S.me.nome || '').split(' ')[0])}</span>
           <span class="val" style="font-size:30px">${pend.length ? plural(pend.length, 'coisa para fazer', 'coisas para fazer') : 'Tudo em dia'}</span>
-          <span class="sub">${isFin() ? 'Conte sempre sem pressa.' : 'Conte sempre sem pressa. Você não vê o valor esperado: o app só diz se bateu.'}</span>
-        </section>
-        ${isFin() && S.saldo != null ? `<section class="card" aria-label="Dinheiro no cofre"><div class="kv tot"><span><b>Dinheiro no cofre agora</b></span><b class="num">${money(S.saldo)}</b></div></section>` : ''}
+          <span class="sub">Conte sempre sem pressa. Você não vê o valor esperado: o app só diz se bateu.</span>
+        </section>`}
         ${acts}
         ${isFin() ? `<section class="card" id="cardStaria"><div class="sec"><h2>Importar do StarIA</h2></div>
           <p class="small muted" style="margin:0 0 10px">Um dia por vez, igual à tela de Fechamento de Caixa. Depois de pedir, é só chamar o Claude: “processar as consultas do StarIA”.</p>
