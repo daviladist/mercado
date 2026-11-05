@@ -1023,6 +1023,8 @@
       return;
     }
     $('#bn').hidden = false; $('#sair').hidden = false; $('#atualizar').hidden = false; $('#mods').hidden = false;
+    // Relatórios ao vivo do StarIA: painel no Claude do dono, só para o administrador da Dávila Supermercados
+    if ($('#modRel')) $('#modRel').hidden = !(isAdmin() && slug === 'fundo-de-caixa');
     if (view === 'sangria') { view = 'inicio'; setTimeout(sheetSangria, 0); }
     $('#navMais').hidden = !isAdmin();
     const aba = SUB_MAIS.includes(view) ? 'mais' : view;
