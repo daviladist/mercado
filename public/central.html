@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
+<script src="/tema.js"></script>
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#FFFFFF">
 <title>Tino — Central do sistema</title>
@@ -131,14 +132,22 @@ details.fold>.fb{display:grid;gap:10px;padding:2px 16px 14px}
 details.fold.grp>.fb{gap:0}
 /* modo escuro */
 @media (prefers-color-scheme:dark){
-  :root{--bg:#0A0A0A;--surface:#141414;--ink:#EDEDED;--ink-2:#C4C4C4;--muted:#8F8F8F;--line:#262626;--line-2:#1F1F1F;--input:#3A3A3A;--hover:#1C1C1C;--danger:#F87171;--ok:#4ADE80;--warn:#FACC15;--off:#3A3A3A}
-  body{color-scheme:dark}
-  .btn.primary,.btn.dark,.presets button[aria-pressed=true],.toast{color:#0A0A0A}
-  .btn.primary:hover:not(:disabled),.btn.dark:hover:not(:disabled){background:#D4D4D4}
-  .sw-t span{background:#EDEDED}.sw-t[aria-checked=true] span{background:#0A0A0A}
-  .ico svg path{fill:#0A0A0A}
-  .errn{color:#2A0606}
+  :root:not([data-theme="light"]){--bg:#0A0A0A;--surface:#141414;--ink:#EDEDED;--ink-2:#C4C4C4;--muted:#8F8F8F;--line:#262626;--line-2:#1F1F1F;--input:#3A3A3A;--hover:#1C1C1C;--danger:#F87171;--ok:#4ADE80;--warn:#FACC15;--off:#3A3A3A}
+  :root:not([data-theme="light"]) body{color-scheme:dark}
+  :root:not([data-theme="light"]) .btn.primary,:root:not([data-theme="light"]) .btn.dark,:root:not([data-theme="light"]) .presets button[aria-pressed=true],:root:not([data-theme="light"]) .toast{color:#0A0A0A}
+  :root:not([data-theme="light"]) .btn.primary:hover:not(:disabled),:root:not([data-theme="light"]) .btn.dark:hover:not(:disabled){background:#D4D4D4}
+  :root:not([data-theme="light"]) .sw-t span{background:#EDEDED}:root:not([data-theme="light"]) .sw-t[aria-checked=true] span{background:#0A0A0A}
+  :root:not([data-theme="light"]) .ico svg path{fill:#0A0A0A}
+  :root:not([data-theme="light"]) .errn{color:#2A0606}
 }
+/* escolha manual: escuro */
+  :root[data-theme="dark"]{--bg:#0A0A0A;--surface:#141414;--ink:#EDEDED;--ink-2:#C4C4C4;--muted:#8F8F8F;--line:#262626;--line-2:#1F1F1F;--input:#3A3A3A;--hover:#1C1C1C;--danger:#F87171;--ok:#4ADE80;--warn:#FACC15;--off:#3A3A3A}
+  :root[data-theme="dark"] body{color-scheme:dark}
+  :root[data-theme="dark"] .btn.primary,:root[data-theme="dark"] .btn.dark,:root[data-theme="dark"] .presets button[aria-pressed=true],:root[data-theme="dark"] .toast{color:#0A0A0A}
+  :root[data-theme="dark"] .btn.primary:hover:not(:disabled),:root[data-theme="dark"] .btn.dark:hover:not(:disabled){background:#D4D4D4}
+  :root[data-theme="dark"] .sw-t span{background:#EDEDED}:root[data-theme="dark"] .sw-t[aria-checked=true] span{background:#0A0A0A}
+  :root[data-theme="dark"] .ico svg path{fill:#0A0A0A}
+  :root[data-theme="dark"] .errn{color:#2A0606}
 </style>
 </head>
 <body>
