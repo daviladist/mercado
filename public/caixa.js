@@ -167,9 +167,12 @@
   }
   // sangria lançada pela equipe que o dono ainda não confirmou no banco (a do próprio dono é retirada dele)
   const semDeposito = m => m.tipo === 'sangria' && !m.depositadoEm && m.destino !== 'impostos' && m.criadoPorRole !== 'admin';
+  // hora em que o lançamento foi feito (horário de Brasília), ex.: 14:32
+  const horaBR = s => { const d = new Date(s); return !s || isNaN(d) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }); };
   function movSub(m) {
     if (m.tipo === 'venda_staria' || m.tipo === 'crediario_staria') return dBR(m.data) + ' · sacola conferida';
-    return dBR(m.data) + (m.motivo ? ' · ' + esc(m.motivo) : '') + (semDeposito(m) ? (isAdmin() ? ' · <b class="neg">falta confirmar no banco</b>' : ' · <b class="inf">aguardando o dono confirmar</b>') : '');
+    const h = horaBR(m.criadoEm);
+    return dBR(m.data) + (h ? ' ' + h : '') + (m.motivo ? ' · ' + esc(m.motivo) : '') + (semDeposito(m) ? (isAdmin() ? ' · <b class="neg">falta confirmar no banco</b>' : ' · <b class="inf">aguardando o dono confirmar</b>') : '');
   }
   function sinal(m) { const s = m.tipo === 'sangria' || m.tipo === 'gaveta_saida' || m.valor < 0; return `<span class="${s ? 'neg' : 'pos'}">${s ? '−' : '+'}${money(Math.abs(m.valor))}</span>`; }
   /* uma linha tocável: abre o painel com detalhes e ações (marcar depositado / apagar) */
@@ -187,7 +190,7 @@
     openSheet(`<div class="tt"><h2>${esc(movTitulo(m))}</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
       <div style="font-size:30px;font-weight:800" class="num">${sinal(m)}</div>
       <div>
-        <div class="kv"><span class="muted">Data</span><b>${dBR(m.data)}</b></div>
+        <div class="kv"><span class="muted">Data</span><b>${dBR(m.data)}${m.tipo !== 'venda_staria' && m.tipo !== 'crediario_staria' && horaBR(m.criadoEm) ? ' ' + horaBR(m.criadoEm) : ''}</b></div>
         ${m.motivo ? `<div class="kv"><span class="muted">Motivo</span><b style="white-space:normal;text-align:right">${esc(m.motivo)}</b></div>` : ''}
         ${m.criadoPor ? `<div class="kv"><span class="muted">Quem lançou</span><b>${esc(m.criadoPor)}</b></div>` : ''}
         ${m.tipo === 'venda_staria' || m.tipo === 'crediario_staria' ? `<div class="kv"><span class="muted">Período</span><b>${dBR(m.periodoIni)} a ${dBR(m.periodoFim)}</b></div>` : ''}
