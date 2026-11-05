@@ -150,7 +150,7 @@ s = s.slice(0, a0) + '<script src="/app.js?v=' + require('crypto').createHash('s
 if (/<script>(?!<\/script>)/.test(s.replace(/<script src=[^>]*><\/script>/g, ''))) { console.error('Ainda há script inline no HTML.'); process.exit(1); }
 const head = s.split('<style>')[0], body = s.slice(head.length);
 const i = body.indexOf('</style>') + '</style>'.length;
-const html = '<!doctype html>\n<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#E11F2C"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">\n'
+const html = '<!doctype html>\n<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><script src="/firme.js"></script><meta name="theme-color" content="#E11F2C"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">\n'
   + head + body.slice(0, i) + '\n</head><body>\n' + body.slice(i) + '\n</body></html>\n';
 // conferência: nada de senha nem dado embutido
 const bad = ['1208' + '10', "pass:'1234'", '__SEED=', 'x.pass===p', 'a.pass===p', 'c.pass===p', 'v.pass===p', "localStorage.setItem(KEY,", 'onclick="'].filter(t => html.includes(t) || appJs.includes(t));
