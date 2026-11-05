@@ -14,3 +14,6 @@ dados/
 node_modules/
 .DS_Store
 __pycache__/
+
+# capturas de tela soltas na raiz (já houve uma com nome de cliente): ficam fora do repositório
+/*.png
