@@ -10,7 +10,7 @@
 <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
 <title>Tino · Painel gerencial</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
 <style>
 /* ===== Tokens ===== */
 :root{
@@ -31,7 +31,7 @@
   --nav-h:64px;
 }
 *{box-sizing:border-box}html,body{margin:0}
-body{background:var(--cream);color:var(--ink);font:16px/1.45 "Sora",system-ui,sans-serif;min-height:100vh;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
+body{background:var(--cream);color:var(--ink);font:16px/1.45 "Inter",system-ui,sans-serif;min-height:100vh;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
 button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer}
 :focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 [hidden]{display:none!important}
@@ -76,22 +76,25 @@ p{margin:0}
 .pagehd{display:grid;gap:4px;padding:4px 2px 0}
 .pagehd p{color:var(--muted);font-size:14px}
 
-/* ===== Número grande (tela inicial) ===== */
-.hero{background:var(--brand);color:#fff;border-radius:var(--r-xl);padding:20px 20px 0;display:grid;gap:4px;overflow:hidden;box-shadow:var(--sh-1)}
-.hero .lb{font-size:14px;color:var(--brand-ink);font-weight:600}
-.hero .val{font-size:40px;line-height:1.1;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums}
-.hero .val small{font-size:22px;font-weight:700;opacity:.8;margin-right:4px}
-.hero .sub{font-size:12px;color:var(--brand-ink);opacity:.8}
-.hero .stat{margin:14px -20px 0;width:calc(100% + 40px)}
-.stat{display:flex;align-items:center;gap:10px;padding:12px 20px;font-size:14px;font-weight:700;text-align:left;border:0;width:100%;min-height:52px}
+/* ===== Número grande (tela inicial): cartão branco, o valor é o destaque ===== */
+.hero{display:grid;gap:4px;overflow:hidden;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:var(--r-xl);padding:18px 18px 0;box-shadow:var(--sh-1)}
+.hero .lb{font-size:13px;font-weight:500;color:var(--muted)}
+.hero .val{font-size:40px;font-weight:600;letter-spacing:-.035em;line-height:1.05}
+.hero .val small{font-size:20px;font-weight:500;color:var(--muted);opacity:1}
+.hero .sub{font-size:12.5px;color:var(--muted);opacity:1}
+.hero .stat{margin:14px -18px 0;width:calc(100% + 36px);border-top:1px solid var(--line-2)}
+.stat{font-size:13.5px;font-weight:600;min-height:48px;padding:11px 18px}
+.saldo{border-radius:var(--r-lg)}
+.saldo b{font-size:30px;font-weight:600;letter-spacing:-.03em}
+
 .stat svg.i{width:22px;height:22px}
 .stat.ok{background:var(--ok-bg);color:var(--ok)}
 .stat.wa{background:var(--wa-bg);color:var(--wa)}
 .stat.bad{background:var(--bad-bg);color:var(--bad)}
 .stat .go-ar{margin-left:auto;opacity:.7}
-.saldo{border-radius:var(--r-lg);padding:18px;display:grid;gap:4px;text-align:center}
-.saldo b{font-size:32px;font-weight:800;font-variant-numeric:tabular-nums}
 .saldo.p{background:var(--ok-bg);color:var(--ok)}.saldo.n{background:var(--bad-bg);color:var(--bad)}.saldo.z{background:var(--line-2)}
+.saldo{padding:18px;display:grid;gap:4px;text-align:center}
+.stat{display:flex;align-items:center;gap:10px;text-align:left;border:0;width:100%}
 
 /* ===== Botões ===== */
 .btn{min-height:48px;padding:0 18px;border-radius:var(--r);border:1px solid var(--input);background:#fff;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;font-size:15px}
@@ -238,6 +241,7 @@ td.n,th.n{text-align:right;white-space:nowrap}
 .toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + 16px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:var(--r);font-weight:600;z-index:30;max-width:92vw;box-shadow:var(--sh-2)}
 .toast.err{background:var(--bad)}
 </style>
+<link rel="stylesheet" href="/design.css">
 </head><body>
 <header class="hd"><div class="in">
   <div class="co"><div class="lg" id="lg"><svg viewBox="0 0 40 40" width="20" height="20" aria-hidden="true"><path d="M20 0 C22 13 27 18 40 20 C27 22 22 27 20 40 C18 27 13 22 0 20 C13 18 18 13 20 0 Z" fill="#E8A33D"/></svg></div>
@@ -246,7 +250,7 @@ td.n,th.n{text-align:right;white-space:nowrap}
   <button class="out" id="sair" type="button" hidden>Sair</button></div>
 </div>
 <nav class="mods" id="mods" hidden aria-label="Áreas do painel"><div class="in"><button type="button" class="on" aria-current="page"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="13" rx="2"/><circle cx="12" cy="12.5" r="2.5"/><path d="M6 10v.01M18 15v.01"/></svg>Caixa</button><a id="modRel" href="https://claude.ai/artifact/3bHTYbX4j31veRDPZRtEcW" target="_blank" rel="noopener" hidden title="Abre os relatórios ao vivo do StarIA numa aba nova"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Relatórios<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a></div></nav></header>
-<main id="main" aria-live="polite"><p class="muted">Carregando…</p></main>
+<main id="main" aria-live="polite"><div class="card sk" aria-busy="true" aria-label="Carregando"><i class="t"></i><i class="b"></i><i class="s"></i><i class="xs"></i></div><div class="card sk" aria-hidden="true"><i class="s"></i><i class="b"></i><i class="b"></i></div></main>
 <nav class="bn" id="bn" hidden aria-label="Menu"><div class="in">
   <button type="button" data-go="inicio"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Início</span></button>
   <button type="button" data-go="sacolas" id="navSacolas"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg><span>Sacolas</span><b class="dot" id="navSacolasN" hidden></b></button>

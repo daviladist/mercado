@@ -30,22 +30,22 @@ function pdfAccRGB(){try{const v=getComputedStyle(document.documentElement).getP
 function finPdf(o){try{
   const J=window.jspdf.jsPDF,doc=mkPdf(J,{unit:'mm',format:'a4',orientation:o.landscape?'landscape':'portrait'}),W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(),A=pdfAccRGB();
   const gen='Gerado em '+new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  const head=()=>{doc.setFillColor(A[0],A[1],A[2]);doc.rect(0,0,W,22,'F');doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(String(S.store&&S.store.name||''),10,11.5);
-    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(o.title,10,18);doc.setFontSize(9);if(o.sub)doc.text(o.sub,W-10,11.5,{align:'right'});doc.text(gen,W-10,18,{align:'right'})};
+  const head=()=>{doc.setFillColor(A[0],A[1],A[2]);doc.rect(0,0,W,1.6,'F');doc.setTextColor(16,24,40);doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text(String(S.store&&S.store.name||''),10,11.5);
+    doc.setFont('helvetica','normal');doc.setTextColor(86,98,117);doc.setFontSize(10);doc.text(o.title,10,18);doc.setFontSize(9);if(o.sub)doc.text(o.sub,W-10,11.5,{align:'right'});doc.text(gen,W-10,18,{align:'right'});doc.setDrawColor(228,231,236);doc.setLineWidth(.3);doc.line(10,22,W-10,22)};
   head();let y=28;
   if(o.tiles&&o.tiles.length){const n=o.tiles.length,g=4,w=(W-20-g*(n-1))/n;
-    o.tiles.forEach(([l,v,neg],i)=>{const x=10+i*(w+g);doc.setFillColor(245,247,250);doc.setDrawColor(220,226,232);doc.roundedRect(x,y,w,16,2,2,'FD');
-      doc.setTextColor(93,107,100);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text(String(l),x+3,y+5.5);
-      if(neg)doc.setTextColor(180,30,40);else doc.setTextColor(20,30,25);doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(String(v),x+3,y+12.5)});y+=22}
+    o.tiles.forEach(([l,v,neg],i)=>{const x=10+i*(w+g);doc.setFillColor(255,255,255);doc.setDrawColor(228,231,236);doc.setLineWidth(.3);doc.roundedRect(x,y,w,16,2,2,'FD');
+      doc.setTextColor(86,98,117);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text(String(l),x+3,y+5.5);
+      if(neg)doc.setTextColor(180,35,24);else doc.setTextColor(16,24,40);doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(String(v),x+3,y+12.5)});y+=22}
   (o.sections||[]).forEach(s=>{
     if(y>H-34){doc.addPage();head();y=28}
-    if(s.title){doc.setTextColor(40,50,45);doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text(s.title,10,y+4);y+=7}
+    if(s.title){doc.setTextColor(16,24,40);doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text(s.title,10,y+4);y+=7}
     if(!s.body.length){doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(93,107,100);doc.text(s.empty||'Nada nesse filtro.',10,y+4);y+=11;return}
     const R={};(s.right||[]).forEach(i=>R[i]=1);
     doc.autoTable({startY:y,margin:{top:28,left:10,right:10,bottom:14},head:[s.head],body:s.body,foot:s.foot?[s.foot]:undefined,showFoot:'lastPage',showHead:'everyPage',
-      theme:'plain',styles:{fontSize:8.5,cellPadding:1.8,valign:'middle',lineColor:[213,221,216],lineWidth:{bottom:.2}},
-      headStyles:{fillColor:[234,239,244],textColor:[60,72,66],fontStyle:'bold'},footStyles:{fillColor:[234,239,244],textColor:[20,30,25],fontStyle:'bold'},
-      didParseCell:d=>{if(R[d.column.index])d.cell.styles.halign='right';if(d.section!=='body')return;if(d.row.index%2===1)d.cell.styles.fillColor=[248,250,252];if(s.red&&s.red(d.row.index,d.column.index))d.cell.styles.textColor=[180,30,40]},
+      theme:'plain',styles:{fontSize:8.5,cellPadding:1.8,valign:'middle',lineColor:[228,231,236],lineWidth:{bottom:.2}},
+      headStyles:{fillColor:[249,250,251],textColor:[86,98,117],fontStyle:'bold',fontSize:7.5},footStyles:{fillColor:[249,250,251],textColor:[16,24,40],fontStyle:'bold'},
+      didParseCell:d=>{if(R[d.column.index])d.cell.styles.halign='right';if(d.section!=='body')return;if(s.red&&s.red(d.row.index,d.column.index))d.cell.styles.textColor=[180,30,40]},
       willDrawPage:d=>{if(d.pageNumber>1)head()}});
     y=doc.lastAutoTable.finalY+8});
   const n=doc.getNumberOfPages();for(let p=1;p<=n;p++){doc.setPage(p);doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(93,107,100);if(o.note)doc.text(doc.splitTextToSize(o.note,W-50)[0],10,H-6);doc.text('Página '+p+' de '+n,W-10,H-6,{align:'right'})}

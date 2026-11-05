@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#FFFFFF">
 <title>Tino — Central do sistema</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
 <style>
 /* Central do Tino: visual neutro (preto, branco e cinzas), letra pequena, blocos que abrem e fecham */
 :root{--bg:#FAFAFA;--surface:#FFFFFF;--ink:#111111;--ink-2:#404040;--muted:#737373;--line:#E5E5E5;--line-2:#F0F0F0;--input:#D4D4D4;--hover:#F5F5F5;--danger:#B91C1C;--ok:#15803D;--warn:#A16207;--off:#D4D4D4}
@@ -46,7 +46,9 @@ header .in{max-width:1280px;margin:0 auto;padding:8px 16px;display:flex;flex-wra
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .wrap{max-width:1280px;margin:0 auto;padding:20px 16px 40px;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
-h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-.2px}
+h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-.02em;font-family:"Geist","Inter",system-ui,sans-serif}
+h1,h2,.wm b,.num,td,.spark{font-variant-numeric:tabular-nums}
+.wm b{font-family:"Geist","Inter",system-ui,sans-serif}
 h2{margin:0;font-size:13px;font-weight:600}
 .muted{color:var(--muted)}.small{font-size:12px}
 /* login */

@@ -10,7 +10,7 @@
 <meta name="referrer" content="no-referrer">
 <title>Loja</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="/tino-app.css">
 <style>
 main{padding-bottom:110px;gap:12px}
@@ -97,7 +97,7 @@ main{padding-bottom:110px;gap:12px}
 .cartbtn b{position:absolute;top:-6px;right:-6px;background:var(--gold);color:#2A1E05;border-radius:99px;font-size:11px;min-width:20px;height:20px;display:grid;place-items:center;padding:0 5px}
 /* modo escuro (segue o aparelho): os mesmos tons, mais fundos escuros */
 @media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){--cream:#141915;--surface:#1E2520;--line:#2F3A32;--line-2:#28322B;--input:#46524A;--muted:#A3B0A6;--ink:#EDE8DC;--gold-soft:#3A2D10;--green:#5BC77C;--green-bg:#1C2F22;--red:#F28B82;--red-bg:#3B1F1C;--brand-text:color-mix(in srgb,var(--brand) 45%,#fff)}
+  :root:not([data-theme="light"]){--cream:#141915;--surface:#1E2520;--surface-2:#242D27;--line:#2F3A32;--line-2:#28322B;--input:#46524A;--muted:#A3B0A6;--ink:#EDE8DC;--gold-soft:#3A2D10;--green:#5BC77C;--green-bg:#1C2F22;--red:#F28B82;--red-bg:#3B1F1C;--brand-text:color-mix(in srgb,var(--brand) 45%,#fff)}
   :root:not([data-theme="light"]) .tino b{color:var(--brand-text)}
   :root:not([data-theme="light"]) .qty input{background:var(--surface);color:var(--ink)}:root:not([data-theme="light"]) .toast{color:var(--cream)}:root:not([data-theme="light"]) .toast.err{color:#fff}
   :root:not([data-theme="light"]) body{background:var(--cream)}
@@ -114,6 +114,7 @@ main{padding-bottom:110px;gap:12px}
   :root:not([data-theme="light"]) a.btn{color:var(--ink)}:root:not([data-theme="light"]) a.btn.pri{color:#fff}
 }
 </style>
+<link rel="stylesheet" href="/design.css">
 </head><body>
 <header class="hd"><div class="in">
   <div class="co"><div class="lg" id="lg"><svg viewBox="0 0 40 40" width="20" height="20" aria-hidden="true"><path d="M20 0 C22 13 27 18 40 20 C27 22 22 27 20 40 C18 27 13 22 0 20 C13 18 18 13 20 0 Z" fill="#E8A33D"/></svg></div>

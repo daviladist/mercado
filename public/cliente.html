@@ -3,17 +3,18 @@
 <title>D'Ávila Pedidos</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
 <style>
 /* Layout: app de uma coluna para celular; etiqueta de preço amarela como no gôndola do supermercado */
 :root{
-  --bg:#F3F6FA; --surface:#FFFFFF; --surface-2:#E9EFF7; --fg:#0F1B2D; --muted:#5A6779; --line:#D5DEEA;
-  --accent:#0A66B2; --accent-fg:#FFFFFF; --accent-soft:#E1EDF9;
+  --bg:#F6F7F9; --surface:#FFFFFF; --surface-2:#F2F4F7; --fg:#101828; --muted:#566275; --line:#E4E7EC;
+  --accent:#0A66B2; --accent-fg:#FFFFFF; --accent-soft:#EAF3FB;
   --brand:#E11F2C; --brand-dark:#B3121D; --brand-fg:#FFFFFF; --stripe:#0A66B2;
   --tag:#FFD43B; --tag-fg:#1B1A10; --danger:#C4161F; --ok:#1E7B4C; --warn:#9A6400;
-  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
-  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --display:"Geist","Inter",system-ui,sans-serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
   --r:12px;
+  --sh:0 1px 2px rgba(16,24,40,.05);
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0B121D; --surface:#142030; --surface-2:#1C2B3F; --fg:#E8EEF6; --muted:#9AA8BA; --line:#283A52;
@@ -1201,6 +1202,25 @@ body.hasbnav{--bnh:calc(60px + env(safe-area-inset-bottom,0px))}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .bnav [aria-current=page]{color:#FF8A80}:root:not([data-theme="light"]) .bnav [aria-current=page]::before{background:#FF8A80}}
 :root[data-theme="dark"] .bnav [aria-current=page]{color:#FF8A80}:root[data-theme="dark"] .bnav [aria-current=page]::before{background:#FF8A80}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ===== Refino visual (mesmo sistema do Caixa, Loja e Rural): tipografia Geist/Inter, números alinhados, sem caixa-alta ===== */
+body{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;letter-spacing:-.003em}
+h1,h2,h3{font-family:var(--display)}
+h2{font-weight:600;font-size:21px;text-transform:none;letter-spacing:-.02em}
+.brand .bn{font-weight:600;font-size:17px;letter-spacing:-.01em;text-transform:none}
+@media (max-width:420px){.brand .bn{font-size:15px;letter-spacing:-.01em}}
+.cartbtn .tot,.sum.total .v,.order .no,.catnum,.orno,.cfno,.cfq b,.tile b,.rec .ra>b,.mini b,.corder .cv,.stfound .field b,.cbcalc b,.ptag,.lrow .lt,.cbtag{font-family:var(--display);font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+.cartbtn .tot{font-size:16px}.sum.total .v{font-size:26px}.order .no,.cfno,.corder .cv,.cfq b{font-size:18px}
+.tile b{font-size:24px}.rec .ra>b{font-size:20px}.mini b{font-size:19px}.stfound .field b,.cbcalc b{font-size:18px}
+.orno{font-size:16px}.catnum{font-size:15px}.ptag,.lrow .lt{font-size:16px}.cbtag{font-size:12px;letter-spacing:.04em}
+.lbl{font-size:11.5px;letter-spacing:.06em}
+.btn{font-weight:600;border-radius:10px;font-size:14.5px}
+.btn.ghost{box-shadow:var(--sh)}
+input[type=text],input[type=password],input[type=number],input[type=date],select,textarea{border-radius:10px;border-color:var(--line)}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:3px solid rgba(10,102,178,.14)}
+.card,.panel{box-shadow:var(--sh)}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+th{font-size:11px;font-weight:600;letter-spacing:.06em}
 </style>
 </head><body>
 
@@ -1226,6 +1246,6 @@ body.hasbnav{--bnh:calc(60px + env(safe-area-inset-bottom,0px))}
 <script src="/vendor/xlsx-0.18.5.full.min.js"></script>
 <script src="/vendor/jspdf-2.5.1.umd.min.js"></script>
 <script src="/vendor/jspdf-autotable-3.8.2.min.js"></script>
-<script src="/app.js?v=4560bb25b2"></script>
+<script src="/app.js?v=98986cc838"></script>
 
 </body></html>

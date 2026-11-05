@@ -1,7 +1,7 @@
 /* Tino — estilos das telas de celular (app do produtor e loja online). */
 :root{--brand:#1F3D2B;--gold:#E8A33D;--gold-soft:#FBEFD9;--cream:#F6F1E7;--surface:#fff;--line:#E6DCC8;--line-2:#EFE7D6;--input:#CFC3AA;--muted:#5E6A5F;--ink:#1F2A22;--green:#1E7A3C;--green-bg:#E3F1E6;--red:#B3261E;--red-bg:#F9E3E1;--blue:#0A5A9C;--blue-bg:#E2EEF8}
 *{box-sizing:border-box}html,body{margin:0}
-body{background:var(--cream);color:var(--ink);font:16px/1.45 "Sora",system-ui,sans-serif;min-height:100vh;-webkit-tap-highlight-color:transparent}
+body{background:var(--cream);color:var(--ink);font:16px/1.45 "Inter",system-ui,sans-serif;min-height:100vh;-webkit-tap-highlight-color:transparent}
 button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer}
 :focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 [hidden]{display:none!important}
