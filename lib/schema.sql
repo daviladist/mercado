@@ -618,6 +618,8 @@ alter table caixa_sacola add column if not exists credi_cartao numeric(14,2);
 alter table caixa_sacola add column if not exists credi_pix numeric(14,2);
 alter table caixa_sacola add column if not exists credi_diferenca numeric(14,2);
 alter table caixa_sacola add column if not exists credi_mov_id text;
+-- sangria feita no caixa da filial durante o dia: o dinheiro já saiu dele e não vem na sacola (desconta do esperado)
+alter table caixa_sacola add column if not exists sangria numeric(14,2) not null default 0;
 -- conferência física do caixa principal: a caixista (ou o admin) digita quanto contou em dinheiro; o servidor
 -- compara com o saldo esperado NA HORA e grava a diferença (pode ser 0). Nunca editada nem excluída: é um
 -- retrato do que foi contado naquele momento. Toda conferência com diferença ≠ 0 vira uma ocorrência (ver abaixo).

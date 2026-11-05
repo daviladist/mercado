@@ -185,7 +185,7 @@ check(s == 200 and SGF, 'financeiro também lança sangria — faz tudo que o ca
 s, _ = F.req('/api/caixa/depositado', {'id': SGF, 'depositadoEm': '2026-10-08'}); check(s == 403, 'financeiro também não confirma o banco (só o dono)')
 s, _ = A.req('/api/caixa/mov/excluir', {'id': SGF}); check(s == 200, 'admin apaga essa sangria de teste (sem deixar isso afetar o saldo daqui pra frente)')
 s, _ = F.req('/api/caixa/ajuste', {'valor': '-5', 'data': '2026-10-08', 'motivo': 'x'}); check(s == 403, 'financeiro não lança ajuste (isso continua só do admin)')
-s, _ = F.req('/api/caixa/staria/pedir', {'periodoIni': '2026-10-08', 'periodoFim': '2026-10-08'}); check(s == 403, 'financeiro não pede consulta ao StarIA')
+s, _ = F.req('/api/caixa/staria/pedir', {'periodoIni': '2026-10-08', 'periodoFim': '2026-10-08'}); check(s == 200, 'financeiro pede consulta ao StarIA (o dono liberou)')
 s, _ = F.req('/api/caixa/mov/excluir', {'id': mvs[0]['id']}); check(s == 403, 'financeiro não apaga nada')
 s, _ = F.req('/api/caixa/pessoa', {'login': 'outro', 'nome': 'X', 'papel': 'caixista'}); check(s == 403, 'financeiro não cria outros acessos')
 print('== habilitação para abrir os Relatórios (só o dono liga, só no financeiro)')
@@ -244,7 +244,7 @@ s, _ = A.req('/api/caixa/mov/excluir', {'id': SGI1}); check(s == 200, 'agora dá
 s, st = A.req('/api/caixa/state'); check(st['saldoImpostos'] == 0 and st['saldo'] == 27700, 'gaveta zerada, saldo principal de volta a 27.700')
 
 print('== conferência física do caixa e ocorrências')
-s, r = F.req('/api/caixa/conferir', {'valorContado': '27700'}); check(s == 200 and r.get('bateu') is True and 'saldoEsperado' not in r and 'diferenca' not in r, 'financeiro também confere o caixa físico, às cegas: só fica sabendo que bateu')
+s, r = F.req('/api/caixa/conferir', {'valorContado': '27700'}); check(s == 200 and r.get('bateu') is True and r.get('saldoEsperado') == 27700 and r.get('diferenca') == 0, 'financeiro também confere o caixa físico e, como agora vê o saldo do cofre, vê o esperado e a diferença')
 s, _ = M.req('/api/caixa/conferir', {'valorContado': '-5'}); check(s == 400, 'valor contado negativo recusado')
 s, r = M.req('/api/caixa/conferir', {'valorContado': '27700'}); check(s == 200 and r.get('bateu') is True, 'caixista confere e bate certinho (27.700 = 27.700)')
 s, _ = M.req('/api/caixa/ocorrencias'); check(s == 403, 'caixista não vê a aba de ocorrências')
@@ -365,11 +365,11 @@ s, r = F.req('/api/caixa/sacola/conferir', {'id': sacs[1]['id'], 'valorContado':
 check(s == 200 and r.get('bateu') is True, 'conferir a sacola da matriz: venda bateu e o crediário em dinheiro (20) bateu com o que foi marcado')
 s, st = A.req('/api/caixa/state'); check(st['saldo'] == round(saldo_a + 70, 2), 'saldo sobe com a venda contada (50) e o crediário em dinheiro (20); o cartão não entra')
 F.req('/api/caixa/sacola/chegou', {'id': sacs[2]['id']})
-s, r = F.req('/api/caixa/sacola/conferir', {'id': sacs[2]['id'], 'valorContado': '300', 'motivo': 'faltou 50 centavos'}); check(s == 200 and r.get('bateu') is False, 'sacola da filial 2 conferida: faltaram 50 centavos')
+s, r = F.req('/api/caixa/sacola/conferir', {'id': sacs[2]['id'], 'valorContado': '300', 'motivo': 'faltou 50 centavos'}); check(s == 200 and r.get('bateu') is True, 'sacola da filial 2 conferida: faltaram 50 centavos, dentro da margem de R$ 5 (bateu)')
 s, oc = A.req('/api/caixa/ocorrencias'); tt = [o['titulo'] for o in oc['ocorrencias']]
 check('Caixas do StarIA enviados para a sacola' in tt, 'enviar caixas para a sacola aparece nas ocorrências')
 sac_oc = [o for o in oc['ocorrencias'] if o['tipo'] == 'sacola']
-check(any(o['detalhe']['diferenca'] == -0.5 for o in sac_oc) and not any(o['detalhe']['filial'] == 1 and o['detalhe']['valorContado'] == 50 for o in sac_oc), 'só a sacola com falta vira ocorrência (a da matriz bateu)')
+check(not any(o['detalhe']['diferenca'] == -0.5 for o in sac_oc) and not any(o['detalhe']['filial'] == 1 and o['detalhe']['valorContado'] == 50 for o in sac_oc), 'diferença dentro da margem (50 centavos) não vira ocorrência, e a sacola da matriz que bateu também não')
 s, st = A.req('/api/caixa/state'); j = next(x for x in st['jobs'] if x['id'] == JL); check(j['resultado'].get('porCaixa') is True and j['status'] == 'aplicada', 'a consulta mostra o resumo por caixa')
 
 print('== "quanto eu tenho agora e está tudo certo?": resumo do dono, contagem cega da equipe, alertas')
@@ -391,7 +391,7 @@ check('CAIXA_VERMELHO' in cods, 'caixa do StarIA esperando há dias vira alerta'
 check(rs['status'] == 'vermelho' and rs['alertas'][0]['nivel'] == 'vermelho', 'com alerta vermelho, o semáforo fica vermelho e o vermelho vem primeiro')
 check(rs['ultimaContagem'] and rs['ultimaContagem']['diferenca'] == -200, 'mostra a última contagem do cofre e quanto deu de diferença')
 s, stf = F.req('/api/caixa/state')
-check('saldo' not in stf and 'resumo' not in stf and 'porFilial' not in stf and 'miniCaixas' not in stf, 'o financeiro não vê o saldo nem o resumo (contagem cega)')
+check(isinstance(stf.get('saldo'), (int, float)) and 'resumo' not in stf and 'porFilial' not in stf and 'miniCaixas' not in stf and 'saldoImpostos' not in stf, 'o financeiro vê o saldo do cofre (liberado pelo dono), mas não o resumo nem a gaveta de impostos')
 check(all(c['dinheiro'] is None for c in stf.get('caixasPendentes', [])) and all(sc['valorStaria'] is None for sc in stf['sacolas']), 'o financeiro não vê o valor dos caixas nem das sacolas que vai contar')
 check(isinstance(stf.get('pendencias'), list) and all('R$' not in p['texto'] for p in stf['pendencias']), 'o financeiro vê as pendências dele, sem valores em R$')
 check(all(m['criadoPor'] == 'Fulano do financeiro' for m in stf['mov']), 'o financeiro só vê no extrato o que ele mesmo lançou')
@@ -418,7 +418,7 @@ s, r3 = A.req('/api/caixa/staria/pedir', {'diasAtras': 3}); check(s == 200 and r
 s, r0 = A.req('/api/caixa/staria/pedir', {'diasAtras': 0}); check(s == 200 and r0['periodoIni'] == _hoje, '"hoje" também pode (um dia só)')
 s, _ = A.req('/api/caixa/staria/pedir', {'diasAtras': -1}); check(s == 400, 'dias atrás negativo recusado')
 s, r2_ = A.req('/api/caixa/staria/pedir', {'auto': True}); check(s == 200 and r2_.get('jaPedido') is True and r2_['id'] == r['id'], 'apertar de novo não dá erro: avisa que já está pedido')
-s, _ = F.req('/api/caixa/staria/pedir', {'auto': True}); check(s == 403, 'financeiro não pede consulta')
+s, _ = F.req('/api/caixa/staria/pedir', {'auto': True}); check(s == 200, 'financeiro pede a atualização do StarIA (o dono liberou)')
 
 print('== crediário recebido, um por um: o financeiro marca a forma, o dinheiro é contado na sacola, o dono confere Pix/cartão no banco')
 _dc = (_dt.datetime.utcnow() - _dt.timedelta(hours=3) - _dt.timedelta(days=5)).strftime('%Y-%m-%d')
@@ -483,8 +483,8 @@ check(al and al[0]['nivel'] == 'vermelho', 'Pix/cartão de crediário com mais d
 s, stf = F.req('/api/caixa/state'); conf = [x for x in stf['sacolas'] if x.get('conferidoEm')]
 check(conf and all(x.get('valorContado') is None and x.get('crediDinheiro') is None and x.get('valorStaria') is None for x in conf), 'a equipe não vê quanto foi contado nas sacolas (não dá para calcular o saldo do cofre)')
 # contagem do cofre: no máximo 3 por hora para a equipe
-res = [F.req('/api/caixa/conferir', {'valorContado': str(1 + i)})[0] for i in range(4)]
-check(res[-1] == 429 and res.count(200) <= 3 and res.index(429) == res.count(200), 'a equipe conta o cofre no máximo 3 vezes por hora (%s)' % res)
+res = [M2.req('/api/caixa/conferir', {'valorContado': str(1 + i)})[0] for i in range(4)]
+check(res[-1] == 429 and res.count(200) <= 3 and res.index(429) == res.count(200), 'a caixista (contagem às cegas) conta o cofre no máximo 3 vezes por hora (%s)' % res)
 s, st = A.req('/api/caixa/state'); al = [a for a in st['resumo']['alertas'] if a['codigo'] == 'COFRE_DIFERENCA']
 check(al and al[0]['nivel'] == 'vermelho', 'a diferença do cofre fica acesa até o dono contar')
 s, r = A.req('/api/caixa/sangria', {'valor': '12,34', 'data': _dc, 'motivo': 'teste apagar'}); MID = r['id']
@@ -524,6 +524,27 @@ check(s == 200 and st3['saldo'] == 100, 'dá para recomeçar: configura o saldo 
 for _ in range(5): A.req('/api/caixa/zerar', {'senha': 'errada' + pw(), 'confirmacao': 'ZERAR'})
 s, _ = A.req('/api/caixa/zerar', {'senha': NP, 'confirmacao': 'ZERAR'}); check(s == 429, 'depois de 5 senhas erradas, bloqueia por 15 minutos (mesmo com a senha certa)')
 s, st4 = A.req('/api/caixa/state'); check(st4['cfg'] is not None, 'o bloqueio não apagou nada')
+
+print('== margem de erro, saldo para o financeiro e importar do StarIA')
+s, r = F.req('/api/caixa/conferir', {'valorContado': '103'}); check(s == 200 and r.get('bateu') is True and r.get('diferenca') == 3, 'cofre com R$ 3 a mais (dentro da margem de R$ 5): bateu')
+s, r = F.req('/api/caixa/conferir', {'valorContado': '94'}); check(s == 200 and r.get('bateu') is False and r.get('diferenca') == -6, 'cofre com R$ 6 a menos (fora da margem): não bateu')
+s, oc5 = A.req('/api/caixa/ocorrencias'); cf5 = [o for o in oc5['ocorrencias'] if o['tipo'] == 'conferencia']
+check(len(cf5) == 1 and cf5[0]['detalhe']['diferenca'] == -6, 'só a diferença fora da margem vira ocorrência')
+s, st5 = F.req('/api/caixa/state'); check(st5.get('saldo') == 100 and st5.get('tolerancia') == 5, 'financeiro vê o saldo do cofre e a margem de erro')
+s, r = F.req('/api/caixa/staria/pedir', {'dia': '2026-11-01'}); check(s == 200 and r.get('id'), 'financeiro pode pedir a importação do StarIA')
+s, r = M2.req('/api/caixa/staria/pedir', {'dia': '2026-11-01'}); check(s == 403, 'caixista não pede a importação do StarIA')
+
+print('== sangria feita no caixa, descontada na conferência da sacola')
+s, rj = F.req('/api/caixa/staria/pedir', {'dia': '2026-11-02'}); JS = rj.get('id'); check(s == 200 and JS, 'financeiro pede o dia 02/11')
+s, _ = A.req('/api/caixa/staria/resultado', {'id': JS, 'resultado': {'linhas': [lin(1, '101', '2026-11-02', 1000)]}}); check(s == 200, 'consulta entregue: caixa 101 da matriz com R$ 1.000 em dinheiro')
+s, stp = A.req('/api/caixa/state'); idp = [c['id'] for c in stp['caixasPendentes'] if c['ecf'] == '101' and c['data'] == '2026-11-02']
+s, _ = F.req('/api/caixa/caixas/aceitar', {'ids': idp}); check(s == 200, 'financeiro envia o caixa para a sacola')
+s, sta = A.req('/api/caixa/state'); sg = next(x for x in sta['sacolas'] if x['periodoFim'] == '2026-11-02' and not x['conferidoEm']); saldo_sg = sta['saldo']
+s, r = F.req('/api/caixa/sacola/checar', {'id': sg['id'], 'valorContado': '800'}); check(s == 200 and r['bateu'] is False, 'sem informar a sangria, R$ 800 contados (de R$ 1.000) não batem')
+s, r = F.req('/api/caixa/sacola/checar', {'id': sg['id'], 'valorContado': '800', 'sangria': '200'}); check(s == 200 and r['bateu'] is True, 'com R$ 200 de sangria no caixa, R$ 800 contados batem')
+s, r = F.req('/api/caixa/sacola/conferir', {'id': sg['id'], 'valorContado': '800', 'sangria': '200'}); check(s == 200 and r['bateu'] is True, 'confere a sacola com a sangria descontada')
+s, sta = A.req('/api/caixa/state'); check(sta['saldo'] == round(saldo_sg + 800, 2), 'no cofre entram só os R$ 800 que vieram na sacola (não os R$ 1.000 do StarIA)')
+s, ocs = A.req('/api/caixa/ocorrencias'); check(not any(o['tipo'] == 'sacola' and o['detalhe'].get('sangria') == 200 for o in ocs['ocorrencias']), 'sacola que bateu com a sangria não vira ocorrência')
 
 print(f'\n{ok} OK, {len(fails)} falha(s)')
 if fails:
