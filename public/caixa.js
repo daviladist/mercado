@@ -25,7 +25,7 @@
   }
   function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, err ? 5200 : 2800); }
   function fail(e) { if (e.status === 401 || e.login) return showLogin('Entre de novo.'); if (e.mustReset) return showReset(); toast(e.message, true); }
-  async function reload() { S = await api('/api/caixa/state'); applyBrand(); if (modulo === 'folha' && podeFolha()) await carregaFolha(); }
+  async function reload() { S = await api('/api/caixa/state'); applyBrand(); if (modulo === 'folha' && podeFolha()) await carregaFolha(); if (modulo === 'dre' && podeDre()) await carregaDre(); }
   async function post(path, body, okMsg) {
     try { const r = await api(path, body); await reload(); if (okMsg) toast(okMsg); closeSheet(); render(); return r; }
     catch (e) { fail(e); return null; }
@@ -1321,9 +1321,172 @@
       if ($('#enDel')) $('#enDel').addEventListener('click', async () => { if (await perguntar('Apagar este lançamento?', '', 'Apagar', true)) post('/api/caixa/folha/encargo/excluir', { id: enc.id }, 'Apagado'); });
     });
   }
+  /* ---------- DRE (área ao lado da Folha): só o dono ----------
+     Filial 1, 2, 3 e Geral. Vendas, impostos e CMV vêm do StarIA (o Claude entrega, ou o dono digita); o pessoal
+     vem da Folha; as despesas fixas se cadastram uma vez e as do dia a dia se lançam no mês. Despesas da "rede"
+     (filial 0) entram só no Geral. Imprimir/PDF pelo navegador. */
+  let DS = null, dreMes = mesMais(hoje().slice(0, 7), -1), dreAba = 'geral';
+  const podeDre = () => !!(S && isAdmin() && S.me.dre);
+  async function carregaDre() { DS = await api('/api/caixa/dre?mes=' + encodeURIComponent(dreMes)); }
+  const filNome = f => (f === 0 ? 'Rede (todas as lojas)' : 'Filial ' + f);
+  const pctDe = (v, base) => (base > 0 ? v / base * 100 : null);
+  function linhaDre(t, v, base, cls, menos) {
+    const p = pctDe(v, base);
+    return `<div class="kv dre${cls ? ' ' + cls : ''}"><span>${t}</span><b>${menos && v ? '− ' : ''}${money(v)}<small class="muted">${p == null ? '' : ' · ' + pctTxt(p)}</small></b></div>`;
+  }
+  function porCategoria(lista) {
+    const m = {};
+    for (const x of lista) m[x.categoria] = r2((m[x.categoria] || 0) + x.valor);
+    return Object.keys(m).sort((a, b) => m[b] - m[a]).map(k => [DS.categorias[k] || k, m[k]]);
+  }
+  function blocoDre(T, filiais, titulo) {
+    const fx = DS.fixas.filter(x => filiais.includes(x.filial)), dd = DS.despesas.filter(x => filiais.includes(x.filial));
+    const op = x => !DS.abaixo.includes(x.categoria);
+    const base = T.receita;
+    const ant = DS.anterior.totais[filiais.length > 1 ? 'geral' : filiais[0]];
+    const sub = arr => arr.map(([t, v]) => `<div class="kv dre sub"><span>${esc(t)}</span><b>${money(v)}</b></div>`).join('');
+    const res = (t, v) => `<div class="kv dre tot ${v < 0 ? 'neg' : ''}"><span>${t}</span><b>${v < 0 ? '− ' : ''}${money(Math.abs(v))}<small class="muted">${base > 0 ? ' · ' + pctTxt(v / base * 100) : ''}</small></b></div>`;
+    const sem = !T.temVendas;
+    return `<section class="card"><h2>${titulo}</h2>
+      ${sem ? `<div class="note noprint" style="display:grid;gap:8px"><span>As vendas de ${esc(mesTxt(DS.mes))} ${filiais.length > 1 ? 'de alguma filial ' : ''}ainda não vieram do StarIA. Sem elas o DRE fica sem a parte de cima.${DS.mes > DS.ultimoFechado ? ' Este mês ainda não fechou: os números são parciais.' : ''}</span><span class="small">Peça no chat do Claude: “vendas do DRE de ${esc(mesTxt(DS.mes))}”.</span><button class="btn sm" type="button" data-dvendas="1">Ou digite aqui</button></div>` : ''}
+      <div>
+        ${linhaDre('Vendas (receita bruta)', T.receita, base)}
+        ${sub([['(−) Impostos sobre a venda', T.impostos]])}
+        ${linhaDre('Receita líquida', T.liquida, base, 'mid')}
+        ${sub([['(−) Custo da mercadoria vendida (CMV)', T.cmv]])}
+        ${res('Lucro bruto', T.bruto)}
+        ${linhaDre('Pessoal (da Folha)', T.pessoal, base, '', true)}
+        ${filiais.length === 1 && !DS.folhaTem ? '<p class="small muted noprint">A folha deste mês ainda não foi lançada. Abra a aba Folha.</p>' : ''}
+        ${linhaDre('Despesas fixas', T.fixas, base, '', true)}
+        ${sub(porCategoria(fx.filter(op)))}
+        ${linhaDre('Despesas do dia a dia', T.variaveis, base, '', true)}
+        ${sub(porCategoria(dd.filter(op)))}
+        ${res('Resultado operacional', T.operacional)}
+        ${T.abaixo ? linhaDre('Financiamentos, retiradas e investimentos', T.abaixo, base, '', true) + sub(porCategoria(fx.concat(dd).filter(x => !op(x)))) + res('Sobra de caixa do mês', T.sobra) : ''}
+      </div>
+      ${DS.anterior.temVendas && ant && ant.receita ? `<p class="small muted">Em ${esc(mesTxt(DS.anterior.mes))}: vendas ${money(ant.receita)}, resultado operacional ${ant.operacional < 0 ? '− ' : ''}${money(Math.abs(ant.operacional))} (${pctTxt(ant.operacional / ant.receita * 100)}).</p>` : ''}
+    </section>`;
+  }
+  function listaDespesas(f, interativo) {
+    const fx = DS.fixas.filter(x => x.filial === f), dd = DS.despesas.filter(x => x.filial === f);
+    const tag = interativo ? 'button type="button"' : 'div', fecha = interativo ? 'button' : 'div';
+    return `<section class="card"><div class="sec"><h2>Fixas · ${esc(f === 0 ? 'Rede' : 'Filial ' + f)}</h2>${interativo ? `<button class="lnk noprint" type="button" data-dfnova="${f}">+ Fixa</button>` : ''}</div>
+        ${fx.length ? `<div class="list">${fx.map(x => `<${tag} class="it" data-dfx="${esc(x.id)}"><div class="tx"><b>${esc(x.descricao)}</b><span>${esc(DS.categorias[x.categoria] || x.categoria)}${x.mudouNoMes ? ' · <b class="neg">neste mês ' + money(x.valor) + '</b> (costume ' + money(x.costume) + ')' : ''}</span></div><div class="vl">${money(x.valor)}</div>${interativo ? `<span class="ch">${ic('chev')}</span>` : ''}</${fecha}>`).join('')}</div>`
+          : '<p class="muted small">Nenhuma cadastrada. Aqui entram aluguel, energia, água, internet, sistema, contabilidade, parcelas… Cadastra uma vez e vale todo mês.</p>'}
+      </section>
+      <section class="card"><div class="sec"><h2>Dia a dia · ${esc(f === 0 ? 'Rede' : 'Filial ' + f)}</h2>${interativo ? `<button class="lnk noprint" type="button" data-ddnova="${f}">+ Lançar</button>` : ''}</div>
+        ${dd.length ? `<div class="list">${dd.map(x => `<${tag} class="it" data-dd="${esc(x.id)}"><div class="tx"><b>${esc(x.descricao)}</b><span>${[esc(DS.categorias[x.categoria] || x.categoria), x.data ? dBR(x.data) : '', x.criadoPor ? esc(x.criadoPor) : ''].filter(Boolean).join(' · ')}</span></div><div class="vl">${money(x.valor)}</div>${interativo ? `<span class="ch">${ic('chev')}</span>` : ''}</${fecha}>`).join('')}</div>`
+          : '<p class="muted small">Nada lançado neste mês. Ex.: diesel do caminhão, conserto da câmara fria, frete.</p>'}
+      </section>`;
+  }
+  function htmlDreGeral(interativo = true) {
+    const T = DS.totais, cols = [1, 2, 3].map(f => [filNome(f), T[f]]).concat([['Rede', T.rede], ['Geral', T.geral]]);
+    const lin = [['Vendas', t => money(t.receita)], ['Lucro bruto', t => money(t.bruto)], ['Margem bruta', t => pctTxt(pctDe(t.bruto, t.receita))],
+      ['Pessoal', t => money(t.pessoal)], ['Fixas', t => money(t.fixas)], ['Dia a dia', t => money(t.variaveis)],
+      ['Resultado operacional', t => (t.operacional < 0 ? '− ' : '') + money(Math.abs(t.operacional))], ['% das vendas', t => pctTxt(pctDe(t.operacional, t.receita))]];
+    return `<section class="card"><h2>Comparativo por filial</h2><div class="ftab"><table>
+        <thead><tr><th></th>${cols.map(([n]) => `<th class="n">${esc(n)}</th>`).join('')}</tr></thead>
+        <tbody>${lin.map(([n, fn], i) => `<tr class="${i === 6 ? 'tot' : ''}"><td>${n}</td>${cols.map(([, t]) => `<td class="n">${n.startsWith('%') || n.startsWith('Margem') ? (t.receita ? fn(t) : '—') : fn(t)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+        <p class="small muted">Rede = despesas de todas as lojas juntas (contabilidade, escritório…). Entram só no Geral. A filial 4 não entra.</p></section>
+      ${blocoDre(T.geral, [0, 1, 2, 3], 'Geral (filiais 1, 2, 3 e rede)')}
+      ${listaDespesas(0, interativo)}`;
+  }
+  function renderDre() {
+    if (!DS || DS.mes !== dreMes) { $('#main').innerHTML = '<div class="card sk" aria-busy="true"><i class="t"></i><i class="b"></i></div>'; carregaDre().then(render, fail); return; }
+    const abas = [['1', 'Filial 1'], ['2', 'Filial 2'], ['3', 'Filial 3'], ['geral', 'Geral']];
+    const v = DS.resultado, fontes = [...new Set(Object.values(v).map(x => x.fonte).filter(Boolean))];
+    $('#main').innerHTML = `<div class="pagehd"><h1>DRE</h1><p class="printonly">${esc(brand.name || '')} · ${esc(mesTxt(dreMes))} · ${dreAba === 'geral' ? 'Geral' : 'Filial ' + dreAba} · impresso em ${dtBR(new Date())}</p></div>
+      <section class="card noprint" style="gap:10px">
+        <div class="mesnav"><button class="btn sm" type="button" id="dMesAnt" aria-label="Mês anterior">${ic('back')}</button><b>${esc(mesTxt(dreMes).replace(/^./, c => c.toUpperCase()))}</b><button class="btn sm" type="button" id="dMesProx" aria-label="Próximo mês">${ic('chev')}</button></div>
+        <div class="seg" role="tablist">${abas.map(([k, t]) => `<button type="button" role="tab" data-daba="${k}" class="${dreAba === k ? 'on' : ''}" aria-selected="${dreAba === k}">${t}</button>`).join('')}</div>
+        <div class="row" style="justify-content:space-between"><span class="small muted">${Object.keys(v).length ? 'Vendas: ' + esc(fontes.join(', ') || 'digitado') + ' · <button type="button" class="lnk" data-dvendas="1" style="min-height:0;padding:0">corrigir</button>' : ''}${dreMes > DS.ultimoFechado ? ' · mês em andamento' : ''}</span>
+          <div class="row"><button class="btn sm" type="button" id="dPrint">Imprimir / PDF</button>${dreAba === 'geral' ? '<button class="btn sm" type="button" id="dPrintTudo">PDF completo</button>' : ''}</div></div>
+      </section>
+      ${dreAba === 'geral' ? htmlDreGeral() : blocoDre(DS.totais[dreAba], [Number(dreAba)], 'Filial ' + dreAba) + listaDespesas(Number(dreAba), true)}`;
+    $('#dMesAnt').addEventListener('click', () => { dreMes = mesMais(dreMes, -1); render(); });
+    $('#dMesProx').addEventListener('click', () => { dreMes = mesMais(dreMes, 1); render(); });
+    document.querySelectorAll('[data-daba]').forEach(b => b.addEventListener('click', () => { dreAba = b.dataset.daba; render(); }));
+    $('#dPrint').addEventListener('click', () => window.print());
+    if ($('#dPrintTudo')) $('#dPrintTudo').addEventListener('click', imprimirDre);
+    document.querySelectorAll('[data-dvendas]').forEach(b => b.addEventListener('click', sheetDreVendas));
+    document.querySelectorAll('[data-dfnova]').forEach(b => b.addEventListener('click', () => sheetFixa(null, Number(b.dataset.dfnova))));
+    document.querySelectorAll('[data-dfx]').forEach(b => b.addEventListener('click', () => sheetFixa(DS.fixas.find(x => x.id === b.dataset.dfx))));
+    document.querySelectorAll('[data-ddnova]').forEach(b => b.addEventListener('click', () => sheetDespesa(null, Number(b.dataset.ddnova))));
+    document.querySelectorAll('[data-dd]').forEach(b => b.addEventListener('click', () => sheetDespesa(DS.despesas.find(x => x.id === b.dataset.dd))));
+  }
+  function imprimirDre() {
+    const cab = t => `<div class="pagehd"><h1>DRE · ${t}</h1><p>${esc(brand.name || '')} · ${esc(mesTxt(dreMes))} · impresso em ${dtBR(new Date())}</p></div>`;
+    $('#main').innerHTML = cab('Geral') + htmlDreGeral(false) + [1, 2, 3].map(f => `<div class="pbreak"></div>${cab('Filial ' + f)}${blocoDre(DS.totais[f], [f], 'Filial ' + f)}${listaDespesas(f, false)}`).join('');
+    const volta = () => { window.removeEventListener('afterprint', volta); render(); };
+    window.addEventListener('afterprint', volta);
+    setTimeout(() => { window.print(); setTimeout(() => { if (!document.hidden) volta(); }, 1500); }, 50);
+  }
+  const optFiliais = sel => [1, 2, 3, 0].map(f => `<option value="${f}" ${f === sel ? 'selected' : ''}>${filNome(f)}</option>`).join('');
+  const optCats = sel => Object.keys(DS.categorias).map(k => `<option value="${k}" ${k === sel ? 'selected' : ''}>${esc(DS.categorias[k])}</option>`).join('');
+  function sheetDreVendas() {
+    const v = DS.resultado;
+    openSheet(`<div class="tt"><h2>Vendas de ${esc(mesTxt(dreMes))}</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      <p class="muted small">Por filial, igual ao StarIA: venda total, impostos sobre a venda e custo da mercadoria vendida (CMV).</p>
+      <form id="fdv">${[1, 2, 3].map(f => `<h3 style="margin:12px 0 6px">Filial ${f}</h3><div class="fgrid">${campo('dvR' + f, 'Vendas', v[f] && v[f].receita, ' w2')}${campo('dvI' + f, 'Impostos', v[f] && v[f].impostos)}${campo('dvC' + f, 'CMV', v[f] && v[f].cmv)}</div>`).join('')}
+        <button class="btn pri lg full" type="submit" style="margin-top:12px">Salvar</button></form>`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      $('#fdv').addEventListener('submit', e => {
+        e.preventDefault(); const pf = {};
+        [1, 2, 3].forEach(f => { const r = $('#dvR' + f).value; if (r !== '') pf[f] = { receita: r, impostos: $('#dvI' + f).value, cmv: $('#dvC' + f).value }; });
+        post('/api/caixa/dre/resultado', { mes: dreMes, porFilial: pf, fonte: 'digitado' }, 'Vendas salvas');
+      });
+    });
+  }
+  function sheetFixa(x, filialNova) {
+    const filial = x ? x.filial : filialNova;
+    openSheet(`<div class="tt"><h2>${x ? esc(x.descricao) : 'Despesa fixa · ' + esc(filNome(filial))}</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      <p class="muted small">${x ? 'Valor de costume vale todo mês. Se em ' + esc(mesTxt(dreMes)) + ' veio diferente, mude só este mês.' : 'Vale de ' + esc(mesTxt(dreMes)) + ' em diante, todo mês, até você parar.'}</p>
+      ${x ? `<form id="ffm"><div class="fgrid">${campo('fmVal', 'Valor em ' + esc(mesTxt(dreMes)) + ' <span class="muted">(vazio = o de costume)</span>', x.mudouNoMes ? x.valor : '', ' w2')}</div><button class="btn pri full" type="submit" style="margin-top:10px">Salvar só este mês</button></form><hr style="margin:14px 0;border:0;border-top:1px solid var(--line)">` : ''}
+      <form id="ffx"><div class="fgrid">
+        <div class="field w2"><label for="fxDesc">Descrição</label><input type="text" id="fxDesc" value="${esc(x ? x.descricao : '')}" required maxlength="80" placeholder="Ex.: aluguel do galpão, conta de luz"></div>
+        <div class="field"><label for="fxCat">Categoria</label><select id="fxCat">${optCats(x ? x.categoria : 'aluguel')}</select></div>
+        <div class="field"><label for="fxFil">Filial</label><select id="fxFil">${optFiliais(filial)}</select></div>
+        ${campo('fxVal', 'Valor de costume (por mês)', x ? x.costume : '')}
+        <div class="field"><label for="fxIni">Começa em</label><input type="month" id="fxIni" value="${esc(x ? x.inicio : dreMes)}"></div>
+      </div><button class="btn ${x ? '' : 'pri lg '}full" type="submit" style="margin-top:12px">${x ? 'Salvar cadastro (todos os meses)' : 'Cadastrar'}</button></form>
+      ${x ? `<button class="btn dan full" type="button" id="fxFim" style="margin-top:8px">Parar a partir de ${esc(mesTxt(dreMes))}</button>` : ''}`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      if ($('#ffm')) $('#ffm').addEventListener('submit', e => { e.preventDefault(); post('/api/caixa/dre/fixa/mes', { id: x.id, mes: dreMes, valor: $('#fmVal').value }, 'Salvo neste mês'); });
+      $('#ffx').addEventListener('submit', e => {
+        e.preventDefault();
+        post('/api/caixa/dre/fixa', { id: x ? x.id : undefined, filial: Number($('#fxFil').value), categoria: $('#fxCat').value, descricao: $('#fxDesc').value, valor: $('#fxVal').value, inicio: $('#fxIni').value }, x ? 'Salvo' : 'Despesa fixa cadastrada');
+      });
+      if ($('#fxFim')) $('#fxFim').addEventListener('click', async () => {
+        if (await perguntar('Parar "' + x.descricao + '"?', 'Sai do DRE a partir de ' + mesTxt(dreMes) + '. Os meses anteriores continuam como estão.', 'Parar', true)) post('/api/caixa/dre/fixa/encerrar', { id: x.id, mes: dreMes }, 'Despesa encerrada');
+      });
+    });
+  }
+  function sheetDespesa(x, filialNova) {
+    const filial = x ? x.filial : filialNova;
+    const hj = hoje(), dataPadrao = hj.slice(0, 7) === dreMes ? hj : '';
+    openSheet(`<div class="tt"><h2>${x ? 'Editar despesa' : 'Despesa do dia a dia · ' + esc(filNome(filial))}</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      <p class="muted small">Entra no DRE de ${esc(mesTxt(dreMes))}.</p>
+      <form id="fdd"><div class="fgrid">
+        <div class="field w2"><label for="ddDesc">O que foi</label><input type="text" id="ddDesc" value="${esc(x ? x.descricao : '')}" required maxlength="120" placeholder="Ex.: diesel do caminhão (Éder)"></div>
+        <div class="field"><label for="ddCat">Categoria</label><select id="ddCat">${optCats(x ? x.categoria : 'combustivel')}</select></div>
+        <div class="field"><label for="ddFil">Filial</label><select id="ddFil">${optFiliais(filial)}</select></div>
+        ${campo('ddVal', 'Valor', x ? x.valor : '')}
+        <div class="field"><label for="ddData">Data (opcional)</label><input type="date" id="ddData" value="${esc(x ? x.data || '' : dataPadrao)}" min="${dreMes}-01" max="${new Date(Date.UTC(+dreMes.slice(0, 4), +dreMes.slice(5, 7), 0)).toISOString().slice(0, 10)}"></div>
+      </div><button class="btn pri lg full" type="submit" style="margin-top:12px">Salvar</button></form>
+      ${x ? '<button class="btn dan full" type="button" id="ddDel" style="margin-top:8px">Apagar esta despesa</button>' : ''}`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      if (!x) setTimeout(() => { const n = $('#ddDesc'); if (n) n.focus(); }, 50);
+      $('#fdd').addEventListener('submit', e => {
+        e.preventDefault();
+        post('/api/caixa/dre/despesa', { id: x ? x.id : undefined, mes: dreMes, filial: Number($('#ddFil').value), categoria: $('#ddCat').value, descricao: $('#ddDesc').value, valor: $('#ddVal').value, data: $('#ddData').value || null }, 'Lançado');
+      });
+      if ($('#ddDel')) $('#ddDel').addEventListener('click', async () => { if (await perguntar('Apagar esta despesa?', '', 'Apagar', true)) post('/api/caixa/dre/despesa/excluir', { id: x.id }, 'Apagado'); });
+    });
+  }
   function irModulo(m) { modulo = m; closeSheet(); render(); window.scrollTo(0, 0); }
   $('#modCaixa').addEventListener('click', () => irModulo('caixa'));
   $('#modFolha').addEventListener('click', () => irModulo('folha'));
+  $('#modDre').addEventListener('click', () => irModulo('dre'));
 
   /* ---------- navegação: 3 abas para a equipe, 4 para o dono ---------- */
   const SUB_MAIS = ['staria', 'acessos', 'gaveta', 'ocorrencias', 'crediario'];
@@ -1339,7 +1502,12 @@
     if (modulo === 'folha' && !podeFolha()) modulo = 'caixa';
     $('#modCaixa').classList.toggle('on', modulo === 'caixa'); $('#modCaixa').setAttribute('aria-current', modulo === 'caixa' ? 'page' : 'false');
     $('#modFolha').classList.toggle('on', modulo === 'folha'); $('#modFolha').setAttribute('aria-current', modulo === 'folha' ? 'page' : 'false');
+    // DRE: só o dono
+    $('#modDre').hidden = !podeDre();
+    if (modulo === 'dre' && !podeDre()) modulo = 'caixa';
+    $('#modDre').classList.toggle('on', modulo === 'dre'); $('#modDre').setAttribute('aria-current', modulo === 'dre' ? 'page' : 'false');
     if (modulo === 'folha') { $('#bn').hidden = true; renderFolha(); return; }
+    if (modulo === 'dre') { $('#bn').hidden = true; renderDre(); return; }
     // Relatórios ao vivo do StarIA: painel no Claude do dono, para o administrador da Dávila Supermercados e para o financeiro que o dono habilitar
     if ($('#modRel')) $('#modRel').hidden = !((isAdmin() || (S && S.me.role === 'financeiro' && S.me.relatorios)) && slug === 'fundo-de-caixa');
     if (view === 'sangria') { view = 'inicio'; setTimeout(sheetSangria, 0); }
