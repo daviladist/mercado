@@ -131,7 +131,7 @@
         <div class="field"><label for="fname">Nome exibido no sistema</label><input type="text" id="fname" maxlength="80" value="${esc(t.name)}"></div>
         <div class="field"><span style="font-size:13px;font-weight:600;color:var(--muted)">Logo</span>
           <div class="logo-row"><div class="logo-box">${t.logo ? `<img src="${esc(t.logo)}" alt="Logo atual">` : 'LOGO'}</div>
-          <label class="btn" for="flogo" style="display:inline-flex;align-items:center">Enviar imagem</label><input type="file" id="flogo" accept="image/png,image/jpeg,image/webp" hidden>
+          <label class="btn" for="flogo" style="display:inline-flex;align-items:center">Enviar imagem</label><input type="file" id="flogo" accept="image/*" hidden>
           ${t.logo ? '<button class="btn" type="button" id="frmlogo">Tirar</button>' : ''}</div></div>
         <div class="field"><span style="font-size:13px;font-weight:600;color:var(--muted)">Cor principal</span>
           <div class="sw">${SWATCHES.map(([c, n]) => `<button type="button" data-c="${c}" aria-label="${n}" aria-pressed="${(t.color || '').toUpperCase() === c}" style="background:${c}"></button>`).join('')}<input type="color" id="fcolor" aria-label="Outra cor" value="${esc(t.color || '#1F3D2B')}"></div>
@@ -167,7 +167,7 @@
         <div class="field"><label for="fname">${esc(U.nomeLabel)}</label><input type="text" id="fname" maxlength="80" value="${esc(t.name)}" placeholder="${esc(U.exemplo)}"></div>
         <div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Logo</span>
           <div class="logo-row"><div class="logo-box">${t.logo ? `<img src="${esc(t.logo)}" alt="Logo atual">` : 'LOGO'}</div>
-          <label class="btn" for="flogo" style="display:inline-flex;align-items:center">Enviar imagem</label><input type="file" id="flogo" accept="image/png,image/jpeg,image/webp" hidden>
+          <label class="btn" for="flogo" style="display:inline-flex;align-items:center">Enviar imagem</label><input type="file" id="flogo" accept="image/*" hidden>
           ${t.logo ? '<button class="btn" type="button" id="frmlogo">Tirar</button>' : ''}</div></div>
         <div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Cor principal</span>
           <div class="sw">${SWATCHES.map(([c, n]) => `<button type="button" data-c="${c}" aria-label="${n}" aria-pressed="${(t.color || '').toUpperCase() === c}" style="background:${c}"></button>`).join('')}<input type="color" id="fcolor" aria-label="Outra cor" value="${esc(t.color || '#1F3D2B')}"></div></div>
@@ -329,19 +329,38 @@
     });
     window.scrollTo(0, 0);
   }
-  /* reduz a logo para no máximo 256 px antes de enviar (fica leve e sem código escondido) */
+  /* aceita qualquer imagem que o navegador abra (PNG, JPG, WEBP, GIF, BMP, SVG, HEIC no iPhone...),
+     de qualquer tamanho, e o próprio sistema reduz e compacta até caber no limite do servidor */
   function readLogo(f) {
-    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) { toast('Use PNG, JPG ou WEBP.'); return; }
-    if (f.size > 5 * 1024 * 1024) { toast('Imagem grande demais.'); return; }
-    const url = URL.createObjectURL(f), img = new Image();
+    if (f.type && !/^image\//.test(f.type)) { toast('Esse arquivo não é uma imagem.'); return; }
+    if (f.size > 40 * 1024 * 1024) { toast('Imagem enorme (mais de 40 MB). Tire uma foto menor ou reduza antes.'); return; }
+    const LIM = 380 * 1024, img = new Image(), fr = new FileReader();
+    /* data: (e não blob:) porque a página só permite imagens data: */
+    fr.onerror = () => toast('Não consegui ler esse arquivo.');
+    fr.onload = () => { img.src = fr.result; };
     img.onload = () => {
-      const k = Math.min(1, 256 / Math.max(img.width, img.height)), c = document.createElement('canvas');
-      c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
-      draft.logo = c.toDataURL('image/png'); touch();
+      const w = img.naturalWidth || 512, h = img.naturalHeight || 512;
+      const tenta = (lado, tipo, q) => {
+        const k = Math.min(1, lado / Math.max(w, h)), c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+        const x = c.getContext('2d');
+        if (tipo === 'image/jpeg') { x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); }
+        x.drawImage(img, 0, 0, c.width, c.height);
+        return c.toDataURL(tipo, q);
+      };
+      const ok = d => /^data:image\/(png|jpeg|webp);base64,/.test(d) && d.length <= LIM;
+      let out = null;
+      for (const lado of [512, 384, 256, 192, 128]) {
+        for (const [tipo, q] of [['image/png'], ['image/webp', .9], ['image/jpeg', .85]]) {
+          const d = tenta(lado, tipo, q); if (ok(d)) { out = d; break; }
+        }
+        if (out) break;
+      }
+      if (!out) { toast('Não consegui reduzir essa imagem. Tente outra.'); return; }
+      draft.logo = out; touch();
     };
-    img.onerror = () => { URL.revokeObjectURL(url); toast('Não consegui abrir essa imagem.'); };
-    img.src = url;
+    img.onerror = () => toast('Não consegui abrir essa imagem (formato HEIC/RAW?). Salve como JPG ou PNG e tente de novo.');
+    fr.readAsDataURL(f);
   }
   async function save() {
     const b = $('#save'); b.disabled = true;
