@@ -244,7 +244,7 @@ s, _ = A.req('/api/caixa/mov/excluir', {'id': SGI1}); check(s == 200, 'agora dá
 s, st = A.req('/api/caixa/state'); check(st['saldoImpostos'] == 0 and st['saldo'] == 27700, 'gaveta zerada, saldo principal de volta a 27.700')
 
 print('== conferência física do caixa e ocorrências')
-s, r = F.req('/api/caixa/conferir', {'valorContado': '27700'}); check(s == 200 and r.get('bateu') is True and 'saldoEsperado' not in r and 'diferenca' not in r, 'financeiro também confere o caixa físico, às cegas: só fica sabendo que bateu')
+s, r = F.req('/api/caixa/conferir', {'valorContado': '27700'}); check(s == 200 and r.get('bateu') is True and r.get('saldoEsperado') == 27700 and r.get('diferenca') == 0, 'financeiro também confere o caixa físico e, como agora vê o saldo do cofre, vê o esperado e a diferença')
 s, _ = M.req('/api/caixa/conferir', {'valorContado': '-5'}); check(s == 400, 'valor contado negativo recusado')
 s, r = M.req('/api/caixa/conferir', {'valorContado': '27700'}); check(s == 200 and r.get('bateu') is True, 'caixista confere e bate certinho (27.700 = 27.700)')
 s, _ = M.req('/api/caixa/ocorrencias'); check(s == 403, 'caixista não vê a aba de ocorrências')
@@ -365,11 +365,11 @@ s, r = F.req('/api/caixa/sacola/conferir', {'id': sacs[1]['id'], 'valorContado':
 check(s == 200 and r.get('bateu') is True, 'conferir a sacola da matriz: venda bateu e o crediário em dinheiro (20) bateu com o que foi marcado')
 s, st = A.req('/api/caixa/state'); check(st['saldo'] == round(saldo_a + 70, 2), 'saldo sobe com a venda contada (50) e o crediário em dinheiro (20); o cartão não entra')
 F.req('/api/caixa/sacola/chegou', {'id': sacs[2]['id']})
-s, r = F.req('/api/caixa/sacola/conferir', {'id': sacs[2]['id'], 'valorContado': '300', 'motivo': 'faltou 50 centavos'}); check(s == 200 and r.get('bateu') is False, 'sacola da filial 2 conferida: faltaram 50 centavos')
+s, r = F.req('/api/caixa/sacola/conferir', {'id': sacs[2]['id'], 'valorContado': '300', 'motivo': 'faltou 50 centavos'}); check(s == 200 and r.get('bateu') is True, 'sacola da filial 2 conferida: faltaram 50 centavos, dentro da margem de R$ 5 (bateu)')
 s, oc = A.req('/api/caixa/ocorrencias'); tt = [o['titulo'] for o in oc['ocorrencias']]
 check('Caixas do StarIA enviados para a sacola' in tt, 'enviar caixas para a sacola aparece nas ocorrências')
 sac_oc = [o for o in oc['ocorrencias'] if o['tipo'] == 'sacola']
-check(any(o['detalhe']['diferenca'] == -0.5 for o in sac_oc) and not any(o['detalhe']['filial'] == 1 and o['detalhe']['valorContado'] == 50 for o in sac_oc), 'só a sacola com falta vira ocorrência (a da matriz bateu)')
+check(not any(o['detalhe']['diferenca'] == -0.5 for o in sac_oc) and not any(o['detalhe']['filial'] == 1 and o['detalhe']['valorContado'] == 50 for o in sac_oc), 'diferença dentro da margem (50 centavos) não vira ocorrência, e a sacola da matriz que bateu também não')
 s, st = A.req('/api/caixa/state'); j = next(x for x in st['jobs'] if x['id'] == JL); check(j['resultado'].get('porCaixa') is True and j['status'] == 'aplicada', 'a consulta mostra o resumo por caixa')
 
 print('== "quanto eu tenho agora e está tudo certo?": resumo do dono, contagem cega da equipe, alertas')
@@ -391,7 +391,7 @@ check('CAIXA_VERMELHO' in cods, 'caixa do StarIA esperando há dias vira alerta'
 check(rs['status'] == 'vermelho' and rs['alertas'][0]['nivel'] == 'vermelho', 'com alerta vermelho, o semáforo fica vermelho e o vermelho vem primeiro')
 check(rs['ultimaContagem'] and rs['ultimaContagem']['diferenca'] == -200, 'mostra a última contagem do cofre e quanto deu de diferença')
 s, stf = F.req('/api/caixa/state')
-check('saldo' not in stf and 'resumo' not in stf and 'porFilial' not in stf and 'miniCaixas' not in stf, 'o financeiro não vê o saldo nem o resumo (contagem cega)')
+check(isinstance(stf.get('saldo'), (int, float)) and 'resumo' not in stf and 'porFilial' not in stf and 'miniCaixas' not in stf and 'saldoImpostos' not in stf, 'o financeiro vê o saldo do cofre (liberado pelo dono), mas não o resumo nem a gaveta de impostos')
 check(all(c['dinheiro'] is None for c in stf.get('caixasPendentes', [])) and all(sc['valorStaria'] is None for sc in stf['sacolas']), 'o financeiro não vê o valor dos caixas nem das sacolas que vai contar')
 check(isinstance(stf.get('pendencias'), list) and all('R$' not in p['texto'] for p in stf['pendencias']), 'o financeiro vê as pendências dele, sem valores em R$')
 check(all(m['criadoPor'] == 'Fulano do financeiro' for m in stf['mov']), 'o financeiro só vê no extrato o que ele mesmo lançou')
@@ -524,6 +524,15 @@ check(s == 200 and st3['saldo'] == 100, 'dá para recomeçar: configura o saldo 
 for _ in range(5): A.req('/api/caixa/zerar', {'senha': 'errada' + pw(), 'confirmacao': 'ZERAR'})
 s, _ = A.req('/api/caixa/zerar', {'senha': NP, 'confirmacao': 'ZERAR'}); check(s == 429, 'depois de 5 senhas erradas, bloqueia por 15 minutos (mesmo com a senha certa)')
 s, st4 = A.req('/api/caixa/state'); check(st4['cfg'] is not None, 'o bloqueio não apagou nada')
+
+print('== margem de erro, saldo para o financeiro e importar do StarIA')
+s, r = F.req('/api/caixa/conferir', {'valorContado': '103'}); check(s == 200 and r.get('bateu') is True and r.get('diferenca') == 3, 'cofre com R$ 3 a mais (dentro da margem de R$ 5): bateu')
+s, r = F.req('/api/caixa/conferir', {'valorContado': '94'}); check(s == 200 and r.get('bateu') is False and r.get('diferenca') == -6, 'cofre com R$ 6 a menos (fora da margem): não bateu')
+s, oc5 = A.req('/api/caixa/ocorrencias'); cf5 = [o for o in oc5['ocorrencias'] if o['tipo'] == 'conferencia']
+check(len(cf5) == 1 and cf5[0]['detalhe']['diferenca'] == -6, 'só a diferença fora da margem vira ocorrência')
+s, st5 = F.req('/api/caixa/state'); check(st5.get('saldo') == 100 and st5.get('tolerancia') == 5, 'financeiro vê o saldo do cofre e a margem de erro')
+s, r = F.req('/api/caixa/staria/pedir', {'dia': '2026-11-01'}); check(s == 200 and r.get('id'), 'financeiro pode pedir a importação do StarIA')
+s, r = M.req('/api/caixa/staria/pedir', {'dia': '2026-11-01'}); check(s == 403, 'caixista não pede a importação do StarIA')
 
 print(f'\n{ok} OK, {len(fails)} falha(s)')
 if fails:

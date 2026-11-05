@@ -39,6 +39,10 @@
     if (cor && /^#[0-9a-f]{6}$/i.test(cor)) document.documentElement.style.setProperty('--brand', cor);
   }
   const isAdmin = () => !!(S && S.me.role === 'admin');
+  const isFin = () => !!(S && S.me.role === 'financeiro');
+  const tolerancia = () => Number((S && S.tolerancia) || 5);
+  const dentro = d => Math.abs(Number(d) || 0) <= tolerancia() + 1e-9;
+
 
   /* ---------- entrar ---------- */
   function showLogin(msg) {
@@ -262,12 +266,17 @@
         <section class="hero" aria-label="Suas tarefas">
           <span class="lb">Olá, ${esc((S.me.nome || '').split(' ')[0])}</span>
           <span class="val" style="font-size:30px">${pend.length ? plural(pend.length, 'coisa para fazer', 'coisas para fazer') : 'Tudo em dia'}</span>
-          <span class="sub">Conte sempre sem pressa. Você não vê o valor esperado: o app só diz se bateu.</span>
+          <span class="sub">${isFin() ? 'Conte sempre sem pressa.' : 'Conte sempre sem pressa. Você não vê o valor esperado: o app só diz se bateu.'}</span>
         </section>
+        ${isFin() && S.saldo != null ? `<section class="card" aria-label="Dinheiro no cofre"><div class="kv tot"><span><b>Dinheiro no cofre agora</b></span><b class="num">${money(S.saldo)}</b></div></section>` : ''}
         ${acts}
+        ${isFin() ? `<section class="card" id="cardStaria"><div class="sec"><h2>Importar do StarIA</h2></div>
+          <p class="small muted" style="margin:0 0 10px">Um dia por vez, igual à tela de Fechamento de Caixa. Depois de pedir, é só chamar o Claude: “processar as consultas do StarIA”.</p>
+          ${seletorDia()}</section>` : ''}
         ${pend.length ? `<section class="card" id="tarefas"><div class="sec"><h2>Para fazer</h2><span class="badge">${pend.length}</span></div>
           <div class="list">${pend.map(linhaAlerta).join('')}</div></section>` : ''}
         ${ultimas}`;
+      if (isFin()) ligarSeletorDia();
     } else {
       const R = S.resumo || { status: 'verde', naMatriz: S.saldo, alertas: [], nasLojas: { total: 0, porFilial: {} }, aCaminhoDoBanco: { total: 0, qtd: 0 }, gaveta: 0, tudo: S.saldo };
       const v = R.naMatriz, reais = Math.trunc(Math.abs(v)), cent = money(v).split(',')[1] || '00';
@@ -277,7 +286,7 @@
         : { k: 'wa', ic: 'clock', t: plural(R.alertas.length, 'coisa para olhar', 'coisas para olhar') };
       const uc = R.ultimaContagem;
       const ucTxt = !uc ? 'O cofre ainda não foi contado. Conte para confirmar.'
-        : 'Última contagem: ' + (uc.horas < 1 ? 'agora há pouco' : uc.horas < 24 ? 'há ' + uc.horas + ' h' : 'há ' + Math.floor(uc.horas / 24) + ' dia(s)') + ', ' + esc(uc.por || '') + ', ' + (uc.diferenca === 0 ? 'bateu' : (uc.diferenca < 0 ? 'faltou ' : 'sobrou ') + money(Math.abs(uc.diferenca)));
+        : 'Última contagem: ' + (uc.horas < 1 ? 'agora há pouco' : uc.horas < 24 ? 'há ' + uc.horas + ' h' : 'há ' + Math.floor(uc.horas / 24) + ' dia(s)') + ', ' + esc(uc.por || '') + ', ' + (dentro(uc.diferenca) ? 'bateu' : (uc.diferenca < 0 ? 'faltou ' : 'sobrou ') + money(Math.abs(uc.diferenca)));
       const pf = Object.entries(R.nasLojas.porFilial || {}).filter(([, x]) => x.caixasSemSacola || x.naFilial || x.chegouFaltaContar || x.crediario).sort((a, b) => a[0] - b[0]);
       const jobP = (S.jobs || []).some(j => j.status === 'pendente');
       $('#main').innerHTML = `
@@ -358,10 +367,10 @@
     });
   }
   function sheetConferir() {
-    const cego = !isAdmin();
+    const cego = !isAdmin() && !isFin();
     let tentativa = 0;
     openSheet(`<div class="tt"><h2>Contar o cofre</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
-      <p class="muted small">Conte todo o dinheiro do cofre e digite o total. ${cego ? 'Você não vê o valor esperado: o app só diz se bateu. Se não bater, conte de novo.' : 'O app compara com o que deveria ter.'}</p>
+      <p class="muted small">Conte todo o dinheiro do cofre e digite o total. ${cego ? 'Você não vê o valor esperado: o app só diz se bateu. Se não bater, conte de novo.' : 'O app compara com o que deveria ter.'} Diferença de até ${money(tolerancia())}, para mais ou para menos, conta como "bateu".</p>
       <form id="fcf">
         <div class="field"><label for="cfValor">Quanto você contou</label><input type="text" inputmode="decimal" id="cfValor" placeholder="0,00" required></div>
         <div class="field"><label for="cfObs">Observação (opcional)</label><textarea id="cfObs" placeholder="Ex.: nota rasgada, troco emprestado…"></textarea></div>
@@ -373,7 +382,7 @@
         try {
           const r = await api('/api/caixa/conferir', { valorContado: $('#cfValor').value, motivo: $('#cfObs').value });
           await reload();
-          if (r.bateu) { $('#fcf').hidden = true; $('#cfOut').innerHTML = `<div class="okbox"><b>Bateu certinho!</b> O cofre confere.</div>`; return; }
+          if (r.bateu) { $('#fcf').hidden = true; const d0 = Number(r.diferenca) || 0; $('#cfOut').innerHTML = `<div class="okbox"><b>${d0 ? 'Bateu, dentro da margem.' : 'Bateu certinho!'}</b> O cofre confere${d0 ? ' (' + (d0 > 0 ? 'sobrou ' : 'faltou ') + money(Math.abs(d0)) + ')' : ''}.</div>`; return; }
           if (cego && tentativa === 0) {
             // não revela o valor: só pede para contar de novo (a 1ª contagem já ficou registrada para o dono)
             tentativa++;
@@ -516,7 +525,7 @@
   function sacolaStatus(s) {
     if (s.conferidoEm && s.diferenca == null) return s.bateu === false ? '<span class="pill bad">Não bateu</span>' : '<span class="pill ok">Conferida · bateu</span>';
     if (s.conferidoEm) {
-      const okVenda = s.diferenca === 0, okCredi = !s.crediStaria || !s.crediDiferenca;
+      const okVenda = dentro(s.diferenca), okCredi = !s.crediStaria || dentro(s.crediDiferenca);
       if (okVenda && okCredi) return '<span class="pill ok">Conferida · bateu certinho</span>';
       const partes = [];
       if (!okVenda) partes.push((s.diferenca > 0 ? 'vendas: sobrou ' : 'vendas: faltou ') + money(Math.abs(s.diferenca)));
@@ -782,7 +791,7 @@
     document.querySelectorAll('[data-conferir]').forEach(b => b.addEventListener('click', () => sheetConferirSacola(S.sacolas.find(s => s.id === b.dataset.conferir))));
   }
   // a equipe recebe só "bateu" (contagem cega); o dono recebe a diferença
-  const sacolaOk = s => s.diferenca == null ? s.bateu !== false : s.diferenca === 0 && (!s.crediStaria || !s.crediDiferenca);
+  const sacolaOk = s => s.diferenca == null ? s.bateu !== false : dentro(s.diferenca) && (!s.crediStaria || dentro(s.crediDiferenca));
   /* conferir a sacola. Para a equipe é às cegas: não vê o valor do StarIA, só conta e digita o total. Antes de
      gravar, o app CHECA (sem gravar) se bateu; se não bateu, pede para contar de novo uma vez, e só então registra. */
   function sheetConferirSacola(s) {
