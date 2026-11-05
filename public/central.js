@@ -5,6 +5,11 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const SWATCHES = [['#1F3D2B', 'Verde Tino'], ['#E11F2C', 'Vermelho'], ['#0A66B2', 'Azul'], ['#B4410F', 'Laranja'], ['#6D28D9', 'Roxo']];
   const STATUS = { ativa: 'Ativa', em_preparo: 'Em preparo', suspensa: 'Suspensa' };
+  /* blocos abertos/fechados: lembrados enquanto a página estiver aberta */
+  const OPEN = new Map();
+  document.addEventListener('toggle', e => { const d = e.target; if (d.matches && d.matches('details.fold[data-k]')) OPEN.set(d.dataset.k, d.open); }, true);
+  const restoreOpen = () => document.querySelectorAll('#editor details.fold[data-k]').forEach(d => { if (OPEN.has(d.dataset.k) && d.open !== OPEN.get(d.dataset.k)) d.open = OPEN.get(d.dataset.k); });
+  new MutationObserver(restoreOpen).observe(document.documentElement, { childList: true, subtree: true });
   let D = null, sel = null, draft = null, dirty = false, pendingDraft = null, segUI = null, aba = 'atacado';
   const ramoOf = t => (t && ['rural', 'loja', 'caixa'].includes(t.ramo) ? t.ramo : 'atacado');
   const modsOf = t => ramoOf(t) === 'rural' ? D.ruralModules : ramoOf(t) === 'loja' ? D.lojaModules : ramoOf(t) === 'caixa' ? D.caixaModules : D.modules;
@@ -111,18 +116,17 @@
       <div><h1>${esc(t.name || 'Nova empresa')}</h1><p class="muted small" style="margin:4px 0 0">${on} de ${D.modules.length} módulos ligados · essenciais sempre ativos</p></div>
       <div class="field" style="min-width:180px"><label for="fst">Situação</label><select id="fst">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${t.status === k ? 'selected' : ''} ${t.primary && k !== 'ativa' ? 'disabled' : ''}>${v}</option>`).join('')}</select></div>
     </section>
-    <section class="card" style="display:grid;gap:10px" aria-labelledby="hwho">
-      <div><h2 id="hwho">Quem usa o sistema</h2><p class="muted small" style="margin:4px 0 0">Sem app do cliente, a vitrine e tudo o que é do cliente ficam desligados: os pedidos entram pelos vendedores e pela loja.</p></div>
+    <details class="card fold" data-k="who"><summary><h2 id="hwho">Quem usa o sistema</h2><span class="sum">${t.modules.app_cliente ? 'Equipe e clientes' : 'Só a equipe'}</span></summary><div class="fb">
+      <p class="muted small" style="margin:0">Sem app do cliente, a vitrine e tudo o que é do cliente ficam desligados: os pedidos entram pelos vendedores e pela loja.</p>
       <div class="presets"><button type="button" data-who="0" aria-pressed="${!t.modules.app_cliente}">Só a equipe (cliente compra pelo vendedor)</button><button type="button" data-who="1" aria-pressed="${!!t.modules.app_cliente}">Equipe e clientes (app do cliente)</button></div>
-    </section>
-    <section class="card" style="display:grid;gap:10px" aria-labelledby="hstk">
-      <div><h2 id="hstk">Venda sem estoque</h2><p class="muted small" style="margin:4px 0 0">Não permitindo, o pedido do cliente ou do vendedor acima do estoque é recusado ("Só temos X un."). A loja sempre pode lançar.</p></div>
+    </div></details>
+    <details class="card fold" data-k="stk"><summary><h2 id="hstk">Venda sem estoque</h2><span class="sum">${t.modules.trava_estoque ? 'Não permite' + (t.modules.trava_reservado ? ' · desconta reservado' : '') : 'Permite'}</span></summary><div class="fb">
+      <p class="muted small" style="margin:0">Não permitindo, o pedido do cliente ou do vendedor acima do estoque é recusado ("Só temos X un."). A loja sempre pode lançar.</p>
       <div class="presets"><button type="button" data-stk="0" aria-pressed="${!t.modules.trava_estoque}">Permitir venda sem estoque</button><button type="button" data-stk="1" aria-pressed="${!!t.modules.trava_estoque}">Não permitir venda sem estoque</button></div>
       ${t.modules.trava_estoque ? `<label class="subopt"><input type="checkbox" id="fstkres" ${t.modules.trava_reservado ? 'checked' : ''}><span><b>Descontar o que já está reservado</b><span class="small muted">Compara com o estoque menos o que os outros pedidos em aberto já vão levar.</span></span></label>` : ''}
-    </section>
+    </div></details>
     ${t.id ? accessCard(t) : '<div class="note">Salve a empresa para gerar o endereço e o acesso do administrador dela.</div>'}
-    <section class="card" style="display:grid;gap:16px" aria-labelledby="hid">
-      <h2 id="hid">Identidade da marca</h2>
+    <details class="card fold" data-k="id"><summary><h2 id="hid">Identidade da marca</h2><span class="sum">${esc(t.name || '')}${t.logo ? ' · com logo' : ''}${t.color ? ' · ' + esc(t.color) : ''}</span></summary><div class="fb" style="gap:14px">
       <div class="grid">
         <div class="field"><label for="fname">Nome exibido no sistema</label><input type="text" id="fname" maxlength="80" value="${esc(t.name)}"></div>
         <div class="field"><span style="font-size:13px;font-weight:600;color:var(--muted)">Logo</span>
@@ -134,15 +138,15 @@
           ${t.primary && !t.color ? '<span class="small muted">Sem cor escolhida: o app mantém as cores atuais.</span>' : ''}</div>
       </div>
       <div class="preview"><span class="small muted">Prévia do botão da loja:</span><span class="pv-btn" style="background:${esc(t.color || '#E11F2C')}">Finalizar pedido</span></div>
-    </section>
-    <section class="card" style="display:grid;gap:12px" aria-labelledby="hseg">
-      <div><h2 id="hseg">Modelo por segmento</h2><p class="muted small" style="margin:4px 0 0">Aplica um pacote pronto de módulos. Depois dá para ajustar um por um.</p></div>
+    </div></details>
+    <details class="card fold" data-k="seg"><summary><h2 id="hseg">Modelo por segmento</h2><span class="sum">${seg ? esc((D.segments.find(s => s.id === seg) || {}).name || '') : 'Personalizado'}</span></summary><div class="fb">
+      <p class="muted small" style="margin:0">Aplica um pacote pronto de módulos. Depois dá para ajustar um por um.</p>
       <div class="presets">${D.segments.map(s => `<button type="button" data-seg="${esc(s.id)}" aria-pressed="${seg === s.id}">${esc(s.name)}</button>`).join('')}${seg ? '' : '<button type="button" aria-pressed="true" disabled>Personalizado</button>'}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn dark" id="segNew">+ Criar segmento</button><button type="button" class="btn" id="segList">Editar segmentos</button></div>
-    </section>
-    ${groups.filter(g => g !== 'Acesso').map(g => `<section class="card grp"><h2>${esc(g)}${g === 'Essenciais' ? '<small>Não podem ser desligados</small>' : ''}</h2>
+    </div></details>
+    ${groups.filter(g => g !== 'Acesso').map(g => { const gm = D.modules.filter(m => m.group === g), gon = gm.filter(m => m.essential || (t.modules[m.code] && !(m.requires && !t.modules[m.requires]))).length; return `<details class="card grp fold" data-k="g:${esc(g)}"><summary><h2>${esc(g)}</h2><span class="sum">${g === 'Essenciais' ? 'Sempre ativos' : gon + ' de ' + gm.length + ' ligados'}</span></summary><div class="fb">
       ${D.modules.filter(m => m.group === g).map(m => { const blk = m.requires && !t.modules[m.requires]; return `<div class="mod"><div class="t"><div class="n">${esc(m.name)}${blk ? `<span class="tag">precisa de "${esc((D.modules.find(x => x.code === m.requires) || {}).name || m.requires)}"</span>` : !m.essential && !m.enforced ? '<span class="tag">efeito na próxima etapa</span>' : m.enforced === 'tela' ? '<span class="tag">só esconde a tela</span>' : ''}</div><div class="d">${esc(m.desc)}</div></div>
-        ${m.essential ? '<span class="lock">Sempre ativo</span>' : `<button type="button" class="sw-t" role="switch" data-m="${esc(m.code)}" aria-checked="${!blk && !!t.modules[m.code]}" aria-label="${esc(m.name)}" ${blk ? 'disabled style="opacity:.45;cursor:not-allowed"' : ''}><span></span></button>`}</div>` }).join('')}</section>`).join('')}
+        ${m.essential ? '<span class="lock">Sempre ativo</span>' : `<button type="button" class="sw-t" role="switch" data-m="${esc(m.code)}" aria-checked="${!blk && !!t.modules[m.code]}" aria-label="${esc(m.name)}" ${blk ? 'disabled style="opacity:.45;cursor:not-allowed"' : ''}><span></span></button>`}</div>` }).join('')}</div></details>`; }).join('')}
     <div class="bar${dirty ? ' dirty' : ''}"><span>${dirty ? 'Há mudanças sem salvar.' : 'Tudo salvo.'}</span><div style="display:flex;gap:8px"><button class="btn ghost-light" type="button" id="undo" ${dirty ? '' : 'disabled'}>Desfazer</button><button class="btn primary" type="button" id="save" ${dirty ? '' : 'disabled'}>Salvar configuração</button></div></div>`;
     bind();
   }
@@ -158,8 +162,7 @@
     </section>
     <div class="note">${U.nota(dono)}</div>
     ${t.id ? accessCard(t) : '<div class="note">Salve para gerar o endereço e o acesso.</div>'}
-    <section class="card" style="display:grid;gap:16px" aria-labelledby="hid">
-      <h2 id="hid">Identidade</h2>
+    <details class="card fold" data-k="id"><summary><h2 id="hid">Identidade</h2><span class="sum">${esc(t.name || '')}${t.logo ? ' · com logo' : ''}${t.color ? ' · ' + esc(t.color) : ''}</span></summary><div class="fb" style="gap:14px">
       <div class="grid">
         <div class="field"><label for="fname">${esc(U.nomeLabel)}</label><input type="text" id="fname" maxlength="80" value="${esc(t.name)}" placeholder="${esc(U.exemplo)}"></div>
         <div class="field"><span style="font-size:13px;font-weight:600;color:#3B4A3F">Logo</span>
@@ -170,10 +173,10 @@
           <div class="sw">${SWATCHES.map(([c, n]) => `<button type="button" data-c="${c}" aria-label="${n}" aria-pressed="${(t.color || '').toUpperCase() === c}" style="background:${c}"></button>`).join('')}<input type="color" id="fcolor" aria-label="Outra cor" value="${esc(t.color || '#1F3D2B')}"></div></div>
       </div>
       <div class="preview"><span class="small muted">Prévia do botão:</span><span class="pv-btn" style="background:${esc(t.color || '#1F3D2B')}">${esc(U.botao)}</span></div>
-    </section>
-    ${groups.map(g => `<section class="card grp"><h2>${esc(g)}${g === 'Essenciais' ? '<small>Não podem ser desligadas</small>' : ''}</h2>
+    </div></details>
+    ${groups.map(g => { const gm = mods.filter(m => m.group === g), gon = gm.filter(m => m.essential || t.modules[m.code]).length; return `<details class="card grp fold" data-k="g:${esc(g)}"><summary><h2>${esc(g)}</h2><span class="sum">${g === 'Essenciais' ? 'Sempre ativas' : gon + ' de ' + gm.length + ' ligadas'}</span></summary><div class="fb">
       ${mods.filter(m => m.group === g).map(m => `<div class="mod"><div class="t"><div class="n">${esc(m.name)}</div><div class="d">${esc(m.desc)}</div></div>
-        ${m.essential ? '<span class="lock">Sempre ativo</span>' : `<button type="button" class="sw-t" role="switch" data-m="${esc(m.code)}" aria-checked="${!!t.modules[m.code]}" aria-label="${esc(m.name)}"><span></span></button>`}</div>`).join('')}</section>`).join('')}
+        ${m.essential ? '<span class="lock">Sempre ativo</span>' : `<button type="button" class="sw-t" role="switch" data-m="${esc(m.code)}" aria-checked="${!!t.modules[m.code]}" aria-label="${esc(m.name)}"><span></span></button>`}</div>`).join('')}</div></details>`; }).join('')}
     <div class="bar${dirty ? ' dirty' : ''}"><span>${dirty ? 'Há mudanças sem salvar.' : 'Tudo salvo.'}</span><div style="display:flex;gap:8px"><button class="btn ghost-light" type="button" id="undo" ${dirty ? '' : 'disabled'}>Desfazer</button><button class="btn primary" type="button" id="save" ${dirty ? '' : 'disabled'}>${t.id ? 'Salvar configuração' : esc(U.criar)}</button></div></div>`;
     bindCommon();
     const E = $('#editor');
@@ -196,8 +199,8 @@
   /* endereço e acesso do administrador da empresa */
   function accessCard(t) {
     const base = location.origin + (t.primary ? '' : '/t/' + t.id), st = t.stats || {};
-    return `<section class="card" style="display:grid;gap:12px" aria-labelledby="hac">
-      <h2 id="hac">Acesso da empresa</h2>
+    const nl = accessLinks(t, base).length;
+    return `<details class="card fold" data-k="ac"><summary><h2 id="hac">Acesso da empresa</h2><span class="sum">${nl} endereço${nl === 1 ? '' : 's'}${t.adminLogin ? ' · admin: ' + esc(t.adminLogin) : t.primary ? '' : ' · sem administrador'}</span></summary><div class="fb">
       <div class="links">${accessLinks(t, base).map(([lb, url, note]) => `<div class="lk"><div class="lk-t"><b>${esc(lb)}</b>${note ? `<span class="small muted">${esc(note)}</span>` : ''}</div><code class="link">${esc(url)}</code><div class="lk-b"><button type="button" class="btn" data-copy="${esc(url)}">Copiar</button><a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Abrir</a></div></div>`).join('')}</div>
       ${ramoOf(t) !== 'atacado' || t.modules.app_cliente ? '' : '<p class="small muted" style="margin:0">Sem app do cliente: os clientes compram pelo vendedor (não há endereço de cliente).</p>'}
       <p class="small muted" style="margin:0">${ramoOf(t) !== 'atacado' ? RAMO_UI[ramoOf(t)].stats(st) : `${st.products || 0} produtos · ${st.orders || 0} pedidos`} · ${st.users || 0} usuários${t.adminLogin ? ' · administrador: ' + esc(t.adminLogin) : ''}</p>
@@ -207,9 +210,9 @@
         <button class="btn dark" type="button" id="agen" style="align-self:end">${t.adminLogin ? 'Gerar nova senha' : ramoOf(t) !== 'atacado' ? esc(RAMO_UI[ramoOf(t)].acesso) : 'Criar acesso do administrador'}</button>
       </div>
       <div id="aout" aria-live="polite"></div>
-      <div class="logo-row" style="align-items:center"><button class="btn" type="button" id="aent">🛟 Entrar como esta empresa</button>
+      <div class="logo-row" style="align-items:center"><button class="btn" type="button" id="aent">Entrar como esta empresa</button>
         <span class="small muted" style="flex:1 1 220px">${t.adminLogin || st.admins ? 'Abre o app numa aba nova como o administrador, sem trocar a senha dele. Vale 1 hora, mostra um aviso vermelho e fica no histórico. Neste navegador fica aberta uma empresa por vez.' : 'Esta empresa ainda não tem administrador: crie o acesso logo acima e depois entre por aqui.'}</span></div>`}
-    </section>`;
+    </div></details>`;
   }
   async function genAdmin() {
     const login = $('#alog').value.trim().toLowerCase();
