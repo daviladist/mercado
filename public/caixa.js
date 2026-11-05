@@ -25,7 +25,7 @@
   }
   function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (err ? ' err' : ''); t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, err ? 5200 : 2800); }
   function fail(e) { if (e.status === 401 || e.login) return showLogin('Entre de novo.'); if (e.mustReset) return showReset(); toast(e.message, true); }
-  async function reload() { S = await api('/api/caixa/state'); applyBrand(); }
+  async function reload() { S = await api('/api/caixa/state'); applyBrand(); if (modulo === 'folha' && podeFolha()) await carregaFolha(); }
   async function post(path, body, okMsg) {
     try { const r = await api(path, body); await reload(); if (okMsg) toast(okMsg); closeSheet(); render(); return r; }
     catch (e) { fail(e); return null; }
@@ -877,7 +877,7 @@
       <h1>Acessos</h1>
       <p class="muted small">Quem pode entrar neste controle de caixa. Ninguém vê custo ou margem (não existe nada disso aqui), e ninguém apaga ou cancela nada — isso é só pelo seu usuário.</p>
       ${S.pessoas.length ? `<div class="list">${S.pessoas.map(p => `<div class="it">
-          <div class="ic">${p.papel === 'financeiro' ? '✅' : p.papel === 'automacao' ? '🤖' : p.papel === 'loja' ? '🏪' : '👤'}</div><div class="tx"><b>${esc(p.nome)}</b><span>${esc(p.login)} · ${papelLabel(p.papel, p.filial)}${p.relatorios ? ' · abre os Relatórios' : ''}${p.ativo ? '' : ' · inativo'}${p.trocarSenha ? ' · ainda não trocou a senha provisória' : ''}</span></div>
+          <div class="ic">${p.papel === 'financeiro' ? '✅' : p.papel === 'automacao' ? '🤖' : p.papel === 'loja' ? '🏪' : '👤'}</div><div class="tx"><b>${esc(p.nome)}</b><span>${esc(p.login)} · ${papelLabel(p.papel, p.filial)}${p.relatorios ? ' · abre os Relatórios' : ''}${p.folha ? ' · abre a Folha' : ''}${p.ativo ? '' : ' · inativo'}${p.trocarSenha ? ' · ainda não trocou a senha provisória' : ''}</span></div>
           <div class="vl"><button class="btn sm" type="button" data-editp="${esc(p.login)}">Editar</button></div>
         </div>`).join('')}</div>` : '<p class="muted">Nenhum acesso criado ainda.</p>'}
       <div class="row"><button class="btn pri" type="button" id="btnNovaCaixista">+ Nova pessoa do caixa</button><button class="btn pri" type="button" id="btnNovoFinanceiro">+ Novo acesso do financeiro</button></div>
@@ -915,6 +915,7 @@
             <input type="text" id="pSenha" autocapitalize="off" spellcheck="false" minlength="12" ${p ? '' : 'required'}></div>
           <p class="small muted">Pelo menos 12 caracteres, com letras e números.</p>` : ''}
         ${papel === 'financeiro' ? `<label class="row"><input type="checkbox" id="pRel" ${p && p.relatorios ? 'checked' : ''}> Pode abrir os Relatórios (painel ao vivo do StarIA)</label>` : ''}
+        ${papel === 'financeiro' || papel === 'caixista' ? `<label class="row"><input type="checkbox" id="pFolha" ${p && p.folha ? 'checked' : ''}> Pode abrir a Folha de pagamento (vê salários; o combinado à parte continua só seu)</label>` : ''}
         ${p ? `<label class="row"><input type="checkbox" id="pAtivo" ${p.ativo ? 'checked' : ''}> Acesso ativo</label>
           ${auto ? '' : '<label class="row"><input type="checkbox" id="pNova"> Gerar nova senha provisória</label>'}` : ''}
         <button class="btn pri full" type="submit">${p ? 'Salvar' : 'Criar acesso'}</button>
@@ -927,6 +928,7 @@
           if (auto) { if ($('#pSenha').value) body.senha = $('#pSenha').value; } else body.novaSenha = p ? $('#pNova').checked : true;
           if (loja) body.filial = Number($('#pFilial').value);
           if (papel === 'financeiro') body.relatorios = $('#pRel').checked;
+          if ($('#pFolha')) body.folha = $('#pFolha').checked;
           const r = await api('/api/caixa/pessoa', body);
           await reload();
           if (r.password) $('#pOutS').innerHTML = `<div class="note" style="display:grid;gap:6px"><b>Anote agora: esta senha aparece só uma vez.</b>
@@ -1097,6 +1099,210 @@
     atualiza();
   }
 
+  /* ---------- Folha de pagamento (área ao lado do Caixa): o dono e quem ele liberar em Acessos ----------
+     Filial 1, 2 e 3: pessoas do mês (copiadas do cadastro e editáveis só no mês) + encargos e rescisões.
+     Geral: a soma das três. Imprimir/PDF pelo navegador. O "combinado à parte" é só do dono (o servidor nem
+     manda para os outros) e pode ser escondido da tela e do PDF. */
+  const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const mesTxt = m => MESES[+m.slice(5, 7) - 1] + ' de ' + m.slice(0, 4);
+  const mesMais = (m, n) => { let y = +m.slice(0, 4), mm = +m.slice(5, 7) + n; while (mm < 1) { mm += 12; y--; } while (mm > 12) { mm -= 12; y++; } return y + '-' + String(mm).padStart(2, '0'); };
+  const BEN = [['valeTransporte', 'Vale-transporte'], ['planoSaude', 'Plano de saúde'], ['planoOdonto', 'Plano odontológico'], ['seguroVida', 'Seguro de vida'], ['outrosBen', 'Outros benefícios']];
+  const TIPO_ENC = { inss: 'INSS', fgts: 'FGTS', irrf: 'IRRF (imposto retido)', rescisao: 'Rescisão', ferias: 'Férias', decimo: '13º salário', sindical: 'Sindicato', medicina: 'Exames / medicina do trabalho', outro: 'Outro' };
+  // 13º (1/12) + férias com 1/3 (1/12 × 4/3) = 19,44% do salário, todo mês: quanto guardar para não ser pego de surpresa
+  const PROVISAO = 1 / 12 + (1 / 12) * (4 / 3);
+  let modulo = 'caixa', FS = null, folhaMes = hoje().slice(0, 7), folhaAba = '1';
+  let verPF = true; try { verPF = localStorage.getItem('tino-folha-pf') !== '0'; } catch (e) { /* sem armazenamento */ }
+  const podeFolha = () => !!(S && (isAdmin() || S.me.folha));
+  const mostraPF = () => !!(FS && FS.verPorFora && verPF);
+  async function carregaFolha() { FS = await api('/api/caixa/folha?mes=' + encodeURIComponent(folhaMes)); }
+  function totPessoa(v) {
+    v = v || {};
+    return r2((v.salario || 0) + (v.extras || 0) + (v.ticket || 0) + BEN.reduce((a, [k]) => a + (v[k] || 0), 0) + (mostraPF() ? (v.porFora || 0) : 0));
+  }
+  function resumoFolha(filiais) {
+    const R = { pessoas: 0, salario: 0, extras: 0, ticket: 0, ben: {}, beneficios: 0, porFora: 0, enc: {}, encargos: 0, total: 0, anterior: 0 };
+    BEN.forEach(([k]) => { R.ben[k] = 0; });
+    for (const l of FS.linhas) {
+      if (!filiais.includes(l.filial)) continue;
+      const v = l.valores || {};
+      R.pessoas++; R.salario += v.salario || 0; R.extras += v.extras || 0; R.ticket += v.ticket || 0; R.porFora += v.porFora || 0;
+      BEN.forEach(([k]) => { R.ben[k] += v[k] || 0; R.beneficios += v[k] || 0; });
+    }
+    for (const e of FS.encargos) { if (!filiais.includes(e.filial)) continue; R.enc[e.tipo] = (R.enc[e.tipo] || 0) + e.valor; R.encargos += e.valor; }
+    R.total = r2(R.salario + R.extras + R.ticket + R.beneficios + R.encargos + (mostraPF() ? R.porFora : 0));
+    R.anterior = r2(filiais.reduce((a, f) => a + (FS.anterior.porFilial[f] || 0), 0));
+    R.provisao = r2((R.salario + R.extras) * PROVISAO);
+    return R;
+  }
+  const kv = (t, v, cls) => `<div class="kv${cls ? ' ' + cls : ''}"><span>${t}</span><b>${money(v)}</b></div>`;
+  function blocoResumo(R, titulo) {
+    const varia = FS.anterior.temDados && R.anterior ? r2(R.total - R.anterior) : null;
+    return `<section class="card"><h2>${titulo}</h2><div>
+        ${kv('Salários (' + plural(R.pessoas, 'pessoa', 'pessoas') + ')', R.salario)}
+        ${R.extras ? kv('Horas extras e adicionais', R.extras) : ''}
+        ${kv('Ticket', R.ticket)}
+        ${BEN.filter(([k]) => R.ben[k]).map(([k, t]) => kv(t, R.ben[k])).join('')}
+        ${Object.keys(TIPO_ENC).filter(t => R.enc[t]).map(t => kv(TIPO_ENC[t], R.enc[t])).join('')}
+        ${mostraPF() && R.porFora ? kv('<span class="sombra">Combinado à parte</span>', R.porFora) : ''}
+        ${kv('Total do mês', R.total, 'tot')}
+        ${R.pessoas ? kv('Custo médio por pessoa', r2(R.total / R.pessoas)) : ''}
+      </div>
+      ${varia != null ? `<p class="small muted">Em ${esc(mesTxt(FS.anterior.mes))}: ${money(R.anterior)} (${varia === 0 ? 'igual' : (varia > 0 ? '<b class="neg">subiu ' : '<b class="pos">caiu ') + money(Math.abs(varia)) + '</b>'}).</p>` : ''}
+      ${R.provisao ? `<p class="small muted">Para não ser pego de surpresa no 13º e nas férias, guarde por mês cerca de <b>${money(R.provisao)}</b> (19,44% dos salários e extras, sem os encargos em cima). Não entra no total.</p>` : ''}
+    </section>`;
+  }
+  function htmlFilial(f, interativo) {
+    const linhas = FS.linhas.filter(l => l.filial === f);
+    const encs = FS.encargos.filter(e => e.filial === f);
+    const noMes = new Set(linhas.map(l => l.funcId));
+    const fimMes = mesMais(folhaMes, 1) + '-01';
+    const fora = FS.funcs.filter(p => p.filial === f && p.ativo && !noMes.has(p.id) && (!p.admissao || p.admissao < fimMes));
+    const desligados = FS.funcs.filter(p => p.filial === f && !p.ativo);
+    const subPessoa = v => [money(v.salario || 0) + ' salário', v.extras ? money(v.extras) + ' extras' : '', v.ticket ? money(v.ticket) + ' ticket' : '',
+      (() => { const b = r2(BEN.reduce((a, [k]) => a + (v[k] || 0), 0)); return b ? money(b) + ' benefícios' : ''; })(),
+      mostraPF() && v.porFora ? '<span class="sombra">' + money(v.porFora) + ' à parte</span>' : ''].filter(Boolean).join(' · ');
+    const tag = interativo ? 'button type="button"' : 'div';
+    const fecha = interativo ? 'button' : 'div';
+    return `<section class="card"><div class="sec"><h2>Pessoas da filial ${f}</h2>${interativo ? `<button class="lnk noprint" type="button" data-fnova="${f}">+ Pessoa</button>` : ''}</div>
+        ${linhas.length ? `<div class="list">${linhas.map(l => `<${tag} class="it" data-flin="${esc(l.funcId)}">
+            <div class="tx"><b>${esc(l.nome)}${l.cargo ? ` <span class="muted small" style="display:inline;font-weight:500">· ${esc(l.cargo)}</span>` : ''}</b><span>${subPessoa(l.valores || {})}</span>${l.obs ? `<span>${esc(l.obs)}</span>` : ''}</div>
+            <div class="vl">${money(totPessoa(l.valores))}</div>${interativo ? `<span class="ch">${ic('chev')}</span>` : ''}</${fecha}>`).join('')}</div>`
+          : `<p class="muted small">${fora.length ? 'A folha de ' + esc(mesTxt(folhaMes)) + ' desta filial ainda não começou.' : 'Ninguém cadastrado nesta filial ainda.'}</p>`}
+        ${interativo && fora.length ? `<div class="note noprint" style="display:grid;gap:8px"><span>${linhas.length ? plural(fora.length, 'pessoa do cadastro não está', 'pessoas do cadastro não estão') + ' neste mês.' : 'Comece o mês com as ' + plural(fora.length, 'pessoa', 'pessoas') + ' do cadastro: os valores vêm do mês de costume e você ajusta o que mudou.'}</span>
+            <button class="btn pri" type="button" data-fabrir="${f}">${linhas.length ? 'Incluir no mês' : 'Começar ' + esc(mesTxt(folhaMes))}</button></div>` : ''}
+        ${interativo && desligados.length ? `<details class="noprint"><summary class="small muted" style="cursor:pointer;padding:6px 0">${plural(desligados.length, 'pessoa desligada', 'pessoas desligadas')}</summary><div class="list">${desligados.map(p => `<div class="it"><div class="tx"><b>${esc(p.nome)}</b><span>${p.demissao ? 'saiu em ' + dBR(p.demissao) : 'desligada'}</span></div><div class="vl"><button class="btn sm" type="button" data-freligar="${esc(p.id)}">Voltar a ativo</button></div></div>`).join('')}</div></details>` : ''}
+      </section>
+      <section class="card"><div class="sec"><h2>Encargos, rescisões e outros</h2>${interativo ? `<button class="lnk noprint" type="button" data-fenc="${f}">+ Lançar</button>` : ''}</div>
+        ${encs.length ? `<div class="list">${encs.map(e => `<${tag} class="it" data-fencid="${esc(e.id)}"><div class="tx"><b>${esc(TIPO_ENC[e.tipo] || e.tipo)}</b><span>${[e.descricao ? esc(e.descricao) : '', e.pagoEm ? 'pago em ' + dBR(e.pagoEm) : '<b class="neg">não pago</b>'].filter(Boolean).join(' · ')}</span></div><div class="vl">${money(e.valor)}</div>${interativo ? `<span class="ch">${ic('chev')}</span>` : ''}</${fecha}>`).join('')}</div>`
+          : '<p class="muted small">Nada lançado. Aqui entram INSS, FGTS, IRRF, rescisão, férias, 13º, sindicato, exames…</p>'}
+      </section>
+      ${blocoResumo(resumoFolha([f]), 'Total da filial ' + f)}`;
+  }
+  function htmlGeral() {
+    const Rs = [1, 2, 3].map(f => resumoFolha([f])), G = resumoFolha([1, 2, 3]);
+    const pf = mostraPF();
+    const col = R => [R.pessoas, money(r2(R.salario + R.extras)), money(r2(R.ticket + R.beneficios)), money(R.encargos)].concat(pf ? [money(R.porFora)] : []).concat([money(R.total)]);
+    const cab = ['Pessoas', 'Salários e extras', 'Ticket e benefícios', 'Encargos e rescisões'].concat(pf ? ['À parte'] : []).concat(['Total']);
+    return `<section class="card"><h2>Comparativo por filial</h2><div class="ftab"><table>
+        <thead><tr><th></th>${cab.map(c => `<th class="n">${c}</th>`).join('')}</tr></thead>
+        <tbody>${Rs.map((R, i) => `<tr><td>Filial ${i + 1}</td>${col(R).map(c => `<td class="n">${c}</td>`).join('')}</tr>`).join('')}
+          <tr class="tot"><td>Geral</td>${col(G).map(c => `<td class="n">${c}</td>`).join('')}</tr></tbody></table></div>
+        <p class="small muted">A filial 4 não entra: não tem funcionários.</p></section>
+      ${blocoResumo(G, 'Total geral (filiais 1, 2 e 3)')}`;
+  }
+  function renderFolha() {
+    if (!FS || FS.mes !== folhaMes) { $('#main').innerHTML = '<div class="card sk" aria-busy="true"><i class="t"></i><i class="b"></i></div>'; carregaFolha().then(render, fail); return; }
+    const abas = [['1', 'Filial 1'], ['2', 'Filial 2'], ['3', 'Filial 3'], ['geral', 'Geral']];
+    $('#main').innerHTML = `<div class="pagehd"><h1>Folha de pagamento</h1><p class="printonly">${esc(brand.name || '')} · ${esc(mesTxt(folhaMes))} · ${folhaAba === 'geral' ? 'Geral' : 'Filial ' + folhaAba} · impresso em ${dtBR(new Date())}</p></div>
+      <section class="card noprint" style="gap:10px">
+        <div class="mesnav"><button class="btn sm" type="button" id="fMesAnt" aria-label="Mês anterior">${ic('back')}</button><b>${esc(mesTxt(folhaMes).replace(/^./, c => c.toUpperCase()))}</b><button class="btn sm" type="button" id="fMesProx" aria-label="Próximo mês">${ic('chev')}</button></div>
+        <div class="seg" role="tablist">${abas.map(([k, t]) => `<button type="button" role="tab" data-faba="${k}" class="${folhaAba === k ? 'on' : ''}" aria-selected="${folhaAba === k}">${t}</button>`).join('')}</div>
+        <div class="row" style="justify-content:space-between">
+          ${FS.verPorFora ? `<label class="row small" style="gap:6px"><input type="checkbox" id="fPF" ${verPF ? 'checked' : ''}> Mostrar o combinado à parte</label>` : '<span></span>'}
+          <div class="row"><button class="btn sm" type="button" id="fPrint">Imprimir / PDF</button>${folhaAba === 'geral' ? '<button class="btn sm" type="button" id="fPrintTudo">PDF completo</button>' : ''}</div>
+        </div>
+      </section>
+      ${folhaAba === 'geral' ? htmlGeral() : htmlFilial(Number(folhaAba), true)}`;
+    $('#fMesAnt').addEventListener('click', () => { folhaMes = mesMais(folhaMes, -1); render(); });
+    $('#fMesProx').addEventListener('click', () => { folhaMes = mesMais(folhaMes, 1); render(); });
+    document.querySelectorAll('[data-faba]').forEach(b => b.addEventListener('click', () => { folhaAba = b.dataset.faba; render(); }));
+    if ($('#fPF')) $('#fPF').addEventListener('change', e => { verPF = e.target.checked; try { localStorage.setItem('tino-folha-pf', verPF ? '1' : '0'); } catch (er) { /* ok */ } render(); });
+    $('#fPrint').addEventListener('click', () => window.print());
+    if ($('#fPrintTudo')) $('#fPrintTudo').addEventListener('click', imprimirTudo);
+    document.querySelectorAll('[data-fnova]').forEach(b => b.addEventListener('click', () => sheetPessoaFolha(null, Number(b.dataset.fnova))));
+    document.querySelectorAll('[data-flin]').forEach(b => b.addEventListener('click', () => sheetPessoaFolha(FS.linhas.find(l => l.funcId === b.dataset.flin))));
+    document.querySelectorAll('[data-fabrir]').forEach(b => b.addEventListener('click', () => post('/api/caixa/folha/abrir', { mes: folhaMes, filial: Number(b.dataset.fabrir) }, 'Pessoas incluídas no mês')));
+    document.querySelectorAll('[data-freligar]').forEach(b => b.addEventListener('click', () => post('/api/caixa/folha/situacao', { funcId: b.dataset.freligar, ativo: true }, 'Pessoa ativa de novo')));
+    document.querySelectorAll('[data-fenc]').forEach(b => b.addEventListener('click', () => sheetEncargo(null, Number(b.dataset.fenc))));
+    document.querySelectorAll('[data-fencid]').forEach(b => b.addEventListener('click', () => sheetEncargo(FS.encargos.find(e => e.id === b.dataset.fencid))));
+  }
+  // PDF completo: as três filiais e o geral, uma por página
+  function imprimirTudo() {
+    const cab = t => `<div class="pagehd"><h1>Folha de pagamento · ${t}</h1><p>${esc(brand.name || '')} · ${esc(mesTxt(folhaMes))} · impresso em ${dtBR(new Date())}</p></div>`;
+    $('#main').innerHTML = cab('Geral') + htmlGeral() + [1, 2, 3].map(f => `<div class="pbreak"></div>${cab('Filial ' + f)}${htmlFilial(f, false)}`).join('');
+    const volta = () => { window.removeEventListener('afterprint', volta); render(); };
+    window.addEventListener('afterprint', volta);
+    setTimeout(() => { window.print(); setTimeout(() => { if (!document.hidden) volta(); }, 1500); }, 50);
+  }
+  const campo = (id, rot, v, extra) => `<div class="field${extra || ''}"><label for="${id}">${rot}</label><input type="text" inputmode="decimal" id="${id}" value="${v ? numIn(v) : ''}" placeholder="0,00"></div>`;
+  function sheetPessoaFolha(l, filialNova) {
+    const p = l ? FS.funcs.find(x => x.id === l.funcId) : null;
+    const v = l ? l.valores || {} : {};
+    const filial = l ? l.filial : filialNova;
+    openSheet(`<div class="tt"><h2>${l ? esc(l.nome) : 'Nova pessoa · filial ' + filial}</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      <p class="muted small">Valores de ${esc(mesTxt(folhaMes))}. ${l ? 'Mudou só neste mês? Desmarque a opção lá embaixo.' : 'Ela entra neste mês e nos próximos.'}</p>
+      <form id="ffp"><div class="fgrid">
+        <div class="field w2"><label for="fpNome">Nome</label><input type="text" id="fpNome" value="${esc(l ? l.nome : '')}" required maxlength="80"></div>
+        <div class="field"><label for="fpCargo">Cargo</label><input type="text" id="fpCargo" value="${esc(l ? l.cargo || '' : '')}" maxlength="60" placeholder="Ex.: operadora de caixa"></div>
+        <div class="field"><label for="fpFilial">Filial</label><select id="fpFilial">${[1, 2, 3].map(f => `<option value="${f}" ${f === filial ? 'selected' : ''}>Filial ${f}</option>`).join('')}</select></div>
+        <div class="field w2"><label for="fpAdm">Admissão (opcional)</label><input type="date" id="fpAdm" value="${esc(p && p.admissao ? p.admissao : '')}"></div>
+        ${campo('fpSal', 'Salário (carteira)', v.salario)}
+        ${campo('fpExt', 'Horas extras / adicionais', v.extras)}
+        ${campo('fpTic', 'Ticket', v.ticket)}
+        ${campo('fpVT', 'Vale-transporte', v.valeTransporte)}
+        ${campo('fpSau', 'Plano de saúde', v.planoSaude)}
+        ${campo('fpOdo', 'Plano odontológico', v.planoOdonto)}
+        ${campo('fpSeg', 'Seguro de vida', v.seguroVida)}
+        ${campo('fpOut', 'Outros benefícios', v.outrosBen)}
+        <div class="field w2"><label for="fpOutD">Quais outros benefícios? (opcional)</label><input type="text" id="fpOutD" value="${esc(v.outrosDesc || '')}" maxlength="80" placeholder="Ex.: cesta básica, auxílio creche"></div>
+        ${FS.verPorFora ? campo('fpPF', 'Combinado à parte <span class="muted">(só você vê)</span>', v.porFora, ' w2') : ''}
+        <div class="field w2"><label for="fpObs">Observação (opcional)</label><input type="text" id="fpObs" value="${esc(l ? l.obs || '' : '')}" maxlength="300" placeholder="Ex.: férias em dezembro"></div>
+      </div>
+      ${l ? '<label class="row small" style="margin-top:10px"><input type="checkbox" id="fpCad" checked> Usar esses valores também nos próximos meses (horas extras não passam para o próximo mês)</label>' : ''}
+      <button class="btn pri lg full" type="submit" style="margin-top:12px">Salvar</button></form>
+      ${l ? `<div class="row" style="margin-top:8px;gap:8px"><button class="btn full" type="button" id="fpTirar">Tirar só deste mês</button>${p && p.ativo ? '<button class="btn dan full" type="button" id="fpDeslig">Desligar (saiu)</button>' : ''}</div>` : ''}`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      if (!l) setTimeout(() => { const n = $('#fpNome'); if (n) n.focus(); }, 50);
+      $('#ffp').addEventListener('submit', e => {
+        e.preventDefault();
+        const val = { salario: $('#fpSal').value, extras: $('#fpExt').value, ticket: $('#fpTic').value, valeTransporte: $('#fpVT').value, planoSaude: $('#fpSau').value,
+          planoOdonto: $('#fpOdo').value, seguroVida: $('#fpSeg').value, outrosBen: $('#fpOut').value, outrosDesc: $('#fpOutD').value };
+        if ($('#fpPF')) val.porFora = $('#fpPF').value;
+        post('/api/caixa/folha/linha', { mes: folhaMes, funcId: l ? l.funcId : undefined, filial: Number($('#fpFilial').value), nome: $('#fpNome').value, cargo: $('#fpCargo').value,
+          admissao: $('#fpAdm').value || null, obs: $('#fpObs').value, valores: val, atualizarCadastro: l ? $('#fpCad').checked : true }, l ? 'Salvo' : 'Pessoa cadastrada');
+      });
+      if ($('#fpTirar')) $('#fpTirar').addEventListener('click', async () => {
+        if (await perguntar('Tirar ' + l.nome + ' de ' + mesTxt(folhaMes) + '?', 'Ela continua no cadastro e volta quando você incluir de novo.', 'Tirar deste mês')) post('/api/caixa/folha/linha/tirar', { mes: folhaMes, funcId: l.funcId }, 'Tirada deste mês');
+      });
+      if ($('#fpDeslig')) $('#fpDeslig').addEventListener('click', () => sheetDesligar(l));
+    });
+  }
+  function sheetDesligar(l) {
+    openSheet(`<div class="tt"><h2>Desligar ${esc(l.nome)}</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      <p class="muted small">Ela fica neste mês (para lançar o último pagamento) e não entra mais nos próximos. Lance a rescisão em "Encargos, rescisões e outros".</p>
+      <form id="fdl"><div class="field"><label for="dlData">Último dia</label><input type="date" id="dlData" value="${hoje()}"></div>
+        <button class="btn dan solid full" type="submit">Desligar</button></form>`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      $('#fdl').addEventListener('submit', e => { e.preventDefault(); post('/api/caixa/folha/situacao', { funcId: l.funcId, ativo: false, demissao: $('#dlData').value }, 'Pessoa desligada'); });
+    });
+  }
+  function sheetEncargo(enc, filialNova) {
+    const filial = enc ? enc.filial : filialNova;
+    openSheet(`<div class="tt"><h2>${enc ? 'Editar lançamento' : 'Encargo, rescisão ou outro · filial ' + filial}</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      <p class="muted small">Do mês de ${esc(mesTxt(folhaMes))}. Entra no total da filial.</p>
+      <form id="fen"><div class="fgrid">
+        <div class="field w2"><label for="enTipo">O que é</label><select id="enTipo">${Object.keys(TIPO_ENC).map(t => `<option value="${t}" ${enc && enc.tipo === t ? 'selected' : ''}>${TIPO_ENC[t]}</option>`).join('')}</select></div>
+        <div class="field w2"><label for="enDesc">Descrição <span class="muted" id="enDescOpc">(opcional)</span></label><input type="text" id="enDesc" value="${esc(enc ? enc.descricao || '' : '')}" maxlength="120" placeholder="Ex.: rescisão da Maria, guia DCTFWeb"></div>
+        ${campo('enValor', 'Valor', enc ? enc.valor : '')}
+        <div class="field"><label for="enPago">Pago em (deixe vazio se não pagou)</label><input type="date" id="enPago" value="${esc(enc && enc.pagoEm ? enc.pagoEm : '')}"></div>
+        <div class="field w2"><label for="enFilial">Filial</label><select id="enFilial">${[1, 2, 3].map(f => `<option value="${f}" ${f === filial ? 'selected' : ''}>Filial ${f}</option>`).join('')}</select></div>
+      </div>
+      <button class="btn pri lg full" type="submit" style="margin-top:12px">Salvar</button></form>
+      ${enc ? '<button class="btn dan full" type="button" id="enDel" style="margin-top:8px">Apagar este lançamento</button>' : ''}`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      const opc = () => { $('#enDescOpc').textContent = $('#enTipo').value === 'outro' ? '(obrigatória)' : '(opcional)'; };
+      $('#enTipo').addEventListener('change', opc); opc();
+      $('#fen').addEventListener('submit', e => {
+        e.preventDefault();
+        post('/api/caixa/folha/encargo', { id: enc ? enc.id : undefined, mes: folhaMes, filial: Number($('#enFilial').value), tipo: $('#enTipo').value, descricao: $('#enDesc').value, valor: $('#enValor').value, pagoEm: $('#enPago').value || null }, 'Lançado');
+      });
+      if ($('#enDel')) $('#enDel').addEventListener('click', async () => { if (await perguntar('Apagar este lançamento?', '', 'Apagar', true)) post('/api/caixa/folha/encargo/excluir', { id: enc.id }, 'Apagado'); });
+    });
+  }
+  function irModulo(m) { modulo = m; closeSheet(); render(); window.scrollTo(0, 0); }
+  $('#modCaixa').addEventListener('click', () => irModulo('caixa'));
+  $('#modFolha').addEventListener('click', () => irModulo('folha'));
+
   /* ---------- navegação: 3 abas para a equipe, 4 para o dono ---------- */
   const SUB_MAIS = ['staria', 'acessos', 'gaveta', 'ocorrencias', 'crediario'];
   function render() {
@@ -1106,6 +1312,12 @@
       return;
     }
     $('#bn').hidden = false; $('#sair').hidden = false; $('#atualizar').hidden = false; $('#mods').hidden = false;
+    // Folha de pagamento: aba no topo, para o dono e quem ele liberar
+    $('#modFolha').hidden = !podeFolha();
+    if (modulo === 'folha' && !podeFolha()) modulo = 'caixa';
+    $('#modCaixa').classList.toggle('on', modulo === 'caixa'); $('#modCaixa').setAttribute('aria-current', modulo === 'caixa' ? 'page' : 'false');
+    $('#modFolha').classList.toggle('on', modulo === 'folha'); $('#modFolha').setAttribute('aria-current', modulo === 'folha' ? 'page' : 'false');
+    if (modulo === 'folha') { $('#bn').hidden = true; renderFolha(); return; }
     // Relatórios ao vivo do StarIA: painel no Claude do dono, para o administrador da Dávila Supermercados e para o financeiro que o dono habilitar
     if ($('#modRel')) $('#modRel').hidden = !((isAdmin() || (S && S.me.role === 'financeiro' && S.me.relatorios)) && slug === 'fundo-de-caixa');
     if (view === 'sangria') { view = 'inicio'; setTimeout(sheetSangria, 0); }
