@@ -2,6 +2,9 @@ name: testes
 on:
   push:
   pull_request:
+# o teste só lê o código: sem permissão de escrita no repositório
+permissions:
+  contents: read
 jobs:
   regras-e-build:
     runs-on: ubuntu-latest
