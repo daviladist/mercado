@@ -775,3 +775,56 @@ create table if not exists folha_venda (
   updated_at timestamptz not null default now(),
   primary key (tenant_id, competencia, filial)
 );
+
+-- DRE (painel gerencial, só o dono): receita/impostos/CMV do mês por filial (StarIA ou digitado), despesas fixas
+-- (valor de costume, do mês de início até o fim; dre_fixa_mes guarda o valor real de um mês) e despesas do dia a dia.
+-- filial 0 = rede (despesa de todas as lojas juntas: só entra no Geral). O pessoal vem da Folha (folha_linha/encargo).
+create table if not exists dre_resultado (
+  tenant_id text not null references tenants(id),
+  competencia text not null check (competencia ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  filial int not null check (filial between 1 and 3),
+  receita numeric(14,2) not null default 0 check (receita >= 0),
+  impostos numeric(14,2) not null default 0 check (impostos >= 0),
+  cmv numeric(14,2) not null default 0 check (cmv >= 0),
+  fonte text,
+  atualizado_por text,
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, competencia, filial)
+);
+create table if not exists dre_fixa (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  filial int not null check (filial between 0 and 3),
+  categoria text not null,
+  descricao text not null,
+  valor numeric(14,2) not null check (valor >= 0),
+  inicio text not null check (inicio ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  fim text check (fim ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  criado_por text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+create table if not exists dre_fixa_mes (
+  tenant_id text not null references tenants(id),
+  fixa_id text not null,
+  competencia text not null check (competencia ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  valor numeric(14,2) not null check (valor >= 0),
+  atualizado_por text,
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, fixa_id, competencia)
+);
+create table if not exists dre_despesa (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  competencia text not null check (competencia ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  filial int not null check (filial between 0 and 3),
+  categoria text not null,
+  descricao text not null,
+  valor numeric(14,2) not null check (valor >= 0),
+  data date,
+  criado_por text,
+  created_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);
+create index if not exists dre_despesa_mes on dre_despesa(tenant_id, competencia);
