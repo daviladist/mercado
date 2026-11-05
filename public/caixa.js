@@ -343,6 +343,14 @@
 
   /* ---------- Mais (só o dono): o que é raro fica aqui, fora da barra de baixo ---------- */
   function renderMais() {
+    if (isFin()) {
+      // financeiro: só um cantinho com a gaveta de impostos, para olhar (o resto do Mais é do dono)
+      $('#main').innerHTML = `<div class="pagehd"><h1>Mais</h1></div>
+        <section class="card menu"><div class="list">
+          <button type="button" class="it" data-go="gaveta"><div class="ic">${ic('tax')}</div><div class="tx"><b>Gaveta de impostos</b><span>${money(S.saldoImpostos || 0)} guardado à parte</span></div><span class="ch">${ic('chev')}</span></button>
+        </div></section>`;
+      return;
+    }
     if (!isAdmin()) { view = 'inicio'; return render(); }
     const R = resumo();
     const jobP = (S.jobs || []).some(j => j.status === 'pendente');
@@ -442,22 +450,23 @@
 
   /* ---------- Gaveta de impostos e financiamentos (admin) ---------- */
   function renderGaveta() {
-    if (!isAdmin()) { view = 'inicio'; return render(); }
+    if (!isAdmin() && !isFin()) { view = 'inicio'; return render(); }
+    const dono = isAdmin();
     const cls = S.saldoImpostos > 0 ? 'p' : S.saldoImpostos < 0 ? 'n' : 'z';
     const lista = S.movImpostos || [];
     $('#main').innerHTML = `<section class="saldo ${cls}"><span>Gaveta de impostos e financiamentos</span><b>${money(S.saldoImpostos)}</b>
         <span class="small">separado do caixa principal</span></section>
-      <div class="row"><button class="btn sm pri" type="button" id="btnGavetaSaida">➖ Lançar pagamento (saída)</button></div>
+      ${dono ? '<div class="row"><button class="btn sm pri" type="button" id="btnGavetaSaida">➖ Lançar pagamento (saída)</button></div>' : ''}
       <section class="card"><h2>Lançamentos da gaveta</h2>
         ${lista.length ? `<div class="list">${lista.map(m => `<div class="it">
             <div class="ic">${movIcon(m)}</div>
             <div class="tx"><b>${esc(movTitulo(m))}</b><span>${esc(m.motivo || '')} · ${esc(m.criadoPor || '')}</span></div>
             <div class="vl"><span class="${m.tipo === 'gaveta_saida' ? 'neg' : 'pos'}">${m.tipo === 'gaveta_saida' ? '−' : '+'}${money(m.valor)}</span>
               <br><small class="muted">${dBR(m.data)}</small>
-              <br><button class="btn sm dan" type="button" data-delmov="${esc(m.id)}" style="margin-top:4px">Apagar</button>
-            </div></div>`).join('')}</div>` : '<p class="muted">Nenhum lançamento ainda. Lance uma sangria com destino "Gaveta de impostos" na tela de Sangria para alimentar aqui.</p>'}
+              ${dono ? `<br><button class="btn sm dan" type="button" data-delmov="${esc(m.id)}" style="margin-top:4px">Apagar</button>` : ''}
+            </div></div>`).join('')}</div>` : `<p class="muted">Nenhum lançamento ainda.${dono ? ' Lance uma sangria com destino "Gaveta de impostos" na tela de Sangria para alimentar aqui.' : ''}</p>`}
       </section>`;
-    $('#btnGavetaSaida').addEventListener('click', sheetGavetaSaida);
+    if ($('#btnGavetaSaida')) $('#btnGavetaSaida').addEventListener('click', sheetGavetaSaida);
     document.querySelectorAll('[data-delmov]').forEach(b => b.addEventListener('click', async () => { if (await perguntar('Apagar este lançamento da gaveta?', '', 'Apagar', true)) post('/api/caixa/mov/excluir', { id: b.dataset.delmov }, 'Lançamento apagado'); }));
   }
   function sheetGavetaSaida() {
@@ -1097,7 +1106,7 @@
     // Relatórios ao vivo do StarIA: painel no Claude do dono, para o administrador da Dávila Supermercados e para o financeiro que o dono habilitar
     if ($('#modRel')) $('#modRel').hidden = !((isAdmin() || (S && S.me.role === 'financeiro' && S.me.relatorios)) && slug === 'fundo-de-caixa');
     if (view === 'sangria') { view = 'inicio'; setTimeout(sheetSangria, 0); }
-    $('#navMais').hidden = !isAdmin();
+    $('#navMais').hidden = !(isAdmin() || isFin());
     const aba = SUB_MAIS.includes(view) ? 'mais' : view;
     document.querySelectorAll('#bn [data-go]').forEach(b => b.setAttribute('aria-current', b.dataset.go === aba));
     const n = S && S.cfg ? resumo().pendSacolas : 0, dot = $('#navSacolasN');
@@ -1116,7 +1125,7 @@
       $('#main').insertAdjacentHTML('beforeend', `<button type="button" class="btn full" id="atalhoIni">${ic('pin')} ${rotuloAtalho()}</button>`);
       $('#atalhoIni').addEventListener('click', criarAtalho);
     }
-    if (SUB_MAIS.includes(view) && isAdmin()) $('#main').insertAdjacentHTML('afterbegin', `<button type="button" class="lnk" data-go="mais" style="justify-self:start;display:inline-flex;align-items:center;gap:2px;margin:-8px 0 -8px -6px">${ic('back')} Mais</button>`);
+    if (SUB_MAIS.includes(view) && (isAdmin() || (isFin() && view === 'gaveta'))) $('#main').insertAdjacentHTML('afterbegin', `<button type="button" class="lnk" data-go="mais" style="justify-self:start;display:inline-flex;align-items:center;gap:2px;margin:-8px 0 -8px -6px">${ic('back')} Mais</button>`);
   }
   function irPara(go) { view = go; closeSheet(); render(); window.scrollTo(0, 0); }
   document.querySelectorAll('#bn [data-go]').forEach(b => b.addEventListener('click', () => irPara(b.dataset.go)));
