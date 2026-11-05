@@ -83,6 +83,14 @@
     finally { b.disabled = false; b.classList.remove('gira'); }
   });
   $('#sair').addEventListener('click', async () => { try { await api('/api/logout', {}); } catch (e) { /* segue */ } showLogin(); });
+  /* sessão que expira: 15 minutos sem tocar na tela e o app sai sozinho (celular esquecido em cima do balcão) */
+  let ocioso = Date.now();
+  ['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach(ev => window.addEventListener(ev, () => { ocioso = Date.now(); }, { passive: true }));
+  setInterval(async () => {
+    if (!S || Date.now() - ocioso < 15 * 60e3) return;
+    try { await api('/api/logout', {}); } catch (e) { /* segue */ }
+    showLogin('Você ficou 15 minutos sem usar. Entre de novo.');
+  }, 30e3);
 
   /* ---------- sheet (formulário em baixo) ---------- */
   function closeSheet() { $('#sheet').innerHTML = ''; }

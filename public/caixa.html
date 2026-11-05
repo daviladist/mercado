@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#1F3D2B">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0E1116" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="/equipe.webmanifest">
 <link rel="apple-touch-icon" href="/icons/tino-180.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/tino-192.png">
@@ -240,8 +240,36 @@ td.n,th.n{text-align:right;white-space:nowrap}
 .tino{text-align:center;font-size:12px;color:var(--muted)}.tino b{color:var(--brand)}
 .toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + 16px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:var(--r);font-weight:600;z-index:30;max-width:92vw;box-shadow:var(--sh-2)}
 .toast.err{background:var(--bad)}
+
 </style>
 <link rel="stylesheet" href="/design.css">
+<style>
+/* ===== Computador: coluna mais larga e dois blocos lado a lado nas listas longas ===== */
+@media (min-width:900px){
+  .hd .in,.mods .in,main,nav.bn .in{max-width:960px}
+  main{gap:20px;padding-top:24px}
+  nav.bn{position:sticky;bottom:0}
+  .acts{max-width:560px}
+}
+/* ===== Modo escuro (segue o celular) ===== */
+@media (prefers-color-scheme:dark){
+  :root{--cream:#0E1116;--surface:#161B22;--surface-2:#1C222B;--line:#2A323D;--line-2:#222A33;--input:#3A4452;
+    --ink:#E6EAF0;--muted:#9AA6B6;--muted-2:#6F7B8C;--brand:#4CC38A;--brand-2:#3AAE76;
+    --green:#4CC38A;--green-bg:#12261C;--red:#F97066;--red-bg:#2B1514;--gold-soft:#2B2110;--wa:#F7B955;
+    --ok-line:#1F4A33;--bad-line:#5A2420;--wa-line:#5A4217;--blue:#6CB0FF;--blue-bg:#14233A;color-scheme:dark}
+  .btn.pri,.btn.bad,.btn.dan.solid{color:#06140C}
+  .btn.bad,.btn.dan.solid{color:#fff}
+  .hd .lg{background:var(--surface-2)}
+  nav.bn{background:rgba(22,27,34,.92)}
+  .sbar{background:#222A33}.sbar .btn{background:var(--ink);color:var(--cream);border-color:var(--ink)}
+  .btn.gold{background:var(--ink);color:var(--cream)}
+  .chip[aria-pressed=true],.seg button.on{color:var(--cream)}
+  .seg button.on{background:var(--ink)}
+  .badge{color:#2A1800}
+  .toast{background:var(--ink);color:var(--cream)}
+  details.how.ajuda>summary::before{color:var(--surface)}
+}
+</style>
 </head><body>
 <header class="hd"><div class="in">
   <div class="co"><div class="lg" id="lg"><svg viewBox="0 0 40 40" width="20" height="20" aria-hidden="true"><path d="M20 0 C22 13 27 18 40 20 C27 22 22 27 20 40 C18 27 13 22 0 20 C13 18 18 13 20 0 Z" fill="#E8A33D"/></svg></div>
