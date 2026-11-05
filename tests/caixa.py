@@ -185,7 +185,7 @@ check(s == 200 and SGF, 'financeiro também lança sangria — faz tudo que o ca
 s, _ = F.req('/api/caixa/depositado', {'id': SGF, 'depositadoEm': '2026-10-08'}); check(s == 403, 'financeiro também não confirma o banco (só o dono)')
 s, _ = A.req('/api/caixa/mov/excluir', {'id': SGF}); check(s == 200, 'admin apaga essa sangria de teste (sem deixar isso afetar o saldo daqui pra frente)')
 s, _ = F.req('/api/caixa/ajuste', {'valor': '-5', 'data': '2026-10-08', 'motivo': 'x'}); check(s == 403, 'financeiro não lança ajuste (isso continua só do admin)')
-s, _ = F.req('/api/caixa/staria/pedir', {'periodoIni': '2026-10-08', 'periodoFim': '2026-10-08'}); check(s == 403, 'financeiro não pede consulta ao StarIA')
+s, _ = F.req('/api/caixa/staria/pedir', {'periodoIni': '2026-10-08', 'periodoFim': '2026-10-08'}); check(s == 200, 'financeiro pede consulta ao StarIA (o dono liberou)')
 s, _ = F.req('/api/caixa/mov/excluir', {'id': mvs[0]['id']}); check(s == 403, 'financeiro não apaga nada')
 s, _ = F.req('/api/caixa/pessoa', {'login': 'outro', 'nome': 'X', 'papel': 'caixista'}); check(s == 403, 'financeiro não cria outros acessos')
 print('== habilitação para abrir os Relatórios (só o dono liga, só no financeiro)')
@@ -418,7 +418,7 @@ s, r3 = A.req('/api/caixa/staria/pedir', {'diasAtras': 3}); check(s == 200 and r
 s, r0 = A.req('/api/caixa/staria/pedir', {'diasAtras': 0}); check(s == 200 and r0['periodoIni'] == _hoje, '"hoje" também pode (um dia só)')
 s, _ = A.req('/api/caixa/staria/pedir', {'diasAtras': -1}); check(s == 400, 'dias atrás negativo recusado')
 s, r2_ = A.req('/api/caixa/staria/pedir', {'auto': True}); check(s == 200 and r2_.get('jaPedido') is True and r2_['id'] == r['id'], 'apertar de novo não dá erro: avisa que já está pedido')
-s, _ = F.req('/api/caixa/staria/pedir', {'auto': True}); check(s == 403, 'financeiro não pede consulta')
+s, _ = F.req('/api/caixa/staria/pedir', {'auto': True}); check(s == 200, 'financeiro pede a atualização do StarIA (o dono liberou)')
 
 print('== crediário recebido, um por um: o financeiro marca a forma, o dinheiro é contado na sacola, o dono confere Pix/cartão no banco')
 _dc = (_dt.datetime.utcnow() - _dt.timedelta(hours=3) - _dt.timedelta(days=5)).strftime('%Y-%m-%d')
@@ -483,8 +483,8 @@ check(al and al[0]['nivel'] == 'vermelho', 'Pix/cartão de crediário com mais d
 s, stf = F.req('/api/caixa/state'); conf = [x for x in stf['sacolas'] if x.get('conferidoEm')]
 check(conf and all(x.get('valorContado') is None and x.get('crediDinheiro') is None and x.get('valorStaria') is None for x in conf), 'a equipe não vê quanto foi contado nas sacolas (não dá para calcular o saldo do cofre)')
 # contagem do cofre: no máximo 3 por hora para a equipe
-res = [F.req('/api/caixa/conferir', {'valorContado': str(1 + i)})[0] for i in range(4)]
-check(res[-1] == 429 and res.count(200) <= 3 and res.index(429) == res.count(200), 'a equipe conta o cofre no máximo 3 vezes por hora (%s)' % res)
+res = [M2.req('/api/caixa/conferir', {'valorContado': str(1 + i)})[0] for i in range(4)]
+check(res[-1] == 429 and res.count(200) <= 3 and res.index(429) == res.count(200), 'a caixista (contagem às cegas) conta o cofre no máximo 3 vezes por hora (%s)' % res)
 s, st = A.req('/api/caixa/state'); al = [a for a in st['resumo']['alertas'] if a['codigo'] == 'COFRE_DIFERENCA']
 check(al and al[0]['nivel'] == 'vermelho', 'a diferença do cofre fica acesa até o dono contar')
 s, r = A.req('/api/caixa/sangria', {'valor': '12,34', 'data': _dc, 'motivo': 'teste apagar'}); MID = r['id']
@@ -532,7 +532,7 @@ s, oc5 = A.req('/api/caixa/ocorrencias'); cf5 = [o for o in oc5['ocorrencias'] i
 check(len(cf5) == 1 and cf5[0]['detalhe']['diferenca'] == -6, 'só a diferença fora da margem vira ocorrência')
 s, st5 = F.req('/api/caixa/state'); check(st5.get('saldo') == 100 and st5.get('tolerancia') == 5, 'financeiro vê o saldo do cofre e a margem de erro')
 s, r = F.req('/api/caixa/staria/pedir', {'dia': '2026-11-01'}); check(s == 200 and r.get('id'), 'financeiro pode pedir a importação do StarIA')
-s, r = M.req('/api/caixa/staria/pedir', {'dia': '2026-11-01'}); check(s == 403, 'caixista não pede a importação do StarIA')
+s, r = M2.req('/api/caixa/staria/pedir', {'dia': '2026-11-01'}); check(s == 403, 'caixista não pede a importação do StarIA')
 
 print('== sangria feita no caixa, descontada na conferência da sacola')
 s, rj = F.req('/api/caixa/staria/pedir', {'dia': '2026-11-02'}); JS = rj.get('id'); check(s == 200 and JS, 'financeiro pede o dia 02/11')
