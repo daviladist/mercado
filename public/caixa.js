@@ -1400,19 +1400,55 @@
         <div class="mesnav"><button class="btn sm" type="button" id="dMesAnt" aria-label="Mês anterior">${ic('back')}</button><b>${esc(mesTxt(dreMes).replace(/^./, c => c.toUpperCase()))}</b><button class="btn sm" type="button" id="dMesProx" aria-label="Próximo mês">${ic('chev')}</button></div>
         <div class="seg" role="tablist">${abas.map(([k, t]) => `<button type="button" role="tab" data-daba="${k}" class="${dreAba === k ? 'on' : ''}" aria-selected="${dreAba === k}">${t}</button>`).join('')}</div>
         <div class="row" style="justify-content:space-between"><span class="small muted">${Object.keys(v).length ? 'Vendas: ' + esc(fontes.join(', ') || 'digitado') + ' · <button type="button" class="lnk" data-dvendas="1" style="min-height:0;padding:0">corrigir</button>' : ''}${dreMes > DS.ultimoFechado ? ' · mês em andamento' : ''}</span>
-          <div class="row"><button class="btn sm" type="button" id="dPrint">Imprimir / PDF</button>${dreAba === 'geral' ? '<button class="btn sm" type="button" id="dPrintTudo">PDF completo</button>' : ''}</div></div>
+          <div class="row"><button class="btn sm" type="button" id="dRobo">${DS.telegram && DS.telegram.ligado ? 'Robô ✔' : 'Robô do Telegram'}${DS.telegram && DS.telegram.pessoas.some(p => !p.liberado) ? ' •' : ''}</button><button class="btn sm" type="button" id="dPrint">Imprimir / PDF</button>${dreAba === 'geral' ? '<button class="btn sm" type="button" id="dPrintTudo">PDF completo</button>' : ''}</div></div>
       </section>
+      ${htmlPendentes()}
       ${dreAba === 'geral' ? htmlDreGeral() : blocoDre(DS.totais[dreAba], [Number(dreAba)], 'Filial ' + dreAba) + listaDespesas(Number(dreAba), true)}`;
     $('#dMesAnt').addEventListener('click', () => { dreMes = mesMais(dreMes, -1); render(); });
     $('#dMesProx').addEventListener('click', () => { dreMes = mesMais(dreMes, 1); render(); });
     document.querySelectorAll('[data-daba]').forEach(b => b.addEventListener('click', () => { dreAba = b.dataset.daba; render(); }));
     $('#dPrint').addEventListener('click', () => window.print());
+    $('#dRobo').addEventListener('click', sheetRobo);
+    document.querySelectorAll('[data-dapr]').forEach(b => b.addEventListener('click', () => post('/api/caixa/dre/aprovar', { ids: [b.dataset.dapr], ok: true }, 'Aprovada')));
+    document.querySelectorAll('[data-drec]').forEach(b => b.addEventListener('click', async () => { if (await perguntar('Recusar esta despesa?', 'Ela é apagada e não entra no DRE.', 'Recusar', true)) post('/api/caixa/dre/aprovar', { ids: [b.dataset.drec], ok: false }, 'Recusada'); }));
+    if ($('#dAprTodas')) $('#dAprTodas').addEventListener('click', () => post('/api/caixa/dre/aprovar', { ids: DS.telegram.pendentes.map(x => x.id), ok: true }, 'Todas aprovadas'));
     if ($('#dPrintTudo')) $('#dPrintTudo').addEventListener('click', imprimirDre);
     document.querySelectorAll('[data-dvendas]').forEach(b => b.addEventListener('click', sheetDreVendas));
     document.querySelectorAll('[data-dfnova]').forEach(b => b.addEventListener('click', () => sheetFixa(null, Number(b.dataset.dfnova))));
     document.querySelectorAll('[data-dfx]').forEach(b => b.addEventListener('click', () => sheetFixa(DS.fixas.find(x => x.id === b.dataset.dfx))));
     document.querySelectorAll('[data-ddnova]').forEach(b => b.addEventListener('click', () => sheetDespesa(null, Number(b.dataset.ddnova))));
     document.querySelectorAll('[data-dd]').forEach(b => b.addEventListener('click', () => sheetDespesa(DS.despesas.find(x => x.id === b.dataset.dd))));
+  }
+  function htmlPendentes() {
+    const P = (DS.telegram && DS.telegram.pendentes) || [];
+    if (!P.length) return '';
+    return `<section class="card noprint" style="border-color:var(--wa-line)"><div class="sec"><h2>Do robô, esperando você (${P.length})</h2>${P.length > 1 ? '<button class="lnk" type="button" id="dAprTodas">Aprovar todas</button>' : ''}</div>
+      <p class="small muted">Só entram no DRE depois que você aprova.</p>
+      <div class="list">${P.map(x => `<div class="it"><div class="tx"><b>${esc(x.descricao)}</b><span>${[money(x.valor), esc(DS.categorias[x.categoria] || x.categoria), esc(filNome(x.filial)), x.data ? dBR(x.data) : '', esc(x.criadoPor || '')].filter(Boolean).join(' · ')}</span></div>
+        <div class="vl row" style="gap:6px"><button class="btn sm" type="button" data-drec="${esc(x.id)}">Recusar</button><button class="btn sm pri" type="button" data-dapr="${esc(x.id)}">Aprovar</button></div></div>`).join('')}</div></section>`;
+  }
+  function sheetRobo() {
+    const T = DS.telegram || { ligado: false, pessoas: [] };
+    const pess = T.pessoas.map(p => `<form class="card" data-tgp="${esc(p.id)}" style="gap:8px;padding:12px">
+        <div class="row" style="justify-content:space-between"><b>${esc(p.nome)}${p.apelido ? ' <span class="muted small">@' + esc(p.apelido) + '</span>' : ''}</b>${p.liberado ? '<span class="small" style="color:var(--ok)">liberado</span>' : '<span class="small neg">pediu acesso</span>'}</div>
+        <div class="fgrid"><div class="field"><label>Nome no DRE</label><input type="text" name="nome" value="${esc(p.nome)}" maxlength="60"></div>
+          <div class="field"><label>Filial padrão</label><select name="filial">${optFiliais(p.filial == null ? 1 : p.filial)}</select></div></div>
+        <label class="row small"><input type="checkbox" name="lib" ${p.liberado ? 'checked' : ''}> Pode lançar despesas</label>
+        <div class="row" style="gap:8px"><button class="btn sm pri" type="submit">Salvar</button><button class="btn sm" type="button" data-tgrem="${esc(p.id)}">Remover</button></div></form>`).join('');
+    openSheet(`<div class="tt"><h2>Robô do Telegram</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
+      ${T.ligado ? `<p class="small">Ligado como <b>@${esc(T.bot || '')}</b>. Coloque ele no grupo da equipe. Quem mandar a primeira mensagem aparece aqui para você liberar.</p>
+        <p class="small muted">Exemplos que a equipe manda: “diesel 400 caminhão”, “conserto câmara fria 1.250,00 loja 2”, “contador 2000 rede”. Sem filial, vai para a filial padrão da pessoa.</p>
+        ${pess || '<p class="muted small">Ninguém falou com o robô ainda.</p>'}
+        <button class="btn dan full" type="button" id="tgOff" style="margin-top:8px">Desligar o robô</button>`
+      : `<p class="small">Cole aqui a chave que o BotFather te deu (a linha com números, dois-pontos e letras). Ela fica guardada só no servidor e não aparece mais na tela.</p>
+        <form id="ftg"><div class="field"><label for="tgTok">Chave do robô</label><input type="password" id="tgTok" autocomplete="off" required placeholder="123456789:AA..."></div>
+        <button class="btn pri lg full" type="submit" style="margin-top:10px">Ligar o robô</button></form>`}`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      if ($('#ftg')) $('#ftg').addEventListener('submit', e => { e.preventDefault(); post('/api/caixa/dre/tg/ligar', { token: $('#tgTok').value, base: location.origin }, 'Robô ligado').then(r => { if (r) setTimeout(sheetRobo, 300); }); });
+      if ($('#tgOff')) $('#tgOff').addEventListener('click', async () => { if (await perguntar('Desligar o robô?', 'Ele para de receber mensagens. Dá para ligar de novo com a chave.', 'Desligar', true)) post('/api/caixa/dre/tg/desligar', {}, 'Robô desligado'); });
+      document.querySelectorAll('[data-tgp]').forEach(f => f.addEventListener('submit', e => { e.preventDefault(); post('/api/caixa/dre/tg/pessoa', { id: f.dataset.tgp, nome: f.nome.value, filial: Number(f.filial.value), liberado: f.lib.checked }, 'Salvo').then(r => { if (r) setTimeout(sheetRobo, 300); }); }));
+      document.querySelectorAll('[data-tgrem]').forEach(b => b.addEventListener('click', async () => { if (await perguntar('Remover esta pessoa?', 'Se ela mandar mensagem de novo, aparece pedindo acesso.', 'Remover', true)) post('/api/caixa/dre/tg/pessoa', { id: b.dataset.tgrem, remover: true }, 'Removida').then(r => { if (r) setTimeout(sheetRobo, 300); }); }));
+    });
   }
   function imprimirDre() {
     const cab = t => `<div class="pagehd"><h1>DRE · ${t}</h1><p>${esc(brand.name || '')} · ${esc(mesTxt(dreMes))} · impresso em ${dtBR(new Date())}</p></div>`;

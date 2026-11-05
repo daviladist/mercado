@@ -642,6 +642,14 @@ check(all(f['id'] != LUZ for f in d['fixas']) and any(f['id'] == LUZ for f in n[
 s, _ = A.req('/api/caixa/dre/despesa/excluir', {'id': DIESEL}); check(s == 200, 'apaga o diesel')
 s, _ = A.req('/api/caixa/dre?mes=2026-11', tenant=TX); check(s == 401, 'sessão do dono não vale no DRE de outra empresa')
 
+
+print('== DRE: robô do Telegram (só o dono liga; despesa do robô espera aprovação)')
+s, _ = F.req('/api/caixa/dre/tg/ligar', {'token': '1:x', 'base': 'https://x.y'}); check(s == 403, 'financeiro não liga o robô')
+s, _ = A.req('/api/caixa/dre/tg/ligar', {'token': 'nao-e-chave', 'base': 'https://x.y'}); check(s == 400, 'chave em formato errado recusada')
+s, _ = A.req('/api/caixa/dre/aprovar', {'ids': []}); check(s == 400, 'aprovar sem nada recusado')
+s, d = A.req('/api/caixa/dre?mes=2026-11'); check(d['telegram']['ligado'] is False and d['telegram']['pendentes'] == [], 'sem robô ligado, nada pendente')
+s, _ = A.req('/api/tg/' + TID, {'update_id': 1}); check(s == 403, 'aviso do robô sem segredo recusado')
+
 print(f'\n{ok} OK, {len(fails)} falha(s)')
 if fails:
     print('\nFALHAS:')
