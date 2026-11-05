@@ -534,6 +534,18 @@ s, st5 = F.req('/api/caixa/state'); check(st5.get('saldo') == 100 and st5.get('t
 s, r = F.req('/api/caixa/staria/pedir', {'dia': '2026-11-01'}); check(s == 200 and r.get('id'), 'financeiro pode pedir a importação do StarIA')
 s, r = M.req('/api/caixa/staria/pedir', {'dia': '2026-11-01'}); check(s == 403, 'caixista não pede a importação do StarIA')
 
+print('== sangria feita no caixa, descontada na conferência da sacola')
+s, rj = F.req('/api/caixa/staria/pedir', {'dia': '2026-11-02'}); JS = rj.get('id'); check(s == 200 and JS, 'financeiro pede o dia 02/11')
+s, _ = A.req('/api/caixa/staria/resultado', {'id': JS, 'resultado': {'linhas': [lin(1, '101', '2026-11-02', 1000)]}}); check(s == 200, 'consulta entregue: caixa 101 da matriz com R$ 1.000 em dinheiro')
+s, stp = A.req('/api/caixa/state'); idp = [c['id'] for c in stp['caixasPendentes'] if c['ecf'] == '101' and c['data'] == '2026-11-02']
+s, _ = F.req('/api/caixa/caixas/aceitar', {'ids': idp}); check(s == 200, 'financeiro envia o caixa para a sacola')
+s, sta = A.req('/api/caixa/state'); sg = next(x for x in sta['sacolas'] if x['periodoFim'] == '2026-11-02' and not x['conferidoEm']); saldo_sg = sta['saldo']
+s, r = F.req('/api/caixa/sacola/checar', {'id': sg['id'], 'valorContado': '800'}); check(s == 200 and r['bateu'] is False, 'sem informar a sangria, R$ 800 contados (de R$ 1.000) não batem')
+s, r = F.req('/api/caixa/sacola/checar', {'id': sg['id'], 'valorContado': '800', 'sangria': '200'}); check(s == 200 and r['bateu'] is True, 'com R$ 200 de sangria no caixa, R$ 800 contados batem')
+s, r = F.req('/api/caixa/sacola/conferir', {'id': sg['id'], 'valorContado': '800', 'sangria': '200'}); check(s == 200 and r['bateu'] is True, 'confere a sacola com a sangria descontada')
+s, sta = A.req('/api/caixa/state'); check(sta['saldo'] == round(saldo_sg + 800, 2), 'no cofre entram só os R$ 800 que vieram na sacola (não os R$ 1.000 do StarIA)')
+s, ocs = A.req('/api/caixa/ocorrencias'); check(not any(o['tipo'] == 'sacola' and o['detalhe'].get('sangria') == 200 for o in ocs['ocorrencias']), 'sacola que bateu com a sangria não vira ocorrência')
+
 print(f'\n{ok} OK, {len(fails)} falha(s)')
 if fails:
     print('\nFALHAS:')

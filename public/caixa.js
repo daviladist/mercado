@@ -798,9 +798,10 @@
     const cego = !isAdmin(), legado = !!s.crediStaria && !String(s.jobId || '').startsWith('lt');
     const caixas = s.caixas || [];
     openSheet(`<div class="tt"><h2>Conferir sacola · Filial ${esc(s.filial)}</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
-      <p class="muted small">${cego ? 'Conte todo o dinheiro de vendas que veio na sacola e digite o total. Você não vê o valor esperado: o app só diz se bateu.' : 'O StarIA apontou ' + money(s.valorStaria) + ' em vendas em dinheiro dessa filial. Digite o que realmente veio dentro da sacola: é esse valor que entra no cofre.'}</p>
+      <p class="muted small">${cego ? 'Conte todo o dinheiro de vendas que veio na sacola e digite o total. Você não vê o valor esperado: o app só diz se bateu.' : 'O StarIA apontou ' + money(s.valorStaria) + ' em vendas em dinheiro dessa filial. Digite o que realmente veio dentro da sacola: é esse valor que entra no cofre. Se houve sangria no caixa, informe abaixo: ela é descontada do esperado.'}</p>
       ${caixas.length ? `<div class="list small" style="margin-bottom:10px">${caixas.map(c => `<div class="it"><div class="tx"><b>Caixa ${esc(c.ecf)}</b><span>${dBR(c.data)}</span></div>${c.dinheiro == null ? '' : `<div class="vl">${money(c.dinheiro)}</div>`}</div>`).join('')}</div>` : ''}
       <form id="fcs">
+        <div class="field"><label for="csSangria">Sangria feita no caixa (se houve)</label><input type="text" id="csSangria" inputmode="decimal" placeholder="0,00"><span class="small muted">Dinheiro que saiu do caixa durante o dia e não veio na sacola. O app desconta do que era esperado.</span></div>
         <div class="field"><label for="csValor">Total de vendas contado</label><input type="text" id="csValor" inputmode="decimal" placeholder="Digite o total contado" required></div>
         ${legado && !cego ? `<div class="note">O StarIA apontou ${money(s.crediStaria)} de crediário recebido. Diga quanto disso foi em cada forma, só o dinheiro entra no cofre.</div>
         <div class="field"><label for="csCrediDinheiro">Crediário em dinheiro</label><input type="text" id="csCrediDinheiro" inputmode="decimal" placeholder="0,00"></div>
@@ -825,7 +826,7 @@
       const confirmar = async () => {
         const cd = $('#csCrediDinheiro'), cc = $('#csCrediCartao'), cp = $('#csCrediPix');
         const r = await api('/api/caixa/sacola/conferir', {
-          id: s.id, valorContado: $('#csValor').value, motivo: $('#csMotivo').value,
+          id: s.id, valorContado: $('#csValor').value, sangria: $('#csSangria').value, motivo: $('#csMotivo').value,
           crediDinheiro: cd ? cd.value : undefined, crediCartao: cc ? cc.value : undefined, crediPix: cp ? cp.value : undefined
         });
         await reload();
@@ -840,7 +841,7 @@
           if (!cego || tentativa >= 1) return await confirmar();
           // equipe, 1ª vez: só checa (não grava). Bateu → grava; não bateu → conta de novo, e na 2ª grava o que der.
           const cdv = $('#csCrediDinheiro');
-          const c = await api('/api/caixa/sacola/checar', { id: s.id, valorContado: $('#csValor').value, crediDinheiro: cdv ? cdv.value : undefined });
+          const c = await api('/api/caixa/sacola/checar', { id: s.id, valorContado: $('#csValor').value, sangria: $('#csSangria').value, crediDinheiro: cdv ? cdv.value : undefined });
           if (c.bateu) return await confirmar();
           tentativa++;
           $('#csOut').innerHTML = `<div class="warn"><b>Não bateu.</b> Conte de novo com calma e digite o total. Na próxima vez fica registrado o que você digitar.</div>`;
@@ -954,7 +955,7 @@
     }
     if (o.tipo === 'sacola') {
       const partes = [];
-      if (d.diferenca) partes.push('vendas: ' + (d.diferenca > 0 ? 'sobrou ' : 'faltou ') + money(Math.abs(d.diferenca)) + ' (contado ' + money(d.valorContado) + ', StarIA apontava ' + money(d.valorStaria) + ')');
+      if (d.diferenca) partes.push('vendas: ' + (d.diferenca > 0 ? 'sobrou ' : 'faltou ') + money(Math.abs(d.diferenca)) + ' (contado ' + money(d.valorContado) + ', StarIA apontava ' + money(d.valorStaria) + (d.sangria ? ', menos ' + money(d.sangria) + ' de sangria no caixa' : '') + ')');
       if (d.crediDiferenca) partes.push('crediário: ' + (d.crediDiferenca > 0 ? 'sobrou ' : 'faltou ') + money(Math.abs(d.crediDiferenca)) + ' (dinheiro+cartão+Pix somou ' + money(r2((d.crediDinheiro || 0) + (d.crediCartao || 0) + (d.crediPix || 0))) + ', StarIA apontava ' + money(d.crediStaria) + ')');
       return 'Filial ' + esc(d.filial) + ': ' + partes.join(' · ') + (d.motivo ? ' · ' + esc(d.motivo) : '') + ' · ' + esc(d.por || '');
     }
