@@ -1,0 +1,149 @@
+/* Tino — sistema de design único (claro, denso, números alinhados).
+   Carregado por último em Caixa, Produtor rural, Loja online e painel da Loja:
+   troca os tokens e refina os componentes sem mexer na lógica das telas. */
+
+:root{
+  /* neutros */
+  --cream:#F6F7F9;--surface:#fff;--surface-2:#F9FAFB;
+  --line:#E4E7EC;--line-2:#EEF0F3;--input:#CBD2DC;
+  --ink:#101828;--muted:#566275;--muted-2:#8793A5;
+  /* marca: um único verde, sem dourado de enfeite */
+  --brand:#176B3A;--brand-2:#0F4F2A;--brand-ink:#475467;--brand-text:var(--brand);
+  /* atenção (âmbar), usado só para avisos */
+  --gold:#F79009;--gold-2:#DC6803;--gold-soft:#FFF6E5;
+  /* estados (os nomes antigos são a base: a Loja escura troca só eles e o resto acompanha) */
+  --green:#067647;--green-bg:#ECFDF3;--red:#B42318;--red-bg:#FEF3F2;
+  --ok:var(--green);--ok-bg:var(--green-bg);--ok-line:#ABEFC6;
+  --bad:var(--red);--bad-bg:var(--red-bg);--bad-line:#FECDCA;
+  --wa:#93370D;--wa-bg:var(--gold-soft);--wa-line:#FEDF89;
+  --blue:#175CD3;--blue-bg:#EFF8FF;
+  /* forma */
+  --r-xl:16px;--r-lg:12px;--r:10px;--r-sm:8px;--r-pill:999px;
+  --sh-1:0 1px 2px rgba(16,24,40,.05);
+  --sh-2:0 12px 32px rgba(16,24,40,.16);
+  /* tipografia */
+  --f-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-head:"Geist","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+
+body{font:15px/1.5 var(--f-body);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+h1,h2,h3,.hero .val,.saldo b,.sheet .tt h2{font-family:var(--f-head)}
+h1{font-size:22px;font-weight:600;letter-spacing:-.02em;line-height:1.2}
+h2{font-size:16px;font-weight:600;letter-spacing:-.01em}
+h3{font-size:15px;font-weight:600}
+.small{font-size:13px}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+
+/* números: largura fixa, para colunas alinharem */
+.num,.vl,.kv b,td.n,th.n,.money,.val,.saldo b,.sac .top .vl,.sbar .t b,.pc .pr,.hero .val,
+input[inputmode=decimal],.cartbar b,.tot,.price{font-family:var(--f-head);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1,"zero" 0}
+.money{font-size:24px;font-weight:600;letter-spacing:-.02em}
+
+/* ===== Cabeçalho branco, fino ===== */
+.hd{background:var(--surface);color:var(--ink);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.hd .in{padding:8px 16px;min-height:56px}
+.hd .lg{width:32px;height:32px;border-radius:8px;background:var(--surface);border:1px solid var(--line)}
+.hd b{font-family:var(--f-head);font-size:16px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
+.hd small{font-size:11.5px;font-weight:500;color:var(--muted);letter-spacing:.02em;text-transform:none;opacity:1}
+.hd .out{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:var(--r-sm);min-height:36px;padding:0 12px;font-size:13px;font-weight:500}
+.hd .out:hover{background:var(--line-2)}
+.hd .atu{background:var(--surface-2)}
+.mods{background:var(--surface);border-bottom:1px solid var(--line)}
+.mods button,.mods a{color:var(--muted);opacity:1;font-size:13px;font-weight:500;border-bottom:2px solid transparent;padding:10px 12px}
+.mods button:hover,.mods a:hover{color:var(--ink)}
+.mods button.on{color:var(--ink);font-weight:600;border-bottom-color:var(--brand)}
+
+/* ===== Cartões ===== */
+.card{border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-1);padding:16px}
+.sec h2{font-size:14px;font-weight:600;color:var(--ink)}
+.sec a,.lnk{color:var(--brand);font-weight:600;font-size:13.5px}
+.pagehd p{font-size:13.5px}
+
+/* ===== Botões ===== */
+.btn{border-radius:var(--r);border:1px solid var(--input);background:var(--surface);color:var(--ink);font-weight:600;font-size:14.5px;box-shadow:var(--sh-1);transition:background .12s,border-color .12s}
+.btn:hover:not(:disabled){background:var(--line-2)}
+.btn.pri{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:none}
+.btn.pri:hover:not(:disabled){background:var(--brand-2);border-color:var(--brand-2)}
+.btn.gold{background:var(--ink);border-color:var(--ink);color:var(--cream);box-shadow:none}
+.btn.gold:hover:not(:disabled){background:var(--ink);filter:brightness(1.15)}
+.btn.bad,.btn.dan.solid{background:var(--bad);border-color:var(--bad);color:#fff;box-shadow:none}
+.btn.dan{color:var(--bad);border-color:var(--bad-line);background:var(--surface)}
+.btn.ghost{color:var(--brand);box-shadow:none}
+.btn.lg{border-radius:var(--r-lg)}
+.acts .btn{border-radius:var(--r-lg)}
+.chip{border-radius:var(--r-pill);border-color:var(--input);font-weight:500;color:var(--ink);background:var(--surface)}
+.chip[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--cream)}
+
+/* ===== Campos ===== */
+.field>label,.lbl{font-size:12.5px;font-weight:600;color:var(--muted);letter-spacing:.01em}
+input[type=text],input[type=date],input[type=tel],input[type=password],input[type=email],input[type=number],input[inputmode],select,textarea{border:1px solid var(--input);border-radius:var(--r);background:var(--surface);color:var(--ink);min-height:48px}
+input:focus,select:focus,textarea:focus{border-color:var(--brand);outline:3px solid rgba(23,107,58,.14)}
+input::placeholder,textarea::placeholder{color:var(--muted-2)}
+input[inputmode=decimal]{font-size:22px;font-weight:600;letter-spacing:-.02em}
+
+/* ===== Listas ===== */
+.it{border-top-color:var(--line-2)}
+.it .ic{border-radius:10px;background:var(--surface-2);border:1px solid var(--line-2);color:var(--ink)}
+.it .ic.ok{background:var(--ok-bg);border-color:var(--ok-line);color:var(--ok)}
+.it .ic.wa{background:var(--wa-bg);border-color:var(--wa-line);color:var(--wa)}
+.it .ic.bad{background:var(--bad-bg);border-color:var(--bad-line);color:var(--bad)}
+.it .tx b{font-weight:600}
+.it .vl{font-weight:600}
+@media (hover:hover){button.it:hover,a.it:hover{background:var(--surface-2)}}
+.kv b{font-weight:600}
+.badge{background:var(--gold);color:#3B2100;font-weight:700;font-size:12px}
+.badge.bad{background:var(--bad);color:#fff}
+.pill{font-size:11.5px;font-weight:600;padding:3px 9px;border:1px solid transparent}
+.pill.ok{border-color:var(--ok-line)}.pill.wa{border-color:var(--wa-line)}.pill.bad{border-color:var(--bad-line)}
+.seg{background:var(--line-2);border-radius:var(--r-sm)}
+.seg button{font-weight:500;border-radius:7px}
+.seg button.on{background:var(--surface);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.12)}
+.seg.vazio{box-shadow:inset 0 0 0 1.5px var(--gold)}
+.ck{accent-color:var(--brand)}
+.steps span.cur{background:var(--gold)}
+.sac{border-radius:var(--r-lg)}
+.sac .top .vl{font-size:18px;font-weight:600;letter-spacing:-.02em}
+
+/* barra de ação fixa: escura e sóbria */
+.sbar{background:var(--ink);border-radius:var(--r-lg);box-shadow:var(--sh-2)}
+.sbar .btn{background:var(--surface);border-color:var(--surface);color:var(--ink)}
+.sbar .btn:disabled{background:transparent;border:1px dashed rgba(255,255,255,.4);color:rgba(255,255,255,.75)}
+
+/* avisos */
+details.how,.note,.aband{background:var(--wa-bg);color:var(--wa);border:1px solid var(--wa-line);border-radius:var(--r)}
+details.how.ajuda>summary::before{background:var(--wa);color:var(--wa-bg)}
+details.how.neutro{background:var(--surface-2);border:1px solid var(--line);color:var(--ink)}
+.warn{border:1px solid var(--bad-line);font-weight:600}
+.okbox{border:1px solid var(--ok-line);font-weight:600}
+details.crfil{background:var(--surface-2);border-radius:var(--r)}
+details.crcli>.list{border-left:2px solid var(--line)}
+
+/* ===== Navegação de baixo ===== */
+nav.bn{background:rgba(255,255,255,.92);backdrop-filter:saturate(1.4) blur(10px);-webkit-backdrop-filter:saturate(1.4) blur(10px);box-shadow:none}
+nav.bn button{font-size:11.5px;font-weight:500;color:var(--muted)}
+nav.bn button[aria-current=true]{color:var(--brand);font-weight:600}
+nav.bn button[aria-current=true]::before{height:2px;background:var(--brand);left:32%;right:32%}
+
+/* ===== Painel de baixo, aviso rápido, tabelas ===== */
+.sheet{background:rgba(16,24,40,.45);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+.sheet .x{background:var(--line-2);color:var(--ink)}
+.toast{background:var(--ink);font-weight:500;box-shadow:var(--sh-2)}
+th{font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--muted)}
+td{font-size:14px}
+tbody tr:hover td{background:var(--surface-2)}
+.tino b{color:var(--brand)}
+
+/* ===== Vazio e carregando ===== */
+.empty{padding:28px 14px;color:var(--muted)}
+.empty .big{background:var(--surface-2);border:1px solid var(--line);color:var(--muted)}
+.sk{display:grid;gap:10px}
+.sk i{display:block;height:14px;border-radius:6px;background:linear-gradient(90deg,var(--line-2) 25%,var(--line) 37%,var(--line-2) 63%);background-size:400% 100%;animation:sk 1.3s ease-in-out infinite}
+.sk i.t{height:26px;width:55%}.sk i.b{height:44px}.sk i.s{width:70%}.sk i.xs{width:40%}
+@keyframes sk{0%{background-position:100% 50%}100%{background-position:0 50%}}
+@media (prefers-reduced-motion:reduce){.sk i{animation:none}}
+
+/* ===== Vitrine (Loja online) ===== */
+.pc{border-radius:var(--r-lg);box-shadow:var(--sh-1)}
+@media (hover:hover){.pc:hover{box-shadow:0 8px 20px rgba(16,24,40,.1)}}
+.pc .nm{font-weight:500}
+.pc .pr{font-weight:600}
