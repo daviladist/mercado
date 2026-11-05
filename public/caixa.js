@@ -529,6 +529,7 @@
   }
   const grupoDe = l => l.filial + '|' + l.data;
   const cxDiasAbertos = new Set(); // dias de cada filial abertos (começam minimizados)
+  const cxFilAbertas = new Set();  // filiais abertas na lista de caixas
   function htmlCaixasPendentes() {
     const lista = S.caixasPendentes;
     if (!lista || !lista.length) return '';
@@ -540,16 +541,26 @@
       <div class="sec"><h2>Caixas do StarIA para marcar</h2><span class="badge">${lista.length}</span></div>
       <details class="how ajuda"><summary>Quais devo marcar?</summary>
         <p>Abra no StarIA a tela <b>Fechamento de Caixa (PDV)</b>. Marque aqui só os caixas que lá estão em <b>preto</b> (já conferidos). Os vermelhos ficam sem marcar: continuam aqui e a próxima consulta atualiza o valor.</p></details>
-      <div>${chaves.map(k => {
-        const ls = grupos[k], [f, d] = k.split('|');
-        const tot = ls.some(l => l.dinheiro != null) ? money(r2(ls.reduce((a, l) => a + (l.dinheiro || 0), 0))) : '';
-        return `<details class="crfil cxdia" data-cxdia="${esc(k)}"${cxDiasAbertos.has(k) ? ' open' : ''}>
-          <summary><span class="tx"><b>Filial ${esc(f)} · ${dBR(d)}</b><span class="small muted">${plural(ls.length, 'caixa', 'caixas')} · <span data-cxdiaresumo="${esc(k)}"></span></span></span><span class="vl">${tot}</span><span class="crfil-seta" aria-hidden="true"></span></summary>
-          <div class="grp" style="border-top:0;padding-top:0"><span class="small muted">Caixas deste dia</span><button type="button" class="lnk" data-grupo="${esc(k)}">Marcar todos</button></div>
-          <div class="list">${ls.map(l => `<label class="it${marcados.has(l.id) ? ' on' : ''}" data-cxrow="${esc(l.id)}">
+      <div>${[...new Set(chaves.map(k => k.split('|')[0]))].map(f => {
+        // filial (minimizada) -> dias (minimizados, quando há mais de um) -> caixas. Nada some: caixa pendente
+        // de dias atrás continua aqui até ser enviado para a sacola.
+        const ks = chaves.filter(k => k.split('|')[0] === f), todos = ks.flatMap(k => grupos[k]);
+        const totF = todos.some(l => l.dinheiro != null) ? money(r2(todos.reduce((a, l) => a + (l.dinheiro || 0), 0))) : '';
+        const caixasDoDia = k => `<div class="list">${grupos[k].map(l => `<label class="it${marcados.has(l.id) ? ' on' : ''}" data-cxrow="${esc(l.id)}">
             <input type="checkbox" class="ck" data-cx="${esc(l.id)}" ${marcados.has(l.id) ? 'checked' : ''}>
             <div class="tx"><b>Caixa ${esc(l.ecf)}</b></div>${l.dinheiro == null ? '' : `<div class="vl">${money(l.dinheiro)}</div>`}
-          </label>`).join('')}</div></details>`;
+          </label>`).join('')}</div>`;
+        const dia = k => { const ls = grupos[k], d = k.split('|')[1];
+          const tot = ls.some(l => l.dinheiro != null) ? money(r2(ls.reduce((a, l) => a + (l.dinheiro || 0), 0))) : '';
+          return ks.length > 1
+            ? `<details class="crfil cxdia sub" data-cxdia="${esc(k)}"${cxDiasAbertos.has(k) ? ' open' : ''}>
+                <summary><span class="tx"><b>${dBR(d)}</b><span class="small muted">${plural(ls.length, 'caixa', 'caixas')} · <span data-cxdiaresumo="${esc(k)}"></span>${atrasoTag(d)}</span></span><span class="vl">${tot}</span><span class="crfil-seta" aria-hidden="true"></span></summary>
+                <div class="grp" style="border-top:0;padding-top:0"><span class="small muted">Caixas de ${dBR(d)}</span><button type="button" class="lnk" data-grupo="${esc(k)}">Marcar todos</button></div>
+                ${caixasDoDia(k)}</details>`
+            : `<div class="grp"><b>${dBR(d)}</b><span data-cxdiaresumo="${esc(k)}" class="small muted"></span><button type="button" class="lnk" data-grupo="${esc(k)}">Marcar todos</button></div>${caixasDoDia(k)}`; };
+        return `<details class="crfil cxdia" data-cxfil="${esc(f)}"${cxFilAbertas.has(f) ? ' open' : ''}>
+          <summary><span class="tx"><b>Filial ${esc(f)}</b><span class="small muted">${ks.length > 1 ? ks.length + ' dias · ' : dBR(ks[0].split('|')[1]) + ' · '}${plural(todos.length, 'caixa', 'caixas')} · <span data-cxfilresumo="${esc(f)}"></span></span></span><span class="vl">${totF}</span><span class="crfil-seta" aria-hidden="true"></span></summary>
+          ${ks.map(dia).join('')}</details>`;
       }).join('')}</div>
       <div class="sbar"><div class="t" id="cxResumo"></div><button class="btn" type="button" id="btnEnviarCx" disabled>Enviar</button></div>
     </section>`;
@@ -567,8 +578,11 @@
       document.querySelectorAll('[data-grupo]').forEach(g => { const ls = lista.filter(l => grupoDe(l) === g.dataset.grupo); g.textContent = ls.every(l => marcados.has(l.id)) ? 'Desmarcar' : 'Marcar todos'; });
       document.querySelectorAll('[data-cxdiaresumo]').forEach(el => { const ls = lista.filter(l => grupoDe(l) === el.dataset.cxdiaresumo), n = ls.filter(l => marcados.has(l.id)).length;
         el.textContent = !n ? 'nenhum marcado' : n === ls.length ? 'todos marcados' : n + ' de ' + ls.length + ' marcados'; el.style.color = n ? 'var(--ok)' : ''; el.style.fontWeight = n ? '700' : ''; });
+      document.querySelectorAll('[data-cxfilresumo]').forEach(el => { const ls = lista.filter(l => String(l.filial) === el.dataset.cxfilresumo), n = ls.filter(l => marcados.has(l.id)).length;
+        el.textContent = !n ? 'nenhum marcado' : n === ls.length ? 'todos marcados' : n + ' de ' + ls.length + ' marcados'; el.style.color = n ? 'var(--ok)' : ''; el.style.fontWeight = n ? '700' : ''; });
     };
     document.querySelectorAll('[data-cxdia]').forEach(d => d.addEventListener('toggle', () => { if (d.open) cxDiasAbertos.add(d.dataset.cxdia); else cxDiasAbertos.delete(d.dataset.cxdia); }));
+    document.querySelectorAll('[data-cxfil]').forEach(d => d.addEventListener('toggle', () => { if (d.open) cxFilAbertas.add(d.dataset.cxfil); else cxFilAbertas.delete(d.dataset.cxfil); }));
     document.querySelectorAll('[data-cx]').forEach(c => c.addEventListener('change', () => { if (c.checked) marcados.add(c.dataset.cx); else marcados.delete(c.dataset.cx); atualiza(); }));
     document.querySelectorAll('[data-grupo]').forEach(g => g.addEventListener('click', () => {
       const ls = lista.filter(l => grupoDe(l) === g.dataset.grupo), todos = ls.every(l => marcados.has(l.id));
@@ -615,7 +629,8 @@
   const FORMA_TXT = { dinheiro: 'Dinheiro', pix: 'Pix', cartao: 'Cartão', outro: 'Outro' };
   const escolhas = new Map();   // escolhas ainda não salvas: id -> forma
   const crFilAbertas = new Set(); // filiais do crediário abertas (começam minimizadas)
-  const crCliAbertos = new Set(); // clientes com vários títulos abertos (filial|data|nome)
+  const crCliAbertos = new Set();
+  const crDiaAbertos = new Set(); // dias abertos dentro de cada filial (quando há mais de um) // clientes com vários títulos abertos (filial|data|nome)
   const sugestao = c => /CART/i.test(c.conta || '') ? 'cartao' : /SICOOB|BANCO|PIX/i.test(c.conta || '') ? 'pix' : null;
   function crediEsperado(s) {
     const fim = String(s.periodoFim).slice(0, 10);
@@ -653,9 +668,14 @@
       ${[...new Set(chaves.map(k => k.split('|')[0]))].map(f => {
         const ks = chaves.filter(k => k.split('|')[0] === f), itens = ks.flatMap(k => grupos[k]);
         return `<details class="crfil" data-crfil="${esc(f)}"${crFilAbertas.has(f) ? ' open' : ''}>
-        <summary><span><b>Filial ${esc(f)}</b><span class="small muted"> · ${plural(itens.length, 'recebimento', 'recebimentos')} · ${money(r2(itens.reduce((a, c) => a + c.valor, 0)))}</span></span><span class="crfil-seta" aria-hidden="true"></span></summary>
-        ${ks.map(k => { const d = k.split('|')[1]; return `<div class="grp"><b>${dBR(d)}</b><button type="button" class="lnk" data-crgrupo="${esc(k)}">Os sem marcar = Dinheiro</button></div>
-        <div class="list">${porCliente(k, grupos[k])}</div>`; }).join('')}
+        <summary><span><b>Filial ${esc(f)}</b><span class="small muted"> · ${ks.length > 1 ? ks.length + ' dias · ' : ''}${plural(itens.length, 'recebimento', 'recebimentos')} · ${money(r2(itens.reduce((a, c) => a + c.valor, 0)))}</span></span><span class="crfil-seta" aria-hidden="true"></span></summary>
+        ${ks.map(k => { const d = k.split('|')[1], ls = grupos[k];
+          const corpo = `<div class="grp"${ks.length > 1 ? ' style="border-top:0;padding-top:0"' : ''}><b>${ks.length > 1 ? '' : dBR(d)}</b><button type="button" class="lnk" data-crgrupo="${esc(k)}">Os sem marcar = Dinheiro</button></div>
+        <div class="list">${porCliente(k, ls)}</div>`;
+          // mais de um dia na filial: cada dia vira um bloco minimizado (nada some até ser marcado)
+          return ks.length > 1 ? `<details class="crfil sub" data-crdia="${esc(k)}"${crDiaAbertos.has(k) ? ' open' : ''}>
+            <summary><span class="tx" style="flex:1;min-width:0;display:flex;flex-direction:column"><b>${dBR(d)}</b><span class="small muted">${plural(ls.length, 'recebimento', 'recebimentos')} · <span data-crdiaresumo="${esc(k)}"></span>${atrasoTag(d)}</span></span><span style="font-weight:700;white-space:nowrap">${money(r2(ls.reduce((a, c) => a + c.valor, 0)))}</span><span class="crfil-seta" aria-hidden="true"></span></summary>
+            ${corpo}</details>` : corpo; }).join('')}
         </details>`; }).join('')}
       ${corrigiveis.length ? `<details class="how neutro" style="margin-top:12px"><summary>Já marcados, ainda dá para corrigir (${corrigiveis.length})</summary>
         <div class="list">${corrigiveis.map(c => linha(c, escolhas.get(c.id) || c.forma)).join('')}</div></details>` : ''}
@@ -673,12 +693,17 @@
         const fs = [...new Set(marc.map(c => FORMA_TXT[escolhas.get(c.id)]))];
         el.textContent = !marc.length ? 'sem marcar' : marc.length < cs.length ? (cs.length - marc.length) + ' sem marcar' : fs.join(' + ');
       });
+      document.querySelectorAll('[data-crdiaresumo]').forEach(el => {
+        const ls = lista.filter(c => !c.forma && c.filial + '|' + c.data === el.dataset.crdiaresumo), falta = ls.filter(c => !escolhas.has(c.id)).length;
+        el.textContent = falta ? falta + ' sem marcar' : 'tudo marcado'; el.style.color = falta ? '' : 'var(--ok)'; el.style.fontWeight = falta ? '' : '700';
+      });
       const m = mudancas(), r = $('#crResumo'), b = $('#btnSalvarCr');
       const falta = lista.filter(c => !c.forma && !escolhas.has(c.id)).length;
       if (r) r.innerHTML = m.length ? plural(m.length, 'recebimento para salvar', 'recebimentos para salvar') + (falta ? `<b>${plural(falta, 'sem marcar', 'sem marcar')}</b>` : '') : (falta ? 'Toque na forma de cada recebimento' : 'Tudo marcado');
       if (b) { b.disabled = !m.length; b.textContent = m.length ? 'Salvar ' + m.length : 'Salvar'; }
     };
     document.querySelectorAll('[data-crfil]').forEach(d => d.addEventListener('toggle', () => { if (d.open) crFilAbertas.add(d.dataset.crfil); else crFilAbertas.delete(d.dataset.crfil); }));
+    document.querySelectorAll('[data-crdia]').forEach(d => d.addEventListener('toggle', () => { if (d.open) crDiaAbertos.add(d.dataset.crdia); else crDiaAbertos.delete(d.dataset.crdia); }));
     document.querySelectorAll('[data-crcli]').forEach(d => d.addEventListener('toggle', () => { if (d.open) crCliAbertos.add(d.dataset.crcli); else crCliAbertos.delete(d.dataset.crcli); }));
     const doCli = key => { const [f, d, ...n] = key.split('|'); const nome = n.join('|'); return lista.filter(c => !c.forma && String(c.filial) === f && c.data === d && (c.cliente || 'Cliente') === nome); };
     document.querySelectorAll('[data-crtodos]').forEach(b => b.addEventListener('click', () => { doCli(b.dataset.crtodos).forEach(c => escolhas.set(c.id, b.dataset.f)); atualiza(); }));
@@ -975,12 +1000,15 @@
   }
 
   /* ---------- pessoa da loja: só confirma o crediário que vai na sacola ---------- */
+  // dia que já devia ter ido (antes de ontem): marca "atrasado" para não passar despercebido
+  const atrasoTag = d => { const ontem = new Date(Date.parse(hoje() + 'T12:00:00Z') - 864e5).toISOString().slice(0, 10); return d < ontem ? ' · <b style="color:var(--bad)">atrasado</b>' : ''; };
   const lojaMarc = new Set();
+  const ljDiasAbertos = new Set();
   function renderLoja() {
     const L = S.crediLoja || [], f = S.loja.filial;
     for (const id of [...lojaMarc]) if (!L.some(c => c.id === id && !c.ok)) lojaMarc.delete(id);
     const falta = L.filter(c => !c.ok), feitos = L.filter(c => c.ok);
-    const dias = [...new Set(falta.map(c => c.data))];
+    const dias = [...new Set(falta.map(c => c.data))].sort();
     const linha = c => `<label class="it${lojaMarc.has(c.id) ? ' on' : ''}" data-lrow="${esc(c.id)}"><input type="checkbox" class="ck" data-lj="${esc(c.id)}" ${lojaMarc.has(c.id) ? 'checked' : ''}>
       <div class="tx"><b>${esc(c.cliente || 'Cliente')}</b><span>Título ${esc(c.numero || '—')}</span></div><div class="vl">${money(c.valor)}</div></label>`;
     const sac = S.sacolasLoja || [];
@@ -988,8 +1016,13 @@
       <section class="card">
         <div class="sec"><h2>Crediário para mandar na sacola</h2>${falta.length ? `<span class="badge">${falta.length}</span>` : ''}</div>
         <details class="how ajuda"><summary>Como fazer</summary><p>Para cada cliente da lista, confira se o papel do recebimento (e o dinheiro, se foi em dinheiro) está indo na sacola. Marque e toque em <b>Confirmar</b>. Não precisa dizer se foi Pix, dinheiro ou cartão: a matriz faz isso pelo papel.</p></details>
-        ${dias.length ? dias.map(d => { const ls = falta.filter(c => c.data === d); return `<div class="grp"><b>${dBR(d)}</b><button type="button" class="lnk" data-ljdia="${esc(d)}">Marcar todos</button></div>
-          <div class="list">${ls.map(linha).join('')}</div>`; }).join('')
+        ${dias.length ? dias.map(d => { const ls = falta.filter(c => c.data === d);
+          const corpo = `<div class="grp"${dias.length > 1 ? ' style="border-top:0;padding-top:0"' : ''}><b>${dias.length > 1 ? '' : dBR(d)}</b><button type="button" class="lnk" data-ljdia="${esc(d)}">Marcar todos</button></div>
+          <div class="list">${ls.map(linha).join('')}</div>`;
+          // mais de um dia esperando (a sacola não foi todo dia): cada dia minimizado, e nada some até confirmar
+          return dias.length > 1 ? `<details class="crfil sub" data-ljd="${esc(d)}"${ljDiasAbertos.has(d) ? ' open' : ''}>
+            <summary><span style="flex:1;min-width:0;display:flex;flex-direction:column"><b>${dBR(d)}</b><span class="small muted">${plural(ls.length, 'recebimento', 'recebimentos')} · <span data-ljdiaresumo="${esc(d)}"></span>${atrasoTag(d)}</span></span><span style="font-weight:700;white-space:nowrap">${money(r2(ls.reduce((a, c) => a + c.valor, 0)))}</span><span class="crfil-seta" aria-hidden="true"></span></summary>
+            ${corpo}</details>` : corpo; }).join('')
         : `<div class="empty"><div class="big">${ic('ok')}</div><p>Nada para confirmar agora.</p></div>`}
         ${falta.length ? `<div class="sbar"><div class="t" id="ljResumo"></div><button class="btn" type="button" id="btnLj" disabled>Confirmar</button></div>` : ''}
       </section>
@@ -1004,7 +1037,10 @@
       if (b) { b.disabled = !sel.length; b.textContent = sel.length ? 'Confirmar ' + sel.length : 'Confirmar'; }
       document.querySelectorAll('[data-lrow]').forEach(x => x.classList.toggle('on', lojaMarc.has(x.dataset.lrow)));
       document.querySelectorAll('[data-ljdia]').forEach(g => { const ls = falta.filter(c => c.data === g.dataset.ljdia); g.textContent = ls.every(c => lojaMarc.has(c.id)) ? 'Desmarcar' : 'Marcar todos'; });
+      document.querySelectorAll('[data-ljdiaresumo]').forEach(el => { const ls = falta.filter(c => c.data === el.dataset.ljdiaresumo), n = ls.filter(c => lojaMarc.has(c.id)).length;
+        el.textContent = !n ? 'nenhum marcado' : n === ls.length ? 'todos marcados' : n + ' de ' + ls.length + ' marcados'; el.style.color = n ? 'var(--ok)' : ''; el.style.fontWeight = n ? '700' : ''; });
     };
+    document.querySelectorAll('[data-ljd]').forEach(d => d.addEventListener('toggle', () => { if (d.open) ljDiasAbertos.add(d.dataset.ljd); else ljDiasAbertos.delete(d.dataset.ljd); }));
     document.querySelectorAll('[data-lj]').forEach(c => c.addEventListener('change', () => { if (c.checked) lojaMarc.add(c.dataset.lj); else lojaMarc.delete(c.dataset.lj); atualiza(); }));
     document.querySelectorAll('[data-ljdia]').forEach(g => g.addEventListener('click', () => {
       const ls = falta.filter(c => c.data === g.dataset.ljdia), todos = ls.every(c => lojaMarc.has(c.id));
