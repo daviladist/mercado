@@ -432,7 +432,7 @@
         <div class="field"><label for="sgMotivo">Para quê</label>
           <div class="row" style="flex-wrap:wrap;gap:8px;margin-bottom:8px">${['Depósito no banco', 'Pagamento a fornecedor (com nota)', 'Outro: '].map(t => `<button type="button" class="pill mu" data-mot="${esc(t)}" style="border:0;cursor:pointer;min-height:36px">${esc(t.replace(': ', ''))}</button>`).join('')}</div>
           <input type="text" id="sgMotivo" placeholder="Ex.: depósito no Sicoob" required maxlength="300"></div>
-        ${isAdmin() ? `<div class="field"><label for="sgDestino">Para onde vai</label>
+        ${isAdmin() || isFin() ? `<div class="field"><label for="sgDestino">Para onde vai</label>
           <select id="sgDestino"><option value="">Retirada normal (para mim / banco)</option><option value="impostos">Gaveta de impostos e financiamentos</option></select></div>` : ''}
         <div class="field"><label for="sgData">Dia</label><input type="date" id="sgData" value="${hoje()}" max="${hoje()}"></div>
         <button class="btn pri lg full" type="submit">Lançar sangria</button>
@@ -442,7 +442,7 @@
       document.querySelectorAll('#sheet [data-mot]').forEach(b => b.addEventListener('click', () => { const m = $('#sgMotivo'); m.value = b.dataset.mot; m.focus(); }));
       $('#fsg').addEventListener('submit', e => {
         e.preventDefault();
-        const destino = isAdmin() ? $('#sgDestino').value : '';
+        const destino = isAdmin() || isFin() ? $('#sgDestino').value : '';
         post('/api/caixa/sangria', { valor: $('#sgValor').value, data: $('#sgData').value, motivo: $('#sgMotivo').value, destino: destino || undefined }, destino === 'impostos' ? 'Sangria lançada na gaveta de impostos' : 'Sangria lançada');
       });
     });
