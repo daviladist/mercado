@@ -636,6 +636,9 @@ create table if not exists caixa_conferencia (
   primary key (tenant_id, id)
 );
 create index if not exists caixa_conferencia_tenant on caixa_conferencia(tenant_id, created_at desc);
+-- o dono pode lançar a diferença de uma contagem direto no saldo (vira um ajuste); guarda qual ajuste foi, para
+-- não lançar duas vezes (se o ajuste for apagado, a diferença volta a poder ser lançada)
+alter table caixa_conferencia add column if not exists ajuste_id text;
 -- caixas do StarIA por dia (filial + ECF + data, só o dinheiro): a importação traz uma linha por caixa por dia, que
 -- fica 'pendente' até o financeiro (ou o admin) marcar que ela já está conferida no StarIA (linha preta na tela de
 -- Fechamento de Caixa). Só as marcadas viram sacola (uma por filial, com a soma); as outras esperam e são
