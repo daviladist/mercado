@@ -172,7 +172,7 @@
   function movSub(m) {
     if (m.tipo === 'venda_staria' || m.tipo === 'crediario_staria') return dBR(m.data) + ' · sacola conferida';
     const h = horaBR(m.criadoEm);
-    return dBR(m.data) + (h ? ' ' + h : '') + (m.motivo ? ' · ' + esc(m.motivo) : '') + (semDeposito(m) ? (isAdmin() ? ' · <b class="neg">falta confirmar no banco</b>' : ' · <b class="inf">aguardando o dono confirmar</b>') : '');
+    return dBR(m.data) + (h ? ' ' + h : '') + (m.motivo ? ' · ' + esc(m.motivo) : '') + (semDeposito(m) ? (isAdmin() ? ' · <b class="neg">falta confirmar no banco</b>' : ' · <b class="inf">aguardando o ADM confirmar</b>') : '');
   }
   function sinal(m) { const s = m.tipo === 'sangria' || m.tipo === 'gaveta_saida' || m.valor < 0; return `<span class="${s ? 'neg' : 'pos'}">${s ? '−' : '+'}${money(Math.abs(m.valor))}</span>`; }
   /* uma linha tocável: abre o painel com detalhes e ações (marcar depositado / apagar) */
@@ -194,7 +194,7 @@
         ${m.motivo ? `<div class="kv"><span class="muted">Motivo</span><b style="white-space:normal;text-align:right">${esc(m.motivo)}</b></div>` : ''}
         ${m.criadoPor ? `<div class="kv"><span class="muted">Quem lançou</span><b>${esc(m.criadoPor)}</b></div>` : ''}
         ${m.tipo === 'venda_staria' || m.tipo === 'crediario_staria' ? `<div class="kv"><span class="muted">Período</span><b>${dBR(m.periodoIni)} a ${dBR(m.periodoFim)}</b></div>` : ''}
-        ${m.tipo === 'sangria' && m.destino !== 'impostos' ? `<div class="kv"><span class="muted">Banco</span><b class="${m.depositadoEm ? 'pos' : 'neg'}">${m.depositadoEm ? 'confirmado em ' + dBR(m.depositadoEm) : isAdmin() ? 'você ainda não confirmou' : 'aguardando o dono confirmar'}</b></div>` : ''}
+        ${m.tipo === 'sangria' && m.destino !== 'impostos' ? `<div class="kv"><span class="muted">Banco</span><b class="${m.depositadoEm ? 'pos' : 'neg'}">${m.depositadoEm ? 'confirmado em ' + dBR(m.depositadoEm) : isAdmin() ? 'você ainda não confirmou' : 'aguardando o ADM confirmar'}</b></div>` : ''}
       </div>
       ${podeDep ? `<p class="small muted">Abra o extrato do banco. Se o depósito está lá, confirme.</p><button class="btn pri lg full" type="button" data-dep="${esc(m.id)}">${ic('bank')} Confirmei no banco</button>` : ''}
       ${podeApagar ? `<button class="btn dan full" type="button" data-delmov="${esc(m.id)}">Apagar este lançamento</button>` : ''}`, () => {
@@ -237,7 +237,7 @@
   /* ---------- Início: "quanto eu tenho agora e está tudo certo?" ---------- */
   function renderInicio() {
     if (!S.cfg) {
-      if (!isAdmin()) { $('#main').innerHTML = '<div class="empty card"><div class="big">' + ic('clock') + '</div><p>O dono ainda não informou o dinheiro inicial do cofre. Volte mais tarde.</p></div>'; return; }
+      if (!isAdmin()) { $('#main').innerHTML = '<div class="empty card"><div class="big">' + ic('clock') + '</div><p>O ADM ainda não informou o dinheiro inicial do cofre. Volte mais tarde.</p></div>'; return; }
       $('#main').innerHTML = `<section class="card">
         <h1>Vamos começar</h1>
         <p class="muted">Conte o dinheiro que está hoje no cofre da matriz e digite aqui. A partir daí, o app soma o que entra e tira o que sai.</p>
@@ -407,7 +407,7 @@
           }
           $('#fcf').hidden = true;
           const dif = Number(r.diferenca);
-          $('#cfOut').innerHTML = cego ? `<div class="warn"><b>Registrado.</b> Não bateu com o esperado: o dono vai ver.</div>`
+          $('#cfOut').innerHTML = cego ? `<div class="warn"><b>Registrado.</b> Não bateu com o esperado: o ADM vai ver.</div>`
             : `<div class="warn"><b>${dif > 0 ? 'Sobrou' : 'Faltou'} ${money(Math.abs(dif))}.</b> Ficou registrado nas Ocorrências.</div>`;
         } catch (er) { fail(er); } finally { b.disabled = false; }
       });
@@ -429,7 +429,7 @@
   /* ---------- Sangria: agora é um painel de baixo (era uma aba inteira) ---------- */
   function sheetSangria() {
     openSheet(`<div class="tt"><h2>Fazer sangria</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
-      <p class="muted small">Dinheiro que saiu do cofre.${isAdmin() ? '' : ' Quando for para o banco, o dono confirma no extrato.'}</p>
+      <p class="muted small">Dinheiro que saiu do cofre.${isAdmin() ? '' : ' Quando for para o banco, o ADM confirma no extrato.'}</p>
       <form id="fsg">
         <div class="field"><label for="sgValor">Quanto saiu</label><input type="text" inputmode="decimal" id="sgValor" placeholder="0,00" required></div>
         <div class="field"><label for="sgMotivo">Para quê</label>
@@ -697,7 +697,7 @@
     return `<section class="card">
       <div class="sec"><h2>Crediário: como o cliente pagou?</h2>${sem.length ? `<span class="badge">${sem.length}</span>` : ''}</div>
       <details class="how ajuda"><summary>Por que marcar?</summary>
-        <p>O StarIA não diz como cada cliente pagou a conta. <b>Dinheiro</b> tem que vir na sacola da filial e é contado junto. <b>Pix</b> e <b>cartão</b> o dono confere no extrato. <b>Outro</b>: desconto em folha, cheque etc.</p></details>
+        <p>O StarIA não diz como cada cliente pagou a conta. <b>Dinheiro</b> tem que vir na sacola da filial e é contado junto. <b>Pix</b> e <b>cartão</b> o ADM confere no extrato. <b>Outro</b>: desconto em folha, cheque etc.</p></details>
       ${[...new Set(chaves.map(k => k.split('|')[0]))].map(f => {
         const ks = chaves.filter(k => k.split('|')[0] === f), itens = ks.flatMap(k => grupos[k]);
         return `<details class="crfil" data-crfil="${esc(f)}"${crFilAbertas.has(f) ? ' open' : ''}>
@@ -848,7 +848,7 @@
         await reload();
         $('#fcs').hidden = true;
         if (r.bateu) $('#csOut').innerHTML = `<div class="okbox"><b>Bateu certinho!</b> O dinheiro entrou no cofre.</div>`;
-        else if (r.diferenca == null) $('#csOut').innerHTML = `<div class="warn"><b>Registrado.</b> Não bateu com o esperado: o dono vai ver.</div>`;
+        else if (r.diferenca == null) $('#csOut').innerHTML = `<div class="warn"><b>Registrado.</b> Não bateu com o esperado: o ADM vai ver.</div>`;
         else $('#csOut').innerHTML = `<div class="warn">${r.diferenca ? `<b>Vendas: ${r.diferenca > 0 ? 'sobrou' : 'faltou'} ${money(Math.abs(r.diferenca))}.</b><br>` : ''}${r.crediDiferenca ? `<b>Crediário: ${r.crediDiferenca > 0 ? 'sobrou' : 'faltou'} ${money(Math.abs(r.crediDiferenca))}.</b><br>` : ''}Ficou registrado nas Ocorrências.</div>`;
       };
       $('#fcs').addEventListener('submit', async e => {
