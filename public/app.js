@@ -211,7 +211,9 @@ function srvStartPoll(){clearInterval(SRV.poll);SRV.poll=setInterval(()=>{if(doc
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')srvRefresh(false)})}
 /* entrar: o servidor confere a senha; o navegador nunca vê senha de ninguém */
 async function srvLogin(role,u,p,errEl,btn){errEl.textContent='';if(btn)btn.disabled=true;
-  try{const me=await api('/api/login',{role:CLIENT_ONLY?'cliente-only':role,login:u,password:p});SRV.me=me;SRV.lastPass=p;
+  const kp=document.getElementById('lk'),keep=kp?kp.checked:undefined;
+  try{const me=await api('/api/login',{role:CLIENT_ONLY?'cliente-only':role,login:u,password:p,keep});SRV.me=me;SRV.lastPass=p;
+    if(keep)srvSaveCred(u,p);
     if(me.mustReset){srvResetScreen();return}await loadState();srvAfterLogin()}
   catch(e){errEl.textContent=e.message||'Não foi possível entrar.'}finally{if(btn)btn.disabled=false}}
 function srvAfterLogin(){const me=SRV.me;SRV.lastPass='';ui.view=ROLE_VIEW[me.role]||'cliente';
@@ -444,6 +446,55 @@ function lnPhotoOpen(p){lnPhotoClose();if(!document.getElementById('lnphcss')){c
 document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-lnph]');if(!b)return;e.preventDefault();e.stopPropagation();
   const p=(S.products||[]).find(x=>x.id===b.dataset.lnph)||(typeof resolveCart==='function'?resolveCart(b.dataset.lnph):null);if(p&&lnHasPhoto(p))lnPhotoOpen(p)},true);
 (()=>{if(!document.getElementById('lnphcss0')){const st=document.createElement('style');st.id='lnphcss0';st.textContent='.lnph{display:inline-grid;place-items:center;width:26px;height:26px;margin-left:4px;vertical-align:middle;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:0;cursor:pointer}.lnph:hover,.lnph:focus-visible{color:var(--accent);border-color:var(--accent)}';document.head.appendChild(st)}})();
+
+/* "Manter conectado": pede ao navegador para guardar usuário e senha (Chrome/Android oferecem salvar) */
+function srvSaveCred(u,p){try{if(window.PasswordCredential&&navigator.credentials&&navigator.credentials.store)navigator.credentials.store(new PasswordCredential({id:u,password:p,name:u})).catch(()=>{})}catch(e){}}
+/* aviso fixo para o administrador que só pode ver */
+function admRoBanner(){const P=admPerms();if(!P||P.editar)return;const t=document.getElementById('tabc');if(!t||t.querySelector('.ronly'))return;
+  const d=document.createElement('div');d.className='ronly';d.setAttribute('role','note');d.textContent='Seu acesso é só para ver. O que você mudar aqui não será gravado.';t.prepend(d)}
+/* ---------- Cadastros › Usuários › Administradores ----------
+   O administrador principal (sem limite) cria outros administradores e marca o que cada um pode ver e fazer.
+   Sócio que só acompanha: "Sócio (vê tudo, não altera)". O servidor confere tudo: o que não está marcado nem chega ao aparelho. */
+const ADM_PERMS=[['pedidos','Pedidos','Lançar, editar e mudar a situação dos pedidos; entregas e romaneio'],['clientes','Clientes','Cadastrar e editar clientes'],['produtos','Produtos e estoque','Produtos, preços, categorias, ofertas, contagem, notas e StarIA'],['custos','Ver custo, margem e lucro','Desmarcado: custo, margem e lucro nem chegam ao aparelho'],['financeiro','Financeiro','Contas a receber e a pagar, frete de terceiro e caixa da semana'],['comissao','Comissão de vendedores','Ver e fechar a comissão'],['relatorios','Relatórios e painel','Vendas por período, ranking e clientes parados'],['equipe','Equipe e senhas','Vendedores, conferentes, faturamento, motoristas e operadores'],['config','Configurações','Loja e regras, pagamento e cidades']];
+const ADM_PRESETS={socio:{n:'Sócio: vê tudo, não altera',p:{editar:false,pedidos:true,clientes:true,produtos:true,custos:true,financeiro:true,comissao:true,relatorios:true,equipe:true,config:true}},
+  gerente:{n:'Gerente: opera, sem financeiro',p:{editar:true,pedidos:true,clientes:true,produtos:true,custos:false,financeiro:false,comissao:false,relatorios:true,equipe:false,config:false}},
+  tudo:{n:'Tudo liberado (menos administradores)',p:{editar:true,pedidos:true,clientes:true,produtos:true,custos:true,financeiro:true,comissao:true,relatorios:true,equipe:true,config:true}}};
+function admPermSum(a){const P=a.perms;if(!P)return 'Principal: pode tudo';const on=ADM_PERMS.filter(x=>P[x[0]]).map(x=>x[1]);return (P.editar?'Pode alterar':'Só ver')+' · '+(on.length===ADM_PERMS.length?'tudo':on.join(', ')||'nada liberado')}
+function admAdmins(){const c=$('#cadc'),L=S.admins||(S.admins=[]),me=SRV.me&&SRV.me.refId;
+  if(!admOwner()){const a=L.find(x=>x.id===me)||{};c.innerHTML=`<div class="sectionhead"><h2>Administradores</h2></div><div class="panel" style="max-width:720px;display:grid;gap:6px"><b>${esc(a.name||SRV.me.name||'')}</b><span class="small muted">Seu acesso: ${esc(admPermSum({perms:admPerms()}))}</span><span class="small muted">Só o administrador principal cria e muda administradores.</span></div>`;return}
+  const E=ui.admEdit;
+  const form=()=>{const a=E.id?L.find(x=>x.id===E.id):null,P=E.p;
+    return `<div class="panel" style="display:grid;gap:12px;max-width:720px;margin-bottom:14px"><b>${a?'Editar '+esc(a.name||a.login):'Novo administrador'}</b>
+      <div class="grid2"><div class="field"><label for="adn">Nome</label><input id="adn" value="${esc(E.name||'')}"></div><div class="field"><label for="adl">Usuário</label><input id="adl" autocapitalize="off" value="${esc(E.login||'')}"></div></div>
+      <div class="field"><label for="adp">${a?'Nova senha base (deixe em branco para manter)':'Senha base (mín. 8)'}</label><input id="adp" type="text" autocomplete="off" value="${a?'':esc(E.pass||sugPass())}"><span class="small muted">Ele troca no primeiro acesso.</span></div>
+      <div class="field"><span class="lbl">Começar de um modelo</span><div class="row" style="gap:6px;flex-wrap:wrap">${Object.entries(ADM_PRESETS).map(([k,v])=>`<button type="button" class="btn ghost" data-adpre="${k}">${esc(v.n)}</button>`).join('')}</div></div>
+      <div class="admperm"><label><input type="checkbox" data-adk="editar" ${P.editar?'checked':''}><span><b>Pode alterar</b><br><span class="small muted">Desmarcado: só vê, não grava nada</span></span></label>
+      ${ADM_PERMS.map(([k,n,d])=>`<label><input type="checkbox" data-adk="${k}" ${P[k]?'checked':''}><span><b>${esc(n)}</b><br><span class="small muted">${esc(d)}</span></span></label>`).join('')}</div>
+      <div class="small muted">Criar e mudar administradores, baixar e restaurar backup e gerar senhas provisórias ficam só com você.</div>
+      <div class="err" id="aderr"></div><div class="row" style="gap:8px"><button class="btn" id="adsave" type="button">Salvar</button><button class="btn ghost" id="adcancel" type="button">Cancelar</button></div></div>`};
+  c.innerHTML=`<div class="sectionhead"><h2>Administradores</h2>${E?'':'<button class="btn" id="adnew" type="button">+ Novo administrador</button>'}</div>
+    <div class="small muted" style="max-width:720px;margin-bottom:10px">Para sócios e gerentes: cada um com o seu usuário e senha. Você marca o que cada um pode ver e fazer.</div>
+    ${E?form():''}
+    <div class="list" style="max-width:720px">${L.map(a=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(a.name||a.login)}${a.id===me?' (você)':''}</b><span class="small muted">Usuário: ${esc(a.login||'')} · ${srvPassLabel(a)}</span><span class="small muted">${esc(admPermSum(a))}</span></div>
+      <div class="row" style="gap:6px">${a.perms?`<button class="btn ghost" data-adedit="${a.id}" type="button">Editar</button>`:''}${a.id!==me?`<button class="btn ghost dlb" data-addel="${a.id}" type="button">Excluir</button>`:''}</div></div>`).join('')}</div>`;
+  const rer=()=>admAdmins();
+  {const b=$('#adnew');if(b)b.onclick=()=>{ui.admEdit={p:Object.assign({},ADM_PRESETS.socio.p)};rer()}}
+  c.querySelectorAll('[data-adedit]').forEach(b=>b.onclick=()=>{const a=L.find(x=>x.id===b.dataset.adedit);ui.admEdit={id:a.id,name:a.name,login:a.login,p:Object.assign({},a.perms)};rer()});
+  c.querySelectorAll('[data-addel]').forEach(b=>b.onclick=()=>{const a=L.find(x=>x.id===b.dataset.addel);if(!confirm('Excluir o administrador '+(a.name||a.login)+'? Ele deixa de entrar no sistema na hora.'))return;S.admins=L.filter(x=>x.id!==a.id);save();toast('Administrador excluído');rer()});
+  if(!E)return;
+  const keep=()=>{E.name=$('#adn').value;E.login=$('#adl').value;E.pass=$('#adp').value;c.querySelectorAll('[data-adk]').forEach(i=>{E.p[i.dataset.adk]=i.checked})};
+  c.querySelectorAll('[data-adpre]').forEach(b=>b.onclick=()=>{keep();E.p=Object.assign({},ADM_PRESETS[b.dataset.adpre].p);rer()});
+  $('#adcancel').onclick=()=>{ui.admEdit=null;rer()};
+  $('#adsave').onclick=()=>{keep();const n=E.name.trim(),l=E.login.trim().toLowerCase(),p=E.pass.trim(),er=$('#aderr');
+    if(!n||!l){er.textContent='Preencha nome e usuário.';return}
+    if(!E.id&&p.length<8){er.textContent='A senha base precisa ter pelo menos 8 caracteres.';return}
+    if(p&&p.length<8){er.textContent='A senha base precisa ter pelo menos 8 caracteres.';return}
+    if(loginTaken(l,E.id)){er.textContent='O usuário "'+l+'" já é usado por outra pessoa. Escolha outro.';return}
+    if(!ADM_PERMS.some(x=>E.p[x[0]])){er.textContent='Marque pelo menos uma área.';return}
+    const perms={editar:!!E.p.editar};ADM_PERMS.forEach(x=>{perms[x[0]]=!!E.p[x[0]]});
+    if(E.id){const a=L.find(x=>x.id===E.id);a.name=n;a.login=l;a.perms=perms;if(p)a.pass=p}else L.push({id:uid(),name:n,login:l,pass:p,perms});
+    ui.admEdit=null;save();toast('Administrador salvo');rer()};
+}
 
 /* ================= ENTRADA DE MERCADORIA, FORNECEDORES E PRECIFICAÇÃO DE NOTAS =================
  * Conferente (ou loja) lança a nota: fornecedor, número, produtos (bipando ou digitando), quantidade e valor.
@@ -1902,8 +1953,9 @@ function renderTop(bump){
 function loginForm(isAdmin){
   return `<div class="loginhero"><img src="${brandLogo()}" alt="${esc(S.store.name)}"><div>${isAdmin?'Painel do administrador':'Compras de atacado com preço de distribuidor'}</div></div><form class="login panel" id="lf">
     <h2>${isAdmin?'Acesso do administrador':'Entrar'}</h2>
-    <div class="field"><label for="lu">${isAdmin?'Usuário':'Usuário ou CNPJ/CPF'}</label><input type="text" id="lu" autocomplete="username" autocapitalize="none" required></div>
-    <div class="field"><label for="lp">Senha</label><input type="password" id="lp" autocomplete="current-password" required></div>
+    <div class="field"><label for="lu">${isAdmin?'Usuário':'Usuário ou CNPJ/CPF'}</label><input type="text" id="lu" name="username" autocomplete="username" autocapitalize="none" required></div>
+    <div class="field"><label for="lp">Senha</label><input type="password" id="lp" name="password" autocomplete="current-password" required></div>
+    <label class="keepme"><input type="checkbox" id="lk" checked> Manter conectado neste aparelho</label>
     <div class="err" id="le"></div>
     <button class="btn block" type="submit">Entrar</button>
     <div class="hint">${isAdmin?'':'Esqueceu a senha? Fale com a loja.'}</div>${srvTeamLinks(isAdmin?'admin':'cliente')}
@@ -2977,6 +3029,12 @@ function vbnavHtml(tabs,T){const nm={pedidos:'Pedidos',clientes:'Clientes',produ
   const n=tabs.length+1;return `<nav class="bnav" aria-label="Menu do vendedor" style="--bnn:${n}">${b('pedidos')}${b('clientes')}<button type="button" id="vNewB" class="bnnew">${bnIco('Novo')}<span>Novo</span></button>${b('produtos')}${b('comissao')}</nav>`}
 /* aba -> módulo da Central que precisa estar ligado */
 const TAB_MOD={pdv:'pdv',relatorios:'painel',decisoes:'decisoes',entregas:'entregas',semana:'ofertas',recmerc:'entrada',precnotas:'entrada',receber:['receber','pagar','caixa'],fretes:'frete3'};
+/* administrador com acesso limitado (sócio, gerente): só as abas liberadas. O servidor também confere tudo. */
+const admPerms=()=>(typeof SRV!=='undefined'&&SRV.me&&SRV.me.role==='admin'&&SRV.me.perms)||null;
+const admCan=k=>{const P=admPerms();return !P||!k||(Array.isArray(k)?k.every(x=>P[x]):!!P[k])};
+const admOwner=()=>!admPerms();
+const TAB_PERM={relatorios:null,decisoes:'pedidos',pedidos:'pedidos',entregas:'pedidos',pdv:'pedidos',semana:'produtos',produtos:'produtos',recmerc:['produtos','custos'],precnotas:['produtos','custos'],receber:'financeiro',fretes:'financeiro'};
+function admCanTab(k){if(k==='relatorios')return admCan('relatorios')||admCan('comissao');return admCan(TAB_PERM[k])}
 /* abas do Financeiro (Perdas por avaria vem das entregas) */
 const finTabs=()=>['receber','pagar','caixa','perdas'].filter(k=>modOn(k==='perdas'?'entregas':k));
 function renderAdmin(){
@@ -2989,7 +3047,7 @@ function renderAdmin(){
   const nan=S.orders.filter(o=>o.appr==='pendente'&&o.status!=='cancelado').length,ncnt=(S.counts||[]).filter(x=>x.status==='finalizada').length,venc=(S.receivables||[]).filter(r=>recStatus(r)==='vencido').length+S.orders.filter(recMissing).length,crit=S.products.filter(isCritical).length;
   /* menu em grupos: poucas abas em cima, micro abas dentro */
   const G=[['Início',[['hoje','Visão geral'],['relatorios','Relatórios']]],['Pedidos',[['pedidos','Pedidos'],['decisoes','Decisões'],['entregas','Entregas']]],['Ofertas',[['semana','Ofertas da semana']]],['Caixa (PDV)',[['pdv','Caixa (PDV)']]],['Produtos',[['produtos','Produtos'],['recmerc','Receber mercadoria'],['precnotas','Precificação de notas']]],['Financeiro',[['receber','Financeiro'],['fretes','Frete de terceiro']]],['Cadastros',[['cadastros','Cadastros'],['clientes',''],['config','']]]]
-    .map(g=>[g[0],g[1].filter(x=>{const m=TAB_MOD[x[0]];return !m||(Array.isArray(m)?m.some(modOn):modOn(m))})]).filter(g=>g[1].some(x=>x[1]));
+    .map(g=>[g[0],g[1].filter(x=>{const m=TAB_MOD[x[0]];return (!m||(Array.isArray(m)?m.some(modOn):modOn(m)))&&admCanTab(x[0])})]).filter(g=>g[1].some(x=>x[1]));
   if(!G.some(g=>g[1].some(x=>x[0]===ui.tab)))ui.tab='hoje';
   const BD={pedidos:novos?{n:novos,c:''}:null,decisoes:(nan+nsug)?{n:nan+nsug,c:''}:null,entregas:nprog?{n:nprog,c:'var(--accent)'}:null,semana:ncnt?{n:ncnt,c:'var(--accent)'}:null,receber:venc?{n:venc,c:''}:null,produtos:crit?{n:crit,c:'var(--warn)'}:null,precnotas:(()=>{const n=(S.receipts||[]).filter(r=>r.status==='conferida').length+(S.imports||[]).filter(x=>x.status==='pendente'||x.status==='consultando').length;return n?{n,c:''}:null})()};
   const cnt=b=>b?`<span class="cnt" ${b.c?`style="background:${b.c}"`:''}>${b.n}</span>`:'';
@@ -3004,7 +3062,7 @@ function renderAdmin(){
   {const at=app.querySelector('.tabs [aria-selected="true"]');if(at&&at.scrollIntoView)try{at.scrollIntoView({block:'nearest',inline:'center'})}catch(e){}}
   {const tb=app.querySelector('.tabs');if(tb){const edge=()=>{tb.classList.toggle('more-r',tb.scrollLeft+tb.clientWidth<tb.scrollWidth-4);tb.classList.toggle('more-l',tb.scrollLeft>4)};tb.addEventListener('scroll',edge,{passive:true});edge()}}
   app.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ui.tab=b.dataset.tab;if(b.dataset.fin)ui.finTab=b.dataset.fin;ui.backWeek=false;ui.romView=false;ui.lanc=null;ui.stBulk=null;ui.stCost=null;ui.combosView=false;ui.comboEdit=null;ui.adj=null;ui.recNew=null;ui.edit=null;ui.bulk=null;ui.confirmDel=null;renderAdmin()});
-  ({fretes:admFretes,pdv:()=>pdvAdmin($('#tabc')),recmerc:()=>recScreen($('#tabc')),precnotas:()=>precScreen($('#tabc')),entregas:admEntregas,decisoes:admDecisoes,separacao:admSep,cadastros:admCadastros,hoje:()=>{admHoje();pdvDashCard()},pedidos:admOrders,receber:admFin,relatorios:admRelatorios,produtos:admProducts,semana:admSemana,analise:admAnalise,clientes:admClients,config:admConfig})[ui.tab]();rcAlert();
+  ({fretes:admFretes,pdv:()=>pdvAdmin($('#tabc')),recmerc:()=>recScreen($('#tabc')),precnotas:()=>precScreen($('#tabc')),entregas:admEntregas,decisoes:admDecisoes,separacao:admSep,cadastros:admCadastros,hoje:()=>{admHoje();pdvDashCard()},pedidos:admOrders,receber:admFin,relatorios:admRelatorios,produtos:admProducts,semana:admSemana,analise:admAnalise,clientes:admClients,config:admConfig})[ui.tab]();rcAlert();admRoBanner();
 }
 /* ---------- baixar pedidos em PDF ou Excel ---------- */
 const FILTER_NAME={ativos:'em-aberto',concluido:'concluidos',cancelado:'cancelados',todos:'todos'};
@@ -3798,7 +3856,7 @@ function admHoje(){
   const crit=S.products.filter(isCritical).length,parados=S.customers.filter(x=>{const d=idleDays(x);return d!=null&&d>=15}).length;
   const tile=(go,lbl,big,small,cls)=>`<button class="tile ${cls||''}" data-go="${go}"><span class="lbl">${lbl}</span><b class="num">${big}</b><span class="small muted">${small}</span></button>`;
   c.innerHTML=`${vitrineAdmBanner()}<div class="sectionhead"><h2>Início</h2><div class="row" style="gap:6px"><button class="btn ghost" id="hRom" aria-label="Romaneio de entrega em PDF">${PDFI}Romaneio</button><button class="btn" id="hLan">+ Lançar pedido</button></div></div>
-    ${(()=>{const a=backupAge();return (a==null||a>=3)&&!ui.bkSnooze?`<div class="notice bkwarn"><span>${a==null?'Você ainda não fez backup dos dados.':'Último backup há '+a+' dias.'} Os dados ficam no servidor; o backup é uma cópia extra.</span><span class="row" style="gap:6px"><button class="btn dlb" id="hBk">Baixar backup agora</button><button class="btn ghost dlb" id="hBkLater">Agora não</button></span></div>`:''})()}
+    ${(()=>{const a=backupAge();return (a==null||a>=3)&&!ui.bkSnooze&&admOwner()?`<div class="notice bkwarn"><span>${a==null?'Você ainda não fez backup dos dados.':'Último backup há '+a+' dias.'} Os dados ficam no servidor; o backup é uma cópia extra.</span><span class="row" style="gap:6px"><button class="btn dlb" id="hBk">Baixar backup agora</button><button class="btn ghost dlb" id="hBkLater">Agora não</button></span></div>`:''})()}
     <h3 class="dech dbsec">Hoje · ${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})}</h3>
     <div class="htiles">
       ${tile('pedidos:ativos','Pedidos novos',novos.length,brl(sum(novos))+' para conferir',novos.length?'t-hot':'')}
@@ -4029,15 +4087,17 @@ function admCategorias(){
 }
 function admCadastros(){
   /* três grupos: Clientes, Usuários (equipe que entra no app) e Configurações */
-  const GR=[['clientes','Clientes',[['clientes','Clientes']]],['fornecedores','Fornecedores',[['fornecedores','Fornecedores'],['transportadoras','Transportadoras']]],['usuarios','Usuários',[['vendedores','Vendedores'],['conferentes','Conferentes'],['faturamento','Faturamento'],['veiculos','Motoristas'],['caixas','Operadores de caixa']]],['config','Configurações',[['loja','Loja e regras'],['categorias','Categorias'],['pagamentos','Pagamento'],['cidades','Cidades de entrega']]]]
-    .map(x=>[x[0],x[1],x[2].filter(y=>{const m={fornecedores:'entrada',transportadoras:'frete3',veiculos:'entregas',conferentes:'conferencia',faturamento:'faturamento',caixas:'pdv'}[y[0]];return !m||modOn(m)})]).filter(x=>x[2].length);
-  const k=ui.cadSub||'clientes',g=GR.find(x=>x[2].some(y=>y[0]===k))||GR[0];ui.cadLast=ui.cadLast||{};ui.cadLast[g[0]]=k;
+  const GR=[['clientes','Clientes',[['clientes','Clientes']]],['fornecedores','Fornecedores',[['fornecedores','Fornecedores'],['transportadoras','Transportadoras']]],['usuarios','Usuários',[['vendedores','Vendedores'],['conferentes','Conferentes'],['faturamento','Faturamento'],['veiculos','Motoristas'],['caixas','Operadores de caixa'],['admins','Administradores']]],['config','Configurações',[['loja','Loja e regras'],['categorias','Categorias'],['pagamentos','Pagamento'],['cidades','Cidades de entrega']]]]
+    .map(x=>[x[0],x[1],x[2].filter(y=>{const m={fornecedores:'entrada',transportadoras:'frete3',veiculos:'entregas',conferentes:'conferencia',faturamento:'faturamento',caixas:'pdv'}[y[0]];
+      const pm={clientes:'clientes',fornecedores:'produtos',transportadoras:'financeiro',categorias:'produtos',loja:'config',pagamentos:'config',cidades:'config'}[y[0]]||(x[0]==='usuarios'?'equipe':null);
+      return (!m||modOn(m))&&(y[0]==='admins'?true:admCan(pm))})]).filter(x=>x[2].length);
+  let k=ui.cadSub||'clientes';const g=GR.find(x=>x[2].some(y=>y[0]===k))||GR[0];if(!g[2].some(y=>y[0]===k))k=g[2][0][0];ui.cadLast=ui.cadLast||{};ui.cadLast[g[0]]=k;
   $('#tabc').innerHTML=`<div class="seg repseg cadg" role="group" aria-label="Cadastros">${GR.map(x=>`<button data-cadg="${x[0]}" aria-pressed="${x===g}">${x[1]}</button>`).join('')}</div>
     ${g[2].length>1?`<div class="seg cadsub" role="group" aria-label="${g[1]}">${g[2].map(([a,b])=>`<button data-cad="${a}" aria-pressed="${k===a}">${b}</button>`).join('')}</div>`:''}<div id="cadc"></div>`;
   const go=v=>{ui.cadSub=v;ui.selEdit=null;ui.edit=null;ui.payEdit=null;ui.confirmDel=null;ui.catMove=null;admCadastros()};
   document.querySelectorAll('[data-cadg]').forEach(b=>b.onclick=()=>{const x=GR.find(y=>y[0]===b.dataset.cadg);go(x===g?x[2][0][0]:(ui.cadLast[x[0]]||x[2][0][0]))});
   document.querySelectorAll('[data-cad]').forEach(b=>b.onclick=()=>go(b.dataset.cad));
-  ({caixas:()=>pdvAdmOperadores($('#cadc')),transportadoras:admTransportadoras,fornecedores:admFornecedores,conferentes:admConferentes,faturamento:admFaturamento,categorias:admCategorias,vendedores:admVendedores,clientes:admClients,pagamentos:admPagamentos,cidades:admCidades,veiculos:admVeiculos,loja:admConfig})[k]();
+  ({admins:admAdmins,caixas:()=>pdvAdmOperadores($('#cadc')),transportadoras:admTransportadoras,fornecedores:admFornecedores,conferentes:admConferentes,faturamento:admFaturamento,categorias:admCategorias,vendedores:admVendedores,clientes:admClients,pagamentos:admPagamentos,cidades:admCidades,veiculos:admVeiculos,loja:admConfig})[k]();
 }
 /* formas de pagamento com prazo próprio, reconhecido no pedido e no contas a receber */
 /* forma a prazo sem os dias das parcelas: o contas a receber automático não consegue gerar parcelas */
@@ -6584,11 +6644,13 @@ function admCompra(){
   }catch(e){pdfFail(e)}};
 }
 function admRelatorios(){
+  if(!admCan('relatorios')){ui.repKind='comissao'}else if(ui.repKind==='comissao'&&!admCan('comissao'))ui.repKind='ranking';
   const k=ui.repKind||'ranking',nc=buildPurchase({cat:'todas'}).rows.length;
-  $('#tabc').innerHTML=`<div class="seg repseg" role="group" aria-label="Tipo de relatório"><button id="rkR" aria-pressed="${k==='ranking'}">Ranking de vendas</button><button id="rkC" aria-pressed="${k==='compra'}">Sugestão de compra${nc?` <span class="cnt" style="background:var(--warn)">${nc}</span>`:''}</button><button id="rkV" aria-pressed="${k==='comissao'}">Comissão de vendedores</button><button id="rkF" aria-pressed="${k==='conf'}">Conferência</button><button id="rkB" aria-pressed="${k==='boa'}">Boas compras</button>${modOn('frete3')?`<button id="rkT" aria-pressed="${k==='frete'}">Frete de terceiro</button>`:''}</div><div id="repc"></div>`;
+  $('#tabc').innerHTML=`<div class="seg repseg" role="group" aria-label="Tipo de relatório"><button id="rkR" aria-pressed="${k==='ranking'}">Ranking de vendas</button><button id="rkC" aria-pressed="${k==='compra'}">Sugestão de compra${nc?` <span class="cnt" style="background:var(--warn)">${nc}</span>`:''}</button>${admCan('comissao')?`<button id="rkV" aria-pressed="${k==='comissao'}">Comissão de vendedores</button>`:''}<button id="rkF" aria-pressed="${k==='conf'}">Conferência</button><button id="rkB" aria-pressed="${k==='boa'}">Boas compras</button>${modOn('frete3')?`<button id="rkT" aria-pressed="${k==='frete'}">Frete de terceiro</button>`:''}</div><div id="repc"></div>`;
   $('#rkR').onclick=()=>{ui.repKind='ranking';admRelatorios()};
   $('#rkC').onclick=()=>{ui.repKind='compra';admRelatorios()};
-  $('#rkV').onclick=()=>{ui.repKind='comissao';admRelatorios()};
+  {const b=$('#rkV');if(b)b.onclick=()=>{ui.repKind='comissao';admRelatorios()}}
+  if(!admCan('relatorios'))$('#tabc').querySelectorAll('.repseg button:not(#rkV)').forEach(b=>b.remove());
   $('#rkF').onclick=()=>{ui.repKind='conf';admRelatorios()};
   $('#rkB').onclick=()=>{ui.repKind='boa';admRelatorios()};
   {const b=$('#rkT');if(b)b.onclick=()=>{ui.repKind='frete';admRelatorios()}}

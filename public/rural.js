@@ -71,14 +71,15 @@
     S = null; $('#bn').hidden = true; $('#sair').hidden = true; closeSheet();
     $('#main').innerHTML = `<div class="login"><form class="card" id="lf" autocomplete="on">
       <h1>Entrar</h1><p class="muted small">${esc(brand.name || 'Tino')} · app do produtor</p>
-      <div class="field"><label for="lu">Usuário</label><input type="text" id="lu" autocomplete="username" autocapitalize="off" spellcheck="false" required></div>
-      <div class="field"><label for="lp">Senha</label><input type="password" id="lp" autocomplete="current-password" required></div>
+      <div class="field"><label for="lu">Usuário</label><input type="text" id="lu" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" required></div>
+      <div class="field"><label for="lp">Senha</label><input type="password" id="lp" name="password" autocomplete="current-password" required></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer"><input type="checkbox" id="lk" checked style="width:20px;height:20px;margin:0"> Manter conectado neste aparelho</label>
       <p class="neg small" id="le" role="alert" style="min-height:18px;font-weight:600">${esc(msg || '')}</p>
       <button class="btn pri full" type="submit">Entrar</button>
       <p class="tino">Quem tem <b>Tino</b>, vende melhor.</p></form></div>`;
     $('#lf').addEventListener('submit', async e => {
       e.preventDefault(); const b = e.target.querySelector('button'); b.disabled = true; $('#le').textContent = '';
-      try { await api('/api/login', { role: 'admin', login: $('#lu').value.trim().toLowerCase(), password: $('#lp').value }); $('#lp').value = ''; await start(); }
+      try { await api('/api/login', { role: 'admin', login: $('#lu').value.trim().toLowerCase(), password: $('#lp').value, keep: $('#lk').checked }); if ($('#lk').checked) try { if (window.PasswordCredential && navigator.credentials) navigator.credentials.store(new PasswordCredential({ id: $('#lu').value.trim().toLowerCase(), password: $('#lp').value })).catch(() => {}); } catch (e) {} $('#lp').value = ''; await start(); }
       catch (er) { $('#le').textContent = er.message; $('#lp').value = ''; } finally { b.disabled = false; }
     });
     setTimeout(() => { const u = $('#lu'); if (u) u.focus(); }, 50);

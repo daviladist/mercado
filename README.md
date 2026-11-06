@@ -217,3 +217,10 @@ node scripts/dev-server.js   # http://localhost:3000
 - **Carga do banco inteiro por requisição** nas gravações (`/api/sync` e `/api/state`): ok para o volume atual (centenas de pedidos); com milhares, vale carregar só o necessário. Trava do vendedor e negociação já carregam só o que usam.
 - **Regras de preço extraídas do app por nome** (`scripts/build-core.js`): mudar o nome de uma função de preço no app exige rodar o build de novo; o GitHub Actions avisa se os arquivos gerados não baterem com o fonte.
 - **Arquivos grandes** (`src/app.source.html`, `checkOrderUpdate`) continuam grandes: a quebra em módulos fica para depois, agora com testes que pegam regressão.
+
+## Administradores com acesso limitado (sócios, gerente) e "Manter conectado"
+- **Cadastros › Usuários › Administradores:** o administrador principal (o que não tem limite) cria outros administradores, cada um com usuário e senha próprios, e marca o que cada um pode ver e fazer: Pedidos, Clientes, Produtos e estoque, Ver custo/margem/lucro, Financeiro, Comissão, Relatórios, Equipe e senhas, Configurações, e **Pode alterar** (desmarcado = só ver). Modelos prontos: "Sócio: vê tudo, não altera", "Gerente", "Tudo liberado".
+- **O servidor garante** (`lib/perms.js` + `limitAdmin`/`keepCosts` em `lib/policy.js`): o que não está marcado não chega ao aparelho (custo, contas, comissão, usuários da equipe) e a gravação é recusada; quem não vê custo pode gravar produto e pedido sem apagar o custo (o servidor mantém o que já estava e pega o custo do produto nos itens novos). Mudar ou excluir o administrador vale na hora, sem ele sair e entrar.
+- **Só o principal:** criar e mudar administradores, backup, restaurar e senhas provisórias. Ninguém limita nem apaga o próprio acesso de principal.
+- **Manter conectado** (caixinha no login, marcada de início): administrador e equipe interna ficam até 7 dias; vendedor, motorista e cliente até 30. Desmarcado, sai ao fechar o navegador. O operador de caixa (PDV) não muda. Marcado, o navegador também é convidado a salvar usuário e senha.
+- Testes: `tests/admins.py` (roda no `tests/ci_banco.sh`).

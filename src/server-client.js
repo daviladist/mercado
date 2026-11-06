@@ -154,7 +154,9 @@ function srvStartPoll(){clearInterval(SRV.poll);SRV.poll=setInterval(()=>{if(doc
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')srvRefresh(false)})}
 /* entrar: o servidor confere a senha; o navegador nunca vê senha de ninguém */
 async function srvLogin(role,u,p,errEl,btn){errEl.textContent='';if(btn)btn.disabled=true;
-  try{const me=await api('/api/login',{role:CLIENT_ONLY?'cliente-only':role,login:u,password:p});SRV.me=me;SRV.lastPass=p;
+  const kp=document.getElementById('lk'),keep=kp?kp.checked:undefined;
+  try{const me=await api('/api/login',{role:CLIENT_ONLY?'cliente-only':role,login:u,password:p,keep});SRV.me=me;SRV.lastPass=p;
+    if(keep)srvSaveCred(u,p);
     if(me.mustReset){srvResetScreen();return}await loadState();srvAfterLogin()}
   catch(e){errEl.textContent=e.message||'Não foi possível entrar.'}finally{if(btn)btn.disabled=false}}
 function srvAfterLogin(){const me=SRV.me;SRV.lastPass='';ui.view=ROLE_VIEW[me.role]||'cliente';
@@ -387,3 +389,52 @@ function lnPhotoOpen(p){lnPhotoClose();if(!document.getElementById('lnphcss')){c
 document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-lnph]');if(!b)return;e.preventDefault();e.stopPropagation();
   const p=(S.products||[]).find(x=>x.id===b.dataset.lnph)||(typeof resolveCart==='function'?resolveCart(b.dataset.lnph):null);if(p&&lnHasPhoto(p))lnPhotoOpen(p)},true);
 (()=>{if(!document.getElementById('lnphcss0')){const st=document.createElement('style');st.id='lnphcss0';st.textContent='.lnph{display:inline-grid;place-items:center;width:26px;height:26px;margin-left:4px;vertical-align:middle;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:0;cursor:pointer}.lnph:hover,.lnph:focus-visible{color:var(--accent);border-color:var(--accent)}';document.head.appendChild(st)}})();
+
+/* "Manter conectado": pede ao navegador para guardar usuário e senha (Chrome/Android oferecem salvar) */
+function srvSaveCred(u,p){try{if(window.PasswordCredential&&navigator.credentials&&navigator.credentials.store)navigator.credentials.store(new PasswordCredential({id:u,password:p,name:u})).catch(()=>{})}catch(e){}}
+/* aviso fixo para o administrador que só pode ver */
+function admRoBanner(){const P=admPerms();if(!P||P.editar)return;const t=document.getElementById('tabc');if(!t||t.querySelector('.ronly'))return;
+  const d=document.createElement('div');d.className='ronly';d.setAttribute('role','note');d.textContent='Seu acesso é só para ver. O que você mudar aqui não será gravado.';t.prepend(d)}
+/* ---------- Cadastros › Usuários › Administradores ----------
+   O administrador principal (sem limite) cria outros administradores e marca o que cada um pode ver e fazer.
+   Sócio que só acompanha: "Sócio (vê tudo, não altera)". O servidor confere tudo: o que não está marcado nem chega ao aparelho. */
+const ADM_PERMS=[['pedidos','Pedidos','Lançar, editar e mudar a situação dos pedidos; entregas e romaneio'],['clientes','Clientes','Cadastrar e editar clientes'],['produtos','Produtos e estoque','Produtos, preços, categorias, ofertas, contagem, notas e StarIA'],['custos','Ver custo, margem e lucro','Desmarcado: custo, margem e lucro nem chegam ao aparelho'],['financeiro','Financeiro','Contas a receber e a pagar, frete de terceiro e caixa da semana'],['comissao','Comissão de vendedores','Ver e fechar a comissão'],['relatorios','Relatórios e painel','Vendas por período, ranking e clientes parados'],['equipe','Equipe e senhas','Vendedores, conferentes, faturamento, motoristas e operadores'],['config','Configurações','Loja e regras, pagamento e cidades']];
+const ADM_PRESETS={socio:{n:'Sócio: vê tudo, não altera',p:{editar:false,pedidos:true,clientes:true,produtos:true,custos:true,financeiro:true,comissao:true,relatorios:true,equipe:true,config:true}},
+  gerente:{n:'Gerente: opera, sem financeiro',p:{editar:true,pedidos:true,clientes:true,produtos:true,custos:false,financeiro:false,comissao:false,relatorios:true,equipe:false,config:false}},
+  tudo:{n:'Tudo liberado (menos administradores)',p:{editar:true,pedidos:true,clientes:true,produtos:true,custos:true,financeiro:true,comissao:true,relatorios:true,equipe:true,config:true}}};
+function admPermSum(a){const P=a.perms;if(!P)return 'Principal: pode tudo';const on=ADM_PERMS.filter(x=>P[x[0]]).map(x=>x[1]);return (P.editar?'Pode alterar':'Só ver')+' · '+(on.length===ADM_PERMS.length?'tudo':on.join(', ')||'nada liberado')}
+function admAdmins(){const c=$('#cadc'),L=S.admins||(S.admins=[]),me=SRV.me&&SRV.me.refId;
+  if(!admOwner()){const a=L.find(x=>x.id===me)||{};c.innerHTML=`<div class="sectionhead"><h2>Administradores</h2></div><div class="panel" style="max-width:720px;display:grid;gap:6px"><b>${esc(a.name||SRV.me.name||'')}</b><span class="small muted">Seu acesso: ${esc(admPermSum({perms:admPerms()}))}</span><span class="small muted">Só o administrador principal cria e muda administradores.</span></div>`;return}
+  const E=ui.admEdit;
+  const form=()=>{const a=E.id?L.find(x=>x.id===E.id):null,P=E.p;
+    return `<div class="panel" style="display:grid;gap:12px;max-width:720px;margin-bottom:14px"><b>${a?'Editar '+esc(a.name||a.login):'Novo administrador'}</b>
+      <div class="grid2"><div class="field"><label for="adn">Nome</label><input id="adn" value="${esc(E.name||'')}"></div><div class="field"><label for="adl">Usuário</label><input id="adl" autocapitalize="off" value="${esc(E.login||'')}"></div></div>
+      <div class="field"><label for="adp">${a?'Nova senha base (deixe em branco para manter)':'Senha base (mín. 8)'}</label><input id="adp" type="text" autocomplete="off" value="${a?'':esc(E.pass||sugPass())}"><span class="small muted">Ele troca no primeiro acesso.</span></div>
+      <div class="field"><span class="lbl">Começar de um modelo</span><div class="row" style="gap:6px;flex-wrap:wrap">${Object.entries(ADM_PRESETS).map(([k,v])=>`<button type="button" class="btn ghost" data-adpre="${k}">${esc(v.n)}</button>`).join('')}</div></div>
+      <div class="admperm"><label><input type="checkbox" data-adk="editar" ${P.editar?'checked':''}><span><b>Pode alterar</b><br><span class="small muted">Desmarcado: só vê, não grava nada</span></span></label>
+      ${ADM_PERMS.map(([k,n,d])=>`<label><input type="checkbox" data-adk="${k}" ${P[k]?'checked':''}><span><b>${esc(n)}</b><br><span class="small muted">${esc(d)}</span></span></label>`).join('')}</div>
+      <div class="small muted">Criar e mudar administradores, baixar e restaurar backup e gerar senhas provisórias ficam só com você.</div>
+      <div class="err" id="aderr"></div><div class="row" style="gap:8px"><button class="btn" id="adsave" type="button">Salvar</button><button class="btn ghost" id="adcancel" type="button">Cancelar</button></div></div>`};
+  c.innerHTML=`<div class="sectionhead"><h2>Administradores</h2>${E?'':'<button class="btn" id="adnew" type="button">+ Novo administrador</button>'}</div>
+    <div class="small muted" style="max-width:720px;margin-bottom:10px">Para sócios e gerentes: cada um com o seu usuário e senha. Você marca o que cada um pode ver e fazer.</div>
+    ${E?form():''}
+    <div class="list" style="max-width:720px">${L.map(a=>`<div class="prow" style="grid-template-columns:1fr auto"><div class="t"><b>${esc(a.name||a.login)}${a.id===me?' (você)':''}</b><span class="small muted">Usuário: ${esc(a.login||'')} · ${srvPassLabel(a)}</span><span class="small muted">${esc(admPermSum(a))}</span></div>
+      <div class="row" style="gap:6px">${a.perms?`<button class="btn ghost" data-adedit="${a.id}" type="button">Editar</button>`:''}${a.id!==me?`<button class="btn ghost dlb" data-addel="${a.id}" type="button">Excluir</button>`:''}</div></div>`).join('')}</div>`;
+  const rer=()=>admAdmins();
+  {const b=$('#adnew');if(b)b.onclick=()=>{ui.admEdit={p:Object.assign({},ADM_PRESETS.socio.p)};rer()}}
+  c.querySelectorAll('[data-adedit]').forEach(b=>b.onclick=()=>{const a=L.find(x=>x.id===b.dataset.adedit);ui.admEdit={id:a.id,name:a.name,login:a.login,p:Object.assign({},a.perms)};rer()});
+  c.querySelectorAll('[data-addel]').forEach(b=>b.onclick=()=>{const a=L.find(x=>x.id===b.dataset.addel);if(!confirm('Excluir o administrador '+(a.name||a.login)+'? Ele deixa de entrar no sistema na hora.'))return;S.admins=L.filter(x=>x.id!==a.id);save();toast('Administrador excluído');rer()});
+  if(!E)return;
+  const keep=()=>{E.name=$('#adn').value;E.login=$('#adl').value;E.pass=$('#adp').value;c.querySelectorAll('[data-adk]').forEach(i=>{E.p[i.dataset.adk]=i.checked})};
+  c.querySelectorAll('[data-adpre]').forEach(b=>b.onclick=()=>{keep();E.p=Object.assign({},ADM_PRESETS[b.dataset.adpre].p);rer()});
+  $('#adcancel').onclick=()=>{ui.admEdit=null;rer()};
+  $('#adsave').onclick=()=>{keep();const n=E.name.trim(),l=E.login.trim().toLowerCase(),p=E.pass.trim(),er=$('#aderr');
+    if(!n||!l){er.textContent='Preencha nome e usuário.';return}
+    if(!E.id&&p.length<8){er.textContent='A senha base precisa ter pelo menos 8 caracteres.';return}
+    if(p&&p.length<8){er.textContent='A senha base precisa ter pelo menos 8 caracteres.';return}
+    if(loginTaken(l,E.id)){er.textContent='O usuário "'+l+'" já é usado por outra pessoa. Escolha outro.';return}
+    if(!ADM_PERMS.some(x=>E.p[x[0]])){er.textContent='Marque pelo menos uma área.';return}
+    const perms={editar:!!E.p.editar};ADM_PERMS.forEach(x=>{perms[x[0]]=!!E.p[x[0]]});
+    if(E.id){const a=L.find(x=>x.id===E.id);a.name=n;a.login=l;a.perms=perms;if(p)a.pass=p}else L.push({id:uid(),name:n,login:l,pass:p,perms});
+    ui.admEdit=null;save();toast('Administrador salvo');rer()};
+}
