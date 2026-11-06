@@ -268,6 +268,22 @@ s, _ = A.req('/api/caixa/mov/excluir', {'id': AJ1}); check(s == 200, 'admin apag
 s, oc = A.req('/api/caixa/ocorrencias'); titulos = [o['titulo'] for o in oc['ocorrencias']]
 check('Ajuste lançado' in titulos and 'Lançamento apagado' in titulos, 'ajuste e exclusão do admin aparecem nas ocorrências, mesmo sendo ele mesmo quem fez')
 
+print('== lançar a diferença da contagem direto da ocorrência (só admin, uma vez só)')
+CF = confs[0]['detalhe']['id']
+check(CF and confs[0]['detalhe']['lancado'] is False, 'ocorrência de contagem traz o id e ainda não foi lançada')
+s, _ = M.req('/api/caixa/conferencia/lancar', {'id': CF}); check(s == 403, 'caixista não lança a diferença no saldo')
+s, _ = F.req('/api/caixa/conferencia/lancar', {'id': CF}); check(s == 403, 'financeiro não lança a diferença no saldo')
+s, _ = A.req('/api/caixa/conferencia/lancar', {'id': 'nao-existe'}); check(s == 404, 'contagem inexistente: 404')
+s, r = A.req('/api/caixa/conferencia/lancar', {'id': CF}); AJC = r.get('id'); check(s == 200 and r.get('valor') == -200, 'admin lança a falta de R$ 200 com um toque')
+s, st = A.req('/api/caixa/state'); mvc = next((m for m in st['mov'] if m['id'] == AJC), {})
+check(st['saldo'] == 27500 and mvc.get('tipo') == 'ajuste' and 'contagem do cofre' in (mvc.get('motivo') or ''), 'saldo fica igual ao contado (27.500) e o ajuste explica de onde veio')
+s, _ = A.req('/api/caixa/conferencia/lancar', {'id': CF}); check(s == 409, 'a mesma diferença não pode ser lançada duas vezes')
+s, oc = A.req('/api/caixa/ocorrencias'); c1 = next(o for o in oc['ocorrencias'] if o['tipo'] == 'conferencia' and o['detalhe']['id'] == CF)
+check(c1['detalhe']['lancado'] is True, 'a ocorrência mostra que já foi lançada')
+s, _ = A.req('/api/caixa/mov/excluir', {'id': AJC}); check(s == 200, 'o ajuste lançado pela ocorrência pode ser apagado no Extrato')
+s, oc = A.req('/api/caixa/ocorrencias'); c1 = next(o for o in oc['ocorrencias'] if o['tipo'] == 'conferencia' and o['detalhe']['id'] == CF)
+s, st = A.req('/api/caixa/state'); check(c1['detalhe']['lancado'] is False and st['saldo'] == 27700, 'apagado o ajuste, o saldo volta e a diferença pode ser lançada de novo')
+
 print('== sacola com diferença de vendas E de crediário: financeiro confere, as duas diferenças aparecem em ocorrências; sacola não confirmada continua "na filial"')
 s, r = A.req('/api/caixa/staria/pedir', {'periodoIni': '2026-10-11', 'periodoFim': '2026-10-11'}); JOB_SAC = r.get('id')
 RES_SAC = {'porFilial': {'1': {'vendasDinheiro': 1000, 'recebCrediario': 100}, '2': {'vendasDinheiro': 300, 'recebCrediario': 0}}}

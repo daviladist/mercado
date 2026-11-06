@@ -208,7 +208,7 @@
   function resumo() {
     const admin = isAdmin(), fin = podeConferirSacola();
     const desde = Date.now() - 7 * 864e5;
-    const alertas = admin ? (S.ocorrencias || []).filter(o => (o.tipo === 'conferencia' || o.tipo === 'sacola') && new Date(o.em).getTime() >= desde) : [];
+    const alertas = admin ? (S.ocorrencias || []).filter(o => (o.tipo === 'conferencia' || o.tipo === 'sacola') && !(o.detalhe && o.detalhe.lancado) && new Date(o.em).getTime() >= desde) : [];
     const difs = alertas.map(o => o.tipo === 'conferencia' ? Number(o.detalhe.diferenca) || 0 : r2((Number(o.detalhe.diferenca) || 0) + (Number(o.detalhe.crediDiferenca) || 0)));
     const faltou = r2(difs.filter(d => d < 0).reduce((a, d) => a - d, 0)), sobrou = r2(difs.filter(d => d > 0).reduce((a, d) => a + d, 0));
     const sac = S.sacolas || [];
@@ -992,6 +992,27 @@
     if (o.titulo === 'Dados do caixa zerados (recomeço do zero)') return 'Apagados: ' + (Number(d.lancamentos) || 0) + ' lançamentos, ' + (Number(d.consultas) || 0) + ' consultas, ' + (Number(d.sacolas) || 0) + ' sacolas, ' + (Number(d.conferencias) || 0) + ' conferências · por ' + esc(d.role || '');
     return esc(d.role || '');
   }
+  // contagem do cofre com diferença: o dono lança a sobra (ou a falta) direto no saldo, sem ir ao Extrato
+  function ocorAcao(o) {
+    const d = o.detalhe || {};
+    if (o.tipo !== 'conferencia' || !d.id) return '';
+    if (d.lancado) return `<span class="small" style="margin-top:6px">${ic('ok')} Já lançado no saldo</span>`;
+    return `<button class="btn ${d.diferenca > 0 ? 'pri' : ''}" type="button" data-lancar="${esc(d.id)}" style="margin-top:8px;align-self:flex-start">${d.diferenca > 0 ? 'Lançar sobra no cofre' : 'Lançar falta no saldo'}</button>`;
+  }
+  function sheetLancarConf(o) {
+    const d = o.detalhe, sobra = d.diferenca > 0;
+    openSheet(`<div class="tt"><h2>${sobra ? 'Lançar sobra no cofre' : 'Lançar falta no saldo'}</h2><button class="x" type="button" id="shxb">✕</button></div>
+      <p>${sobra ? 'Vai <b>somar</b>' : 'Vai <b>tirar</b>'} <b>${money(Math.abs(d.diferenca))}</b> do saldo do cofre, para ele ficar igual ao que foi contado (${money(d.valorContado)}).</p>
+      <p class="muted small">Entra como um ajuste no Extrato, com a data da contagem e o motivo preenchido. Se lançar errado, dá para apagar o ajuste no Extrato.</p>
+      <button class="btn pri full" type="button" id="btLancConf">Confirmar</button>`, () => {
+      $('#shxb').addEventListener('click', closeSheet);
+      $('#btLancConf').addEventListener('click', async e => {
+        e.target.disabled = true;
+        const r = await post('/api/caixa/conferencia/lancar', { id: d.id }, sobra ? 'Sobra lançada no cofre' : 'Falta lançada no saldo');
+        if (!r) e.target.disabled = false;
+      });
+    });
+  }
   function renderOcorrencias() {
     if (!isAdmin()) { view = 'inicio'; return render(); }
     const lista = S.ocorrencias || [];
@@ -999,9 +1020,13 @@
       <section class="card">
       ${lista.length ? `<div class="list">${lista.map(o => { const dif = o.tipo === 'conferencia' || o.tipo === 'sacola' || o.tipo === 'credi' || (o.titulo === 'Forma do crediário trocada' && (o.detalhe || {}).de === 'dinheiro'); return `<div class="it" style="align-items:flex-start">
           <div class="ic ${dif ? 'bad' : ''}">${ic(dif ? 'alert' : 'shield')}</div>
-          <div class="tx"><b>${esc(o.titulo)}</b><span>${ocorDetalheTxt(o)}</span><span>${dtBR(o.em)}</span></div>
+          <div class="tx"><b>${esc(o.titulo)}</b><span>${ocorDetalheTxt(o)}</span><span>${dtBR(o.em)}</span>${ocorAcao(o)}</div>
         </div>`; }).join('')}</div>` : `<div class="empty"><div class="big">${ic('ok')}</div><p>Nenhuma ocorrência registrada.</p></div>`}
       </section>`;
+    $('#main').querySelectorAll('[data-lancar]').forEach(b => b.addEventListener('click', () => {
+      const o = lista.find(x => x.tipo === 'conferencia' && x.detalhe && x.detalhe.id === b.dataset.lancar);
+      if (o) sheetLancarConf(o);
+    }));
   }
 
   /* ---------- atalho na área de trabalho / tela inicial ----------
