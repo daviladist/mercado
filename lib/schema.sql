@@ -828,3 +828,34 @@ create table if not exists dre_despesa (
   primary key (tenant_id, id)
 );
 create index if not exists dre_despesa_mes on dre_despesa(tenant_id, competencia);
+
+-- Robô do Telegram para despesas do dia a dia (DRE): a chave e o segredo do webhook ficam só aqui (nunca voltam
+-- para a tela); dre_tg_pessoa = quem já falou com o robô (o dono libera e escolhe a filial padrão).
+-- Despesa que vem do robô nasce 'pendente' e só entra no DRE quando o dono aprova.
+create table if not exists dre_tg (
+  tenant_id text primary key references tenants(id),
+  token text not null,
+  secret text not null,
+  bot_username text,
+  ligado boolean not null default true,
+  atualizado_por text,
+  updated_at timestamptz not null default now()
+);
+create table if not exists dre_tg_pessoa (
+  tenant_id text not null references tenants(id),
+  tg_user bigint not null,
+  nome text not null,
+  apelido text,
+  filial int check (filial between 0 and 3),
+  liberado boolean not null default false,
+  created_at timestamptz not null default now(),
+  primary key (tenant_id, tg_user)
+);
+alter table dre_despesa add column if not exists status text not null default 'ok';
+alter table dre_despesa add column if not exists origem text;
+alter table dre_despesa add column if not exists aprovado_por text;
+alter table dre_despesa add column if not exists tg_chat bigint;
+alter table dre_despesa add column if not exists tg_msg bigint;
+alter table dre_despesa add column if not exists tg_update bigint;
+alter table dre_despesa add column if not exists tg_user bigint;
+create unique index if not exists dre_despesa_tg_update on dre_despesa(tenant_id, tg_update) where tg_update is not null;
