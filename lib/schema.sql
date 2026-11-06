@@ -766,6 +766,17 @@ create table if not exists caixa_pessoa_folha (
   updated_at timestamptz not null default now(),
   primary key (tenant_id, ref_id)
 );
+-- abas do topo (Folha, DRE, Relatórios e as que vierem) liberadas pessoa por pessoa pelo dono (lib/caixa-abas.js).
+-- Copia as liberações antigas de Folha e Relatórios (tirar uma liberação apaga das duas tabelas).
+create table if not exists caixa_pessoa_aba (
+  tenant_id text not null,
+  ref_id text not null,
+  aba text not null,
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, ref_id, aba)
+);
+insert into caixa_pessoa_aba(tenant_id,ref_id,aba) select tenant_id, ref_id, 'folha' from caixa_pessoa_folha on conflict do nothing;
+insert into caixa_pessoa_aba(tenant_id,ref_id,aba) select tenant_id, ref_id, 'relatorios' from caixa_pessoa_rel on conflict do nothing;
 -- vendas do mês por filial (StarIA, entregue pelo Claude, ou digitada pelo dono): para a folha mostrar quanto ela é
 -- das vendas, sempre comparando com um mês já fechado
 create table if not exists folha_venda (

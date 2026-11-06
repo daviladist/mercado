@@ -877,7 +877,7 @@
       <h1>Acessos</h1>
       <p class="muted small">Quem pode entrar neste controle de caixa. Ninguém vê custo ou margem (não existe nada disso aqui), e ninguém apaga ou cancela nada — isso é só pelo seu usuário.</p>
       ${S.pessoas.length ? `<div class="list">${S.pessoas.map(p => `<div class="it">
-          <div class="ic">${p.papel === 'financeiro' ? '✅' : p.papel === 'automacao' ? '🤖' : p.papel === 'loja' ? '🏪' : '👤'}</div><div class="tx"><b>${esc(p.nome)}</b><span>${esc(p.login)} · ${papelLabel(p.papel, p.filial)}${p.relatorios ? ' · abre os Relatórios' : ''}${p.folha ? ' · abre a Folha' : ''}${p.ativo ? '' : ' · inativo'}${p.trocarSenha ? ' · ainda não trocou a senha provisória' : ''}</span></div>
+          <div class="ic">${p.papel === 'financeiro' ? '✅' : p.papel === 'automacao' ? '🤖' : p.papel === 'loja' ? '🏪' : '👤'}</div><div class="tx"><b>${esc(p.nome)}</b><span>${esc(p.login)} · ${papelLabel(p.papel, p.filial)}${abasTxt(p)}${p.ativo ? '' : ' · inativo'}${p.trocarSenha ? ' · ainda não trocou a senha provisória' : ''}</span></div>
           <div class="vl"><button class="btn sm" type="button" data-editp="${esc(p.login)}">Editar</button></div>
         </div>`).join('')}</div>` : '<p class="muted">Nenhum acesso criado ainda.</p>'}
       <div class="row"><button class="btn pri" type="button" id="btnNovaCaixista">+ Nova pessoa do caixa</button><button class="btn pri" type="button" id="btnNovoFinanceiro">+ Novo acesso do financeiro</button></div>
@@ -914,8 +914,10 @@
         ${auto ? `<div class="field"><label for="pSenha">${p ? 'Nova senha (deixe em branco para manter a atual)' : 'Senha'}</label>
             <input type="text" id="pSenha" autocapitalize="off" spellcheck="false" minlength="12" ${p ? '' : 'required'}></div>
           <p class="small muted">Pelo menos 12 caracteres, com letras e números.</p>` : ''}
-        ${papel === 'financeiro' ? `<label class="row"><input type="checkbox" id="pRel" ${p && p.relatorios ? 'checked' : ''}> Pode abrir os Relatórios (painel ao vivo do StarIA)</label>` : ''}
-        ${papel === 'financeiro' || papel === 'caixista' ? `<label class="row"><input type="checkbox" id="pFolha" ${p && p.folha ? 'checked' : ''}> Pode abrir a Folha de pagamento (vê salários; o combinado à parte continua só seu)</label>` : ''}
+        ${abasDoPapel(papel, loja).length ? `<fieldset class="abasp" style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:8px">
+          <legend class="small" style="padding:0 4px"><b>Abas do topo que esta pessoa pode abrir</b></legend>
+          ${abasDoPapel(papel, loja).map(a => `<label style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;cursor:pointer"><input type="checkbox" data-aba="${esc(a.id)}" ${p && (p.abas || []).includes(a.id) ? 'checked' : ''} style="margin-top:3px"><span style="display:grid;gap:2px"><b>${esc(a.nome)}</b><span class="small muted">${esc(a.detalhe)}</span></span></label>`).join('')}
+        </fieldset>` : ''}
         ${p ? `<label class="row"><input type="checkbox" id="pAtivo" ${p.ativo ? 'checked' : ''}> Acesso ativo</label>
           ${auto ? '' : '<label class="row"><input type="checkbox" id="pNova"> Gerar nova senha provisória</label>'}` : ''}
         <button class="btn pri full" type="submit">${p ? 'Salvar' : 'Criar acesso'}</button>
@@ -927,8 +929,8 @@
           const body = { login: $('#pLogin').value.trim().toLowerCase(), nome: $('#pNome').value, papel, ativo: p ? $('#pAtivo').checked : true };
           if (auto) { if ($('#pSenha').value) body.senha = $('#pSenha').value; } else body.novaSenha = p ? $('#pNova').checked : true;
           if (loja) body.filial = Number($('#pFilial').value);
-          if (papel === 'financeiro') body.relatorios = $('#pRel').checked;
-          if ($('#pFolha')) body.folha = $('#pFolha').checked;
+          const marc = {}; document.querySelectorAll('#fp [data-aba]').forEach(c => { marc[c.dataset.aba] = c.checked; });
+          if (Object.keys(marc).length) body.abas = marc;
           const r = await api('/api/caixa/pessoa', body);
           await reload();
           if (r.password) $('#pOutS').innerHTML = `<div class="note" style="display:grid;gap:6px"><b>Anote agora: esta senha aparece só uma vez.</b>
@@ -962,6 +964,15 @@
     });
   }
 
+  // abas do topo que o dono pode liberar para um papel (a lista vem do servidor: aba nova aparece sozinha aqui)
+  function abasDoPapel(papel, loja) {
+    if (loja || papel === 'automacao') return [];
+    return (S.abasCatalogo || []).filter(a => a.papeis.includes(papel) && (a.id !== 'relatorios' || slug === 'fundo-de-caixa'));
+  }
+  function abasTxt(p) {
+    const nomes = (p.abas || []).map(id => ((S.abasCatalogo || []).find(a => a.id === id) || { nome: id }).nome);
+    return nomes.length ? ' · abre: ' + esc(nomes.join(', ')) : '';
+  }
   /* ---------- Ocorrências (admin): conferências com diferença + tudo que foi apagado, alterado ou decidido,
      inclusive pelo próprio admin — para dar transparência e segurança a quem trabalha com o dinheiro. Só leitura. */
   function ocorIcon(o) { return o.tipo === 'conferencia' ? '⚖️' : o.tipo === 'sacola' ? '📦' : '🛡️'; }
@@ -1351,7 +1362,7 @@
      vem da Folha; as despesas fixas se cadastram uma vez e as do dia a dia se lançam no mês. Despesas da "rede"
      (filial 0) entram só no Geral. Imprimir/PDF pelo navegador. */
   let DS = null, dreMes = mesMais(hoje().slice(0, 7), -1), dreAba = 'geral';
-  const podeDre = () => !!(S && isAdmin() && S.me.dre);
+  const podeDre = () => !!(S && (isAdmin() || S.me.dre));
   async function carregaDre() { DS = await api('/api/caixa/dre?mes=' + encodeURIComponent(dreMes)); }
   const filNome = f => (f === 0 ? 'Rede (todas as lojas)' : 'Filial ' + f);
   const pctDe = (v, base) => (base > 0 ? v / base * 100 : null);
@@ -1380,7 +1391,7 @@
         ${linhaDre('Receita líquida', T.liquida, base, 'mid')}
         ${sub([['(−) Custo da mercadoria vendida (CMV)', T.cmv]])}
         ${res('Lucro bruto', T.bruto)}
-        ${linhaDre('Pessoal (da Folha)', T.pessoal, base, '', true)}
+        ${linhaDre(DS.semCombinado ? 'Pessoal (da Folha, sem o combinado à parte)' : 'Pessoal (da Folha)', T.pessoal, base, '', true)}
         ${filiais.length === 1 && !DS.folhaTem ? '<p class="small muted noprint">A folha deste mês ainda não foi lançada. Abra a aba Folha.</p>' : ''}
         ${linhaDre('Despesas fixas', T.fixas, base, '', true)}
         ${sub(porCategoria(fx.filter(op)))}
@@ -1425,7 +1436,7 @@
         <div class="mesnav"><button class="btn sm" type="button" id="dMesAnt" aria-label="Mês anterior">${ic('back')}</button><b>${esc(mesTxt(dreMes).replace(/^./, c => c.toUpperCase()))}</b><button class="btn sm" type="button" id="dMesProx" aria-label="Próximo mês">${ic('chev')}</button></div>
         <div class="seg" role="tablist">${abas.map(([k, t]) => `<button type="button" role="tab" data-daba="${k}" class="${dreAba === k ? 'on' : ''}" aria-selected="${dreAba === k}">${t}</button>`).join('')}</div>
         <div class="row" style="justify-content:space-between"><span class="small muted">${Object.keys(v).length ? 'Vendas: ' + esc(fontes.join(', ') || 'digitado') + ' · <button type="button" class="lnk" data-dvendas="1" style="min-height:0;padding:0">corrigir</button>' : ''}${dreMes > DS.ultimoFechado ? ' · mês em andamento' : ''}</span>
-          <div class="row"><button class="btn sm" type="button" id="dRobo">${DS.telegram && DS.telegram.ligado ? 'Robô ✔' : 'Robô do Telegram'}${DS.telegram && DS.telegram.pessoas.some(p => !p.liberado) ? ' •' : ''}</button><button class="btn sm" type="button" id="dPrint">Imprimir / PDF</button>${dreAba === 'geral' ? '<button class="btn sm" type="button" id="dPrintTudo">PDF completo</button>' : ''}</div></div>
+          <div class="row">${isAdmin() ? `<button class="btn sm" type="button" id="dRobo">${DS.telegram && DS.telegram.ligado ? 'Robô ✔' : 'Robô do Telegram'}${DS.telegram && DS.telegram.pessoas.some(p => !p.liberado) ? ' •' : ''}</button>` : ''}<button class="btn sm" type="button" id="dPrint">Imprimir / PDF</button>${dreAba === 'geral' ? '<button class="btn sm" type="button" id="dPrintTudo">PDF completo</button>' : ''}</div></div>
       </section>
       ${htmlPendentes()}
       ${dreAba === 'geral' ? htmlDreGeral() : blocoDre(DS.totais[dreAba], [Number(dreAba)], 'Filial ' + dreAba) + listaDespesas(Number(dreAba), true)}`;
@@ -1433,7 +1444,7 @@
     $('#dMesProx').addEventListener('click', () => { dreMes = mesMais(dreMes, 1); render(); });
     document.querySelectorAll('[data-daba]').forEach(b => b.addEventListener('click', () => { dreAba = b.dataset.daba; render(); }));
     $('#dPrint').addEventListener('click', () => window.print());
-    $('#dRobo').addEventListener('click', sheetRobo);
+    if ($('#dRobo')) $('#dRobo').addEventListener('click', sheetRobo);
     document.querySelectorAll('[data-dapr]').forEach(b => b.addEventListener('click', () => post('/api/caixa/dre/aprovar', { ids: [b.dataset.dapr], ok: true }, 'Aprovada')));
     document.querySelectorAll('[data-drec]').forEach(b => b.addEventListener('click', async () => { if (await perguntar('Recusar esta despesa?', 'Ela é apagada e não entra no DRE.', 'Recusar', true)) post('/api/caixa/dre/aprovar', { ids: [b.dataset.drec], ok: false }, 'Recusada'); }));
     if ($('#dAprTodas')) $('#dAprTodas').addEventListener('click', () => post('/api/caixa/dre/aprovar', { ids: DS.telegram.pendentes.map(x => x.id), ok: true }, 'Todas aprovadas'));
@@ -1534,7 +1545,7 @@
         ${campo('ddVal', 'Valor', x ? x.valor : '')}
         <div class="field"><label for="ddData">Data (opcional)</label><input type="date" id="ddData" value="${esc(x ? x.data || '' : dataPadrao)}" min="${dreMes}-01" max="${new Date(Date.UTC(+dreMes.slice(0, 4), +dreMes.slice(5, 7), 0)).toISOString().slice(0, 10)}"></div>
       </div><button class="btn pri lg full" type="submit" style="margin-top:12px">Salvar</button></form>
-      ${x ? '<button class="btn dan full" type="button" id="ddDel" style="margin-top:8px">Apagar esta despesa</button>' : ''}`, () => {
+      ${x && isAdmin() ? '<button class="btn dan full" type="button" id="ddDel" style="margin-top:8px">Apagar esta despesa</button>' : ''}`, () => {
       $('#shxb').addEventListener('click', closeSheet);
       if (!x) setTimeout(() => { const n = $('#ddDesc'); if (n) n.focus(); }, 50);
       $('#fdd').addEventListener('submit', e => {
@@ -1563,14 +1574,14 @@
     if (modulo === 'folha' && !podeFolha()) modulo = 'caixa';
     $('#modCaixa').classList.toggle('on', modulo === 'caixa'); $('#modCaixa').setAttribute('aria-current', modulo === 'caixa' ? 'page' : 'false');
     $('#modFolha').classList.toggle('on', modulo === 'folha'); $('#modFolha').setAttribute('aria-current', modulo === 'folha' ? 'page' : 'false');
-    // DRE: só o dono
+    // DRE: o dono e quem ele liberar no cadastro
     $('#modDre').hidden = !podeDre();
     if (modulo === 'dre' && !podeDre()) modulo = 'caixa';
     $('#modDre').classList.toggle('on', modulo === 'dre'); $('#modDre').setAttribute('aria-current', modulo === 'dre' ? 'page' : 'false');
     if (modulo === 'folha') { $('#bn').hidden = true; renderFolha(); return; }
     if (modulo === 'dre') { $('#bn').hidden = true; renderDre(); return; }
     // Relatórios ao vivo do StarIA: painel no Claude do dono, para o administrador da Dávila Supermercados e para o financeiro que o dono habilitar
-    if ($('#modRel')) $('#modRel').hidden = !((isAdmin() || (S && S.me.role === 'financeiro' && S.me.relatorios)) && slug === 'fundo-de-caixa');
+    if ($('#modRel')) $('#modRel').hidden = !((isAdmin() || (S && S.me.relatorios)) && slug === 'fundo-de-caixa');
     if (view === 'sangria') { view = 'inicio'; setTimeout(sheetSangria, 0); }
     $('#navMais').hidden = !(isAdmin() || isFin());
     const aba = SUB_MAIS.includes(view) ? 'mais' : view;
