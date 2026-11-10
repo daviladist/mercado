@@ -37,7 +37,15 @@
     '#tinoGate button{width:100%;margin-top:14px;padding:13px;font-size:16px;font-weight:700;border:0;border-radius:8px;background:#d71920;color:#fff;cursor:pointer}#tinoGate .er{color:#b3261e;font-weight:600;min-height:18px;margin:8px 0 0;font-size:13px}#tinoGate .mu{color:#6b6f78;font-size:13px}' +
     '#tinoMenu{position:fixed;right:12px;bottom:12px;z-index:9000}#tinoMenu>button{background:#16181d;color:#fff;border:0;border-radius:20px;padding:9px 14px;font:600 13px Inter,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer}' +
     '#tinoPop{position:fixed;right:12px;bottom:58px;z-index:9001;background:#fff;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.3);padding:14px;width:min(360px,calc(100vw - 24px));max-height:70vh;overflow:auto;font-family:Inter,sans-serif;font-size:14px}' +
-    '#tinoPop button{font:inherit}#tinoPop .r{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #eee}#tinoPop input{font-size:15px;padding:8px;border:1px solid #ccc;border-radius:6px;width:100%;box-sizing:border-box;margin:3px 0}';
+    '#tinoPop button{font:inherit}#tinoPop .r{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #eee}#tinoPop input{font-size:15px;padding:8px;border:1px solid #ccc;border-radius:6px;width:100%;box-sizing:border-box;margin:3px 0}' +
+    '#tinoUsr{position:fixed;inset:0;z-index:9500;background:#f4f2ee;overflow:auto;font-family:Inter,system-ui,sans-serif;font-size:15px;color:#16181d}#tinoUsr .w{max-width:560px;margin:0 auto;padding:14px 14px 90px}' +
+    '#tinoUsr .hd{display:flex;align-items:center;justify-content:space-between;gap:8px;position:sticky;top:0;background:#f4f2ee;padding:10px 0;z-index:1}#tinoUsr h2{font:700 22px Oswald,Inter,sans-serif;text-transform:uppercase;margin:0}' +
+    '#tinoUsr button{font:600 14px Inter,sans-serif;border:1px solid #cfcac0;background:#fff;border-radius:8px;padding:8px 12px;cursor:pointer;color:#16181d}#tinoUsr button.pri{background:#d71920;border-color:#d71920;color:#fff}' +
+    '#tinoUsr .card{background:#fff;border-radius:12px;padding:12px;margin:10px 0;box-shadow:0 1px 3px rgba(0,0,0,.08)}#tinoUsr .u{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}' +
+    '#tinoUsr .tag{display:inline-block;font-size:11.5px;font-weight:700;border-radius:10px;padding:2px 8px;margin-left:4px}#tinoUsr .t-adm{background:#16181d;color:#fff}#tinoUsr .t-auto{background:#e8f0fe;color:#1a56c4}#tinoUsr .t-off{background:#eee;color:#777}' +
+    '#tinoUsr .ac{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}#tinoUsr input,#tinoUsr select{font-size:16px;padding:10px;border:1px solid #cfcac0;border-radius:8px;width:100%;box-sizing:border-box;margin:4px 0 8px;background:#fff}' +
+    '#tinoUsr .seg{display:flex;gap:6px;margin:4px 0 8px}#tinoUsr .seg label{flex:1;border:2px solid #cfcac0;border-radius:10px;padding:10px;cursor:pointer;font-size:13px;color:#555}#tinoUsr .seg input{display:none}#tinoUsr .seg label:has(input:checked){border-color:#d71920;color:#16181d;background:#fff5f5}#tinoUsr .seg b{display:block;font-size:15px;color:#16181d}' +
+    '#tinoUsr .ok{background:#e6f4ea;color:#17692e;padding:12px;border-radius:10px;margin:8px 0}#tinoUsr .mu{color:#6b6f78;font-size:13px}';
   document.head.appendChild(st);
   function showLogin(msg) {
     box(`<form id="tgF" autocomplete="on"><h1>Encartes</h1><p class="mu">${esc(brand.name || 'Tino')}</p>
@@ -63,7 +71,7 @@
       catch (er) { e.target.querySelector('.er').textContent = er.message; }
     });
   }
-  /* ---------- menu da conta (sair, senha, equipe) ---------- */
+  /* ---------- menu da conta (sair, usuários) ---------- */
   function menu() {
     if ($('#tinoMenu')) return;
     const m = document.createElement('div'); m.id = 'tinoMenu'; m.innerHTML = '<button type="button">👤 ' + esc(ME.nome || 'Conta') + '</button>'; document.body.appendChild(m);
@@ -71,20 +79,41 @@
   }
   async function pop(msg) {
     let p = $('#tinoPop'); if (!p) { p = document.createElement('div'); p.id = 'tinoPop'; document.body.appendChild(p); }
-    let eq = '';
-    if (ME.dono) {
-      let L = []; try { L = (await api('/api/encartes/pessoas')).pessoas; } catch (e) { /* segue */ }
-      eq = `<h3 style="margin:14px 0 6px">Equipe (funcionários)</h3><p style="color:#666;font-size:12.5px;margin:0 0 6px">Funcionário entra no passo a passo; não vê o Painel do dono.</p>
-        ${L.map(x => `<div class="r"><span><b>${esc(x.nome)}</b> <small>${esc(x.login)}${x.ativo ? '' : ' · desligado'}</small></span><span><button type="button" data-np="${esc(x.login)}">Nova senha</button> <button type="button" data-tg="${esc(x.login)}" data-at="${x.ativo ? 1 : 0}">${x.ativo ? 'Desligar' : 'Ligar'}</button></span></div>`).join('') || '<p style="color:#666">Ninguém cadastrado ainda.</p>'}
-        <form id="tpN" style="margin-top:8px"><input id="tpNome" placeholder="Nome (ex.: Maria)" required><input id="tpLog" placeholder="Usuário (ex.: maria)" required autocapitalize="off"><button type="submit" style="width:100%;padding:9px;margin-top:4px;background:#16181d;color:#fff;border:0;border-radius:6px">+ Criar acesso</button></form>`;
-    }
+    const eq = ME.dono ? '<button type="button" id="tpUsr" style="width:100%;margin-top:10px;padding:10px;background:#16181d;color:#fff;border:0;border-radius:8px;font-weight:600">👥 Usuários</button>' : '';
     p.innerHTML = `${msg ? `<div style="background:#e6f4ea;color:#17692e;padding:10px;border-radius:8px;margin-bottom:8px">${msg}</div>` : ''}
-      <div class="r"><span><b>${esc(ME.nome || '')}</b><br><small>${ME.dono ? 'Dono' : 'Funcionário'}</small></span><button type="button" id="tpSair">Sair</button></div>${eq}`;
+      <div class="r"><span><b>${esc(ME.nome || '')}</b><br><small>${ME.dono ? 'Administrador' : 'Modo automático'}</small></span><button type="button" id="tpSair">Sair</button></div>${eq}`;
     $('#tpSair').onclick = async () => { try { await api('/api/logout', {}); } catch (e) { /* segue */ } location.reload(); };
-    const pessoa = async (b, ok) => { try { const r = await api('/api/encartes/pessoa', b); pop(r.password ? `${esc(ok)}<br>Usuário: <b>${esc(r.login)}</b><br>Senha provisória: <b>${esc(r.password)}</b><br><small>Anote agora: ela não aparece de novo.</small>` : esc(ok)); } catch (e) { alert(e.message); } };
-    const f = $('#tpN'); if (f) f.addEventListener('submit', e => { e.preventDefault(); pessoa({ nome: $('#tpNome').value.trim(), login: $('#tpLog').value.trim().toLowerCase() }, 'Acesso criado.'); });
-    p.querySelectorAll('[data-np]').forEach(b => b.onclick = () => pessoa({ login: b.dataset.np, novaSenha: true }, 'Senha nova gerada.'));
-    p.querySelectorAll('[data-tg]').forEach(b => b.onclick = () => pessoa({ login: b.dataset.tg, ativo: b.dataset.at !== '1' }, b.dataset.at === '1' ? 'Acesso desligado.' : 'Acesso ligado.'));
+    const u = $('#tpUsr'); if (u) u.onclick = () => { p.remove(); usuarios(); };
+  }
+  /* ---------- aba Usuários (só administrador) ---------- */
+  const TIPO = { adm: 'Administrador', auto: 'Modo automático' };
+  async function usuarios(msg) {
+    let o = $('#tinoUsr'); if (!o) { o = document.createElement('div'); o.id = 'tinoUsr'; document.body.appendChild(o); }
+    let L = [], er = '';
+    try { L = (await api('/api/encartes/pessoas')).pessoas; } catch (e) { er = e.message; }
+    const linha = x => `<div class="card"><div class="u"><span><b>${esc(x.nome)}</b> <span class="tag t-${x.tipo}">${TIPO[x.tipo]}</span>${x.ativo ? '' : '<span class="tag t-off">desligado</span>'}<br><span class="mu">usuário: ${esc(x.login)}${x.principal ? ' · dono principal' : ''}${x.voce ? ' · você' : ''}${x.trocarSenha && x.ativo ? ' · ainda não trocou a senha provisória' : ''}</span></span></div>
+      ${x.principal || x.voce ? '' : `<div class="ac"><button type="button" data-tp="${esc(x.login)}" data-v="${x.tipo === 'adm' ? 'auto' : 'adm'}">Mudar para ${x.tipo === 'adm' ? 'Modo automático' : 'Administrador'}</button><button type="button" data-np="${esc(x.login)}">Nova senha</button><button type="button" data-tg="${esc(x.login)}" data-at="${x.ativo ? 1 : 0}">${x.ativo ? 'Desligar' : 'Ligar'}</button></div>`}</div>`;
+    o.innerHTML = `<div class="w"><div class="hd"><h2>Usuários</h2><button type="button" id="tuX">✕ Fechar</button></div>
+      ${msg ? `<div class="ok">${msg}</div>` : ''}${er ? `<div class="ok" style="background:#fdecea;color:#b3261e">${esc(er)}</div>` : ''}
+      <div class="card"><b>+ Novo usuário</b><form id="tuF" style="margin-top:8px">
+        <div class="seg"><label><input type="radio" name="tp" value="auto" checked><b>Modo automático</b>Segue o passo a passo para montar encartes e plaquinhas.</label>
+        <label><input type="radio" name="tp" value="adm"><b>Administrador</b>Vê tudo: painel do dono, modelos, banco e esta aba.</label></div>
+        <input id="tuN" placeholder="Nome (ex.: Maria)" required maxlength="80">
+        <input id="tuL" placeholder="Usuário para entrar (ex.: maria)" required autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="40">
+        <button type="submit" class="pri" style="width:100%;padding:12px">Criar acesso</button></form>
+        <p class="mu" style="margin:6px 0 0">O app gera uma senha provisória; a pessoa troca no primeiro acesso.</p></div>
+      ${L.map(linha).join('')}</div>`;
+    $('#tuX').onclick = () => o.remove();
+    const salvar = async (b, ok) => {
+      try { const r = await api('/api/encartes/pessoa', b);
+        usuarios(r.password ? `${esc(ok)}<br>Usuário: <b>${esc(r.login)}</b><br>Senha provisória: <b>${esc(r.password)}</b><br><small>Anote agora: ela não aparece de novo.</small>` : esc(ok));
+        o.scrollTop = 0;
+      } catch (e) { alert(e.message); } };
+    $('#tuF').addEventListener('submit', e => { e.preventDefault(); const tp = o.querySelector('input[name=tp]:checked').value;
+      salvar({ criar: true, tipo: tp, nome: $('#tuN').value.trim(), login: $('#tuL').value.trim().toLowerCase() }, `Acesso criado (${TIPO[tp]}).`); });
+    o.querySelectorAll('[data-tp]').forEach(b => b.onclick = () => { if (confirm(`Mudar ${b.dataset.tp} para ${TIPO[b.dataset.v]}? A pessoa precisa entrar de novo.`)) salvar({ login: b.dataset.tp, tipo: b.dataset.v }, `Agora é ${TIPO[b.dataset.v]}.`); });
+    o.querySelectorAll('[data-np]').forEach(b => b.onclick = () => { if (confirm(`Gerar senha nova para ${b.dataset.np}? A senha atual para de funcionar.`)) salvar({ login: b.dataset.np, novaSenha: true }, 'Senha nova gerada.'); });
+    o.querySelectorAll('[data-tg]').forEach(b => b.onclick = () => salvar({ login: b.dataset.tg, ativo: b.dataset.at !== '1' }, b.dataset.at === '1' ? 'Acesso desligado.' : 'Acesso ligado.'));
   }
   /* ---------- início ---------- */
   let loaded = false;

@@ -29,11 +29,11 @@
       stats: st => `${st.caixaMov || 0} lançamentos`,
       links: base => [['Painel gerencial', base + '/', 'Saldo esperado, sangrias e conferência (dono e equipe)']] }
   };
-  RAMO_UI.encartes = { tipo: 'Encartes', novo: 'Nova empresa (encartes)', criar: 'Criar', acesso: 'Criar acesso do dono', usuario: 'Usuário do dono', exemplo: 'Ex.: Dávila Supermercados', nomeLabel: 'Nome da empresa', botao: 'Criar encarte',
+  RAMO_UI.encartes = { tipo: 'Gerador de Encartes', novo: 'Nova empresa (encartes)', criar: 'Criar', acesso: 'Criar acesso do dono', usuario: 'Usuário do dono', exemplo: 'Ex.: Dávila Supermercados', nomeLabel: 'Nome da empresa', botao: 'Criar encarte',
     nota: () => 'Gerador de Encartes: encartes, plaquinhas, vídeo e TV a partir da lista de ofertas. O dono monta campanhas e modelos; o funcionário segue o passo a passo. A equipe é criada pelo dono, dentro do app.',
     stats: () => '',
     links: base => [['Gerador de Encartes', base + '/', 'Dono e funcionários (computador ou celular)']] };
-  const ABAS = [['atacado', 'Atacado e varejo'], ['rural', 'Rural'], ['loja', 'Loja online'], ['caixa', 'Painel gerencial'], ['encartes', 'Encartes']];
+  const ABAS = [['atacado', 'Atacado e varejo'], ['rural', 'Rural'], ['loja', 'Loja online'], ['caixa', 'Painel gerencial'], ['encartes', 'Gerador de Encartes']];
 
   async function api(path, body) {
     const opt = body === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-App': '1' }, body: JSON.stringify(body) };
