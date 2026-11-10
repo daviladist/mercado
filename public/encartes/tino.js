@@ -55,20 +55,22 @@
       <p class="er" role="alert">${esc(msg || '')}</p><button type="submit">Entrar</button></form>`);
     $('#tgF').addEventListener('submit', async e => {
       e.preventDefault(); const b = e.target.querySelector('button'); b.disabled = true;
-      try { await api('/api/login', { login: $('#tgU').value.trim().toLowerCase(), password: $('#tgP').value, keep: $('#tgK').checked }); await start(); }
+      try { const pw = $('#tgP').value; await api('/api/login', { login: $('#tgU').value.trim().toLowerCase(), password: pw, keep: $('#tgK').checked }); TEMP = pw; await start(); }
       catch (er) { e.target.querySelector('.er').textContent = er.message; $('#tgP').value = ''; b.disabled = false; }
     });
     setTimeout(() => $('#tgU') && $('#tgU').focus(), 50);
   }
+  /* a provisória acabou de ser digitada para entrar: não pede de novo (o iPhone preenchia o campo com outra senha salva) */
+  let TEMP = '';
   function showReset() {
     box(`<form id="tgR"><h1>Crie sua senha</h1><p class="mu">Primeiro acesso: troque a senha provisória por uma só sua (mínimo de 8 caracteres).</p>
-      <label for="tgC">Senha atual (a provisória)</label><input type="password" id="tgC" autocomplete="current-password" required>
+      ${TEMP ? '' : '<label for="tgC">Senha atual (a provisória)</label><input type="password" id="tgC" autocomplete="off" required>'}
       <label for="tgN">Senha nova</label><input type="password" id="tgN" autocomplete="new-password" required minlength="8">
       <p class="er" role="alert"></p><button type="submit">Salvar e entrar</button></form>`);
     $('#tgR').addEventListener('submit', async e => {
       e.preventDefault();
-      try { await api('/api/password', { current: $('#tgC').value, next: $('#tgN').value }); await start(); }
-      catch (er) { e.target.querySelector('.er').textContent = er.message; }
+      try { await api('/api/password', { current: TEMP || $('#tgC').value, next: $('#tgN').value }); TEMP = ''; await start(); }
+      catch (er) { if (TEMP && er.status === 400 && /atual/i.test(er.message)) { TEMP = ''; return showReset(); } e.target.querySelector('.er').textContent = er.message; }
     });
   }
   /* ---------- menu da conta (sair, usuários) ---------- */
