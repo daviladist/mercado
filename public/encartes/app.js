@@ -1333,7 +1333,7 @@ async function cloudInit(){
    /* config compartilhada vem da nuvem; o encarte em edição é de cada pessoa */
    DRAFT.forEach(k=>{if(!dr&&k in d)mine[k]=mine[k]??d[k];delete d[k]});S=Object.assign(defaults(),d,mine);S.saved=keep;S.savedAt=remote.savedAt;try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}refreshAll()}catch(e){}}
   if(dr&&(dr.savedAt||0)>(S.draftAt||0)){try{Object.assign(S,JSON.parse(dr.data));S.draftAt=dr.savedAt;refreshAll()}catch(e){}}
-  const rs=sv.docs.map(d=>{try{return JSON.parse(d.data().data)}catch(e){return null}}).filter(Boolean),ids=new Set(rs.map(r=>r.id)),localOnly=S.saved.filter(x=>!ids.has(x.id));
+  const rs=sv.docs.map(d=>{try{return JSON.parse(d.data().data)}catch(e){return null}}).filter(r=>r&&r.id&&Array.isArray(r.products)),ids=new Set(rs.map(r=>r.id)),localOnly=S.saved.filter(x=>!ids.has(x.id));
   S.saved=[...rs,...localOnly].sort((a,b)=>(b.at||0)-(a.at||0));
   CLOUD.on=true;
   for(const x of localOnly)cloudSaveEnc(x);
@@ -1609,6 +1609,10 @@ let dlP=null;function getDL(){if(!dlP)dlP=(async()=>{try{return window.claude&&w
 setTimeout(getDL,800);
 const slug=s=>norm(String(s).replace(/\s+/g,'-')).slice(0,30)||'encarte';
 function fname(ext,suf=''){return[slug(camp().nome),S.store.nome?slug(S.store.nome):'',(S.val.ini||today()).split('-').reverse().slice(0,2).join('-')].filter(Boolean).join('_')+suf+'.'+ext}
+/* abre a tela de compartilhar do aparelho (WhatsApp aparece nela) com o arquivo anexado; se o aparelho não deixar, baixa */
+async function sendWpp(name,blob,kind){const files=[new File([blob],name,{type:blob.type||'application/pdf'})];
+ try{if(navigator.canShare&&navigator.canShare({files})){await navigator.share({files,title:name});return true}}catch(e){if(e&&e.name==='AbortError')return false}
+ toast('Este aparelho não deixou compartilhar direto. Vou baixar o PDF para você mandar.',4500);return saveFile(name,blob,kind)}
 async function saveFile(name,blob,kind){
  const dl=await getDL();
  if(dl){try{await dl.save({filename:name,data:blob});toast('Arquivo pronto: '+name);return true}catch(e){const c=e&&e.code;if(c==='declined'){toast('Download cancelado');return false}if(c==='rate_limited'){toast('Já tem um download esperando confirmação');return false}}}
@@ -1634,7 +1638,7 @@ $('#bPlaq').onclick=()=>{const sel=S.products.filter(p=>p.sel);
  <label>Plaquinha<select id="plqOri"><option value="h" ${(S.plaqOri||(S.plaqPer==1?'v':'h'))==='h'?'selected':''}>Deitada (horizontal)</option><option value="v" ${(S.plaqOri||(S.plaqPer==1?'v':'h'))==='v'?'selected':''}>Em pé (vertical)</option></select></label></div>
  <p class="hint">Cada plaquinha tem uma faixa de 3 cm em cima, com linha tracejada, para dobrar e prender no suporte da gôndola.</p>
  <p class="hint" style="margin:6px 0 4px">Prévia da folha A4 como sai na impressora:</p><canvas id="plqPrev" style="width:100%;box-shadow:0 2px 10px #0003"></canvas>
- <div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn pri" data-a="y" ${sel.length?'':'disabled'}>Baixar PDF</button></div>`,b=>{
+ <div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn" data-a="w" ${sel.length?'':'disabled'}>Compartilhar</button><button class="btn pri" data-a="y" ${sel.length?'':'disabled'}>Baixar PDF</button></div>`,b=>{
   const prev=async()=>{await fontsReady();const per=+$('#plqPer').value,d=plaqDims(per,$('#plqOri').value),cv=$('#plqPrev'),PX=3,pw=d.page==='portrait'?210:297,ph=d.page==='portrait'?297:210;
    /* prévia da folha A4 inteira, como sai da impressora */
    cv.width=pw*PX;cv.height=ph*PX;cv.style.width=pw>ph?'100%':'60%';cv.style.display='block';cv.style.margin='0 auto';const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cv.width,cv.height);
@@ -1645,9 +1649,10 @@ $('#bPlaq').onclick=()=>{const sel=S.products.filter(p=>p.sel);
    x.strokeStyle='#bbb';x.lineWidth=2;x.strokeRect(1,1,cv.width-2,cv.height-2)};prev();
   $('#plqPer').onchange=()=>{S.plaqPer=+$('#plqPer').value;persist();prev()};$('#plqOri').onchange=()=>{S.plaqOri=$('#plqOri').value;persist();prev()};
   b.querySelector('[data-a=n]').onclick=closeModal;
-  b.querySelector('[data-a=y]').onclick=async()=>{const J=window.jspdf&&window.jspdf.jsPDF;if(!J){toast('A biblioteca de PDF não carregou');return}
+  const go=wpp=>async()=>{const J=window.jspdf&&window.jspdf.jsPDF;if(!J){toast('A biblioteca de PDF não carregou');return}
    const per=+$('#plqPer').value||2,ori=$('#plqOri').value;S.plaqPer=per;S.plaqOri=ori;persist();closeModal();toast('Montando as plaquinhas…');await fontsReady();
-   saveFile(fname('pdf','_plaquinhas'),plaqDoc(sel,per,ori),'pdf')}})};
+   (wpp?sendWpp:saveFile)(fname('pdf','_plaquinhas'),plaqDoc(sel,per,ori),'pdf')};
+  b.querySelector('[data-a=y]').onclick=go(false);b.querySelector('[data-a=w]').onclick=go(true)})};
 
 /* ================= Modo TV ================= */
 let tvRaf=null,idleT;
@@ -1979,8 +1984,9 @@ $('#avPaste').onclick=()=>modal(`<h3>Colar lista</h3><p class="hint">Um produto 
  b.querySelector('[data-a=y]').onclick=()=>{const L=parseQuick($('#avTx').value);if(!L.length){toast('Não achei produto com preço');return}S.avulsas=S.avulsas.filter(avOk).concat(L);closeModal();persist();loadAllImages();avRender()}});
 $('#avTit').oninput=e=>{S.avTitle=e.target.value;persist();avPrev()};$('#avDate').onchange=e=>{S.avVal=e.target.value;persist();avPrev()};
 $('#avPer').onchange=e=>{S.avPer=+e.target.value;persist();avPrev()};$('#avOri').onchange=e=>{S.avOri=e.target.value;persist();avPrev()};
-$('#avGo').onclick=async()=>{const L=(S.avulsas||[]).filter(avOk);if(!L.length){toast('Preencha pelo menos um produto com nome e preço');return}if(!window.jspdf){toast('A biblioteca de PDF não carregou. Recarregue.');return}
- toast('Montando as plaquinhas…');await fontsReady();const per=S.avPer||2,ori=S.avOri||(per===1?'v':'h');const blob=withVal(avVal(),()=>plaqDoc(L,per,ori,avCamp()));saveFile('plaquinhas_'+slug(S.avTitle||'oferta')+'_'+(S.avVal||today())+'.pdf',blob,'pdf')};
+const avPdf=wpp=>async()=>{const L=(S.avulsas||[]).filter(avOk);if(!L.length){toast('Preencha pelo menos um produto com nome e preço');return}if(!window.jspdf){toast('A biblioteca de PDF não carregou. Recarregue.');return}
+ toast('Montando as plaquinhas…');await fontsReady();const per=S.avPer||2,ori=S.avOri||(per===1?'v':'h');const blob=withVal(avVal(),()=>plaqDoc(L,per,ori,avCamp()));(wpp?sendWpp:saveFile)('plaquinhas_'+slug(S.avTitle||'oferta')+'_'+(S.avVal||today())+'.pdf',blob,'pdf')};
+$('#avGo').onclick=avPdf(false);$('#avWpp').onclick=avPdf(true);
 $('#avNew').onclick=()=>modal(`<h3>Começar plaquinhas novas?</h3><p>As ${S.avulsas.length} de agora saem da lista.</p><div class="mfoot"><button class="btn" data-a="n">Não</button><button class="btn pri" data-a="y">Sim, começar de novo</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=closeModal;b.querySelector('[data-a=y]').onclick=()=>{closeModal();S.avulsas=[P({desc:'',price:null})];AVSEL=0;persist();avRender()}});
 $('#homeEnc').onclick=()=>wzGo(1);$('#homePlq').onclick=avGo;
 /* ================= PASSO A PASSO (tela do funcionário) ================= */
