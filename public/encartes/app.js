@@ -1333,7 +1333,7 @@ async function cloudInit(){
    /* config compartilhada vem da nuvem; o encarte em edição é de cada pessoa */
    DRAFT.forEach(k=>{if(!dr&&k in d)mine[k]=mine[k]??d[k];delete d[k]});S=Object.assign(defaults(),d,mine);S.saved=keep;S.savedAt=remote.savedAt;try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}refreshAll()}catch(e){}}
   if(dr&&(dr.savedAt||0)>(S.draftAt||0)){try{Object.assign(S,JSON.parse(dr.data));S.draftAt=dr.savedAt;refreshAll()}catch(e){}}
-  const rs=sv.docs.map(d=>{try{return JSON.parse(d.data().data)}catch(e){return null}}).filter(Boolean),ids=new Set(rs.map(r=>r.id)),localOnly=S.saved.filter(x=>!ids.has(x.id));
+  const rs=sv.docs.map(d=>{try{return JSON.parse(d.data().data)}catch(e){return null}}).filter(r=>r&&r.id&&Array.isArray(r.products)),ids=new Set(rs.map(r=>r.id)),localOnly=S.saved.filter(x=>!ids.has(x.id));
   S.saved=[...rs,...localOnly].sort((a,b)=>(b.at||0)-(a.at||0));
   CLOUD.on=true;
   for(const x of localOnly)cloudSaveEnc(x);
