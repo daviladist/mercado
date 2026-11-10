@@ -86,6 +86,9 @@ textarea{min-height:70px;resize:vertical}
 /* login */
 .login{max-width:400px;margin:24px auto;display:grid;gap:14px}
 .login .hint{background:var(--accent-soft);border-radius:10px;padding:10px 12px;font-size:13px}
+.keepme{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;user-select:none}.keepme input{width:20px;height:20px;margin:0;accent-color:var(--brand)}
+.admperm{display:grid;gap:6px}.admperm label{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer}.admperm input{width:18px;height:18px;margin-top:2px;flex:none}
+.ronly{background:var(--accent-soft);border-radius:10px;padding:8px 12px;font-size:13px;margin:0 0 10px}
 
 /* catálogo */
 .validity{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
@@ -1528,8 +1531,9 @@ function renderTop(bump){
 function loginForm(isAdmin){
   return `<div class="loginhero"><img src="${brandLogo()}" alt="${esc(S.store.name)}"><div>${isAdmin?'Painel do administrador':'Compras de atacado com preço de distribuidor'}</div></div><form class="login panel" id="lf">
     <h2>${isAdmin?'Acesso do administrador':'Entrar para fazer pedido'}</h2>
-    <div class="field"><label for="lu">${isAdmin?'Usuário':'Usuário ou CNPJ/CPF'}</label><input type="text" id="lu" autocomplete="username" autocapitalize="none" required></div>
-    <div class="field"><label for="lp">Senha</label><input type="password" id="lp" autocomplete="current-password" required></div>
+    <div class="field"><label for="lu">${isAdmin?'Usuário':'Usuário ou CNPJ/CPF'}</label><input type="text" id="lu" name="username" autocomplete="username" autocapitalize="none" required></div>
+    <div class="field"><label for="lp">Senha</label><input type="password" id="lp" name="password" autocomplete="current-password" required></div>
+    <label class="keepme"><input type="checkbox" id="lk" checked> Manter conectado neste aparelho</label>
     <div class="err" id="le"></div>
     <button class="btn block" type="submit">Entrar</button>
     ${isAdmin?'':'<div class="hint">Para testar: usuário <b>cliente</b>, senha <b>1234</b>. Os acessos dos clientes são criados por você no painel do administrador.</div>'}
@@ -2613,6 +2617,12 @@ function vbnavHtml(tabs,T){const nm={pedidos:'Pedidos',clientes:'Clientes',produ
   const n=tabs.length+1;return `<nav class="bnav" aria-label="Menu do vendedor" style="--bnn:${n}">${b('pedidos')}${b('clientes')}<button type="button" id="vNewB" class="bnnew">${bnIco('Novo')}<span>Novo</span></button>${b('produtos')}${b('comissao')}</nav>`}
 /* aba -> módulo da Central que precisa estar ligado */
 const TAB_MOD={pdv:'pdv',relatorios:'painel',decisoes:'decisoes',entregas:'entregas',semana:'ofertas',recmerc:'entrada',precnotas:'entrada',receber:['receber','pagar','caixa'],fretes:'frete3'};
+/* administrador com acesso limitado (sócio, gerente): só as abas liberadas. O servidor também confere tudo. */
+const admPerms=()=>(typeof SRV!=='undefined'&&SRV.me&&SRV.me.role==='admin'&&SRV.me.perms)||null;
+const admCan=k=>{const P=admPerms();return !P||!k||(Array.isArray(k)?k.every(x=>P[x]):!!P[k])};
+const admOwner=()=>!admPerms();
+const TAB_PERM={relatorios:null,decisoes:'pedidos',pedidos:'pedidos',entregas:'pedidos',pdv:'pedidos',semana:'produtos',produtos:'produtos',recmerc:['produtos','custos'],precnotas:['produtos','custos'],receber:'financeiro',fretes:'financeiro'};
+function admCanTab(k){if(k==='relatorios')return admCan('relatorios')||admCan('comissao');return admCan(TAB_PERM[k])}
 /* abas do Financeiro (Perdas por avaria vem das entregas) */
 const finTabs=()=>['receber','pagar','caixa','perdas'].filter(k=>modOn(k==='perdas'?'entregas':k));
 function renderAdmin(){
@@ -2625,7 +2635,7 @@ function renderAdmin(){
   const nan=S.orders.filter(o=>o.appr==='pendente'&&o.status!=='cancelado').length,ncnt=(S.counts||[]).filter(x=>x.status==='finalizada').length,venc=(S.receivables||[]).filter(r=>recStatus(r)==='vencido').length+S.orders.filter(recMissing).length,crit=S.products.filter(isCritical).length;
   /* menu em grupos: poucas abas em cima, micro abas dentro */
   const G=[['Início',[['hoje','Visão geral'],['relatorios','Relatórios']]],['Pedidos',[['pedidos','Pedidos'],['decisoes','Decisões'],['entregas','Entregas']]],['Ofertas',[['semana','Ofertas da semana']]],['Caixa (PDV)',[['pdv','Caixa (PDV)']]],['Produtos',[['produtos','Produtos'],['recmerc','Receber mercadoria'],['precnotas','Precificação de notas']]],['Financeiro',[['receber','Financeiro'],['fretes','Frete de terceiro']]],['Cadastros',[['cadastros','Cadastros'],['clientes',''],['config','']]]]
-    .map(g=>[g[0],g[1].filter(x=>{const m=TAB_MOD[x[0]];return !m||(Array.isArray(m)?m.some(modOn):modOn(m))})]).filter(g=>g[1].some(x=>x[1]));
+    .map(g=>[g[0],g[1].filter(x=>{const m=TAB_MOD[x[0]];return (!m||(Array.isArray(m)?m.some(modOn):modOn(m)))&&admCanTab(x[0])})]).filter(g=>g[1].some(x=>x[1]));
   if(!G.some(g=>g[1].some(x=>x[0]===ui.tab)))ui.tab='hoje';
   const BD={pedidos:novos?{n:novos,c:''}:null,decisoes:(nan+nsug)?{n:nan+nsug,c:''}:null,entregas:nprog?{n:nprog,c:'var(--accent)'}:null,semana:ncnt?{n:ncnt,c:'var(--accent)'}:null,receber:venc?{n:venc,c:''}:null,produtos:crit?{n:crit,c:'var(--warn)'}:null,precnotas:(()=>{const n=(S.receipts||[]).filter(r=>r.status==='conferida').length+(S.imports||[]).filter(x=>x.status==='pendente'||x.status==='consultando').length;return n?{n,c:''}:null})()};
   const cnt=b=>b?`<span class="cnt" ${b.c?`style="background:${b.c}"`:''}>${b.n}</span>`:'';
@@ -2640,7 +2650,7 @@ function renderAdmin(){
   {const at=app.querySelector('.tabs [aria-selected="true"]');if(at&&at.scrollIntoView)try{at.scrollIntoView({block:'nearest',inline:'center'})}catch(e){}}
   {const tb=app.querySelector('.tabs');if(tb){const edge=()=>{tb.classList.toggle('more-r',tb.scrollLeft+tb.clientWidth<tb.scrollWidth-4);tb.classList.toggle('more-l',tb.scrollLeft>4)};tb.addEventListener('scroll',edge,{passive:true});edge()}}
   app.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ui.tab=b.dataset.tab;if(b.dataset.fin)ui.finTab=b.dataset.fin;ui.backWeek=false;ui.romView=false;ui.lanc=null;ui.stBulk=null;ui.stCost=null;ui.combosView=false;ui.comboEdit=null;ui.adj=null;ui.recNew=null;ui.edit=null;ui.bulk=null;ui.confirmDel=null;renderAdmin()});
-  ({fretes:admFretes,pdv:()=>pdvAdmin($('#tabc')),recmerc:()=>recScreen($('#tabc')),precnotas:()=>precScreen($('#tabc')),entregas:admEntregas,decisoes:admDecisoes,separacao:admSep,cadastros:admCadastros,hoje:()=>{admHoje();pdvDashCard()},pedidos:admOrders,receber:admFin,relatorios:admRelatorios,produtos:admProducts,semana:admSemana,analise:admAnalise,clientes:admClients,config:admConfig})[ui.tab]();rcAlert();
+  ({fretes:admFretes,pdv:()=>pdvAdmin($('#tabc')),recmerc:()=>recScreen($('#tabc')),precnotas:()=>precScreen($('#tabc')),entregas:admEntregas,decisoes:admDecisoes,separacao:admSep,cadastros:admCadastros,hoje:()=>{admHoje();pdvDashCard()},pedidos:admOrders,receber:admFin,relatorios:admRelatorios,produtos:admProducts,semana:admSemana,analise:admAnalise,clientes:admClients,config:admConfig})[ui.tab]();rcAlert();admRoBanner();
 }
 /* ---------- baixar pedidos em PDF ou Excel ---------- */
 const FILTER_NAME={ativos:'em-aberto',concluido:'concluidos',cancelado:'cancelados',todos:'todos'};
@@ -3434,7 +3444,7 @@ function admHoje(){
   const crit=S.products.filter(isCritical).length,parados=S.customers.filter(x=>{const d=idleDays(x);return d!=null&&d>=15}).length;
   const tile=(go,lbl,big,small,cls)=>`<button class="tile ${cls||''}" data-go="${go}"><span class="lbl">${lbl}</span><b class="num">${big}</b><span class="small muted">${small}</span></button>`;
   c.innerHTML=`${vitrineAdmBanner()}<div class="sectionhead"><h2>Início</h2><div class="row" style="gap:6px"><button class="btn ghost" id="hRom" aria-label="Romaneio de entrega em PDF">${PDFI}Romaneio</button><button class="btn" id="hLan">+ Lançar pedido</button></div></div>
-    ${(()=>{const a=backupAge();return (a==null||a>=3)&&!ui.bkSnooze?`<div class="notice bkwarn"><span>${a==null?'Você ainda não fez backup dos dados.':'Último backup há '+a+' dias.'} No protótipo os dados ficam só neste navegador.</span><span class="row" style="gap:6px"><button class="btn dlb" id="hBk">Baixar backup agora</button><button class="btn ghost dlb" id="hBkLater">Agora não</button></span></div>`:''})()}
+    ${(()=>{const a=backupAge();return (a==null||a>=3)&&!ui.bkSnooze&&admOwner()?`<div class="notice bkwarn"><span>${a==null?'Você ainda não fez backup dos dados.':'Último backup há '+a+' dias.'} No protótipo os dados ficam só neste navegador.</span><span class="row" style="gap:6px"><button class="btn dlb" id="hBk">Baixar backup agora</button><button class="btn ghost dlb" id="hBkLater">Agora não</button></span></div>`:''})()}
     <h3 class="dech dbsec">Hoje · ${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})}</h3>
     <div class="htiles">
       ${tile('pedidos:ativos','Pedidos novos',novos.length,brl(sum(novos))+' para conferir',novos.length?'t-hot':'')}
@@ -3665,15 +3675,17 @@ function admCategorias(){
 }
 function admCadastros(){
   /* três grupos: Clientes, Usuários (equipe que entra no app) e Configurações */
-  const GR=[['clientes','Clientes',[['clientes','Clientes']]],['fornecedores','Fornecedores',[['fornecedores','Fornecedores'],['transportadoras','Transportadoras']]],['usuarios','Usuários',[['vendedores','Vendedores'],['conferentes','Conferentes'],['faturamento','Faturamento'],['veiculos','Motoristas'],['caixas','Operadores de caixa']]],['config','Configurações',[['loja','Loja e regras'],['categorias','Categorias'],['pagamentos','Pagamento'],['cidades','Cidades de entrega']]]]
-    .map(x=>[x[0],x[1],x[2].filter(y=>{const m={fornecedores:'entrada',transportadoras:'frete3',veiculos:'entregas',conferentes:'conferencia',faturamento:'faturamento',caixas:'pdv'}[y[0]];return !m||modOn(m)})]).filter(x=>x[2].length);
-  const k=ui.cadSub||'clientes',g=GR.find(x=>x[2].some(y=>y[0]===k))||GR[0];ui.cadLast=ui.cadLast||{};ui.cadLast[g[0]]=k;
+  const GR=[['clientes','Clientes',[['clientes','Clientes']]],['fornecedores','Fornecedores',[['fornecedores','Fornecedores'],['transportadoras','Transportadoras']]],['usuarios','Usuários',[['vendedores','Vendedores'],['conferentes','Conferentes'],['faturamento','Faturamento'],['veiculos','Motoristas'],['caixas','Operadores de caixa'],['admins','Administradores']]],['config','Configurações',[['loja','Loja e regras'],['categorias','Categorias'],['pagamentos','Pagamento'],['cidades','Cidades de entrega']]]]
+    .map(x=>[x[0],x[1],x[2].filter(y=>{const m={fornecedores:'entrada',transportadoras:'frete3',veiculos:'entregas',conferentes:'conferencia',faturamento:'faturamento',caixas:'pdv'}[y[0]];
+      const pm={clientes:'clientes',fornecedores:'produtos',transportadoras:'financeiro',categorias:'produtos',loja:'config',pagamentos:'config',cidades:'config'}[y[0]]||(x[0]==='usuarios'?'equipe':null);
+      return (!m||modOn(m))&&(y[0]==='admins'?true:admCan(pm))})]).filter(x=>x[2].length);
+  let k=ui.cadSub||'clientes';const g=GR.find(x=>x[2].some(y=>y[0]===k))||GR[0];if(!g[2].some(y=>y[0]===k))k=g[2][0][0];ui.cadLast=ui.cadLast||{};ui.cadLast[g[0]]=k;
   $('#tabc').innerHTML=`<div class="seg repseg cadg" role="group" aria-label="Cadastros">${GR.map(x=>`<button data-cadg="${x[0]}" aria-pressed="${x===g}">${x[1]}</button>`).join('')}</div>
     ${g[2].length>1?`<div class="seg cadsub" role="group" aria-label="${g[1]}">${g[2].map(([a,b])=>`<button data-cad="${a}" aria-pressed="${k===a}">${b}</button>`).join('')}</div>`:''}<div id="cadc"></div>`;
   const go=v=>{ui.cadSub=v;ui.selEdit=null;ui.edit=null;ui.payEdit=null;ui.confirmDel=null;ui.catMove=null;admCadastros()};
   document.querySelectorAll('[data-cadg]').forEach(b=>b.onclick=()=>{const x=GR.find(y=>y[0]===b.dataset.cadg);go(x===g?x[2][0][0]:(ui.cadLast[x[0]]||x[2][0][0]))});
   document.querySelectorAll('[data-cad]').forEach(b=>b.onclick=()=>go(b.dataset.cad));
-  ({caixas:()=>pdvAdmOperadores($('#cadc')),transportadoras:admTransportadoras,fornecedores:admFornecedores,conferentes:admConferentes,faturamento:admFaturamento,categorias:admCategorias,vendedores:admVendedores,clientes:admClients,pagamentos:admPagamentos,cidades:admCidades,veiculos:admVeiculos,loja:admConfig})[k]();
+  ({admins:admAdmins,caixas:()=>pdvAdmOperadores($('#cadc')),transportadoras:admTransportadoras,fornecedores:admFornecedores,conferentes:admConferentes,faturamento:admFaturamento,categorias:admCategorias,vendedores:admVendedores,clientes:admClients,pagamentos:admPagamentos,cidades:admCidades,veiculos:admVeiculos,loja:admConfig})[k]();
 }
 /* formas de pagamento com prazo próprio, reconhecido no pedido e no contas a receber */
 /* forma a prazo sem os dias das parcelas: o contas a receber automático não consegue gerar parcelas */
@@ -6222,11 +6234,13 @@ function admCompra(){
   }catch(e){pdfFail(e)}};
 }
 function admRelatorios(){
+  if(!admCan('relatorios')){ui.repKind='comissao'}else if(ui.repKind==='comissao'&&!admCan('comissao'))ui.repKind='ranking';
   const k=ui.repKind||'ranking',nc=buildPurchase({cat:'todas'}).rows.length;
-  $('#tabc').innerHTML=`<div class="seg repseg" role="group" aria-label="Tipo de relatório"><button id="rkR" aria-pressed="${k==='ranking'}">Ranking de vendas</button><button id="rkC" aria-pressed="${k==='compra'}">Sugestão de compra${nc?` <span class="cnt" style="background:var(--warn)">${nc}</span>`:''}</button><button id="rkV" aria-pressed="${k==='comissao'}">Comissão de vendedores</button><button id="rkF" aria-pressed="${k==='conf'}">Conferência</button><button id="rkB" aria-pressed="${k==='boa'}">Boas compras</button>${modOn('frete3')?`<button id="rkT" aria-pressed="${k==='frete'}">Frete de terceiro</button>`:''}</div><div id="repc"></div>`;
+  $('#tabc').innerHTML=`<div class="seg repseg" role="group" aria-label="Tipo de relatório"><button id="rkR" aria-pressed="${k==='ranking'}">Ranking de vendas</button><button id="rkC" aria-pressed="${k==='compra'}">Sugestão de compra${nc?` <span class="cnt" style="background:var(--warn)">${nc}</span>`:''}</button>${admCan('comissao')?`<button id="rkV" aria-pressed="${k==='comissao'}">Comissão de vendedores</button>`:''}<button id="rkF" aria-pressed="${k==='conf'}">Conferência</button><button id="rkB" aria-pressed="${k==='boa'}">Boas compras</button>${modOn('frete3')?`<button id="rkT" aria-pressed="${k==='frete'}">Frete de terceiro</button>`:''}</div><div id="repc"></div>`;
   $('#rkR').onclick=()=>{ui.repKind='ranking';admRelatorios()};
   $('#rkC').onclick=()=>{ui.repKind='compra';admRelatorios()};
-  $('#rkV').onclick=()=>{ui.repKind='comissao';admRelatorios()};
+  {const b=$('#rkV');if(b)b.onclick=()=>{ui.repKind='comissao';admRelatorios()}}
+  if(!admCan('relatorios'))$('#tabc').querySelectorAll('.repseg button:not(#rkV)').forEach(b=>b.remove());
   $('#rkF').onclick=()=>{ui.repKind='conf';admRelatorios()};
   $('#rkB').onclick=()=>{ui.repKind='boa';admRelatorios()};
   {const b=$('#rkT');if(b)b.onclick=()=>{ui.repKind='frete';admRelatorios()}}
