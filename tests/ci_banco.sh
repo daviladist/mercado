@@ -108,4 +108,10 @@ APW="$(gen)"
 curl -sf -X POST "localhost:$PORTA/api/setup" -H 'Content-Type: application/json' -H 'X-App: 1' \
   -d "{\"code\":\"$SETUP_CODE\",\"name\":\"Dono\",\"login\":\"eduardo\",\"password\":\"$APW\"}" >/dev/null
 BASE=http://localhost:$PORTA ADMIN_LOGIN=eduardo ADMIN_PASSWORD="$APW" python3 tests/caixa.py
+echo "== 12. Gerador de Encartes"
+newdb tino_ci_encartes; serve tino_ci_encartes
+APW="$(gen)"
+curl -sf -X POST "localhost:$PORTA/api/setup" -H 'Content-Type: application/json' -H 'X-App: 1' \
+  -d "{\"code\":\"$SETUP_CODE\",\"name\":\"Dono\",\"login\":\"eduardo\",\"password\":\"$APW\"}" >/dev/null
+BASE=http://localhost:$PORTA ADMIN_LOGIN=eduardo ADMIN_PASSWORD="$APW" python3 tests/encartes.py
 echo "Testes com banco: tudo certo."

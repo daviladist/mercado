@@ -11,8 +11,8 @@
   const restoreOpen = () => document.querySelectorAll('#editor details.fold[data-k]').forEach(d => { if (OPEN.has(d.dataset.k) && d.open !== OPEN.get(d.dataset.k)) d.open = OPEN.get(d.dataset.k); });
   new MutationObserver(restoreOpen).observe(document.documentElement, { childList: true, subtree: true });
   let D = null, sel = null, draft = null, dirty = false, pendingDraft = null, segUI = null, aba = 'atacado';
-  const ramoOf = t => (t && ['rural', 'loja', 'caixa'].includes(t.ramo) ? t.ramo : 'atacado');
-  const modsOf = t => ramoOf(t) === 'rural' ? D.ruralModules : ramoOf(t) === 'loja' ? D.lojaModules : ramoOf(t) === 'caixa' ? D.caixaModules : D.modules;
+  const ramoOf = t => (t && ['rural', 'loja', 'caixa', 'encartes'].includes(t.ramo) ? t.ramo : 'atacado');
+  const modsOf = t => ramoOf(t) === 'rural' ? D.ruralModules : ramoOf(t) === 'loja' ? D.lojaModules : ramoOf(t) === 'caixa' ? D.caixaModules : ramoOf(t) === 'encartes' ? (D.encModules || []) : D.modules;
   const naAba = () => D.tenants.filter(t => ramoOf(t) === aba);
   /* textos de cada segmento (Rural e Loja online usam o mesmo editor) */
   const RAMO_UI = {
@@ -29,7 +29,11 @@
       stats: st => `${st.caixaMov || 0} lançamentos`,
       links: base => [['Painel gerencial', base + '/', 'Saldo esperado, sangrias e conferência (dono e equipe)']] }
   };
-  const ABAS = [['atacado', 'Atacado e varejo'], ['rural', 'Rural'], ['loja', 'Loja online'], ['caixa', 'Painel gerencial']];
+  RAMO_UI.encartes = { tipo: 'Encartes', novo: 'Nova empresa (encartes)', criar: 'Criar', acesso: 'Criar acesso do dono', usuario: 'Usuário do dono', exemplo: 'Ex.: Dávila Supermercados', nomeLabel: 'Nome da empresa', botao: 'Criar encarte',
+    nota: () => 'Gerador de Encartes: encartes, plaquinhas, vídeo e TV a partir da lista de ofertas. O dono monta campanhas e modelos; o funcionário segue o passo a passo. A equipe é criada pelo dono, dentro do app.',
+    stats: () => '',
+    links: base => [['Gerador de Encartes', base + '/', 'Dono e funcionários (computador ou celular)']] };
+  const ABAS = [['atacado', 'Atacado e varejo'], ['rural', 'Rural'], ['loja', 'Loja online'], ['caixa', 'Painel gerencial'], ['encartes', 'Encartes']];
 
   async function api(path, body) {
     const opt = body === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-App': '1' }, body: JSON.stringify(body) };

@@ -873,3 +873,23 @@ alter table dre_despesa add column if not exists tg_msg bigint;
 alter table dre_despesa add column if not exists tg_update bigint;
 alter table dre_despesa add column if not exists tg_user bigint;
 create unique index if not exists dre_despesa_tg_update on dre_despesa(tenant_id, tg_update) where tg_update is not null;
+
+-- ===== Tino Encartes (ramo 'encartes'): a "nuvem" do Gerador de Encartes, por empresa =====
+-- enc_docs: estado da campanha, rascunho de cada pessoa, encartes salvos e banco de produtos (texto JSON).
+-- enc_blobs: imagens (fotos, logos, fundos) em base64; o id é o hash da imagem (a mesma foto não grava duas vezes).
+create table if not exists enc_docs (
+  tenant_id text not null references tenants(id),
+  path text not null,
+  data text not null,
+  updated_by text,
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, path)
+);
+create table if not exists enc_blobs (
+  tenant_id text not null references tenants(id),
+  id text not null,
+  mime text not null,
+  b64 text not null,
+  created_at timestamptz not null default now(),
+  primary key (tenant_id, id)
+);

@@ -188,6 +188,15 @@ Para a loja que quer vender pelo celular (loja de roupa, supermercado, bazar…)
 - **Voltar versão:** **não use "Instant Rollback"** na Vercel: a versão antiga não conhece a loja online e abriria o app de pedidos no endereço dela. Para desfazer, publique uma correção para frente.
 - **Para depois:** pagamento online (PIX automático/cartão), cupom de desconto, aviso automático por WhatsApp.
 
+## Segmento Encartes (ramo "encartes")
+Gerador de encartes, plaquinhas avulsas, vídeo e TV a partir da lista de ofertas (substitui QR Ofertas/Photoshop). Uso interno: o dono e a equipe dele.
+- **Criar:** Central → aba **Encartes** → **+ Nova** → "Criar acesso do dono". O endereço é `/t/<empresa>/`.
+- **Equipe:** o dono cria funcionários dentro do app (menu 👤 no canto inferior direito): senha provisória, trocar senha, ligar/desligar. Funcionário usa o papel `caixista` (sem papel novo no banco); não vê rascunhos de outros nem altera o catálogo.
+- **Dados (`lib/encartes.js`):** documentos em `enc_docs` (caminho → JSON) e imagens em `enc_blobs` (base64, id = SHA-256). Rotas só em `/api/encartes/*`.
+- **Front:** `public/encartes.html` + `public/encartes/app.js` (gerado a partir do app do Claude por `tools/to_tino.py` — não editar à mão) + `public/encartes/tino.js` (login e ponte de dados). Bibliotecas em `public/vendor/` (sem CDN, por causa da CSP).
+- **Sem StarIA aqui:** o botão "Atualizar banco do StarIA" só funciona no app do Claude. Dados, fotos e modelos do app do Claude não migram sozinhos.
+- **Testes:** `tests/unit/encartes.test.js` e `tests/encartes.py` (passo 12 do `tests/ci_banco.sh`).
+
 ## Desenvolver e testar no computador
 
 ```
