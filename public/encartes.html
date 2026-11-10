@@ -422,8 +422,8 @@ h4:first-child{margin-top:0}
     <div class="logo" id="logo1">Toque para enviar<br>logo 2</div>
    </div>
    <h4>Banco de produtos</h4>
-   <p class="hint">Puxa do StarIA os 300 produtos mais vendidos dos últimos 30 dias (filial abaixo): código, EAN, nome, custo, preço atual e imposto. É o que aparece quando alguém bipa uma plaquinha. Atualize uma vez por mês.</p>
-   <div class="bar"><button class="btn sm pri" id="catUp">Atualizar banco do StarIA</button><span id="catInfo" class="hint" style="margin:0"></span></div>
+   <p class="hint">Puxa do StarIA os 1000 produtos mais vendidos dos últimos 30 dias (filial abaixo; se o banco já tiver 1000 ou mais, puxa mais 1000): código, EAN, nome, custo, preço atual e imposto. É o que aparece quando alguém bipa uma plaquinha. Atualize uma vez por mês.</p>
+   <div class="bar"><button class="btn sm pri" id="catUp">Atualizar banco do StarIA</button><button class="btn sm" id="catExp">Exportar banco</button><button class="btn sm" id="catImp">Importar banco</button><input type="file" id="catFile" accept=".json,application/json" hidden><span id="catInfo" class="hint" style="margin:0"></span></div>
    <h4>StarIA e margem</h4>
    <div class="row2"><label>Filial no StarIA<input id="sFil" type="number" min="1" placeholder="1"></label>
    <label>Avisar margem abaixo de (%)<input id="sMarg" inputmode="decimal" placeholder="8"></label></div>

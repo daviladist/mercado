@@ -1,4 +1,3 @@
-
 /* Gerador de Encartes (Tino). Gerado de encartes/index.html por tools/to_tino.py: não editar à mão. */
 /* ================= base ================= */
 const $=s=>document.querySelector(s);
@@ -2266,22 +2265,24 @@ let CATB=null,CATRUN=false,CATIX={e:{},c:{}};
 function catIndex(){CATIX={e:{},c:{}};((CATB&&CATB.itens)||[]).forEach(it=>{if(it.e)CATIX.e[cleanEan(it.e)]=it;if(it.c)CATIX.c[String(it.c)]=it});renderCatInfo()}
 async function catLoad(){try{const u=await IDB.get('catalogo:base');if(u&&!CATB){CATB=JSON.parse(u);catIndex()}}catch(e){}
  if(CLOUD.db){try{const r=await CLOUD.db.doc('app/catalogo').get();if(r.exists){const d=JSON.parse(r.data().data);if(!CATB||d.at>=CATB.at){CATB=d;catIndex();IDB.set('catalogo:base',JSON.stringify(d),true)}}}catch(e){}}
- if(!CATRUN&&isOwnerV()===true&&(!CATB||Date.now()-CATB.at>30*864e5)){CATRUN=true;importCatalogo(300)}}
+ if(!CATRUN&&!window.TINO&&isOwnerV()===true&&(!CATB||Date.now()-CATB.at>30*864e5)){CATRUN=true;importCatalogo()}}
 function renderCatInfo(){const el=$('#catInfo');if(!el)return;el.textContent=CATB?`${CATB.itens.length} produtos no banco • atualizado em ${new Date(CATB.at).toLocaleDateString('pt-BR')} (filial ${CATB.filial})`:'Banco ainda vazio'}
-async function importCatalogo(N=300){
+async function importCatalogo(N){
+ const cur=(CATB&&CATB.itens||[]).length;if(!N)N=cur>=1000?cur+1000:1000;
  const fl=filial(),fim=new Date(Date.now()-864e5),ini=new Date(fim.getTime()-29*864e5),di=ymd(ini),df=ymd(fim);const st=t=>{toast(t,60000);const e=$('#catInfo');if(e)e.textContent=t};
  try{st('Buscando vendas por grupo no StarIA…');
-  const g=await star('consultar_vendas',{dataInicial:di,dataFinal:df,filial:fl,agruparPor:'GRUPO',ordenarPor:'VALOR_VENDA',ordem:'DESC',limite:100});
-  const tot=g.resumo.valorVendaTotal||1,grupos=(g.itens||[]).filter(x=>x.grupo&&x.valorVendaTotal>0);let all=[];
-  for(let i=0;i<grupos.length;i++){const gr=grupos[i],lim=Math.min(100,Math.ceil(gr.valorVendaTotal/tot*N*1.5)+3);st(`Lendo os mais vendidos ${i+1}/${grupos.length}: ${gr.grupo}`);
-   try{const r=await star('consultar_vendas',{dataInicial:di,dataFinal:df,filial:fl,agruparPor:'MERCADORIA',grupo:gr.grupo,ordenarPor:'VALOR_VENDA',ordem:'DESC',limite:lim});all=all.concat(r.itens||[])}catch(e){}}
+  const g=await star('consultar_vendas',{dataInicial:di,dataFinal:df,filial:fl,agruparPor:'SUBGRUPO',ordenarPor:'VALOR_VENDA',ordem:'DESC',limite:100});
+  const tot=g.resumo.valorVendaTotal||1,grupos=(g.itens||[]).filter(x=>x.subGrupo&&x.valorVendaTotal>0);let all=[];
+  for(let i=0;i<grupos.length;i++){const gr=grupos[i],lim=Math.min(100,Math.ceil(gr.valorVendaTotal/tot*N*1.5)+3);st(`Lendo os mais vendidos ${i+1}/${grupos.length}: ${gr.subGrupo}`);
+   try{const r=await star('consultar_vendas',{dataInicial:di,dataFinal:df,filial:fl,agruparPor:'MERCADORIA',subGrupo:gr.subGrupo,ordenarPor:'VALOR_VENDA',ordem:'DESC',limite:lim});all=all.concat(r.itens||[])}catch(e){}}
   const seen=new Set();all=all.filter(x=>x.codigoMercadoria&&!seen.has(x.codigoMercadoria)&&seen.add(x.codigoMercadoria)).sort((a,b)=>b.valorVendaTotal-a.valorVendaTotal).slice(0,N);
   const itens=all.map(x=>({c:String(x.codigoMercadoria),e:cleanEan(x.ean),d:x.mercadoria||'',tx:x.valorVendaTotal>0?Math.round((x.valorImpostos||0)/x.valorVendaTotal*10000)/10000:0,
    pm:x.quantidade>0?r2(x.valorVendaTotal/x.quantidade):null,cm:x.quantidade>0?Math.round(x.custoTotalCMV/x.quantidade*10000)/10000:null,vv:r2(x.valorVendaTotal)}));
   let done=0;const work=async it=>{try{const r=await star('consultar_estoque',{filial:fl,codigoMercadoria:+it.c,agruparPor:'MERCADORIA',situacaoEstoque:'TODOS',limite:1});const s=r.itens&&r.itens[0];
     if(s&&+s.estoque){it.pv=r2(s.valorVendaTotal/s.estoque);it.cu=Math.round(s.valorCustoTotal/s.estoque*10000)/10000;if(s.ean&&!it.e)it.e=cleanEan(s.ean)}}catch(e){}
    if(it.cu==null){try{it.cu=await starLastCost(it.c)}catch(e){}}if(it.cu==null)it.cu=it.cm;if(it.pv==null)it.pv=it.pm;done++;if(done%10===0)st(`Puxando preço e custo atuais ${done}/${itens.length}…`)};
-  for(let i=0;i<itens.length;i+=4)await Promise.all(itens.slice(i,i+4).map(work));
+  for(let i=0;i<itens.length;i+=6)await Promise.all(itens.slice(i,i+6).map(work));
+  const novos=new Set(itens.map(x=>x.c));((CATB&&CATB.itens)||[]).forEach(o=>{if(o.c&&!novos.has(String(o.c)))itens.push(o)});
   CATB={at:Date.now(),filial:fl,de:di,ate:df,itens};catIndex();await IDB.set('catalogo:base',JSON.stringify(CATB),true);
   if(CLOUD.db)await CLOUD.db.doc('app/catalogo').set({at:CATB.at,data:JSON.stringify(CATB)});
   toast(`Banco atualizado: ${itens.length} produtos mais vendidos de ${fmtD(di)} a ${fmtD(df)}`,6000);renderCatInfo()}
@@ -2372,7 +2373,13 @@ function openScan(){
    const v=$('#scV');v.srcObject=scanStream;$('#scVid').hidden=false;await v.play().catch(()=>{});try{await zxLib()}catch(_){}
    const cv=document.createElement('canvas');const loop=async()=>{if(!scanStream||busy)return;if(v.videoWidth){const k=Math.min(1,1000/v.videoWidth);cv.width=v.videoWidth*k|0;cv.height=v.videoHeight*k|0;cv.getContext('2d').drawImage(v,0,0,cv.width,cv.height);const r=await decodeCanvas(cv);if(r&&cleanEan(r).length>=8){navigator.vibrate&&navigator.vibrate(80);go(r);return}}setTimeout(loop,250)};loop()};
   setTimeout(()=>$('#scCode').focus(),60)})}
-$('#avScan').onclick=openScan;$('#catUp').onclick=()=>importCatalogo(300);
+$('#avScan').onclick=openScan;$('#catUp').onclick=()=>importCatalogo();
+$('#catExp').onclick=()=>{if(!CATB||!CATB.itens.length){toast('Banco vazio');return}saveFile(`banco-produtos-${CATB.itens.length}.json`,new Blob([JSON.stringify(CATB)],{type:'application/json'}),'file')};
+$('#catImp').onclick=()=>$('#catFile').click();
+$('#catFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const d=JSON.parse(await f.text());if(!d||!Array.isArray(d.itens)||!d.itens.length||!d.itens.every(x=>x&&x.c!=null))throw 0;
+ const novos=new Set(d.itens.map(x=>String(x.c)));((CATB&&CATB.itens)||[]).forEach(o=>{if(o.c&&!novos.has(String(o.c)))d.itens.push(o)});d.at=Date.now();
+ CATB=d;catIndex();await IDB.set('catalogo:base',JSON.stringify(CATB),true);if(CLOUD.db)await CLOUD.db.doc('app/catalogo').set({at:CATB.at,data:JSON.stringify(CATB)});toast(`Banco importado: ${CATB.itens.length} produtos`,5000)}
+ catch(err){toast('Arquivo inválido: use o "Exportar banco" do outro app',5000)}};
 /* ================= início ================= */
 $('#vIni').value=S.val.ini;$('#vFim').value=S.val.fim;$('#phr').value=S.phrases.join('\n');
 if(!S.campaigns.some(c=>c.modelo==='superdia')){S.campaigns.push({id:'superdiad',nome:'Super Dia D',titulo:'Super Dia D',dia:-1,modelo:'superdia',cores:{fundo:'#232126',cabecalho:'#b31a0c',titulo:'#ffffff',preco:'#d23a17',precoTexto:'#ffffff',adesivo:'#f5a623',adesivoTexto:'#111111',cartao:'#ffffff'}});S._sharedDirty=true}
