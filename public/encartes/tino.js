@@ -44,7 +44,7 @@
     '#tinoUsr .card{background:#fff;border-radius:12px;padding:12px;margin:10px 0;box-shadow:0 1px 3px rgba(0,0,0,.08)}#tinoUsr .u{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}' +
     '#tinoUsr .tag{display:inline-block;font-size:11.5px;font-weight:700;border-radius:10px;padding:2px 8px;margin-left:4px}#tinoUsr .t-adm{background:#16181d;color:#fff}#tinoUsr .t-auto{background:#e8f0fe;color:#1a56c4}#tinoUsr .t-off{background:#eee;color:#777}' +
     '#tinoUsr .ac{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}#tinoUsr input,#tinoUsr select{font-size:16px;padding:10px;border:1px solid #cfcac0;border-radius:8px;width:100%;box-sizing:border-box;margin:4px 0 8px;background:#fff}' +
-    '#tinoUsr .seg{display:flex;gap:6px;margin:4px 0 8px}#tinoUsr .seg label{flex:1;border:2px solid #cfcac0;border-radius:10px;padding:10px;cursor:pointer;font-size:13px;color:#555}#tinoUsr .seg input{display:none}#tinoUsr .seg label:has(input:checked){border-color:#d71920;color:#16181d;background:#fff5f5}#tinoUsr .seg b{display:block;font-size:15px;color:#16181d}' +
+    '#tinoUsr .tseg{display:flex;gap:6px;margin:4px 0 8px}#tinoUsr .tseg label{flex:1;background:#fff;border:2px solid #cfcac0;border-radius:10px;padding:10px;cursor:pointer;font-size:13px;color:#555}#tinoUsr .tseg input{display:none}#tinoUsr .tseg label:has(input:checked){border-color:#d71920;color:#16181d;background:#fff5f5}#tinoUsr .tseg b{display:block;font-size:15px;color:#16181d}' +
     '#tinoUsr .ok{background:#e6f4ea;color:#17692e;padding:12px;border-radius:10px;margin:8px 0}#tinoUsr .mu{color:#6b6f78;font-size:13px}';
   document.head.appendChild(st);
   function showLogin(msg) {
@@ -96,7 +96,7 @@
     o.innerHTML = `<div class="w"><div class="hd"><h2>Usuários</h2><button type="button" id="tuX">✕ Fechar</button></div>
       ${msg ? `<div class="ok">${msg}</div>` : ''}${er ? `<div class="ok" style="background:#fdecea;color:#b3261e">${esc(er)}</div>` : ''}
       <div class="card"><b>+ Novo usuário</b><form id="tuF" style="margin-top:8px">
-        <div class="seg"><label><input type="radio" name="tp" value="auto" checked><b>Modo automático</b>Segue o passo a passo para montar encartes e plaquinhas.</label>
+        <div class="tseg"><label><input type="radio" name="tp" value="auto" checked><b>Modo automático</b>Segue o passo a passo para montar encartes e plaquinhas.</label>
         <label><input type="radio" name="tp" value="adm"><b>Administrador</b>Vê tudo: painel do dono, modelos, banco e esta aba.</label></div>
         <input id="tuN" placeholder="Nome (ex.: Maria)" required maxlength="80">
         <input id="tuL" placeholder="Usuário para entrar (ex.: maria)" required autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="40">
