@@ -2370,7 +2370,13 @@ function openScan(){
     S.avulsas=(S.avulsas||[]).filter(q=>q.desc||q.price!=null);S.avulsas.push(p);AVSEL=S.avulsas.length-1;changed();avRender();
     toast(`${desc} adicionado${fk?'':' • sem foto'}`,2500);res.innerHTML='';$('#scCode').value='';$('#scCode').focus()};
    setTimeout(()=>{const e=novo?$('#scD'):$('#scP');e.focus()},60)};
-  $('#scGo').onclick=()=>go($('#scCode').value);$('#scCode').onkeydown=e=>{if(e.key==='Enter')go(e.target.value)};let tN=0;$('#scCode').oninput=e=>{const v=e.target.value;clearTimeout(tN);if(/[a-zA-ZÀ-ú]/.test(v)&&v.trim().length>=3)tN=setTimeout(()=>{const L=localName(v);if(L.length){res.innerHTML='';nameList(L)}},250);else if(!v)sug.innerHTML=''};
+  $('#scGo').onclick=()=>go($('#scCode').value);$('#scCode').onkeydown=e=>{if(e.key==='Enter')go(e.target.value)};let tN=0;
+  /* lista na hora, enquanto digita: número = código interno que começa com ele ou EAN que contém; letras = nome */
+  const nBanco=((CATB&&CATB.itens)||[]).length,info=()=>{sug.innerHTML=nBanco?`<p class="hint">Banco do app: <b>${nBanco}</b> produtos. Digite o código ou o nome.</p>`:`<p class="hint" style="color:#b3261e"><b>O banco de produtos está vazio neste app.</b> ${window.TINO?'Importe: Painel do dono → Banco de produtos → <b>Importar banco</b> (arquivo exportado no app do Claude).':'Painel do dono → Banco de produtos → <b>Atualizar banco do StarIA</b>.'}</p>`};
+  const byCode=q=>{const L=((CATB&&CATB.itens)||[]);return[...L.filter(it=>String(it.c)===q),...L.filter(it=>String(it.c)!==q&&String(it.c).startsWith(q)),...(q.length>=4?L.filter(it=>!String(it.c).startsWith(q)&&String(it.e||'').includes(q)):[])].slice(0,12)};
+  $('#scCode').oninput=e=>{const v=e.target.value.trim();clearTimeout(tN);if(!v){res.innerHTML='';info();return}
+   tN=setTimeout(()=>{if(/[a-zA-ZÀ-ú]/.test(v)){if(v.length>=2){res.innerHTML='';nameList(localName(v))}}else{const d=v.replace(/\D/g,'');if(!d)return;const L=byCode(d);res.innerHTML='';sug.innerHTML='';if(L.length)nameList(L);else sug.innerHTML=`<p class="hint">Nenhum código começando com ${esc(d)} no banco. Toque em Buscar para procurar${isOwnerV()===true&&!window.TINO?' também no StarIA':''}.</p>`}},200)};
+  info();
   $('#scIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;res.innerHTML='<p class="hint">Lendo o código na foto…</p>';
    let v=null;try{v=await decodeImageURL(await fileToURL(f))}catch(_){}
    if(v)go(v);else res.innerHTML='<div class="warn r">Não consegui ler o código nessa foto. Tente mais perto, com o código reto e sem reflexo, ou digite os números.</div>'};
