@@ -2314,6 +2314,7 @@ async function lookupEan(raw){const code=cleanEan(raw);
  const base=CATIX.e[code]||CATIX.c[code]||(code.length===14&&CATIX.e[code.slice(1)])||null,ean=base&&base.e||code,ov=catGet(ean)||(base&&catGet(base.c))||null;
  if(base)return{ean,base,desc:(ov&&ov.desc)||base.d,code:base.c,src:'base'};
  if(ov)return{ean,base:ov.cu!=null?{cu:ov.cu,tx:ov.tx||0,pv:ov.pv}:null,desc:ov.desc,code:ov.code||'',src:'cat'};
+ if(window.TINO)return{ean:code,starErr:'Sem StarIA no Tino: importe o banco'};
  try{const rs=await starSearch(code);const s=rs.find(x=>cleanEan(x.ean)===code)||(code.length<8?rs.find(x=>x.code===code):null)||(code.length>=8?rs[0]:null);
   if(s){await starFill(s);return{ean:cleanEan(s.ean)||code,base:{c:s.code,cu:s.cost,pv:s.sysPrice,tx:null},desc:s.desc,code:s.code,src:'star'}}}catch(e){return{ean:code,starErr:starErr(e)}}
  return{ean:code}}
@@ -2334,15 +2335,15 @@ function openScan(){
    sug.querySelectorAll('[data-i]').forEach(bt=>bt.onclick=()=>pick(L[+bt.dataset.i]))};
   const nw=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ');const localName=q=>{const t=nw(q).split(/\s+/).filter(Boolean).map(norm);if(!t.length)return[];const pool=[...((CATB&&CATB.itens)||[]),...Object.entries(S.catalogo||{}).filter(([k,v])=>v.desc&&!CATIX.e[k]).map(([k,v])=>({c:v.code||'',e:k,d:v.desc,cu:v.cu,pv:v.pv,tx:v.tx}))];
    return pool.filter(it=>{const n=norm(it.d);return t.every(w=>n.includes(w))}).slice(0,12)};
-  const byName=async q=>{let L=localName(q);nameList(L);if(L.length||isOwnerV()!==true)return;
+  const byName=async q=>{let L=localName(q);nameList(L);if(!L.length&&!nBanco){info();return}if(L.length||isOwnerV()!==true||window.TINO)return;
    sug.innerHTML='<p class="hint">Procurando no StarIA…</p>';try{const rs=await starSearch(q);L=rs.slice(0,12).map(x=>({c:x.code,e:x.ean,d:x.desc,pv:x.sysPrice,cu:x.cost,tx:null}));nameList(L)}catch(e){sug.innerHTML=`<p class="hint">${esc(starErr(e))}</p>`}};
-  const go=async raw=>{raw=String(raw||'').trim();if(busy||!raw)return;if(/[a-zA-ZÀ-ú]/.test(raw)){res.innerHTML='';byName(raw);return}sug.innerHTML='';const code=cleanEan(raw);if(code.length<1||code.length>14){toast('Código inválido');return}
+  const go=async raw=>{clearTimeout(tN);raw=String(raw||'').trim();if(busy||!raw)return;if(/[a-zA-ZÀ-ú]/.test(raw)){res.innerHTML='';byName(raw);return}sug.innerHTML='';const code=cleanEan(raw);if(code.length<1||code.length>14){toast('Código inválido');return}
    busy=true;stopScan();$('#scVid').hidden=true;$('#scCode').value=code;res.innerHTML='<p class="hint">Procurando '+code+'…</p>';
    const r=await lookupEan(code);busy=false;showRes(r)};
   const showRes=r=>{const ean=r.ean,B=r.base;let fk=photoByEan(ean);if((!fk||!imgCache.has(fk))&&r.desc){const k2=findPhotoByName({desc:r.desc});if(k2&&imgCache.has(k2))fk=k2}const fu=fk&&imgCache.has(fk)?imgCache.get(fk).url:'';
    const novo=!r.desc;
    res.innerHTML=`<div class="scCard">${fu?`<div class="scPh" style="background-image:url('${fu}')"></div>`:`<button class="scPh none" id="scFoto">📷<br>foto do<br>produto</button>`}<div style="flex:1;min-width:0">
-    ${novo?`<small class="flag r">NÃO ENCONTRADO</small><p class="hint" style="margin:4px 0">Não está no banco do app${r.starErr?' e o StarIA não respondeu neste aparelho':' nem no StarIA'}. Cadastre aqui: fica salvo para as próximas vezes.</p>`:''}
+    ${novo?`<small class="flag r">NÃO ENCONTRADO</small><p class="hint" style="margin:4px 0">Não está no banco do app${window.TINO?'':r.starErr?' e o StarIA não respondeu neste aparelho':' nem no StarIA'}. Cadastre aqui: fica salvo para as próximas vezes.</p>`:''}
     <input id="scD" class="scNm" value="${esc(r.desc||'')}" placeholder="Nome do produto">
     ${B&&(B.cu!=null||B.pv!=null)?`<div class="scRO"><span>Custo <b>${B.cu!=null?brl(B.cu):'—'}</b></span><span>Preço atual <b>${B.pv!=null?brl(B.pv):'—'}</b></span></div>`:''}
     <small class="hint">${r.code?'Cód. '+esc(r.code)+' • ':''}EAN ${esc(ean)}</small></div></div>
@@ -2375,7 +2376,7 @@ function openScan(){
   const nBanco=((CATB&&CATB.itens)||[]).length,info=()=>{sug.innerHTML=nBanco?`<p class="hint">Banco do app: <b>${nBanco}</b> produtos. Digite o código ou o nome.</p>`:`<p class="hint" style="color:#b3261e"><b>O banco de produtos está vazio neste app.</b> ${window.TINO?'Importe: Painel do dono → Banco de produtos → <b>Importar banco</b> (arquivo exportado no app do Claude).':'Painel do dono → Banco de produtos → <b>Atualizar banco do StarIA</b>.'}</p>`};
   const byCode=q=>{const L=((CATB&&CATB.itens)||[]);return[...L.filter(it=>String(it.c)===q),...L.filter(it=>String(it.c)!==q&&String(it.c).startsWith(q)),...(q.length>=4?L.filter(it=>!String(it.c).startsWith(q)&&String(it.e||'').includes(q)):[])].slice(0,12)};
   $('#scCode').oninput=e=>{const v=e.target.value.trim();clearTimeout(tN);if(!v){res.innerHTML='';info();return}
-   tN=setTimeout(()=>{if(/[a-zA-ZÀ-ú]/.test(v)){if(v.length>=2){res.innerHTML='';nameList(localName(v))}}else{const d=v.replace(/\D/g,'');if(!d)return;const L=byCode(d);res.innerHTML='';sug.innerHTML='';if(L.length)nameList(L);else sug.innerHTML=`<p class="hint">Nenhum código começando com ${esc(d)} no banco. Toque em Buscar para procurar${isOwnerV()===true&&!window.TINO?' também no StarIA':''}.</p>`}},200)};
+   tN=setTimeout(()=>{if(!nBanco){info();return}if(/[a-zA-ZÀ-ú]/.test(v)){if(v.length>=2){res.innerHTML='';nameList(localName(v))}}else{const d=v.replace(/\D/g,'');if(!d)return;const L=byCode(d);res.innerHTML='';sug.innerHTML='';if(L.length)nameList(L);else sug.innerHTML=`<p class="hint">Nenhum código começando com ${esc(d)} no banco. Toque em Buscar para procurar${isOwnerV()===true&&!window.TINO?' também no StarIA':''}.</p>`}},200)};
   info();
   $('#scIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;res.innerHTML='<p class="hint">Lendo o código na foto…</p>';
    let v=null;try{v=await decodeImageURL(await fileToURL(f))}catch(_){}
