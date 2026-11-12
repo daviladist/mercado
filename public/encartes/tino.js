@@ -83,23 +83,26 @@
     let p = $('#tinoPop'); if (!p) { p = document.createElement('div'); p.id = 'tinoPop'; document.body.appendChild(p); }
     const eq = ME.dono ? '<button type="button" id="tpUsr" style="width:100%;margin-top:10px;padding:10px;background:#16181d;color:#fff;border:0;border-radius:8px;font-weight:600">👥 Usuários</button>' : '';
     p.innerHTML = `${msg ? `<div style="background:#e6f4ea;color:#17692e;padding:10px;border-radius:8px;margin-bottom:8px">${msg}</div>` : ''}
-      <div class="r"><span><b>${esc(ME.nome || '')}</b><br><small>${ME.dono ? 'Administrador' : 'Modo automático'}</small></span><button type="button" id="tpSair">Sair</button></div>${eq}`;
+      <div class="r"><span><b>${esc(ME.nome || '')}</b><br><small>${ME.dono ? 'Administrador' : 'Funcionário: ' + permTxt(ME.perms)}</small></span><button type="button" id="tpSair">Sair</button></div>${eq}`;
     $('#tpSair').onclick = async () => { try { await api('/api/logout', {}); } catch (e) { /* segue */ } location.reload(); };
     const u = $('#tpUsr'); if (u) u.onclick = () => { p.remove(); usuarios(); };
   }
   /* ---------- aba Usuários (só administrador) ---------- */
-  const TIPO = { adm: 'Administrador', auto: 'Modo automático' };
+  const TIPO = { adm: 'Administrador', auto: 'Funcionário' };
+  const permTxt = p => (p = p || {}, [p.encarte ? 'encarte' : '', p.plaquinha ? 'plaquinha' : ''].filter(Boolean).join(' e ') || 'sem permissão');
   async function usuarios(msg) {
     let o = $('#tinoUsr'); if (!o) { o = document.createElement('div'); o.id = 'tinoUsr'; document.body.appendChild(o); }
     let L = [], er = '';
     try { L = (await api('/api/encartes/pessoas')).pessoas; } catch (e) { er = e.message; }
-    const linha = x => `<div class="card"><div class="u"><span><b>${esc(x.nome)}</b> <span class="tag t-${x.tipo}">${TIPO[x.tipo]}</span>${x.ativo ? '' : '<span class="tag t-off">desligado</span>'}<br><span class="mu">usuário: ${esc(x.login)}${x.principal ? ' · dono principal' : ''}${x.voce ? ' · você' : ''}${x.trocarSenha && x.ativo ? ' · ainda não trocou a senha provisória' : ''}</span></span></div>
-      ${x.principal || x.voce ? '' : `<div class="ac"><button type="button" data-tp="${esc(x.login)}" data-v="${x.tipo === 'adm' ? 'auto' : 'adm'}">Mudar para ${x.tipo === 'adm' ? 'Modo automático' : 'Administrador'}</button><button type="button" data-np="${esc(x.login)}">Nova senha</button><button type="button" data-tg="${esc(x.login)}" data-at="${x.ativo ? 1 : 0}">${x.ativo ? 'Desligar' : 'Ligar'}</button></div>`}</div>`;
+    const linha = x => `<div class="card"><div class="u"><span><b>${esc(x.nome)}</b> <span class="tag t-${x.tipo}">${TIPO[x.tipo]}</span>${x.tipo === 'auto' ? ` <span class="mu">${esc(permTxt(x.perms))}</span>` : ''}${x.ativo ? '' : '<span class="tag t-off">desligado</span>'}<br><span class="mu">usuário: ${esc(x.login)}${x.principal ? ' · administrador principal' : ''}${x.voce ? ' · você' : ''}${x.trocarSenha && x.ativo ? ' · ainda não trocou a senha provisória' : ''}</span></span></div>
+      ${x.principal || x.voce ? '' : `<div class="ac"><button type="button" data-tp="${esc(x.login)}" data-v="${x.tipo === 'adm' ? 'auto' : 'adm'}">Mudar para ${x.tipo === 'adm' ? 'Modo automático' : 'Administrador'}</button>${x.tipo === 'auto' ? `<button type="button" data-pm="${esc(x.login)}" data-e="${x.perms && x.perms.encarte ? 1 : 0}" data-p="${x.perms && x.perms.plaquinha ? 1 : 0}">O que pode fazer</button>` : ''}<button type="button" data-np="${esc(x.login)}">Nova senha</button><button type="button" data-tg="${esc(x.login)}" data-at="${x.ativo ? 1 : 0}">${x.ativo ? 'Desligar' : 'Ligar'}</button></div>`}</div>`;
     o.innerHTML = `<div class="w"><div class="hd"><h2>Usuários</h2><button type="button" id="tuX">✕ Fechar</button></div>
       ${msg ? `<div class="ok">${msg}</div>` : ''}${er ? `<div class="ok" style="background:#fdecea;color:#b3261e">${esc(er)}</div>` : ''}
       <div class="card"><b>+ Novo usuário</b><form id="tuF" style="margin-top:8px">
-        <div class="tseg"><label><input type="radio" name="tp" value="auto" checked><b>Modo automático</b>Segue o passo a passo para montar encartes e plaquinhas.</label>
-        <label><input type="radio" name="tp" value="adm"><b>Administrador</b>Vê tudo: painel do dono, modelos, banco e esta aba.</label></div>
+        <div class="tseg"><label><input type="radio" name="tp" value="auto" checked><b>Funcionário</b>Segue o passo a passo. Faz só o que você marcar abaixo.</label>
+        <label><input type="radio" name="tp" value="adm"><b>Administrador</b>Vê tudo: painel do admin, modelos, banco, custos e esta aba.</label></div>
+        <div id="tuPm"><label style="display:flex;gap:8px;align-items:center;margin:2px 0"><input type="checkbox" id="tuE" checked style="width:auto;margin:0"> Pode fazer encarte</label>
+        <label style="display:flex;gap:8px;align-items:center;margin:6px 0 8px"><input type="checkbox" id="tuP" checked style="width:auto;margin:0"> Pode fazer plaquinha</label></div>
         <input id="tuN" placeholder="Nome (ex.: Maria)" required maxlength="80">
         <input id="tuL" placeholder="Usuário para entrar (ex.: maria)" required autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="40">
         <button type="submit" class="pri" style="width:100%;padding:12px">Criar acesso</button></form>
@@ -111,8 +114,21 @@
         usuarios(r.password ? `${esc(ok)}<br>Usuário: <b>${esc(r.login)}</b><br>Senha provisória: <b>${esc(r.password)}</b><br><small>Anote agora: ela não aparece de novo.</small>` : esc(ok));
         o.scrollTop = 0;
       } catch (e) { alert(e.message); } };
+    const syncPm = () => { $('#tuPm').hidden = o.querySelector('input[name=tp]:checked').value !== 'auto'; };
+    o.querySelectorAll('input[name=tp]').forEach(r => r.addEventListener('change', syncPm)); syncPm();
     $('#tuF').addEventListener('submit', e => { e.preventDefault(); const tp = o.querySelector('input[name=tp]:checked').value;
-      salvar({ criar: true, tipo: tp, nome: $('#tuN').value.trim(), login: $('#tuL').value.trim().toLowerCase() }, `Acesso criado (${TIPO[tp]}).`); });
+      const b = { criar: true, tipo: tp, nome: $('#tuN').value.trim(), login: $('#tuL').value.trim().toLowerCase() };
+      if (tp === 'auto') { b.perms = { encarte: $('#tuE').checked, plaquinha: $('#tuP').checked }; if (!b.perms.encarte && !b.perms.plaquinha) return alert('Marque pelo menos encarte ou plaquinha.'); }
+      salvar(b, `Acesso criado (${TIPO[tp]}).`); });
+    /* o que o funcionário pode fazer: escolhe entre as três opções */
+    o.querySelectorAll('[data-pm]').forEach(b => b.onclick = () => {
+      const op = [['enc', 'Só encarte', { encarte: true, plaquinha: false }], ['plq', 'Só plaquinha', { encarte: false, plaquinha: true }], ['dois', 'Encarte e plaquinha', { encarte: true, plaquinha: true }]];
+      const cur = b.dataset.e === '1' && b.dataset.p === '1' ? 'dois' : b.dataset.e === '1' ? 'enc' : 'plq';
+      const card = b.closest('.card'); let f = card.querySelector('.pmF'); if (f) return f.remove();
+      f = document.createElement('div'); f.className = 'pmF'; f.innerHTML = '<div class="tseg" style="margin-top:8px">' + op.map(([k, t]) => `<label><input type="radio" name="pm_${esc(b.dataset.pm)}" value="${k}"${k === cur ? ' checked' : ''}><b>${t}</b></label>`).join('') + '</div><button type="button" class="pri">Salvar</button>';
+      card.appendChild(f);
+      f.querySelector('button').onclick = () => { const k = f.querySelector('input:checked').value; salvar({ login: b.dataset.pm, perms: op.find(x => x[0] === k)[2] }, 'Permissões salvas. Vale na próxima vez que a pessoa abrir o app.'); };
+    });
     o.querySelectorAll('[data-tp]').forEach(b => b.onclick = () => { if (confirm(`Mudar ${b.dataset.tp} para ${TIPO[b.dataset.v]}? A pessoa precisa entrar de novo.`)) salvar({ login: b.dataset.tp, tipo: b.dataset.v }, `Agora é ${TIPO[b.dataset.v]}.`); });
     o.querySelectorAll('[data-np]').forEach(b => b.onclick = () => { if (confirm(`Gerar senha nova para ${b.dataset.np}? A senha atual para de funcionar.`)) salvar({ login: b.dataset.np, novaSenha: true }, 'Senha nova gerada.'); });
     o.querySelectorAll('[data-tg]').forEach(b => b.onclick = () => salvar({ login: b.dataset.tg, ativo: b.dataset.at !== '1' }, b.dataset.at === '1' ? 'Acesso desligado.' : 'Acesso ligado.'));
@@ -123,6 +139,8 @@
     try { ME = await api('/api/encartes/me'); }
     catch (e) { if (e.mustReset) return showReset(); if (e.status === 401 || e.login) return showLogin(e.status === 401 ? '' : e.message); return showLogin(e.message); }
     const g = $('#tinoGate'); if (g) g.remove();
+    /* o app usa isto para saber o papel e o que mostrar (encarte, plaquinha); quem barra custo e configuração é o servidor */
+    window.TINO.role = ME.dono ? 'admin' : 'func'; window.TINO.perms = ME.perms || { encarte: true, plaquinha: true };
     window.claude = { use: async k => { if (k === 'db') return db; if (k === 'assets') return assets; if (k === 'user') return user; throw Object.assign(new Error('Indisponível no Tino'), { code: 'unavailable' }); } };
     try { localStorage.setItem('encartes-tino-user', ME.id); } catch (e) { /* segue */ }
     menu();
