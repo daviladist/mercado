@@ -140,7 +140,7 @@
     catch (e) { if (e.mustReset) return showReset(); if (e.status === 401 || e.login) return showLogin(e.status === 401 ? '' : e.message); return showLogin(e.message); }
     const g = $('#tinoGate'); if (g) g.remove();
     /* o app usa isto para saber o papel e o que mostrar (encarte, plaquinha); quem barra custo e configuração é o servidor */
-    window.TINO.role = ME.dono ? 'admin' : 'func'; window.TINO.perms = ME.perms || { encarte: true, plaquinha: true };
+    window.TINO.role = ME.dono ? 'admin' : 'func'; window.TINO.nome = ME.nome || ''; window.TINO.perms = ME.perms || { encarte: true, plaquinha: true };
     window.claude = { use: async k => { if (k === 'db') return db; if (k === 'assets') return assets; if (k === 'user') return user; throw Object.assign(new Error('Indisponível no Tino'), { code: 'unavailable' }); } };
     try { localStorage.setItem('encartes-tino-user', ME.id); } catch (e) { /* segue */ }
     menu();

@@ -1453,9 +1453,9 @@ function onRemoteCfg(rem){if(!rem||(rem.savedAt||0)===CLOUD.baseAt)return;let th
 function onRemoteComum(d){if(!d)return;let t={};try{t=JSON.parse(d.data||'{}')}catch(e){return}const out=unionShared(t,sharedOf());SHAREDK.forEach(k=>{if(out[k]!=null)S[k]=out[k]});CLOUD.comum=t;withPadroes();bankCount();renderVenc()}
 /* fica escutando a nuvem; se o aparelho não tiver escuta ao vivo, confere a cada minuto e quando a aba volta */
 function cloudWatch(){const db=CLOUD.db;const pull=async()=>{try{const g=p=>db.doc(p).get().then(r=>r.exists?r.data():null);
-  usersApply(await g('app/usuarios'));onRemoteCfg(await g('app/estado'));onRemoteComum(await g('comum/dados'));const id=await meId();if(id)onRemoteDraft(await g('data/users/'+id+'/rascunho'))}catch(e){}};
+  usersApply(await g('app/usuarios'));onStaria(await g('comum/staria'));onRemoteCfg(await g('app/estado'));onRemoteComum(await g('comum/dados'));const id=await meId();if(id)onRemoteDraft(await g('data/users/'+id+'/rascunho'))}catch(e){}};
  let live=false;try{const sub=(p,fn)=>{const d=db.doc(p);if(typeof d.onSnapshot!=='function')throw 0;CLOUD.unsub.push(d.onSnapshot(r=>{try{fn(r&&r.exists?r.data():null)}catch(e){}},()=>{}))};
-  sub('app/estado',onRemoteCfg);sub('app/usuarios',usersApply);sub('comum/dados',onRemoteComum);meId().then(id=>{if(id)sub('data/users/'+id+'/rascunho',onRemoteDraft)});live=true}catch(e){}
+  sub('app/estado',onRemoteCfg);sub('app/usuarios',usersApply);sub('comum/staria',onStaria);sub('comum/dados',onRemoteComum);meId().then(id=>{if(id)sub('data/users/'+id+'/rascunho',onRemoteDraft)});live=true}catch(e){}
  if(!live)setInterval(()=>{if(!document.hidden)pull()},60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull()})}
 async function loadSalvos(n){const db=CLOUD.db;let sv;try{sv=await db.collection('salvos').orderBy('at','desc').limit(n).get()}catch(e){sv=await db.collection('salvos').get()}
  const rs=sv.docs.map(d=>{try{return JSON.parse(d.data().data)}catch(e){return null}}).filter(r=>r&&r.id&&Array.isArray(r.products));
@@ -1487,7 +1487,7 @@ async function cloudInit(){
   else if(full)DRAFT.forEach(k=>{if(!(k in S)&&k in full)S[k]=full[k]});
   /* encartes salvos: só os 60 mais novos ao abrir */
   const rs=await loadSalvos(60),ids=new Set(rs.map(r=>r.id)),localOnly=S.saved.filter(x=>!ids.has(x.id)&&CLOUD.salvosAll);
-  usersApply(await g('app/usuarios'));CLOUD.on=true;refreshAll();
+  usersApply(await g('app/usuarios'));CLOUD.on=true;refreshAll();onStaria(await g('comum/staria'));
   for(const x of localOnly)cloudSaveEnc(x);
   /* migração: tira custo dos salvos antigos que estão na área compartilhada (só o admin consegue regravar) */
   if(canCfg())rs.filter(r=>r.products.some(p=>p.cost!=null)).forEach(r=>cloudSaveEnc(Object.assign({},S.saved.find(x=>x.id===r.id)||r)));
@@ -2350,7 +2350,7 @@ function wzCheck(){const el=$('#wzList');if(!el)return;document.querySelectorAll
   its.forEach(p=>{p.featured=false});const keep=cur.slice(0,k);its.filter(p=>!keep.includes(p)).slice(0,k-keep.length).forEach(p=>keep.push(p));keep.forEach(p=>{p.featured=true;p.papel=''});changed();wzCheck()});
  const bad=S.products.filter(p=>prodIssues(p).length),gen=[];if(!S.val.ini)gen.push('Validade não preenchida');
  $('#wzSum').innerHTML=bad.length||gen.length?`<div class="wzBad">${bad.length} ${bad.length>1?'produtos precisam':'produto precisa'} de atenção. Toque em Ajustar ao lado do problema. <button class="btn sm" id="wzFixAll">Ajustar tudo que dá</button></div>`:`<div class="wzGood">Tudo certo. Confira o encarte e toque em "Está certo".</div>`;
- setTimeout(()=>{const fa=$('#wzFixAll');if(fa)fa.onclick=fixAll},0);
+ setTimeout(()=>{const fa=$('#wzFixAll');if(fa)fa.onclick=fixAll},0);renderStarBar();
  el.innerHTML=S.products.map(p=>{const is=prodIssues(p),ent=getImg(p)&&imgCache.get(imgKey(p));
   return`<div class="wzP ${is.length?'bad':''} ${wzOpen===p.id?'open':''}" data-id="${p.id}"><div class="wzPh"><span class="drg" title="Arraste para mudar a ordem">⠿</span><i class="ph ${ent?'':'no'}" ${ent?`style="background-image:url('${ent.url}')"`:''}>${ent?'':'sem foto'}</i><div><b>${esc(p.desc)}</b><small>${hasApp(p)?`sem app ${brl(p.price)} • com app ${brl(p.app)}`:p.price!=null?brl(p.price):'sem preço'}${p.limit>0?' • limite '+p.limit:''}</small>${is.map(x=>`<span class="flag r">${esc(x[1])}<button class="fx" data-fx="${x[0]}">Ajustar</button></span>`).join('')}</div>${starTag(p)}<span class="chev">${wzOpen===p.id?'▴':'▾'}</span></div>
   ${wzOpen===p.id?wzFix(p):''}</div>`}).join('');
@@ -2576,7 +2576,7 @@ let pminT;function pminLater(){clearTimeout(pminT);pminT=setTimeout(async()=>{if
 function renderCatInfo(){const el=$('#catInfo');if(!el)return;if(!CATB){el.textContent='Banco ainda vazio';return}
  const n=CATB.itens.length,old=CATB.itens.filter(x=>Date.now()-(x.at||CATB.at)>30*864e5).length,err=CATB.itens.filter(x=>x.err).length,p=CATB.parcial;
  el.innerHTML=`${n} produtos no banco • importado em ${new Date(CATB.at).toLocaleDateString('pt-BR')} (filial ${esc(CATB.filial)})`+(old?` • <span class="catWarn">${old} com preço/custo de mais de 30 dias</span>`:'')+(p||err?` • <span class="catWarn">importação incompleta (${err} itens sem resposta${p&&p.grupos?`, ${p.grupos} grupos falharam`:''})</span> <button class="btn sm" id="catRes">Completar</button>`:'');
- const b=$('#catRes');if(b)b.onclick=()=>importCatalogo(null,true)}
+ const b=$('#catRes');if(b){if(window.TINO)b.hidden=true;else b.onclick=()=>importCatalogo(null,true)}}
 async function importCatalogo(N,soFalhas){
  if(!ownCat()){toast('Só o admin atualiza o banco de produtos');return}
  const cur=(CATB&&CATB.itens||[]).length;if(!N)N=cur>=1000?cur+1000:1000;
@@ -2707,6 +2707,60 @@ $('#catFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(
  const sp=splitCat(d);CATB=sp.pub;CUST=sp.cust;catIndex();await saveCatalog();toast(`Banco importado: ${CATB.itens.length} produtos`,5000)}
  catch(err){toast('Arquivo inválido: use o "Exportar banco" do outro app',5000)}};
 
+/* ================= conferir preço e custo dos produtos do encarte no StarIA =================
+   No Claude, o admin com o StarIA conectado confere na hora (e atende sozinho os pedidos dos funcionários).
+   No Tino o site não fala com o StarIA: grava o pedido em comum/staria e o Claude atende pelo navegador
+   (código 1313), chamando stariaAplicar(resultados, id) nesta página com o admin logado. */
+const STJOB='comum/staria';let STJ=null,STBUSY=0;
+const stCodes=()=>[...new Set(S.products.filter(p=>p.code).map(p=>String(p.code)))];
+const stLocal=()=>!window.TINO&&ownCat();
+async function starOne(c,fl){const o={};
+ const r=await star('consultar_estoque',{filial:fl,codigoMercadoria:+c,agruparPor:'MERCADORIA',situacaoEstoque:'TODOS',statusMercadoria:'TODOS',limite:1});const x=r&&r.itens&&r.itens[0];
+ if(x){o.d=x.mercadoria||'';o.e=x.ean||'';const est=+x.estoque||0;if(est>0&&x.valorVendaTotal>0)o.pv=r2(x.valorVendaTotal/est);if(est>0&&x.valorCustoTotal>0){o.cu=Math.round(x.valorCustoTotal/est*10000)/10000;o.src='estoque'}}
+ if(o.cu==null){try{const u=await starLastCost(c);if(u!=null){o.cu=u;o.src='ultimaCompra'}}catch(e){}}
+ return o.pv==null&&o.cu==null?null:o}
+async function starRun(cs){if(!await getMcp())throw{code:'no_mcp'};const fl=(CATB&&+CATB.filial)||filial(),out={};let fail=0,last=null;
+ for(let i=0;i<cs.length;i+=6)await Promise.all(cs.slice(i,i+6).map(async c=>{try{out[c]=await starOne(c,fl)}catch(e){fail++;last=e;out[c]=null}}));
+ if(fail===cs.length&&last)throw last;return out}
+/* grava o que veio do StarIA no banco (preço em app/catalogo, custo em app/custos) e atualiza os produtos abertos */
+async function stariaAplicar(res,jobId){if(!ownCat())throw new Error('Entre como admin para aplicar a conferência');
+ if(!res||typeof res!=='object')throw new Error('Resultados vazios');
+ if(!CATB)CATB={at:Date.now(),filial:filial(),itens:[]};if(!CUST)CUST={at:Date.now(),m:{}};if(!CUST.m)CUST.m={};
+ const now=Date.now(),falta=[];let ok=0;
+ for(const[c0,r]of Object.entries(res)){const c=String(c0).replace(/\D/g,'');if(!c)continue;
+  if(!r||(r.pv==null&&r.cu==null)){falta.push(c);continue}
+  const pv=r.pv!=null&&isFinite(+r.pv)&&+r.pv>0?r2(+r.pv):null,cu=r.cu!=null&&isFinite(+r.cu)&&+r.cu>=0?Math.round(+r.cu*10000)/10000:null;
+  let it=CATIX.c[c];if(!it){it={c,e:cleanEan(String(r.e||'')),d:String(r.d||'').slice(0,120),pv:null,vv:null,pm:null,at:now,src:''};CATB.itens.push(it);CATIX.c[c]=it}
+  if(pv!=null)it.pv=pv;if(r.e&&!it.e)it.e=cleanEan(String(r.e));if(r.d&&!it.d)it.d=String(r.d).slice(0,120);it.at=now;it.src=String(r.src||it.src||'').slice(0,40);delete it.err;
+  if(cu!=null)CUST.m[c]=Object.assign({tx:0,cm:null},CUST.m[c]||{},{cu,at:now,src:it.src});
+  const cc=CUST.m[c];if(cc)it.pmin=pminOf(cc.cu,cc.tx);ok++}
+ CATB.at=now;CUST.at=now;catIndex();
+ [...S.products,...(S.avulsas||[])].forEach(p=>{const it=p.code&&res[String(p.code)]&&CATIX.c[String(p.code)];if(it)linkTo(p,it,p.catLink||'codigo')});
+ await saveCatalog();try{persist()}catch(e){}
+ if(jobId&&CLOUD.db){const d={id:String(jobId),status:'pronta',codes:Object.keys(res),ok,falta,at:(STJ&&STJ.at)||now,por:(STJ&&STJ.por)||'',doneAt:now,doneBy:window.TINO?'Claude':(curName()||'admin')};await CLOUD.db.doc(STJOB).set(d);STJ=d}
+ try{renderList();if(inWz()&&WZ===3)wzCheck();renderStarBar()}catch(e){}
+ return{ok,falta}}
+const hm=t=>new Date(t).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+function renderStarBar(){const el=$('#wzStar');if(!el)return;if(!S.products.length){el.innerHTML='';return}
+ const cs=stCodes(),sem=S.products.filter(p=>!p.code&&p.desc).length,j=STJ,pend=j&&j.status==='pendente';let t='';
+ if(pend)t=`Pedido enviado ${hm(j.at)} (${(j.codes||[]).length} produtos). ${isFunc()?'Avise o admin para liberar.':window.TINO?'Mande <b>1313</b> para o Claude liberar.':'Abra o app como admin para liberar.'}`;
+ else if(j&&j.status==='pronta'&&j.doneAt&&Date.now()-j.doneAt<12*36e5)t=`Conferido no StarIA em ${hm(j.doneAt)}: ${j.ok} produtos${j.falta&&j.falta.length?`, ${j.falta.length} não encontrados`:''}.`;
+ el.innerHTML=`<div class="bar" style="align-items:center;flex-wrap:wrap"><button class="btn sm" id="wzStarB"${!cs.length||pend||STBUSY?' disabled':''}>${stLocal()?'Conferir preço e custo no StarIA':'Pedir conferência no StarIA'}</button>${t?`<span class="hint" style="margin:0">${t}</span>`:''}${sem?`<span class="hint" style="margin:0">${sem} sem código: ligue ao banco para conferir.</span>`:''}</div>`;
+ const b=$('#wzStarB');if(b)b.onclick=starConferir}
+async function starConferir(){const cs=stCodes();if(!cs.length)return toast('Nenhum produto ligado ao banco');
+ if(stLocal()){STBUSY=1;renderStarBar();toast(`Conferindo ${cs.length} produtos no StarIA…`,60000);
+  try{const r=await stariaAplicar(await starRun(cs));toast(`Conferido no StarIA: ${r.ok} produtos`+(r.falta.length?`, ${r.falta.length} não encontrados`:''),6000)}catch(e){toast(e&&e.message&&!e.code?e.message:starErr(e),6000)}finally{STBUSY=0;renderStarBar()}return}
+ if(!CLOUD.db)return toast('Sem nuvem agora: tente de novo daqui a pouco');
+ const cur=STJ&&STJ.status==='pendente'?STJ:null;
+ const job={id:cur?cur.id:uid()+uid(),status:'pendente',codes:[...new Set([...(cur&&cur.codes||[]),...cs])].slice(0,200),at:Date.now(),por:curName()||(window.TINO&&window.TINO.nome)||'',filial:(CATB&&+CATB.filial)||filial()};
+ try{await CLOUD.db.doc(STJOB).set(job);STJ=job;renderStarBar();toast(isFunc()?'Pedido enviado. Avise o admin para liberar.':'Pedido enviado. Mande 1313 para o Claude liberar.',6000)}catch(e){toast('Não consegui enviar o pedido')}}
+/* chegou da nuvem: pedido atendido recarrega o banco; no Claude, o admin atende sozinho o pedido pendente */
+function onStaria(d){const prev=STJ;STJ=d&&typeof d==='object'?d:null;try{renderStarBar()}catch(e){}
+ if(STJ&&STJ.status==='pronta'&&prev&&prev.status==='pendente'&&prev.id===STJ.id&&STJ.doneBy!==(curName()||'admin')){
+  catLoad().then(()=>{S.products.forEach(p=>{const it=p.code&&CATIX.c[String(p.code)];if(it)linkTo(p,it,p.catLink||'codigo')});try{renderList();if(inWz()&&WZ===3)wzCheck()}catch(e){}toast('Preços conferidos no StarIA',5000)}).catch(()=>{})}
+ if(STJ&&STJ.status==='pendente'&&stLocal()&&!STBUSY&&Array.isArray(STJ.codes)&&STJ.codes.length){STBUSY=1;const j=STJ;
+  getMcp().then(m=>m?starRun(j.codes.map(String)).then(res=>stariaAplicar(res,j.id)).then(r=>toast(`Conferi no StarIA o pedido de ${j.por||'um funcionário'}: ${r.ok} produtos`,6000)):0).catch(()=>{}).finally(()=>{STBUSY=0;try{renderStarBar()}catch(e){}})}}
+
 /* ================= controle: plaquinhas impressas, conferência com o sistema, custo da oferta ================= */
 /* registro de toda plaquinha impressa (fica na área comum: todos veem o que precisa sair da gôndola) */
 function plaqLog(list,val,origem){const fim=(val&&val.fim)||today(),at=Date.now();S.plaqLog=S.plaqLog||[];
@@ -2753,7 +2807,7 @@ if(S.store&&S.store.pin){const v=String(S.store.pin);delete S.store.pin;if(!hasP
 IDB.get('kv:saved').then(u=>{if(!u)return;try{const L=JSON.parse(u),m=new Map((S.saved||[]).map(x=>[x.id,x]));L.forEach(x=>{const l=m.get(x.id);if(!l||(x.at||0)>(l.at||0))m.set(x.id,x)});S.saved=[...m.values()].sort((a,b)=>(b.at||0)-(a.at||0));renderSaved()}catch(e){}});
 $('#vIni').value=S.val.ini;$('#vFim').value=S.val.fim;$('#phr').value=S.phrases.join('\n');
 if(!S.campaigns.some(c=>c.modelo==='superdia')){S.campaigns.push({id:'superdiad',nome:'Super Dia D',titulo:'Super Dia D',dia:-1,modelo:'superdia',cores:{fundo:'#232126',cabecalho:'#b31a0c',titulo:'#ffffff',preco:'#d23a17',precoTexto:'#ffffff',adesivo:'#f5a623',adesivoTexto:'#111111',cartao:'#ffffff'}});S._sharedDirty=true}
-renderFormats();renderCamps();renderList();renderLogos();renderSaved();renderSecs();render();applyModo();bankCount();if(inWz()&&S.format!=='insta'){S.format='insta';renderFormats()}document.body.classList.toggle('wz',inWz());$('#bDono').textContent=inWz()?'Painel do admin':'Voltar ao passo a passo';if(inWz())wzGo(0);undoSnap();renderVenc();applyPerms();if(usersOn()&&!curUser())showLogin();else if(window.TINO&&inWz()&&canDo('encarte')!==canDo('plaquinha')){if(canDo('encarte'))wzGo(1);else avGo()}
+renderFormats();renderCamps();renderList();renderLogos();renderSaved();renderSecs();render();applyModo();bankCount();if(inWz()&&S.format!=='insta'){S.format='insta';renderFormats()}document.body.classList.toggle('wz',inWz());$('#bDono').textContent=inWz()?'Painel do admin':'Voltar ao passo a passo';if(inWz())wzGo(0);undoSnap();renderVenc();applyPerms();if(window.TINO){const u=$('#catUp');if(u)u.hidden=true;const ex=$('#catExp');if(ex)ex.hidden=true;const im=$('#catImp');if(im){im.textContent='Atualizar banco com arquivo';im.classList.add('pri')}const h=im&&im.closest('.bar')&&im.closest('.bar').previousElementSibling;if(h&&h.tagName==='P')h.innerHTML='O banco completo vem do Gerador do Claude: lá, toque em <b>Exportar banco</b>, mande o arquivo para o celular e toque aqui em <b>Atualizar banco com arquivo</b>. Uma vez por semana basta. Para os produtos de um encarte, use <b>Pedir conferência no StarIA</b> na tela Confira.'}if(usersOn()&&!curUser())showLogin();else if(window.TINO&&inWz()&&canDo('encarte')!==canDo('plaquinha')){if(canDo('encarte'))wzGo(1);else avGo()}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&usersOn()&&!curUser()&&(!$('#loginOv')||$('#loginOv').hidden))showLogin()});
 let phDrag=null,phMoved=false;
 function phDown(cv,e){const r=cv.getBoundingClientRect(),x=(e.clientX-r.left)*cv.width/r.width,y=(e.clientY-r.top)*cv.height/r.height;
