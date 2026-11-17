@@ -307,7 +307,7 @@ function splitPrice(n){const s=Number(n).toFixed(2).split('.');return[s[0].repla
 /* número grosso: contorno da mesma cor engrossa a fonte condensada, com sombra curta para dar volume */
 function thick(c,t,x,y,z,k=0.07,sh=true){c.save();c.lineJoin='round';c.lineWidth=z*k;c.strokeStyle=c.fillStyle;if(sh){c.shadowColor='rgba(0,0,0,.28)';c.shadowOffsetY=z*0.035;c.shadowOffsetX=z*0.012}c.strokeText(t,x,y);c.shadowColor='transparent';c.fillText(t,x,y);c.restore()}
 function drawPrice(c,x,y,w,h,price,unit,C,radius=true,opt={}){
- c.save();c.fillStyle=opt.bg||C.preco;rr(c,x,y,w,h,radius?Math.min(h*0.2,w*0.08):0);c.fill();
+ c.save();c.fillStyle=opt.bg||C.preco;rr(c,x,y,w,h,radius?Math.min(h*0.2,w*0.08):0);c.fill();if(C.eco){c.strokeStyle='#111111';c.lineWidth=Math.max(3,Math.min(w,h)*0.03);c.stroke()}
  const fg=opt.fg||C.precoTexto;c.fillStyle=fg;c.textBaseline='alphabetic';
  let py=y,phh=h;
  if(opt.label){const ls=fitLine(c,opt.label,w*0.86,h*0.17,z=>O(z,700));c.font=O(ls,700);c.textAlign='center';c.textBaseline='middle';c.fillText(opt.label,x+w/2,y+h*0.135);c.textBaseline='alphabetic';py=y+h*0.24;phh=h*0.76}
@@ -355,7 +355,7 @@ function drawDe(c,p,x,y,w,h,sc){const lab='DE',pr=brl(p.old),pc=Math.round((p.ol
  if(bt){const bh=Math.min(h*0.82,s*1.15);c.fillStyle='#ffd400';rr(c,sx,my-bh/2,bw,bh,bh*0.25);c.fill();c.fillStyle='#111111';c.textAlign='center';c.font=F(s*0.92);c.fillText(bt,sx+bw/2,my+s*0.04)}
  c.restore()}
 function isReddish(hex){const m=/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex||'');if(!m)return false;const r=parseInt(m[1],16),g=parseInt(m[2],16),b=parseInt(m[3],16);return r>140&&g<110&&b<110}
-const semCol=(C,bg)=>isReddish(C.preco)||(bg&&isReddish(C.fundo))?{bg:'#111111',fg:'#ffffff'}:{bg:'#d71920',fg:'#ffffff'};
+const semCol=(C,bg)=>C.eco?{bg:'#ffffff',fg:'#111111'}:isReddish(C.preco)||(bg&&isReddish(C.fundo))?{bg:'#111111',fg:'#ffffff'}:{bg:'#d71920',fg:'#ffffff'};
 /* bloco de preço: sem app x com app. mode 'stack' = sem app em cima; 'split' = lado a lado */
 function drawPriceBlock(c,p,x,y,w,h,C,mode,onBg){
  if(!hasApp(p)){if(hasDe(p)){const th=h*0.27,g=Math.max(3,Math.min(w,h)*0.035);drawDe(c,p,x,y,w,th,semCol(C,onBg));drawPrice(c,x,y+th+g,w,h-th-g,p.price,p.unit,C);return}drawPrice(c,x,y,w,h,p.price,p.unit,C);return}
@@ -393,6 +393,10 @@ const NMV=(p,v)=>{if(v==='nup')p.nameDy=Math.max(-0.8,(p.nameDy||0)-0.15);else i
 function drawDesc(c,p,x,y,w,h,iss,align='center',maxL=2,color='#15171c'){
  const t=(p.desc||'').toUpperCase();if(!t)return;
  if(p.nameDy)y+=p.nameDy*h;
+ /* linha pequena embaixo do nome: selo +18 e observação */
+ const ob=(p.obs||'').trim().toUpperCase();if(ob||p.m18){const oh=Math.min(h*0.45,Math.max(h*0.24,CUR.W*0.024),CUR.W*0.045);h-=oh;let s=oh*0.6;c.save();const pw0=()=>p.m18?(c.font=O(s,700),c.measureText('+18').width+s*0.7):0,tw0=()=>ob?(c.font=O(s,600),c.measureText(ob).width):0,tot=()=>pw0()+(p.m18&&ob?s*0.4:0)+tw0();const k=Math.min(1,w/tot());s*=k;const T=tot();let sx=align==='center'?x+(w-T)/2:x;const cy=y+h+oh*0.55;
+  if(p.m18){const pw=pill(c,'+18',sx,cy-s*0.675,s,'left',color==='#ffffff'?'#ffffff':'#111111',color==='#ffffff'?'#111111':'#ffffff');sx+=pw+s*0.4}
+  if(ob){c.font=O(s,600);c.fillStyle=color;c.globalAlpha=0.85;c.textAlign='left';c.textBaseline='middle';c.fillText(ob,sx,cy+s*0.03)}c.restore()}
  const tf=TXTF(),min=CUR.W*0.016*Math.max(0.85,tf);const r=fitBlock(c,t,w,h,maxL,Math.min(h/(maxL*1.04),w*(p._cap||0.13))*tf,min,s=>O(s,700));
  if(iss){if(!r.ok)iss.push(`Descrição cortada (longa demais): ${p.desc}`);else if(r.s<CUR.W*0.019)iss.push(`Letra pequena para ler no celular: ${p.desc}`)}
  c.save();c.font=O(r.s,700);c.fillStyle=color;c.textBaseline='middle';c.textAlign=align;if(color==='#ffffff'){c.shadowColor='rgba(0,0,0,.65)';c.shadowBlur=r.s*0.25;c.shadowOffsetY=r.s*0.06}
@@ -820,8 +824,10 @@ function drawCroqui(cv,l,fk,maxW=132,maxH=150,items){
   const k=ar[i]/mx;c.fillStyle=uni?'#c4bcae':k>0.6?'#857d6e':k>0.3?'#ada595':'#d6cfc2';c.fillRect(r.x,r.y,r.w,r.h);c.strokeRect(r.x,r.y,r.w,r.h)})}
 
 /* ---------- plaquinhas ---------- */
+/* economia de tinta: cabeçalho e caixa de preço brancos com contorno preto */
+const ecoC=C=>Object.assign({},C,{cabecalho:'#ffffff',titulo:'#111111',preco:'#ffffff',precoTexto:'#111111',adesivo:'#111111',adesivoTexto:'#ffffff',eco:true});
 function renderPlaque(c,W,H,p,cp,fold){
- CUR={W:W*0.75,H};const C=cp.cores;c.save();c.fillStyle='#fff';c.fillRect(0,0,W,H);
+ CUR={W:W*0.75,H};const C=S.plaqEco?ecoC(cp.cores):cp.cores;c.save();c.fillStyle='#fff';c.fillRect(0,0,W,H);
  c.strokeStyle='#9a9a9a';c.lineWidth=3;c.setLineDash([W*0.014,W*0.009]);c.beginPath();c.moveTo(0,fold);c.lineTo(W,fold);c.stroke();c.setLineDash([]);
  c.fillStyle='#a8a8a8';c.textAlign='center';c.textBaseline='middle';c.font=`500 ${fold*0.16}px Inter, sans-serif`;c.fillText('▲  DOBRE AQUI E PRENDA NO SUPORTE DA GÔNDOLA  ▲',W/2,fold*0.55);
  const y0=fold,bh=H-fold,land=W>bh,noImg=!getImg(p),hb=bh*(land?0.15:0.1)*(noImg?1.35:1),m=W*0.03;
@@ -863,7 +869,7 @@ function renderPlaque(c,W,H,p,cp,fold){
  const lt=vt;
  if(upq){c.fillStyle='#16181d';c.textAlign='center';c.textBaseline='middle';const z=fitLine(c,upq,W-m*2,vH*0.5,q=>`700 ${q}px Inter, sans-serif`);c.font=`700 ${z}px Inter, sans-serif`;c.fillText(upq,W/2,H-m-vH*0.7)}
  c.fillStyle='#555';c.textAlign='center';c.textBaseline='middle';c.font=`500 ${fitLine(c,lt,W-m*2,vH*(upq?0.28:0.55),z=>`500 ${z}px Inter, sans-serif`)}px Inter, sans-serif`;c.fillText(lt,W/2,H-m-(upq?vH*0.18:vH/2));
- c.strokeStyle=C.cabecalho;c.lineWidth=W*0.006;c.strokeRect(c.lineWidth/2,y0+c.lineWidth/2,W-c.lineWidth,bh-c.lineWidth);
+ c.strokeStyle=C.eco?'#111111':C.cabecalho;c.lineWidth=W*0.006;c.strokeRect(c.lineWidth/2,y0+c.lineWidth/2,W-c.lineWidth,bh-c.lineWidth);
  c.restore()}
 const hasLimitText=p=>p.limit>0;
 /* folha e posição das plaquinhas: vertical (em pé) ou horizontal (deitada), 1 ou 2 por folha A4 */
@@ -1237,6 +1243,8 @@ function openEditor(id){
  <label>Frase de impacto<select name="phrase"><option value="">Nenhuma</option>${phr.map(f=>`<option ${f===p.phrase?'selected':''}>${esc(f)}</option>`).join('')}</select></label></div>
  <div class="row2"><label>Cor do preço <small style="color:var(--mut);font-weight:500">(só deste)</small><span style="display:flex;gap:6px;align-items:center"><input type="color" name="precoCor" value="${p.precoCor||camp().cores.preco}" style="width:56px;margin:0">${p.precoCor?'<button class="btn sm" type="button" data-a="corRs">Voltar ao padrão</button>':''}</span></label>
  ${p.featured?`<label>Fundo do destaque<select name="destFundo"><option value="">Igual à campanha</option>${DEST_FUNDOS.map(([v,t])=>`<option value="${v}" ${p.destFundo===v?'selected':''}>${t}</option>`).join('')}</select></label>`:'<span></span>'}</div>
+ <label>Observação <small style="color:var(--mut);font-weight:500">opcional: linha pequena embaixo do nome (ex.: sabores variados)</small><input name="obs" maxlength="40" value="${esc(p.obs||'')}" placeholder=""></label>
+ <label class="chk2"><input type="checkbox" name="m18" ${p.m18?'checked':''}> Só para maiores de 18 (selo +18)</label>
  <label class="chk2"><input type="checkbox" name="venc" ${p.venc?'checked':''}> Vencimento próximo (selo laranja)</label>
  <div class="szR" id="edSz"></div>
  <button class="btn sm dark" type="button" data-a="cores" style="margin-top:8px">🎨 Cores do encarte todo</button>
@@ -1276,6 +1284,7 @@ function openEditor(id){
     else if(k==='limit')p.limit=Math.max(0,parseInt(inp.value)||0);
     else if(k==='papel'){p.featured=inp.value==='icone';p.papel=inp.value==='icone'?'':inp.value}
     else if(k==='venc')p.venc=inp.checked;
+    else if(k==='m18')p.m18=inp.checked;
     else if(k==='precoKg')p.precoKg=inp.checked;
     else if(k==='setor'){if(inp.value==='__novo'){$('#novoSet').hidden=false;$('#novoSetN').focus();return}p.setor=inp.value}
     else if(k==='zoom')p.zoom=inp.value/100;else if(k==='dy')p.dy=inp.value/100;else if(k==='dx')p.dx=inp.value/100;else if(k==='prOver')p.prOver=inp.checked;
@@ -1843,6 +1852,7 @@ $('#bPlaq').onclick=()=>{const sel=S.products.filter(p=>p.sel);
  modal(`<h3>Baixar plaquinhas</h3><p><b>${sel.length}</b> de ${S.products.length} produtos marcados. Marque ou desmarque na lista de produtos.</p>
  <div class="row2"><label>Quantas por folha A4?<select id="plqPer"><option value="2" ${S.plaqPer==2?'selected':''}>2 por folha (padrão)</option><option value="1" ${S.plaqPer==1?'selected':''}>1 por folha (grande)</option></select></label>
  <label>Plaquinha<select id="plqOri"><option value="h" ${(S.plaqOri||(S.plaqPer==1?'v':'h'))==='h'?'selected':''}>Deitada (horizontal)</option><option value="v" ${(S.plaqOri||(S.plaqPer==1?'v':'h'))==='v'?'selected':''}>Em pé (vertical)</option></select></label></div>
+ <label class="chk2"><input type="checkbox" id="plqEco" ${S.plaqEco?'checked':''}> Economizar tinta (cabeçalho e preço sem fundo colorido)</label>
  <p class="hint">Cada plaquinha tem uma faixa de 3 cm em cima, com linha tracejada, para dobrar e prender no suporte da gôndola.</p>
  <p class="hint" style="margin:6px 0 4px">Prévia da folha A4 como sai na impressora:</p><canvas id="plqPrev" style="width:100%;box-shadow:0 2px 10px #0003"></canvas>
  <div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn" data-a="w" ${sel.length?'':'disabled'}>Compartilhar</button><button class="btn pri" data-a="y" ${sel.length?'':'disabled'}>Baixar PDF</button></div>`,b=>{
@@ -1854,6 +1864,7 @@ $('#bPlaq').onclick=()=>{const sel=S.products.filter(p=>p.sel);
     x.drawImage(t,px*PX,py*PX)});
    if(d.cut){x.strokeStyle='#888';x.lineWidth=2;x.setLineDash([9,6]);x.beginPath();x.moveTo(d.cut[0]*PX,d.cut[1]*PX);x.lineTo(d.cut[2]*PX,d.cut[3]*PX);x.stroke();x.setLineDash([])}
    x.strokeStyle='#bbb';x.lineWidth=2;x.strokeRect(1,1,cv.width-2,cv.height-2)};prev();
+  $('#plqEco').onchange=e=>{S.plaqEco=e.target.checked;persist();prev()};
   $('#plqPer').onchange=()=>{S.plaqPer=+$('#plqPer').value;persist();prev()};$('#plqOri').onchange=()=>{S.plaqOri=$('#plqOri').value;persist();prev()};
   b.querySelector('[data-a=n]').onclick=closeModal;
   const go=wpp=>async()=>{const J=window.jspdf&&window.jspdf.jsPDF;if(!J){toast('A biblioteca de PDF não carregou');return}
@@ -2233,16 +2244,18 @@ function avRender(){const L=S.avulsas||[];AVSEL=clamp(AVSEL,0,Math.max(0,L.lengt
   row.querySelector('[data-a=rm]').onclick=()=>modal(`<h3>Tem certeza?</h3><p>Tirar "${esc(p.desc||'este produto')}" das plaquinhas?</p><div class="mfoot"><button class="btn" data-a="n">Não</button><button class="btn pri" data-a="y">Sim, tirar</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=closeModal;b.querySelector('[data-a=y]').onclick=()=>{closeModal();L.splice(i,1);if(!L.length)L.push(P({desc:'',price:null}));persist();avRender()}});
   const fz=row.querySelector('.avFino');if(fz){fz.querySelectorAll('[data-z]').forEach(b=>b.onclick=()=>{const v=b.dataset.z;NMV(p,v);
    if(v==='z+')p.zoom=Math.min(1.8,(p.zoom||1)+0.1);if(v==='z-')p.zoom=Math.max(0.5,(p.zoom||1)-0.1);if(v==='up')p.dy=(p.dy||0)-0.04;if(v==='dn')p.dy=Math.min(0.2,(p.dy||0)+0.04);if(v==='d+')p.descK=Math.min(1.8,(p.descK||1)+0.15);if(v==='d-')p.descK=Math.max(0.7,(p.descK||1)-0.15);if(v==='p+')p.phK=Math.min(2.2,(p.phK||1)+0.15);if(v==='p-')p.phK=Math.max(0.5,(p.phK||1)-0.15);if(v==='rs'){p.zoom=1;p.dy=0;p.descK=1;p.phK=1;p.nameDy=0}persist();avRender()});
-   const ph=fz.querySelector('select');if(ph)ph.onchange=()=>{p.phrase=ph.value;persist();avPrev()};const vc=fz.querySelector('[data-venc]');if(vc)vc.onchange=()=>{p.venc=vc.checked;persist();avRender()};const vd=fz.querySelector('[data-vd]');if(vd)vd.onchange=()=>{p.vencData=vd.value;persist();avPrev()}}});
+   const ph=fz.querySelector('select');if(ph)ph.onchange=()=>{p.phrase=ph.value;persist();avPrev()};const m8=fz.querySelector('[data-m18]');if(m8)m8.onchange=()=>{p.m18=m8.checked;persist();avPrev()};const ob8=fz.querySelector('[data-obs]');if(ob8)ob8.oninput=()=>{p.obs=ob8.value;persist();avPrev()};const vc=fz.querySelector('[data-venc]');if(vc)vc.onchange=()=>{p.venc=vc.checked;persist();avRender()};const vd=fz.querySelector('[data-vd]');if(vd)vd.onchange=()=>{p.vencData=vd.value;persist();avPrev()}}});
  avPrev()}
 function avFino(p){const phr=[...new Set([...S.phrases,p.phrase].filter(Boolean))];return`<div class="avFino">
  <div class="szR"><span>Foto</span><button data-z="z-">−</button><b>${Math.round((p.zoom||1)*100)}%</b><button data-z="z+">+</button><button data-z="up">↑</button><button data-z="dn">↓</button></div>
  <div class="szR"><span>Letra do nome</span><button data-z="d-">A−</button><b>${Math.round((p.descK||1)*100)}%</b><button data-z="d+">A+</button><span style="margin-left:10px">Posição do nome</span><button data-z="nup" title="Subir o nome">↑</button><button data-z="ndn" title="Descer o nome">↓</button></div>
  <div class="szR"><span>Frase</span><select>${['',...phr].map(f=>`<option value="${esc(f)}" ${f===(p.phrase||'')?'selected':''}>${f?esc(f):'Nenhuma'}</option>`).join('')}</select>${p.phrase?`<button data-z="p-">A−</button><b>${Math.round((p.phK||1)*100)}%</b><button data-z="p+">A+</button>`:''}</div>
+ <div class="szR"><span>Observação</span><input data-obs maxlength="40" value="${esc(p.obs||'')}" placeholder="opcional (ex.: sabores variados)" style="margin:0;flex:1;min-width:120px"></div>
+ <label class="chk2"><input type="checkbox" data-m18 ${p.m18?'checked':''}> Selo +18</label>
  <label class="chk2"><input type="checkbox" data-venc ${p.venc?'checked':''}> Vencimento próximo</label>${p.venc?`<input type="date" data-vd value="${p.vencData||''}" style="width:auto;display:inline-block;margin:0 8px">`:''} <button class="btn sm ghost" data-z="rs">Voltar ao padrão</button></div>`}
 const avOk=p=>(p.desc||'').trim()&&p.price!=null;
 function avPrev(){const L=S.avulsas||[],nOk=L.filter(avOk).length;$('#avN').textContent=`${nOk} plaquinha${nOk===1?'':'s'} pronta${nOk===1?'':'s'}`;const per=S.avPer||2,ori=S.avOri||(per===1?'v':'h'),d=plaqDims(per,ori),cv=$('#avPrev'),PX=3,pw=d.page==='portrait'?210:297,ph=d.page==='portrait'?297:210;
- $('#avPer').value=per;$('#avOri').value=ori;cv.width=pw*PX;cv.height=ph*PX;const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cv.width,cv.height);
+ $('#avPer').value=per;$('#avOri').value=ori;{const ec=$('#avEco');if(ec)ec.checked=!!S.plaqEco}cv.width=pw*PX;cv.height=ph*PX;const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cv.width,cv.height);
  const start=Math.floor(AVSEL/d.pos.length)*d.pos.length;
  withVal(avVal(),()=>d.pos.forEach(([px,py],k)=>{const p=L[start+k];const t=document.createElement('canvas');t.width=Math.round(d.w*PX);t.height=Math.round(d.h*PX);const tx=t.getContext('2d');
   if(p&&avOk(p))renderPlaque(tx,t.width,t.height,p,avCamp(),30*PX);else{tx.fillStyle='#f6f4ef';tx.fillRect(0,0,t.width,t.height);tx.fillStyle='#999';tx.font='600 20px Inter,sans-serif';tx.textAlign='center';tx.fillText(p?'Preencha nome e preço':'Espaço livre na folha',t.width/2,t.height/2)}
@@ -2253,6 +2266,7 @@ $('#avAdd').onclick=()=>{S.avulsas.push(P({desc:'',price:null}));AVSEL=S.avulsas
 $('#avPaste').onclick=()=>modal(`<h3>Colar lista</h3><p class="hint">Um produto por linha, com o preço na frente. Dois preços = sem app e com app. "lim 6" vira limite.</p><textarea id="avTx" style="min-height:150px"></textarea><div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn pri" data-a="y">Adicionar</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=closeModal;setTimeout(()=>$('#avTx').focus(),40);
  b.querySelector('[data-a=y]').onclick=()=>{const L=parseQuick($('#avTx').value);if(!L.length){toast('Não achei produto com preço');return}S.avulsas=S.avulsas.filter(avOk).concat(L);closeModal();persist();loadAllImages();avRender()}});
 $('#avTit').oninput=e=>{S.avTitle=e.target.value;persist();avPrev()};$('#avDate').onchange=e=>{S.avVal=e.target.value;persist();avPrev()};
+{const ec=$('#avEco');if(ec)ec.onchange=e=>{S.plaqEco=e.target.checked;persist();avPrev()}}
 $('#avPer').onchange=e=>{S.avPer=+e.target.value;persist();avPrev()};$('#avOri').onchange=e=>{S.avOri=e.target.value;persist();avPrev()};
 const avPdf=wpp=>async()=>{const L=(S.avulsas||[]).filter(avOk);if(!L.length){toast('Preencha pelo menos um produto com nome e preço');return}if(!window.jspdf){toast('A biblioteca de PDF não carregou. Recarregue.');return}
  if(!await plaqGate(L))return;toast('Montando as plaquinhas…');await fontsReady();plaqLog(L,avVal(),'avulsa');const per=S.avPer||2,ori=S.avOri||(per===1?'v':'h');const blob=withVal(avVal(),()=>plaqDoc(L,per,ori,avCamp()));(wpp?sendWpp:saveFile)('plaquinhas_'+slug(S.avTitle||'oferta')+'_'+(S.avVal||today())+'.pdf',blob,'pdf')};
