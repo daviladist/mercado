@@ -29,3 +29,20 @@ test('funcionário não gera voz', async () => {
   await assert.rejects(V.handle({ method: 'POST', user: { role: 'caixista' }, tid: 't', body: async () => ({ texto: 'oi' }) }), /administrador/);
 });
 test('mês do uso', () => { assert.strictEqual(V.mesAtual(new Date('2026-11-17T12:00:00Z')), '2026-11'); });
+test('método estranho e funcionário são recusados antes de qualquer gasto', async () => {
+  await assert.rejects(V.handle({ method: 'DELETE', user: { role: 'admin' }, tid: 't', body: async () => ({}) }), /Método/);
+  await assert.rejects(V.handle({ method: 'GET', user: { role: 'caixista' }, tid: 't', body: async () => ({}) }), /administrador/);
+});
+test('teto geral da conta vem da variável ELEVENLABS_TETO_MES', () => {
+  const antes = process.env.ELEVENLABS_TETO_MES;
+  try {
+    delete process.env.ELEVENLABS_TETO_MES; assert.strictEqual(V.tetoGeral(), null);
+    process.env.ELEVENLABS_TETO_MES = '30000'; assert.strictEqual(V.tetoGeral(), 30000);
+    process.env.ELEVENLABS_TETO_MES = 'abc'; assert.strictEqual(V.tetoGeral(), null);
+    process.env.ELEVENLABS_TETO_MES = '0'; assert.strictEqual(V.tetoGeral(), null);
+  } finally { if (antes == null) delete process.env.ELEVENLABS_TETO_MES; else process.env.ELEVENLABS_TETO_MES = antes; }
+});
+test('erro da ElevenLabs nunca sai como 5xx (o servidor esconderia a mensagem do administrador)', () => {
+  const src = require('fs').readFileSync(require.resolve('../../lib/encartes-voz'), 'utf8');
+  assert.ok(!/httpErr\(5\d\d/.test(src));
+});
