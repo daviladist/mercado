@@ -2854,7 +2854,7 @@ $('#lgPos').onchange=e=>{S.store.logoPos=e.target.value;changed(false)};$('#lgFx
      o admin corrige uma vez em "Como falar o nome" e fica guardado (S.vozNomes) para as próximas campanhas.
    - Vídeo com som só sai em AAC (o que Instagram e iPhone aceitam). Sem AAC no navegador, o app não gera nem gasta crédito.
    - A chave da ElevenLabs fica só no servidor do Tino. Aqui no Claude dá para montar e testar o vídeo sem voz. */
-const VOZES=[['HR2TRGmi4QbMsO5omv7l','Rômulo Franklin: radialista (padrão)'],['zhza6dIY7yb1xz5MKTvQ','Nassif: vendedor, rápido'],['UaeEQHfiDI8l58WWXiwS','Leonardo Hamaral: comercial'],['rpNe0HOx7heUulPiOEaG','Locução para propaganda'],['4RyYr3owp1gnOgHKTs6D','Aline Mota: feminina, forte'],['Yu6uoFniEUcJhbrF7K1D','Lari Diniz: feminina, animada'],['Pxxu743NJcLUqO1QxfD6','Isabela: feminina, comercial']];
+const VOZES=[['HR2TRGmi4QbMsO5omv7l','Rômulo Franklin: radialista (padrão)'],['zhza6dIY7yb1xz5MKTvQ','Nassif: vendedor, rápido'],['BEufRj0H7KMKUaQ7dCsj','Jorge Silva: voz de varejo'],['UaeEQHfiDI8l58WWXiwS','Leonardo Hamaral: comercial'],['rpNe0HOx7heUulPiOEaG','Locução para propaganda'],['4RyYr3owp1gnOgHKTs6D','Aline Mota: feminina, forte'],['Yu6uoFniEUcJhbrF7K1D','Lari Diniz: feminina, animada'],['Pxxu743NJcLUqO1QxfD6','Isabela: feminina, comercial']];
 const VOZMOD={eleven_multilingual_v2:['Melhor qualidade',1],eleven_flash_v2_5:['Econômica (até metade do crédito)',0.5]};
 const VOZFMT={story:{w:1080,h:1920,label:'Stories / Reels / Status (1080×1920)'},feed:{w:1080,h:1350,label:'Feed do Instagram (1080×1350)'}};
 const VOZ_ATRASO=0.35,VOZ_MAXTX=300,VOZ_SUGESTAO=6;
@@ -2947,15 +2947,29 @@ function vozSemAac(){modal(`<h3>Este computador não grava o som no formato do I
 const vozPergunta=(tit,html,sim)=>new Promise(res=>modal(`<h3>${esc(tit)}</h3><p>${html}</p><div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn pri" data-a="y">${esc(sim)}</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=()=>{closeModal();res(false)};b.querySelector('[data-a=y]').onclick=()=>{closeModal();res(true)}}));
 /* ouvir uma fala antes de montar o vídeo. Fala nova gasta crédito uma vez (avisa antes); "de novo" grava outra tomada. */
 let VOZAUD=null,VOZOUV=false;
+async function vozTocar(texto,voz,modelo,refazer){if(VOZAUD){try{VOZAUD.pause()}catch(e){}VOZAUD=null}
+ const r=await vozApi({texto,voz,modelo,refazer:!!refazer});if(!r||!r.audio)throw new Error('A voz não veio. Tente de novo.');
+ const url=URL.createObjectURL(new Blob([b64ab(r.audio)],{type:'audio/mpeg'}));VOZAUD=new Audio(url);VOZAUD.onended=()=>{try{URL.revokeObjectURL(url)}catch(e){}};window.__VOZTOCOU=(window.__VOZTOCOU||0)+1;
+ try{await VOZAUD.play()}catch(e){toast('O navegador não deixou tocar. Toque em Ouvir de novo.')}return r}
+/* comparar vozes: a mesma fala em cada voz da lista. Só gasta na voz que você mandar gravar (o custo está no botão);
+   depois de gravada, ouvir de novo é de graça. "Usar esta voz" troca a voz do vídeo. */
+function vozComparar(){const c=vozCfg(),sel=vozSel(),texto=limpaFala(sel.length?falaDe(sel[0]):abertura());if(!texto){toast('Escreva uma fala primeiro');return}
+ const lista=VOZES.some(x=>x[0]===c.voz)?VOZES:[...VOZES,[c.voz,'Outra: '+c.voz]],cred=credOf(texto,c.modelo);
+ modal(`<h3>Comparar vozes</h3><p class="hint">Fala de teste: <b>“${esc(texto)}”</b></p><p class="hint">Cada voz gasta <b>${cred.toLocaleString('pt-BR')} créditos</b> na primeira vez que você manda gravar. Depois, ouvir de novo não gasta.</p>
+ <div id="vcList">${lista.map(([id,n])=>`<div class="vcRow${id===c.voz?' on':''}" data-v="${esc(id)}"><span class="vcN"><b>${esc(n)}</b><small>${id===c.voz?'voz do vídeo agora':''}</small></span><span class="vzBts"><button class="btn sm" data-a="ouvir" disabled>…</button><button class="btn sm pri" data-a="usar" ${id===c.voz?'disabled':''}>Usar esta voz</button></span></div>`).join('')}</div>
+ <div class="mfoot"><button class="btn" data-a="x">Fechar</button></div>`,b=>{b.querySelector('[data-a=x]').onclick=()=>{if(VOZAUD){try{VOZAUD.pause()}catch(e){}}closeModal()};
+  b.querySelectorAll('.vcRow').forEach(row=>{const id=row.dataset.v,bo=row.querySelector('[data-a=ouvir]'),bu=row.querySelector('[data-a=usar]');let tem=false;
+   const rot=()=>{bo.disabled=false;bo.textContent=tem?'▶ Ouvir':`Gravar e ouvir · ${cred.toLocaleString('pt-BR')} créditos`};
+   vozApi({texto,voz:id,modelo:c.modelo,estimar:true}).then(e=>{tem=!!(e&&e.cache);rot()}).catch(()=>rot());
+   bo.onclick=async()=>{if(VOZOUV)return;VOZOUV=true;bo.disabled=true;bo.textContent=tem?'Tocando…':'Gravando…';
+    try{const r=await vozTocar(texto,id,c.modelo,false);if(!r.cache)vozInfo().then(()=>vozBox());tem=true}catch(e){toast(e&&e.message?e.message:'Não consegui gravar esta voz',6000)}finally{VOZOUV=false;rot()}};
+   bu.onclick=()=>{if(VOZAUD){try{VOZAUD.pause()}catch(e){}}S.vozCfg=Object.assign(vozCfg(),{voz:id});changed(false);closeModal();toast('Voz do vídeo: '+((lista.find(x=>x[0]===id)||[])[1]||id));renderVoz();vozInfo().then(()=>{if($('#vzGo'))renderVoz()})}})})}
 async function vozOuvir(texto,refazer){texto=limpaFala(texto);if(!texto||VOZOUV||VOZRUN)return;const c=vozCfg();VOZOUV=true;
  try{if(VOZAUD){try{VOZAUD.pause()}catch(e){}VOZAUD=null}
   const e=await vozApi({texto,voz:c.voz,modelo:c.modelo,estimar:true,refazer:!!refazer});
   if(refazer||!(e&&e.cache)){const cred=e&&e.cred?e.cred:credOf(texto,c.modelo);
    if(!await vozPergunta(refazer?'Gravar esta fala de novo':'Ouvir esta fala',refazer?`A ElevenLabs grava outra vez (cada gravação sai um pouco diferente). Gasta <b>${cred.toLocaleString('pt-BR')} créditos</b> de novo.<br><span class="hint">Se o problema é a pronúncia de uma palavra, mude o texto em vez de gravar de novo.</span>`:`Esta fala ainda não foi gravada. Gasta <b>${cred.toLocaleString('pt-BR')} créditos</b> agora; depois, no vídeo, ela não gasta de novo.`,refazer?'Gravar de novo':'Gravar e ouvir'))return}
-  toast(refazer||!(e&&e.cache)?'Gravando a fala…':'Tocando…');
-  const r=await vozApi({texto,voz:c.voz,modelo:c.modelo,refazer:!!refazer});if(!r||!r.audio)throw new Error('A voz não veio. Tente de novo.');
-  const url=URL.createObjectURL(new Blob([b64ab(r.audio)],{type:'audio/mpeg'}));VOZAUD=new Audio(url);VOZAUD.onended=()=>{try{URL.revokeObjectURL(url)}catch(e){}};window.__VOZTOCOU=(window.__VOZTOCOU||0)+1;
-  try{await VOZAUD.play()}catch(e){toast('O navegador não deixou tocar. Toque em Ouvir de novo.')}
+  toast(refazer||!(e&&e.cache)?'Gravando a fala…':'Tocando…');const r=await vozTocar(texto,c.voz,c.modelo,refazer);
   if(!r.cache)vozInfo().then(()=>{if($('#vzGo')&&!VOZRUN)vozBox()})}
  catch(e){toast(e&&e.message?e.message:'Não consegui tocar a fala',6000)}finally{VOZOUV=false}}
 const b64ab=b=>{const s=atob(b),a=new Uint8Array(s.length);for(let i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return a.buffer};
@@ -2989,6 +3003,7 @@ function renderVoz(){const el=$('#t-voz');if(!el)return;const v=vozSt(),c=vozCfg
  <textarea id="vzFecha" class="vzTx" maxlength="${VOZ_MAXTX}" ${v.semFecha?'disabled':''}>${esc(fechamento())}</textarea>${v.semFecha?'':`<div class="vzRow"><small>${credOf(limpaFala(fechamento()),c.modelo)} créditos na 1ª vez</small><span class="vzBts"><button class="btn sm" data-ouvir="fecha" ${pode?'':'disabled'}>▶ Ouvir</button><button class="btn sm ghost" data-denovo="fecha" ${pode?'':'disabled'}>Gravar de novo</button></span></div>`}
  <details class="sec"><summary>Voz e música</summary><div class="in">
   <label>Voz<select id="vzVoz">${VOZES.map(([id,n])=>`<option value="${id}" ${c.voz===id?'selected':''}>${esc(n)}</option>`).join('')}${VOZES.some(x=>x[0]===c.voz)?'':`<option value="${esc(c.voz)}" selected>Outra: ${esc(c.voz)}</option>`}<option value="+">Outra (colar o código da voz)…</option></select></label>
+  <div class="bar"><button class="btn sm" id="vzComp" ${lig&&I&&I.ligada?'':'disabled'}>Comparar vozes</button><span class="hint" style="margin:0">Ouça a mesma fala em cada voz e escolha.</span></div>
   <p class="hint">As vozes são de locutores da biblioteca da ElevenLabs: o dono pode tirar a voz de lá, e o app avisa aqui em cima se isso acontecer. Na ElevenLabs, a voz escolhida precisa estar em <b>My Voices</b>: abra a voz na Voice Library e toque em <b>Add to my voices</b>.</p>
   <label>Qualidade<select id="vzMod">${Object.entries(VOZMOD).map(([k,[n]])=>`<option value="${k}" ${c.modelo===k?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
   <label>Limite de créditos por mês<input type="number" id="vzLim" min="0" ${I&&I.teto?`max="${I.teto}"`:''} step="1000" value="${I&&I.limite!=null?I.limite:30000}" ${lig&&I&&!I.erro?'':'disabled'}></label>
@@ -3020,6 +3035,7 @@ function renderVoz(){const el=$('#t-voz');if(!el)return;const v=vozSt(),c=vozCfg
    b.querySelector('[data-a=n]').onclick=()=>{closeModal();renderVoz()};b.querySelector('[data-a=y]').onclick=()=>{const v=$('#vzVid').value.trim();if(!/^[A-Za-z0-9]{10,40}$/.test(v)){toast('Código de voz inválido');return}closeModal();set(v)}})};
  $('#vzMod').onchange=e=>{S.vozCfg=Object.assign(vozCfg(),{modelo:e.target.value});changed(false);renderVoz()};
  const lim=$('#vzLim');if(lim)lim.onchange=async()=>{const n=Math.min(Math.max(0,Math.floor(+lim.value||0)),VOZINFO&&VOZINFO.teto?VOZINFO.teto:1e9);try{if(CLOUD.db)await CLOUD.db.doc('app/vozcfg').set({limite:n});toast('Limite salvo: '+n.toLocaleString('pt-BR')+' créditos por mês');await vozInfo();renderVoz()}catch(e){toast('Não consegui salvar o limite')}};
+ $('#vzComp').onclick=()=>vozComparar();
  $('#vzMus').onclick=()=>$('#vzMusIn').click();
  $('#vzMusIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(f.size>15e6){toast('Música grande demais (até 15 MB)');return}
   try{await decodeAudio(await f.arrayBuffer());await IDB.setRaw('voz:musica',f);v.musNome=f.name;keep();renderVoz();toast('Música pronta')}catch(err){toast('Não consegui ler esta música. Use MP3.')}};

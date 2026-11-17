@@ -19,7 +19,7 @@ H = functools.partial(Q, directory=D)
 srv = http.server.ThreadingHTTPServer(('127.0.0.1', PORT), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 URL = f'http://127.0.0.1:{PORT}/index.html'
 FAKE = r'''window.__VOZC={};window.__VOZN=0;window.__VOZLOG=[];window.__VOZ_FAKE=async b=>{if(b===undefined)return{ligada:true,usado:0,limite:30000,teto:30000,conta:{usado:1200,limite:30000,renova:1900000000},voz:window.__VOZSUMIU?{ok:false,some:null}:{ok:true,some:null}};
- const k=b.voz+'|'+b.modelo+'|'+b.texto,tem=!!window.__VOZC[k];window.__VOZLOG.push({t:b.texto,e:!!b.estimar,r:!!b.refazer});
+ const k=b.voz+'|'+b.modelo+'|'+b.texto,tem=!!window.__VOZC[k];window.__VOZLOG.push({t:b.texto,v:b.voz,e:!!b.estimar,r:!!b.refazer});
  if(b.estimar)return{cache:tem,cred:tem&&!b.refazer?0:String(b.texto).length};if(tem&&!b.refazer)return{audio:window.__VOZC[k],cred:0,cache:true};
  const dur=Math.max(0.6,String(b.texto).length/14),SR=24000,n=Math.round(dur*SR),buf=new ArrayBuffer(44+n*2),v=new DataView(buf),w=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
  w(0,'RIFF');v.setUint32(4,36+n*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,SR,true);v.setUint32(28,SR*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*2,true);
@@ -80,6 +80,17 @@ with sync_playwright() as pw:
     else:
         pg2.evaluate('()=>{window.reviewGate=reviewGate=async()=>true}'); pg2.click('#vzGo'); pg2.wait_for_selector('#modal:not([hidden]) [data-a=y]'); pg2.click('#modal [data-a=y]')
         pg2.wait_for_function('window.__SALVOU', timeout=180000); check(pg2.evaluate('window.__SALVOU.n').endswith('.mp4'), 'computador com AAC: salva o MP4 com voz')
+    # comparar vozes: a mesma fala em cada voz; só gasta na que mandar gravar; "Usar esta voz" troca a voz do vídeo
+    pg2.evaluate('()=>{document.querySelector("#t-voz details.sec").open=true}'); pg2.click('#vzComp'); pg2.wait_for_selector('#vcList .vcRow')
+    pg2.wait_for_function('[...document.querySelectorAll("#vcList [data-a=ouvir]")].every(b=>!b.disabled)', timeout=10000)
+    nv = pg2.evaluate('document.querySelectorAll("#vcList .vcRow").length'); rot = pg2.evaluate('[...document.querySelectorAll("#vcList [data-a=ouvir]")].map(b=>b.textContent)')
+    check(nv == 8 and rot[0] == '▶ Ouvir' and 'créditos' in rot[1], 'Comparar vozes: lista as 8 vozes; a já gravada toca de graça, as outras mostram o custo no botão', rot[:3])
+    n2 = pg2.evaluate('window.__VOZN'); tc = pg2.evaluate('window.__VOZTOCOU'); pg2.click('#vcList .vcRow[data-v="BEufRj0H7KMKUaQ7dCsj"] [data-a=ouvir]'); pg2.wait_for_function('window.__VOZTOCOU>%d' % tc, timeout=10000)
+    check(pg2.evaluate('window.__VOZN') == n2 + 1 and pg2.evaluate('window.__VOZLOG.filter(x=>!x.e).pop().v') == 'BEufRj0H7KMKUaQ7dCsj', 'gravar uma voz para comparar gasta só aquela voz')
+    pg2.wait_for_function('document.querySelector(\'#vcList .vcRow[data-v="BEufRj0H7KMKUaQ7dCsj"] [data-a=ouvir]\').textContent==="▶ Ouvir"'); tc = pg2.evaluate('window.__VOZTOCOU')
+    pg2.click('#vcList .vcRow[data-v="BEufRj0H7KMKUaQ7dCsj"] [data-a=ouvir]'); pg2.wait_for_function('window.__VOZTOCOU>%d' % tc, timeout=10000); check(pg2.evaluate('window.__VOZN') == n2 + 1, 'ouvir de novo a voz já gravada não gasta')
+    pg2.click('#vcList .vcRow[data-v="BEufRj0H7KMKUaQ7dCsj"] [data-a=usar]'); check(pg2.evaluate('vozCfg().voz') == 'BEufRj0H7KMKUaQ7dCsj' and not pg2.is_visible('#modal'), '"Usar esta voz" troca a voz do vídeo')
+    pg2.evaluate('()=>{S.vozCfg=Object.assign(vozCfg(),{voz:VOZES[0][0]});renderVoz()}')
     # voz que sumiu da ElevenLabs: avisa e trava o botão
     pg2.evaluate('async()=>{window.__VOZSUMIU=true;await vozInfo();renderVoz()}'); check('não está na sua conta' in pg2.inner_text('#vzBox') and not pg2.is_enabled('#vzGo'), 'voz que sumiu: avisa e não deixa gerar')
     pg2.evaluate('async()=>{window.__VOZSUMIU=false;await vozInfo();renderVoz()}')
