@@ -83,10 +83,32 @@ s, _ = func.req('/api/encartes/doc', {'p': 'app/catalogo', 'data': {'at': 1}}); 
 s, _ = func.req('/api/encartes/pessoas'); check(s == 403, 'funcionária não vê a equipe')
 s, _ = func.req('/api/encartes/pessoa', {'nome': 'Zé', 'login': 'ze'}); check(s == 403, 'funcionária não cria acesso')
 s, _ = dono.req('/api/encartes/pessoa', {'login': 'maria', 'ativo': False}); s, _ = func.req('/api/encartes/me'); check(s == 401, 'desligar o acesso derruba a sessão da funcionária')
+print('== voz dos vídeos (ElevenLabs de mentira)')
+FAKE = os.environ.get('FAKE_EL')
+def falas():
+    with urllib.request.urlopen('http://127.0.0.1:%s/count' % FAKE) as r: return json.loads(r.read())
+if FAKE:
+    s, st = dono.req('/api/encartes/voz'); check(s == 200 and st['ligada'] is True and st['usado'] == 0 and st['limite'] == 30000, 'situação da voz: ligada, nada usado, limite do Starter')
+    fala = {'texto': 'Picanha bovina, quarenta e nove e noventa o quilo, no app!'}
+    s, e = dono.req('/api/encartes/voz', dict(fala, estimar=True)); check(s == 200 and e['cache'] is False and e['cred'] == len(fala['texto']) and 'audio' not in e and falas()['n'] == 0, 'estimar não gasta nada')
+    s, g1 = dono.req('/api/encartes/voz', fala); check(s == 200 and g1['cache'] is False and base64.b64decode(g1['audio'])[:2] == bytes.fromhex('fffb') and falas()['n'] == 1, 'gera a fala (mp3)')
+    check(falas()['last']['voz'] == 'HR2TRGmi4QbMsO5omv7l' and falas()['last']['model'] == 'eleven_multilingual_v2', 'usa a voz e o modelo padrão')
+    s, g2 = dono.req('/api/encartes/voz', fala); check(s == 200 and g2['cache'] is True and g2['cred'] == 0 and g2['audio'] == g1['audio'] and falas()['n'] == 1, 'a mesma fala de novo não gasta crédito')
+    s, st = dono.req('/api/encartes/voz'); check(st['usado'] == g1['cred'], 'uso do mês somado')
+    s, g3 = dono.req('/api/encartes/voz', {'texto': 'Arroz cinco quilos', 'modelo': 'eleven_flash_v2_5'}); check(s == 200 and g3['cred'] == 9 and falas()['last']['model'] == 'eleven_flash_v2_5', 'modelo econômico gasta metade')
+    s, _ = dono.req('/api/encartes/doc', {'p': 'app/vozcfg', 'data': {'limite': 10}}); s, x = dono.req('/api/encartes/voz', {'texto': 'Feijão carioca um quilo'}); check(s == 429 and falas()['n'] == 2, 'passou do limite do mês: recusa sem chamar a ElevenLabs')
+    s, g4 = dono.req('/api/encartes/voz', fala); check(s == 200 and g4['cache'] is True, 'fala já guardada sai mesmo acima do limite (não gasta)')
+    s, _ = dono.req('/api/encartes/voz', {'texto': 'x' * 400}); check(s == 400, 'fala longa demais é recusada')
+    jo = entra(TID, 'jose', z['password'], pw())
+    s, _ = jo.req('/api/encartes/voz', fala); check(s == 403, 'funcionário não gera voz')
+    s, _ = jo.req('/api/encartes/voz'); check(s == 403, 'funcionário não vê o uso da voz')
+else:
+    print('  (pulado: sem FAKE_EL)')
 print('== separação por empresa')
 P2 = pw(); outro = entra(TID2, 'dono2', a2['password'], P2)
 s, d = outro.req('/api/encartes/doc?p=app/estado'); check(s == 200 and not d['exists'], 'outra empresa não vê o estado desta')
 s, _, _h = outro.req('/api/encartes/blob?id=' + b['id'], raw=True, headers={}); check(s == 404, 'outra empresa não vê a imagem desta')
+if FAKE: s, e2 = outro.req('/api/encartes/voz', {'texto': 'Picanha bovina, quarenta e nove e noventa o quilo, no app!', 'estimar': True}); check(s == 200 and e2['cache'] is False, 'fala guardada de uma empresa não aparece para outra')
 s, _ = dono.req('/api/encartes/me', tenant=TID2); check(s == 401, 'sessão de uma empresa não vale em outra')
 s, _ = dono.req('/api/state'); check(s == 404, 'rotas do atacado não existem na empresa de encartes')
 

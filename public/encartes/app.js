@@ -155,7 +155,6 @@ let rafP;function schedule(){cancelAnimationFrame(rafP);rafP=requestAnimationFra
 function changed(list=true){undoSnap();if(list){autoMatchPhotos();renderList();renderSecs()}schedule();persist()}
 
 let toastT;function toast(t,ms=2600){const el=$('#toast');el.textContent=t;el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>el.hidden=true,ms)}
-
 /* ================= imagens (IndexedDB) ================= */
 const IDB=(()=>{const mem=new Map();let dbp;
  function open(){if(dbp)return dbp;dbp=new Promise(res=>{try{const r=indexedDB.open('encartes-img',1);r.onupgradeneeded=()=>r.result.createObjectStore('img');r.onsuccess=()=>res(r.result);r.onerror=()=>res(null)}catch(e){res(null)}});return dbp}
@@ -178,6 +177,20 @@ function ensureImg(k){if(!k)return Promise.resolve(null);if(imgCache.has(k))retu
 const ensureAll=items=>Promise.all((items||[]).map(p=>ensureImg(imgKey(p))));
 const getImg=p=>{const k=imgKey(p),e=imgCache.get(k);if(e)return e.img;if(KNOWN.has(k))ensureImg(k);return null};
 const logos=[null,null];
+/* Logomarcas FIXAS deste gerador: vêm dos arquivos da pasta logos/ e ninguém troca pela tela.
+   Para outro cliente: trocar os dois arquivos e os nomes desta lista. */
+const LOGOS_FIXAS=[{nome:'RedeShow Supermercados Express',src:'logos/logo1.png'},{nome:"D'Ávila",src:'logos/logo2.png'}];
+const FIXL=[null,null];let LOGO_FIXA=false,LOGO_TENTOU=false;
+function applyLogoOrder(){if(!LOGO_FIXA)return;const inv=!!S.store.logoInv;for(let i=0;i<2;i++)logos[i]=FIXL[inv?1-i:i]}
+async function loadFixedLogos(){
+ for(let i=0;i<2;i++){if(FIXL[i])continue;try{const img=await loadImg(LOGOS_FIXAS[i].src),c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;c.getContext('2d').drawImage(img,0,0);const u=c.toDataURL('image/png');FIXL[i]={img:await loadImg(u),url:u,nome:LOGOS_FIXAS[i].nome}}catch(e){}}
+ LOGO_FIXA=!!(FIXL[0]&&FIXL[1]);
+ if(LOGO_FIXA){/* quem já tinha invertido a ordem antes continua com a ordem que escolheu */
+  if(S.store.logoInv==null){const o=await IDB.get('logo0');if(o&&o===FIXL[1].url){S.store.logoInv=true;persist()}}
+  applyLogoOrder()}
+ else{/* sem os arquivos fixos (ex.: versão sem a pasta logos/): usa as logos guardadas, como antes */
+  for(let i=0;i<2;i++){const u=await IDB.get('logo'+i);if(u){try{logos[i]={img:await loadImg(u),url:u}}catch(e){}}}}
+ LOGO_TENTOU=true}
 const artCache=new Map(),artKey=(cid,fk)=>`art:${cid}:${fk}`;
 function loadImg(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=src})}
 function fileToURL(f){return new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(f)})}
@@ -210,11 +223,9 @@ async function loadAllImages(){
  const keys=new Set();[...S.products,...(S.avulsas||[])].forEach(p=>{keys.add(ownKey(p));if(p.imgAlias)keys.add(p.imgAlias)});
  await Promise.all([...keys].map(k=>KNOWN.has(k)?ensureImg(k):null));
  S.products.forEach(p=>{if(imgCache.has(ownKey(p)))rememberPhoto(p)});autoMatchPhotos();
- for(let i=0;i<2;i++){const u=await IDB.get('logo'+i);if(u){try{logos[i]={img:await loadImg(u),url:u}}catch(e){}}}
- for(let i=0;i<2;i++){if(logos[i]||S.store['semLogoPadrao'+i])continue;try{const img=await loadImg('logos/logo'+(i+1)+'.png'),c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;c.getContext('2d').drawImage(img,0,0);const u=c.toDataURL('image/png');logos[i]={img:await loadImg(u),url:u};await IDB.set('logo'+i,u,true)}catch(e){}}
+ await loadFixedLogos();
  for(const cp of S.campaigns)for(const fk of Object.keys(FORMATS)){const k=artKey(cp.id,fk);if(artCache.has(k))continue;const u=await IDB.get(k);if(u){try{artCache.set(k,{img:await loadImg(u),url:u})}catch(e){}}}
  renderList();renderLogos();renderArt();schedule();catLoad()}
-
 /* ================= desenho ================= */
 let CUR={W:1080,H:1350};
 const F=s=>`${s}px Anton, Impact, "Arial Narrow", sans-serif`;
@@ -951,7 +962,6 @@ function drawSlide(c,W,H,s,lt){
  }
  const out=clamp((s.d-lt)/0.3,0,1);if(out<1){c.globalAlpha=1-out;c.fillStyle=C.fundo;c.fillRect(0,0,W,H);c.globalAlpha=1}
  c.restore()}
-
 /* ================= UI: formato, preview ================= */
 const ARTE_NOMES=['Frente','Verso','Arte 3','Arte 4'];
 const arteNome=(i,pg)=>pg&&pg.extra?'Extra '+(i+1):(ARTE_NOMES[i]||'Arte '+(i+1));
@@ -1005,7 +1015,7 @@ function renderWarns(P,n){
  $('#pickLay').onclick=()=>openLayPicker(S.page);const sm=$('#stM'),sp=$('#stP');if(sm)sm.onclick=()=>stepArte(-1);if(sp)sp.onclick=()=>stepArte(1);renderSugs(P);
  $('#lbIni').onchange=e=>{S.val.ini=e.target.value;if(S.val.fim&&S.val.fim<S.val.ini)S.val.fim=S.val.ini;$('#vIni').value=S.val.ini;$('#vFim').value=S.val.fim;changed(false)};
  $('#lbFim').onchange=e=>{S.val.fim=e.target.value;$('#vFim').value=S.val.fim;changed(false)};
- const si=$('#showIss');if(si)si.onclick=()=>reviewGate(S.products,true);const sc=$('#showCusto');if(sc)sc.onclick=openCusto}
+ const si=$('#showIss');if(si)si.onclick=()=>reviewGate(S.products,true);const sc=$('#showCusto');if(sc)sc.onclick=(...a)=>openCusto(...a)}
 function collectIssues(items){
  const o=[];
  const fu=isFunc(),own=!fu&&isOwnerV()!==false;
@@ -1067,12 +1077,12 @@ function renderPicker(first){
   b.querySelectorAll('.accH').forEach(h=>{const i=+h.dataset.i;drawCroqui(h.querySelector('canvas'),P[i].lay,fk,34,42,P[i].items);h.onclick=()=>{pickOpen=pickOpen===i?-1:i;S.page=i;changed();renderPicker()}});
   b.querySelectorAll('#pkN button').forEach(x=>x.onclick=()=>{const k=+x.dataset.k;let a=cfg.slice(0,k);while(a.length<k)a.push({t:'m',lay:'auto'});pickOpen=Math.min(k-1,pickOpen<0?0:pickOpen);if(k>cfg.length)pickOpen=cfg.length;save(a)});
   b.querySelectorAll('[data-t]').forEach(x=>x.onclick=()=>{const i=+x.dataset.i,a=cfg.slice();if(x.dataset.t==='m')a[i]={t:'m',lay:'auto'};else{const used=new Set(cfg.flatMap(c=>c.t==='s'?c.setores:[]));a[i]={t:'s',dest:true,setores:S.setores.filter(s=>secCount(s.nome)&&!used.has(s.nome)).map(s=>s.nome)}}save(a)});
-  const i=pickOpen,c=cfg[i];if(i<0||!c){b.querySelector('[data-a=x]').onclick=closeModal;return}
+  const i=pickOpen,c=cfg[i];if(i<0||!c){b.querySelector('[data-a=x]').onclick=(...a)=>closeModal(...a);return}
   b.querySelectorAll('.layOpt').forEach(el=>{drawCroqui(el.querySelector('canvas'),layById(el.dataset.id),fk);el.onclick=()=>{const a=cfg.slice();a[i]={t:'m',lay:el.dataset.id};toast(`${arteNome(i)}: ${layById(el.dataset.id).nome}`);if(i+1<a.length)pickOpen=i+1;save(a)}});
   b.querySelectorAll('[data-sec]').forEach(x=>x.onchange=()=>{const a=cfg.slice(),s=a[i].setores.slice(),n=x.dataset.sec;if(x.checked){if(!s.includes(n))s.push(n)}else s.splice(s.indexOf(n),1);a[i]={...a[i],setores:s};save(a)});
   b.querySelectorAll('[data-up],[data-dn]').forEach(x=>x.onclick=()=>{const a=cfg.slice(),s=a[i].setores.slice(),k=+(x.dataset.up??x.dataset.dn),j=x.dataset.up!=null?k-1:k+1;if(j<0||j>=s.length)return;[s[k],s[j]]=[s[j],s[k]];a[i]={...a[i],setores:s};save(a)});
   const d=$('#pkDest');if(d)d.onchange=()=>{const a=cfg.slice();a[i]={...a[i],dest:d.checked};save(a)};
-  b.querySelector('[data-a=x]').onclick=closeModal})}
+  b.querySelector('[data-a=x]').onclick=(...a)=>closeModal(...a)})}
 function renderFormats(){const el=$('#formats');el.innerHTML=Object.entries(FORMATS).map(([k,f])=>`<button data-f="${k}" class="${S.format===k?'on':''}">${f.label}</button>`).join('');
  el.querySelectorAll('button').forEach(b=>b.onclick=()=>{S.format=b.dataset.f;S.page=0;renderFormats();renderArt();changed()})}
 
@@ -1249,7 +1259,7 @@ function openEditor(id){
   const fu=b.querySelector('[data-a=fundo]');if(fu)fu.onclick=async()=>{toast('Tirando o fundo branco…');const u=await processImage(imgCache.get(imgKey(p)).url,true);await setImage(p,u);openEditor(p.id)};
   const rm=b.querySelector('[data-a=rmfoto]');if(rm)rm.onclick=async()=>{if(p.imgAlias&&imgKey(p)===p.imgAlias){delete p.imgAlias;delete p.autoFoto;p.noAuto=true}else{const k=ownKey(p);imgCache.delete(k);await IDB.del(k);p.noAuto=true}changed();openEditor(p.id)};
   b.querySelectorAll('[data-tab]').forEach(x=>x.onclick=()=>{EDTAB=x.dataset.tab;b.querySelectorAll('[data-tab]').forEach(y=>y.classList.toggle('on',y===x));b.querySelectorAll('.edG').forEach(g=>g.hidden=g.dataset.g!==EDTAB)});
-  b.querySelector('[data-a=ok]').onclick=closeModal;
+  b.querySelector('[data-a=ok]').onclick=(...a)=>closeModal(...a);
   const crs=b.querySelector('[data-a=corRs]');if(crs)crs.onclick=()=>{delete p.precoCor;changed();openEditor(p.id)};
   b.querySelector('[data-a=cores]').onclick=()=>openCores();
   const mvc=b.querySelector('[data-mv=c]');if(mvc)mvc.onclick=()=>{p.dx=0;p.dy=0;p.zoom=1;changed();openEditor(p.id)};
@@ -1280,12 +1290,12 @@ function renderSecs(){const el=$('#secList');if(!el)return;
  el.querySelectorAll('input[type=color]').forEach(x=>x.oninput=()=>{S.setores[+x.dataset.i].cor=x.value;changed()});
  el.querySelectorAll('[data-del]').forEach(x=>x.onclick=()=>{S.setores.splice(+x.dataset.del,1);renderSecs();changed()});
  $('#secAdd').onclick=()=>{const n=$('#secNew').value.trim();if(n){addSetor(n);changed()}}}
-$('#quickP').onclick=openQuick;$('#fillP').onclick=()=>openFill(0);
-$('#starP').onclick=()=>openStarSearch();$('#starAll').onclick=starRefreshAll;
+$('#quickP').onclick=(...a)=>openQuick(...a);$('#fillP').onclick=()=>openFill(0);
+$('#starP').onclick=()=>openStarSearch();$('#starAll').onclick=(...a)=>starRefreshAll(...a);
 $('#addP').onclick=()=>{const p=P({});S.products.push(p);changed();openEditor(p.id)};
 $('#selAll').onclick=()=>{S.products.forEach(p=>p.sel=true);changed()};
 $('#selNone').onclick=()=>{S.products.forEach(p=>p.sel=false);changed()};
-$('#clearP').onclick=()=>{modal(`<h3>Tem certeza?</h3><p>Todos os ${S.products.length} produtos saem da lista. As fotos continuam guardadas e voltam sozinhas quando o produto for cadastrado de novo.</p><div class="mfoot"><button class="btn" data-a="n">Não</button><button class="btn pri" data-a="y">Sim, remover todos</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=closeModal;b.querySelector('[data-a=y]').onclick=()=>{S.products=[];S.page=0;closeModal();changed()}})};
+$('#clearP').onclick=()=>{modal(`<h3>Tem certeza?</h3><p>Todos os ${S.products.length} produtos saem da lista. As fotos continuam guardadas e voltam sozinhas quando o produto for cadastrado de novo.</p><div class="mfoot"><button class="btn" data-a="n">Não</button><button class="btn pri" data-a="y">Sim, remover todos</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=(...a)=>closeModal(...a);b.querySelector('[data-a=y]').onclick=()=>{S.products=[];S.page=0;closeModal();changed()}})};
 
 function normUnit(u){u=norm(u);if(!u)return'un';if(['un','und','unid','unidade','u'].includes(u))return'un';if(['kg','quilo','kilo'].includes(u))return'kg';if(['bdj','bandeja'].includes(u))return'bandeja';if(['pct','pacote','pc'].includes(u))return'pct';if(['cx','caixa'].includes(u))return'cx';if(['l','lt','litro'].includes(u))return'L';if(u==='100g')return'100g';if(['dz','duzia'].includes(u))return'dz';return u}
 function parsePaste(t){
@@ -1305,13 +1315,12 @@ $('#pasteP').onclick=()=>modal(`<h3>Colar lista</h3><p class="hint">Copie as lin
  <textarea id="pasteTx" style="min-height:200px" placeholder="7891234567890	Arroz tipo 1 5kg	24,90	un	29,90&#10;Picanha bovina	59,90	kg"></textarea>
  <div class="mfoot"><button class="btn l" data-a="n">Cancelar</button><button class="btn" data-a="rep">Substituir a lista</button><button class="btn pri" data-a="add">Adicionar</button></div>`,b=>{
  const go=rep=>{const l=parsePaste($('#pasteTx').value);if(!l.length){toast('Não achei produtos com preço nessas linhas');return}if(rep){S.products=l;S.page=0}else S.products.push(...l);closeModal();changed();loadAllImages();toast(`${l.length} produtos adicionados`)};
- b.querySelector('[data-a=n]').onclick=closeModal;b.querySelector('[data-a=add]').onclick=()=>go(false);b.querySelector('[data-a=rep]').onclick=()=>go(true)});
+ b.querySelector('[data-a=n]').onclick=(...a)=>closeModal(...a);b.querySelector('[data-a=add]').onclick=()=>go(false);b.querySelector('[data-a=rep]').onclick=()=>go(true)});
 $('#bulkP').onclick=()=>{toast('Dica: o nome do arquivo deve ser o código ou a descrição do produto',3500);$('#fileMulti').click()};
 $('#fileMulti').onchange=async e=>{const fs=[...e.target.files];e.target.value='';if(!fs.length)return;toast('Encaixando as fotos…');let ok=0,miss=[];
  for(const f of fs){const nm=norm(f.name.replace(/\.[^.]+$/,''));const p=S.products.find(p=>p.code&&norm(p.code)===nm)||S.products.find(p=>norm(p.desc)===nm)||(nm.length>=4&&S.products.find(p=>norm(p.desc).includes(nm)));
   if(p){try{const u=await processImage(await fileToURL(f),false);const k=imgKey(p);imgCache.set(k,{img:await loadImg(u),url:u});await IDB.set(k,u);ok++}catch(err){miss.push(f.name)}}else miss.push(f.name)}
  changed();toast(`${ok} fotos encaixadas${miss.length?` • ${miss.length} sem produto correspondente`:''}`,4000)};
-
 /* ================= StarIA ================= */
 const STAR='StarIA',r2=n=>Math.round(n*100)/100;
 let mcpP=null;
@@ -1372,7 +1381,6 @@ async function starRefreshAll(){
   try{const rs=await starSearch(p.code);const r=rs.find(x=>x.code===p.code)||rs[0];if(r){await starFill(r);if(r.cost!=null)p.cost=r.cost;if(r.sysPrice!=null)p.sysPrice=r.sysPrice;p.sysAt=Date.now();ok++}else fail++}
   catch(e){fail++;lastErr=e;if(['no_mcp','server_not_connected','needs_reauth','not_in_manifest','approval_required','blocked_by_policy','not_granted'].includes(e&&e.code))break}}
  changed();toast(lastErr&&!ok?starErr(lastErr):`${ok} produtos atualizados com custo e preço do sistema${fail?` • ${fail} sem resposta`:''}`,5000)}
-
 /* ================= nuvem (db + assets) ================= */
 /* Onde fica cada coisa (as regras do banco valem no servidor, não só na tela):
    app/estado, app/catalogo : configuração e banco de produtos sem custo. Todos leem, só o admin grava.
@@ -1384,7 +1392,7 @@ const CLOUD={db:null,as:null,map:{},on:false,wq:Promise.resolve(),base:null,base
 function cloudStatus(t,cls){const el=$('#cloudSt');if(el){el.textContent=t;el.className='cloud '+(cls||'')}}
 function dataURLtoBlob(u){const[h,b]=u.split(',');const mime=(h.match(/data:([^;]+)/)||[])[1]||'image/png';const bin=atob(b);const a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:mime})}
 function cloudQueue(fn){CLOUD.wq=CLOUD.wq.then(fn).catch(()=>{});return CLOUD.wq}
-const DRAFT=['avulsas','avTitle','avCamp','avVal','avPer','avOri','logoOff','tvAt','products','val','artes','page','campaignId','format','lay','listMode','ui','kitOpt'];
+const DRAFT=['voz','avulsas','avTitle','avCamp','avVal','avPer','avOri','logoOff','tvAt','products','val','artes','page','campaignId','format','lay','listMode','ui','kitOpt'];
 const SHAREDK=['fotoNomes','fotoEan','catalogo','ofertaHist','padroes','funcSeen','plaqLog'];
 const LOCALK=['saved','_sharedDirty','draftAt','savedAt','localAt','draftSyncAt','tvPub'];
 const LSB='encartes-base',DEVK='encartes-dev';
@@ -1508,9 +1516,8 @@ async function cloudInit(){
   if(canCfg())rs.filter(r=>r.products.some(p=>p.cost!=null)).forEach(r=>cloudSaveEnc(Object.assign({},S.saved.find(x=>x.id===r.id)||r)));
   /* migração: config antiga com senha ou dados somados dentro: o admin regrava limpa */
   if(full&&canCfg()&&(full.store&&full.store.pin||SHAREDK.some(k=>full[k]!=null)))cloudQueue(async()=>{const c=cfgOf(S),at=Date.now();await db.doc('app/estado').set({savedAt:at,data:JSON.stringify(c)});setBase(c,at)});
-  cloudSave();renderSaved();cloudWatch();cloudSyncImages();cloudStatus('Salvo na nuvem','ok');applyModo();if(isFunc()&&!inWz())setUi('wz');else if(inWz())wzGo(WZ);setTimeout(catLoad,1500)
+  cloudSave();renderSaved();cloudWatch();cloudSyncImages();cloudStatus('Salvo na nuvem','ok');applyModo();if(isFunc()&&!inWz())setUi('wz');else if(inWz())wzGo(WZ);setTimeout((...a)=>catLoad(...a),1500)
  }catch(e){clearTimeout(timer);cloudStatus('Sem conexão com a nuvem, salvo neste navegador','bad')}}
-
 /* ================= digitar produtos ================= */
 const isPriceTok=t=>/^(r\$)?\d{1,5}([.,]\d{1,2})?$/i.test(t)&&!/^r\$$/i.test(t);
 const UNIT_WORDS={kg:'kg','/kg':'kg',quilo:'kg',bdj:'bandeja',bandeja:'bandeja',un:'un',und:'un',unid:'un',pct:'pct',pacote:'pct',cx:'cx',caixa:'cx',dz:'dz',duzia:'dz','dúzia':'dz'};
@@ -1564,7 +1571,7 @@ function openQuick(pre){
   tx.oninput=upd;if(pre){tx.value=pre;upd()}setTimeout(()=>tx.focus(),40);
   const go=rep=>{const l=parseQuick(tx.value);if(!l.length){toast('Não achei produto com preço. Ex.: Arroz 5kg 24,90');return}
    if(rep){S.products=l;S.page=0}else S.products.push(...l);changed();loadAllImages();askDistrib()};
-  b.querySelector('[data-a=n]').onclick=closeModal;b.querySelector('[data-a=add]').onclick=()=>go(false);b.querySelector('[data-a=rep]').onclick=()=>go(true)})}
+  b.querySelector('[data-a=n]').onclick=(...a)=>closeModal(...a);b.querySelector('[data-a=add]').onclick=()=>go(false);b.querySelector('[data-a=rep]').onclick=()=>go(true)})}
 /* pergunta frente x verso */
 function askDistrib(){
  const fk=S.format,N=S.products.length,lim=FORMATS[fk].limit,cfg=artesOf(fk);
@@ -1577,7 +1584,7 @@ function askDistrib(){
  <div class="mfoot"><button class="btn" data-a="n">Deixar como está</button><button class="btn pri" data-a="y">Aplicar</button></div>`,b=>{
   const f=$('#dF'),v=$('#dV');f.oninput=()=>{v.value=Math.max(0,N-(+f.value||0))};
   b.querySelectorAll('#dQuick .chip').forEach(x=>x.onclick=()=>{f.value=x.dataset.v;f.oninput()});
-  b.querySelector('[data-a=n]').onclick=closeModal;
+  b.querySelector('[data-a=n]').onclick=(...a)=>closeModal(...a);
   b.querySelector('[data-a=y]').onclick=()=>{const nf=clamp(+f.value||N,1,N),nv=Math.max(0,+v.value||0);
    setArtes(fk,nf>=N&&!nv?[{t:'m',lay:'auto',n:N,grow:true}]:[{t:'m',lay:'auto',n:nf},{t:'m',lay:'auto',n:Math.max(nv,1),grow:true}]);S.page=0;closeModal();changed();
    toast(nf>=N?`${N} produtos na frente`:`Frente com ${nf}, verso com ${N-nf}`)}})}
@@ -1641,7 +1648,6 @@ function openFill(i=0){
   pz.oninput=()=>{if(pz.value.trim()){pz.value='';toast('Veio só o endereço. No Google use "Copiar imagem".',4500)}};
   FILL_NEXT=()=>openFill(i)})}
 let FILL_NEXT=null,fillAfterFile=null;
-
 /* ================= UI: campanhas ================= */
 function renderCamps(){modBtn();renderHeadBox();
  const el=$('#camps');el.innerHTML=S.campaigns.map(c=>`<div class="chip ${c.id===S.campaignId?'on':''}" data-id="${c.id}"><span class="dot" style="background:${c.cores.fundo}"></span><span class="dot" style="background:${c.cores.cabecalho}"></span>${esc(c.nome)}</div>`).join('');
@@ -1669,18 +1675,18 @@ $('#newC').onclick=()=>{let vis='app';
  <p class="hint" id="ncH" style="margin-top:8px">Começa com as cores da campanha atual. Você troca as cores depois em "Título, dia e cores".</p>
  <div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn pri" data-a="y">Criar campanha</button></div>`,b=>{
   b.querySelectorAll('#ncV button').forEach(x=>x.onclick=()=>{vis=x.dataset.v;b.querySelectorAll('#ncV button').forEach(y=>y.classList.toggle('on',y===x));$('#ncH').textContent=vis==='ps'?'Depois de criar, você baixa o kit do Photoshop (PSD com as áreas tracejadas), monta seu tema e sobe a arte pronta. Dá pra reaproveitar o mesmo cabeçalho em várias ações.':'Começa com as cores da campanha atual. Você troca as cores depois em "Título, dia e cores".'});
-  setTimeout(()=>$('#ncN').focus(),40);b.querySelector('[data-a=n]').onclick=closeModal;
+  setTimeout(()=>$('#ncN').focus(),40);b.querySelector('[data-a=n]').onclick=(...a)=>closeModal(...a);
   b.querySelector('[data-a=y]').onclick=()=>{const nome=$('#ncN').value.trim()||'Nova campanha',fk=$('#ncF').value;
    const n=Object.assign(clone(camp()),{id:uid(),nome,titulo:nome,dia:+$('#ncD').value,artOpt:undefined,cab:undefined,rod:undefined});S.campaigns.push(n);S.campaignId=n.id;S.format=fk;S.page=0;
    renderFormats();renderCamps();changed(false);
    if(vis==='ps'){const f=FORMATS[fk];modal(`<h3>${esc(nome)} criada</h3><p>Agora monte o tema no Photoshop:</p>
     <ol class="hint" style="padding-left:18px"><li>Baixe o kit: um .zip com o PSD de ${f.w}×${f.h} px, as áreas tracejadas e as guias.</li><li>Crie fundo e cabeçalho fora das áreas reservadas.</li><li>Esconda o grupo GUIAS, exporte PNG e suba aqui.</li></ol>
     <div class="mfoot"><button class="btn" data-a="x">Fazer depois</button><button class="btn" data-a="up">Subir arte pronta</button><button class="btn pri" data-a="kit">Baixar kit Photoshop</button></div>`,b2=>{
-     b2.querySelector('[data-a=x]').onclick=closeModal;b2.querySelector('[data-a=up]').onclick=()=>{closeModal();pickFor({art:true})};b2.querySelector('[data-a=kit]').onclick=()=>exportKit(fk)});
+     b2.querySelector('[data-a=x]').onclick=(...a)=>closeModal(...a);b2.querySelector('[data-a=up]').onclick=()=>{closeModal();pickFor({art:true})};b2.querySelector('[data-a=kit]').onclick=()=>exportKit(fk)});
     document.querySelector('#tabs [data-t=camp]').click();const d=$('#artBox').closest('details');if(d)d.open=true}
    else{closeModal();toast('Campanha criada')}}})};
 $('#dupC').onclick=()=>{const c=camp(),n=Object.assign(clone(c),{id:uid(),nome:c.nome+' (cópia)',dia:-1});S.campaigns.push(n);S.campaignId=n.id;renderCamps();changed(false)};
-$('#delC').onclick=()=>{if(S.campaigns.length<2){toast('Precisa ter pelo menos uma campanha');return}const c=camp();modal(`<h3>Excluir "${esc(c.nome)}"?</h3><div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn pri" data-a="y">Excluir</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=closeModal;b.querySelector('[data-a=y]').onclick=()=>{S.campaigns=S.campaigns.filter(x=>x!==c);S.campaignId=S.campaigns[0].id;closeModal();renderCamps();changed(false)}})};
+$('#delC').onclick=()=>{if(S.campaigns.length<2){toast('Precisa ter pelo menos uma campanha');return}const c=camp();modal(`<h3>Excluir "${esc(c.nome)}"?</h3><div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn pri" data-a="y">Excluir</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=(...a)=>closeModal(...a);b.querySelector('[data-a=y]').onclick=()=>{S.campaigns=S.campaigns.filter(x=>x!==c);S.campaignId=S.campaigns[0].id;closeModal();renderCamps();changed(false)}})};
 $('#vIni').oninput=e=>{S.val.ini=e.target.value;if(S.val.fim&&S.val.fim<S.val.ini){S.val.fim=S.val.ini;$('#vFim').value=S.val.fim}changed(false)};
 $('#vFim').oninput=e=>{S.val.fim=e.target.value;changed(false)};
 $('#phr').oninput=e=>{S.phrases=e.target.value.split('\n').map(s=>s.trim().toUpperCase()).filter(Boolean);persist()};
@@ -1708,7 +1714,7 @@ function renderArt(){
 async function removeWhiteAll(){const ps=S.products.filter(p=>imgCache.has(imgKey(p)));for(let i=0;i<ps.length;i++){toast(`Tirando o fundo branco ${i+1}/${ps.length}…`,6000);try{await setImage(ps[i],await processImage(imgCache.get(imgKey(ps[i])).url,true))}catch(e){}}toast('Fundos brancos removidos')}
 function offerWhiteAll(){const n=S.products.filter(p=>imgCache.has(imgKey(p))).length;if(!n)return;
  modal(`<h3>Tirar o fundo branco das fotos?</h3><p>Sem o cartão branco, foto com fundo branco aparece como um quadrado em cima da sua arte. Posso tirar o fundo branco das ${n} fotos agora. Fundo colorido não sai.</p>
- <div class="mfoot"><button class="btn" data-a="n">Agora não</button><button class="btn pri" data-a="y">Tirar o fundo de todas</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=closeModal;b.querySelector('[data-a=y]').onclick=()=>{closeModal();removeWhiteAll()}})}
+ <div class="mfoot"><button class="btn" data-a="n">Agora não</button><button class="btn pri" data-a="y">Tirar o fundo de todas</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=(...a)=>closeModal(...a);b.querySelector('[data-a=y]').onclick=()=>{closeModal();removeWhiteAll()}})}
 function askCards(cp){
  modal(`<h3>Como os produtos ficam nesta arte?</h3><p class="hint">Fica salvo na campanha "${esc(cp.nome)}". Dá pra mudar depois em Campanha > Arte própria.</p>
  <div class="row2"><button class="btn bigc" data-v="1"><b>▣</b>Com cartão branco<br><small style="font-weight:500;color:#666">cada produto num quadrado branco</small></button>
@@ -1774,8 +1780,11 @@ async function exportMolde(){
  saveFile(`molde_${fk}_${f.w}x${f.h}_${slug(layLabel(pg))}.png`,await toBlob(c),'img')}
 
 /* ================= UI: loja ================= */
-async function setLogo(i,f){const u=await processImage(await fileToURL(f),false,true);logos[i]={img:await loadImg(u),url:u};await IDB.set('logo'+i,u);renderLogos();schedule()}
-function renderLogos(){[0,1].forEach(i=>{const el=$('#logo'+i);const L=logos[i];el.classList.toggle('has',!!L);el.style.backgroundImage=L?`url("${L.url}")`:'';el.innerHTML=L?'<button class="x">remover</button>':`Toque para enviar<br>logo ${i+1}`;
+async function setLogo(i,f){if(LOGO_FIXA)return;const u=await processImage(await fileToURL(f),false,true);logos[i]={img:await loadImg(u),url:u};await IDB.set('logo'+i,u);renderLogos();schedule()}
+function renderLogos(){if(!LOGO_TENTOU)return;applyLogoOrder();const hint=$('#lgHint');if(hint)hint.innerHTML=LOGO_FIXA?'<b>Fixas neste gerador:</b> D\'Ávila e RedeShow. Não dá para trocar nem remover por aqui; para tirar uma logo de um encarte só, use os botões de logo na tela Confira.':'Ficam no cabeçalho. PNG com fundo transparente fica melhor.';
+ [0,1].forEach(i=>{const el=$('#logo'+i);const L=logos[i];el.classList.toggle('has',!!L);el.classList.toggle('fix',LOGO_FIXA);
+ if(LOGO_FIXA){el.style.backgroundImage=`url("${L.url}")`;el.innerHTML='';el.title=L.nome;el.onclick=null;return}
+ el.style.backgroundImage=L?`url("${L.url}")`:'';el.innerHTML=L?'<button class="x">remover</button>':`Toque para enviar<br>logo ${i+1}`;
  el.onclick=()=>pickFor({logo:i});const x=el.querySelector('.x');if(x)x.onclick=async e=>{e.stopPropagation();logos[i]=null;S.store['semLogoPadrao'+i]=true;persist();await IDB.del('logo'+i);renderLogos();schedule()}})}
 [['sNome','nome'],['sWa','wa'],['sEnd','ends'],['sExtra','extra'],['sFil','filial'],['sMarg','margMin'],['sMAlvo','margAlvo'],['sFils','filiais']].forEach(([id,k])=>{const el=$('#'+id);el.value=S.store[k]||'';el.oninput=()=>{S.store[k]=el.value;changed(false);if(k==='margMin')pminLater()}});
 renderPinInfo();$('#sPin').onchange=async e=>{const v=e.target.value.trim();if(!v)return;if(v.length<4){toast('Use pelo menos 4 números');return}await setPin(v);toast('Senha do admin salva neste aparelho')};
@@ -1791,11 +1800,10 @@ function renderSaved(){const el=$('#savedList');
   r.querySelector('[data-a=open]').onclick=()=>{load(false);toast('Encarte aberto')};
   r.querySelector('[data-a=res]').onclick=()=>openResult(s);r.querySelector('[data-a=chk]').onclick=()=>conferirSistema(s.products,s.name);
   r.querySelector('[data-a=dup]').onclick=()=>{load(true);$('#saveName').value=s.name+' (nova)';toast('Cópia aberta com validade de hoje. Atualize os preços e salve.',4000)};
-  r.querySelector('[data-a=del]').onclick=()=>modal(`<h3>Tem certeza?</h3><p>O encarte salvo "${esc(s.name)}" vai ser apagado.</p><div class="mfoot"><button class="btn" data-a="n">Não</button><button class="btn pri" data-a="y">Sim, apagar</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=closeModal;b.querySelector('[data-a=y]').onclick=()=>{closeModal();S.saved=S.saved.filter(x=>x!==s);cloudDelEnc(s.id);renderSaved();persist()}})});
+  r.querySelector('[data-a=del]').onclick=()=>modal(`<h3>Tem certeza?</h3><p>O encarte salvo "${esc(s.name)}" vai ser apagado.</p><div class="mfoot"><button class="btn" data-a="n">Não</button><button class="btn pri" data-a="y">Sim, apagar</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=(...a)=>closeModal(...a);b.querySelector('[data-a=y]').onclick=()=>{closeModal();S.saved=S.saved.filter(x=>x!==s);cloudDelEnc(s.id);renderSaved();persist()}})});
  if(CLOUD.on&&!CLOUD.salvosAll){const m=document.createElement('button');m.className='btn sm';m.style.cssText='width:100%;margin-top:8px';m.textContent='Carregar encartes mais antigos';m.onclick=async()=>{m.disabled=true;m.textContent='Carregando…';try{await loadSalvos(1000)}catch(e){}renderSaved()};el.appendChild(m)}}
 $('#saveB').onclick=()=>{const name=$('#saveName').value.trim()||`${camp().nome} ${fmtD(S.val.ini)}`;const ex=S.saved.find(s=>s.name===name);const rec={id:ex?ex.id:uid(),name,at:Date.now(),por:curName(),campaignId:S.campaignId,format:S.format,val:clone(S.val),products:clone(S.products)};
  if(ex)Object.assign(ex,rec);else S.saved.unshift(rec);renderSaved();persist();cloudSaveEnc(ex||rec);toast(ex?'Encarte atualizado':'Encarte salvo')};
-
 /* ================= modal, abas ================= */
 function modal(html,mount){FILL_NEXT=null;$('#mbody').classList.remove('wide');const sd=!!editingId;$('#modal').classList.toggle('side',sd);$('#modal').classList.toggle('r',sd&&inWz());$('#modal').classList.toggle('l',sd&&!inWz());$('#mbody').innerHTML=html;$('#modal').hidden=false;mount&&mount($('#mbody'))}
 function closeModal(){$('#modal').hidden=true;editingId=null}
@@ -1880,7 +1888,7 @@ function renderCmd(n){
  $('#pgTxt').textContent=`Arte ${S.page+1} de ${n}`;$('#pgPrev').disabled=S.page<=0;$('#pgNext').disabled=S.page>=n-1}
 document.querySelectorAll('.dd').forEach(d=>{d.querySelector('.ddT').onclick=e=>{e.stopPropagation();const o=d.classList.contains('open');document.querySelectorAll('.dd.open').forEach(x=>x.classList.remove('open'));if(!o)d.classList.add('open')};d.querySelectorAll('.ddM button').forEach(b=>b.addEventListener('click',()=>d.classList.remove('open')))});
 document.addEventListener('click',e=>{if(!e.target.closest('.dd'))document.querySelectorAll('.dd.open').forEach(x=>x.classList.remove('open'))});
-$('#cbRep').onclick=repeatLast;$('#sugP').onclick=openSugest;
+$('#cbRep').onclick=(...a)=>repeatLast(...a);$('#sugP').onclick=(...a)=>openSugest(...a);
 $('#cbCamp').onchange=e=>{S.campaignId=e.target.value;renderCamps();renderArt();changed(false)};
 $('#cbTxt').onchange=e=>{S.store.txt=e.target.value;changed(false)};
 $('#cbRod').onchange=e=>{S.store.rodInv=e.target.value==='i';changed(false)};
@@ -1957,7 +1965,6 @@ async function recordVideo(vert,onP){
  await new Promise(res=>{const step=()=>{const t=(performance.now()-t0)/1000;if(vidCancel||t>=tot){res();return}const{s,lt}=slideAt(L,t);drawSlide(ctx,W,H,s,lt);onP(t/tot);setTimeout(step,1000/30)};step()});
  rec.stop();await done;st.getTracks().forEach(t=>t.stop());if(vidCancel)return null;
  const type=rec.mimeType||mime||'video/webm';return{blob:new Blob(ch,{type}),ext:type.includes('mp4')?'mp4':'webm'}}
-
 /* ================= 1+2. ofertas sugeridas pelo StarIA ================= */
 const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const daysAgo=n=>{const d=new Date();d.setDate(d.getDate()-n);return ymd(d)};
@@ -2134,7 +2141,6 @@ async function openResult(s){const codes=[...new Set(s.products.map(p=>p.code).f
   <p class="hint">Verde: vendeu 20% ou mais que a média das 4 semanas anteriores, a oferta puxou. Vermelho na variação: vendeu menos mesmo em oferta, não repita. Vermelho na margem: queimou margem.</p>
   <div class="mfoot"><button class="btn pri" data-a="n">Fechar</button></div>`,b=>{b.classList.add('wide');b.querySelector('[data-a=n]').onclick=closeModal})}
  catch(e){modal(`<h3>Resultado</h3><p>${esc(starErr(e))}</p><div class="mfoot"><button class="btn pri" data-a="n">Fechar</button></div>`,b=>b.querySelector('[data-a=n]').onclick=closeModal)}}
-
 /* ================= campanhas padrão (para a hora da pressa) ================= */
 const DIA_N=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'],DIA_M=d=>d===0||d===6;
 const PD_MOT={"carne": "steak", "verde": "leaf", "limpeza": "bubble", "imbativel": "star", "show": "sparkle", "precobaixo": "tag", "frango": "drum", "peixe": "fish", "padaria": "wheat", "gelada": "cube", "churrasco": "steak", "frios": "cheese", "beleza": "sparkle", "cesta": "basket", "pet": "paw", "doce": "heart", "feira": "leaf", "relampago": "bolt", "levemais": "plus", "cafe": "bean", "semana": "tag", "fds": "star", "feirao": "tag", "economia": "coin", "queima": "bolt", "diad": "star"};
@@ -2418,7 +2424,7 @@ $('#wzShare').onclick=async()=>{await fontsReady();if(!await reviewGate(S.produc
  snapshotKit();
  try{if(navigator.canShare&&navigator.canShare({files})){await navigator.share({files,title:camp().nome});return}}catch(e){if(e&&e.name==='AbortError')return}
  toast('Este aparelho não deixou compartilhar direto. Vou baixar a imagem para você mandar.',4500);for(const fl of files){const ok=await saveFile(fl.name,fl,'img');if(!ok)break}};$('#wzStory').onclick=dlStory;$('#wzPlaq').onclick=()=>$('#bPlaq').click();$('#wzTvB').onclick=dlTv;$('#wzKit').onclick=()=>$('#bKit').click();$('#wzA4').onclick=()=>$('#bPdf').click();
-$('#wzNew').onclick=()=>wzGo(1);$('#wzBack1').onclick=()=>wzGo(1);$('#bVenc').onclick=openVenc;$('#bCusto').onclick=openCusto;$('#bConf').onclick=()=>conferirSistema(S.products,camp().nome);$('#wzBack3').onclick=()=>wzGo(3);
+$('#wzNew').onclick=()=>wzGo(1);$('#wzBack1').onclick=()=>wzGo(1);$('#bVenc').onclick=(...a)=>openVenc(...a);$('#bCusto').onclick=(...a)=>openCusto(...a);$('#bConf').onclick=()=>conferirSistema(S.products,camp().nome);$('#wzBack3').onclick=()=>wzGo(3);
 function bankCount(){const el=$('#bankN');if(el)el.textContent=`${Object.keys(S.fotoNomes||{}).length+Object.keys(S.fotoEan||{}).length} fotos ligadas no banco`}
 $('#bankUp').onclick=()=>$('#bankIn').click();
 $('#bankIn').onchange=async e=>{const fs=[...e.target.files].filter(f=>f.type.startsWith('image/'));e.target.value='';if(!fs.length)return;let ok=0,bad=0;S.fotoNomes=S.fotoNomes||{};S.fotoEan=S.fotoEan||{};
@@ -2438,7 +2444,6 @@ $('#bDono').onclick=()=>{if(!inWz()){setUi('wz');return}
  askPin('Abrir o painel do admin',()=>setUi('dono'))};
 $('#wzPrev').addEventListener('click',e=>{if(phMoved)return;const pv=$('#wzPrev'),r=pv.getBoundingClientRect(),x=(e.clientX-r.left)*pv.width/r.width,y=(e.clientY-r.top)*pv.height/r.height;
  for(let i=PREV_HIT.length-1;i>=0;i--){const h=PREV_HIT[i];if(x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h){if(String(h.id).startsWith('vaga')){wzAdd();return}wzOpen=h.id;wzCheck();const row=document.querySelector(`.wzP[data-id="${h.id}"]`);if(row)row.scrollIntoView({block:'nearest',behavior:'smooth'});return}}});
-
 /* ================= cores do encarte (atalho rápido) ================= */
 function openCores(){const c=camp();
  modal(`<h3>Cores e fundo: ${esc(c.nome)}</h3><p class="hint">Vale para todos os produtos desta campanha. Para mudar só um produto, use "Cor da caixa de preço" dentro dele.</p>
@@ -2775,7 +2780,6 @@ function onStaria(d){const prev=STJ;STJ=d&&typeof d==='object'?d:null;try{render
   catLoad().then(()=>{S.products.forEach(p=>{const it=p.code&&CATIX.c[String(p.code)];if(it)linkTo(p,it,p.catLink||'codigo')});try{renderList();if(inWz()&&WZ===3)wzCheck()}catch(e){}toast('Preços conferidos no StarIA',5000)}).catch(()=>{})}
  if(STJ&&STJ.status==='pendente'&&stLocal()&&!STBUSY&&Array.isArray(STJ.codes)&&STJ.codes.length){STBUSY=1;const j=STJ;
   getMcp().then(m=>m?starRun(j.codes.map(String)).then(res=>stariaAplicar(res,j.id)).then(r=>toast(`Conferi no StarIA o pedido de ${j.por||'um funcionário'}: ${r.ok} produtos`,6000)):0).catch(()=>{}).finally(()=>{STBUSY=0;try{renderStarBar()}catch(e){}})}}
-
 /* ================= controle: plaquinhas impressas, conferência com o sistema, custo da oferta ================= */
 /* registro de toda plaquinha impressa (fica na área comum: todos veem o que precisa sair da gôndola) */
 function plaqLog(list,val,origem){const fim=(val&&val.fim)||today(),at=Date.now();S.plaqLog=S.plaqLog||[];
@@ -2816,7 +2820,6 @@ function openCusto(){const c=custoOferta(S.products);
  modal(`<h3>Custo estimado desta oferta</h3><p>Em ${c.dias} dia${c.dias>1?'s':''}, vendendo o mesmo que o normal, o desconto custa cerca de <b>${brl(c.tot)}</b>. Se vender o dobro, <b>${brl(c.tot*2)}</b>.</p><p class="hint">Conta: (preço normal − preço da oferta) × venda média por dia dos últimos 30 dias × dias da oferta. ${c.sem?c.sem+' produto(s) sem histórico no banco ficaram de fora.':''}</p>
  <div style="max-height:44vh;overflow:auto"><table class="sgt"><tr><th>Produto</th><th>Desconto/un</th><th>Venda/dia</th><th>Custo</th></tr>${c.rows.map(r=>`<tr><td><b>${esc(r.d)}</b></td><td>${brl(r.desc)}</td><td>${r.qd.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td><td>${brl(r.v)}</td></tr>`).join('')}</table></div>
  <div class="mfoot"><button class="btn" data-a="chk">Conferir com o sistema</button><button class="btn pri" data-a="x">Fechar</button></div>`,b=>{b.querySelector('[data-a=x]').onclick=closeModal;b.querySelector('[data-a=chk]').onclick=()=>conferirSistema(S.products,camp().nome)})}
-
 /* ================= início ================= */
 if(S.store&&S.store.pin){const v=String(S.store.pin);delete S.store.pin;if(!hasPin())setPin(v);persist()}
 IDB.get('kv:saved').then(u=>{if(!u)return;try{const L=JSON.parse(u),m=new Map((S.saved||[]).map(x=>[x.id,x]));L.forEach(x=>{const l=m.get(x.id);if(!l||(x.at||0)>(l.at||0))m.set(x.id,x)});S.saved=[...m.values()].sort((a,b)=>(b.at||0)-(a.at||0));renderSaved()}catch(e){}});
@@ -2838,7 +2841,194 @@ fontsReady().then(schedule);if(document.fonts)document.fonts.ready.then(schedule
 loadAllImages();
 setTimeout(async()=>{await cloudInit();let tv=false;try{tv=localStorage.getItem(TVKEY)==='1'}catch(e){}if(tv){await fontsReady();await loadAllImages();startTvScreen()}},300);
 $('#lgPos').value=S.store.logoPos||'lado';$('#lgFx').value=S.store.logoFx||'auto';
-$('#lgSwap').onclick=async()=>{const[a,b]=[await IDB.get('logo0'),await IDB.get('logo1')];if(b)await IDB.set('logo0',b);else await IDB.del('logo0');if(a)await IDB.set('logo1',a);else await IDB.del('logo1');[logos[0],logos[1]]=[logos[1],logos[0]];renderLogos();schedule()};
+$('#lgSwap').onclick=async()=>{if(LOGO_FIXA){S.store.logoInv=!S.store.logoInv;renderLogos();try{renderLogoT()}catch(_){}changed(false);return}const[a,b]=[await IDB.get('logo0'),await IDB.get('logo1')];if(b)await IDB.set('logo0',b);else await IDB.del('logo0');if(a)await IDB.set('logo1',a);else await IDB.del('logo1');[logos[0],logos[1]]=[logos[1],logos[0]];renderLogos();schedule()};
 $('#lgPos').onchange=e=>{S.store.logoPos=e.target.value;changed(false)};$('#lgFx').onchange=e=>{S.store.logoFx=e.target.value;changed(false)};
+/* ================= vídeo com voz (Stories e Feed) =================
+   Vídeo curto para Instagram e WhatsApp, com locução da ElevenLabs. O da TV continua sem som, com todos os produtos.
+   - O admin marca só os produtos mais fortes (cada fala gasta crédito).
+   - A fala de cada produto já vem escrita (nome + preço por extenso); dá para mudar.
+   - O tempo de cada produto na tela sai do tamanho da fala.
+   - A mesma fala nunca é paga duas vezes: o servidor guarda cada uma (vinheta da campanha, produto repetido).
+   - A chave da ElevenLabs fica só no servidor do Tino. Aqui no Claude dá para montar e testar o vídeo sem voz. */
+const VOZES=[['HR2TRGmi4QbMsO5omv7l','Rômulo Franklin: radialista (padrão)'],['zhza6dIY7yb1xz5MKTvQ','Nassif: vendedor, rápido'],['UaeEQHfiDI8l58WWXiwS','Leonardo Hamaral: comercial'],['rpNe0HOx7heUulPiOEaG','Locução para propaganda'],['4RyYr3owp1gnOgHKTs6D','Aline Mota: feminina, forte'],['Yu6uoFniEUcJhbrF7K1D','Lari Diniz: feminina, animada'],['Pxxu743NJcLUqO1QxfD6','Isabela: feminina, comercial']];
+const VOZMOD={eleven_multilingual_v2:['Melhor qualidade',1],eleven_flash_v2_5:['Econômica (metade do crédito)',0.5]};
+const VOZFMT={story:{w:1080,h:1920,label:'Stories / Reels / Status (1080×1920)'},feed:{w:1080,h:1350,label:'Feed do Instagram (1080×1350)'}};
+const VOZ_ATRASO=0.35,VOZ_MAXTX=300,VOZ_SUGESTAO=6;
+/* ---- números e preços falados ---- */
+const EXT_U=['zero','um','dois','três','quatro','cinco','seis','sete','oito','nove','dez','onze','doze','treze','catorze','quinze','dezesseis','dezessete','dezoito','dezenove'];
+const EXT_D=['','','vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa'];
+const EXT_C=['','cento','duzentos','trezentos','quatrocentos','quinhentos','seiscentos','setecentos','oitocentos','novecentos'];
+function extenso(n){n=Math.floor(Math.abs(+n||0));if(n<20)return EXT_U[n];if(n<100){const d=Math.floor(n/10),u=n%10;return EXT_D[d]+(u?' e '+EXT_U[u]:'')}
+ if(n<1000){if(n===100)return'cem';const c=Math.floor(n/100),r=n%100;return EXT_C[c]+(r?' e '+extenso(r):'')}
+ if(n<1e6){const m=Math.floor(n/1000),r=n%1000;return(m===1?'mil':extenso(m)+' mil')+(r?(r<100||r%100===0?' e ':' ')+extenso(r):'')}
+ return String(n)}
+/* como o locutor de mercado fala: 49,90 → "quarenta e nove e noventa"; 49,00 → "quarenta e nove reais"; 0,99 → "noventa e nove centavos" */
+function precoFalado(v){if(v==null||isNaN(v))return'';const c=Math.round(v*100),r=Math.floor(c/100),cc=c%100;
+ if(!r)return extenso(cc)+(cc===1?' centavo':' centavos');if(!cc)return extenso(r)+(r===1?' real':' reais');
+ if(cc<10)return extenso(r)+(r===1?' real e ':' reais e ')+extenso(cc)+(cc===1?' centavo':' centavos');return extenso(r)+' e '+extenso(cc)}
+function qtdFalada(q,u){const v=parseFloat(String(q).replace(',','.'));if(!(v>0))return'';const int=Math.floor(v),fr=Math.round((v-int)*1000);
+ const W={kg:['quilo','quilos'],g:['grama','gramas'],l:['litro','litros'],ml:['mililitro','mililitros'],un:['unidade','unidades']}[u];if(!W)return'';
+ if(!fr)return extenso(int)+' '+W[int===1?0:1];if(fr===500&&int>=1)return extenso(int)+' '+W[0]+' e meio';
+ return extenso(int)+' vírgula '+String(Math.round((v-int)*100)).replace(/0+$/,'').split('').map(d=>EXT_U[+d]).join(' ')+' '+W[1]}
+const UNI_RE={kg:'kg|kgs|quilos?|kilos?',g:'g|gr|grs|gramas?',l:'l|lt|lts|litros?',ml:'ml',un:'un|und|unid|unidades?'};
+/* nome do produto em texto para falar: sem caixa alta, sem abreviação, medidas por extenso */
+function nomeFalado(d){let t=' '+String(d||'').replace(/\s+/g,' ')+' ';
+ t=t.replace(/(\d+)\s*x\s*(?=\d)/gi,(m,a)=>' '+extenso(+a)+' de ');
+ for(const[u,re]of Object.entries(UNI_RE))t=t.replace(new RegExp('(\\d+(?:[.,]\\d+)?)\\s*(?:'+re+')(?![a-zà-ú])','gi'),(m,q)=>' '+qtdFalada(q,u)+' ');
+ const AB={'c/':'com','s/':'sem','refrig.':'refrigerante','refrig':'refrigerante','pct':'pacote','pcte':'pacote','cx':'caixa','bdj':'bandeja','emb.':'embalagem','trad.':'tradicional','sab.':'sabão','cerv.':'cerveja','lt':'lata','tp':'tipo','ref.':'refil','choc.':'chocolate','biscoito rech.':'biscoito recheado'};
+ const letras=String(d||'').replace(/[^A-Za-zÀ-ú]/g,''),tudoCaixaAlta=letras.length>3&&letras===letras.toUpperCase();
+ t=t.split(' ').map(w=>{const k=w.toLowerCase();if(AB[k])return AB[k];if(/[A-ZÀ-Ú]/.test(w)&&w===w.toUpperCase()&&!/\d/.test(w)&&(tudoCaixaAlta?w.length>1:w.length>3))return['DE','DA','DO','DAS','DOS','COM','SEM','E'].includes(w)?k:w.charAt(0)+w.slice(1).toLowerCase();return w}).join(' ');
+ return t.replace(/\b(\d+)\b/g,(m,n)=>+n<1e6?extenso(+n):m).replace(/[\/|_*#]+/g,' ').replace(/\s+/g,' ').trim()}
+const UNI_FALA={kg:'o quilo','100g':'os cem gramas',L:'o litro',dz:'a dúzia',bandeja:'a bandeja',cento:'o cento',metro:'o metro'};
+function falaAuto(p){const nome=nomeFalado(p.desc)||'Oferta',u=UNI_FALA[p.unit]?' '+UNI_FALA[p.unit]:'';
+ if(hasApp(p))return`${nome}: no app, só ${precoFalado(Math.min(p.app,p.price))}${u}!`;
+ if(p.price==null||isNaN(p.price))return nome+'!';return`${nome}: só ${precoFalado(p.price)}${u}!`}
+const titFalado=t=>String(t||'').split(/\s+/).map((w,i)=>{const l=w.toLowerCase();return i&&['da','de','do','das','dos','e','na','no'].includes(l)?l:l.charAt(0).toUpperCase()+l.slice(1)}).join(' ');
+function aberturaAuto(){const cp=camp(),n=titFalado(cp.titulo||cp.nome||'Ofertas');const loja=(S.store.nome||'').trim();return`${n}${/[!?.]$/.test(n)?'':'!'} Confira as ofertas${loja?' do '+loja:''}.`}
+const fechamentoAuto=()=>'Baixe o app e pague menos! Corre, que é por tempo limitado.';
+/* ---- estado ---- */
+function vozSt(){if(!S.voz||typeof S.voz!=='object')S.voz={};const v=S.voz;if(!Array.isArray(v.sel))v.sel=S.products.filter(p=>p.featured).slice(0,VOZ_SUGESTAO).map(p=>p.id);
+ if(!v.falas||typeof v.falas!=='object')v.falas={};if(!VOZFMT[v.fmt])v.fmt='story';if(v.musVol==null)v.musVol=0.25;return v}
+function vozCfg(){const c=Object.assign({voz:VOZES[0][0],modelo:'eleven_multilingual_v2'},S.vozCfg||{});if(!VOZMOD[c.modelo])c.modelo='eleven_multilingual_v2';if(!/^[A-Za-z0-9]{10,40}$/.test(c.voz))c.voz=VOZES[0][0];return c}
+const vozSel=()=>{const v=vozSt(),ids=new Set(v.sel);return S.products.filter(p=>ids.has(p.id))};
+const falaDe=p=>{const f=vozSt().falas[p.id];return f!=null&&String(f).trim()?String(f):falaAuto(p)};
+const abertura=()=>{const v=vozSt();return v.abre!=null&&String(v.abre).trim()?String(v.abre):aberturaAuto()};
+const fechamento=()=>{const v=vozSt();return v.fecha!=null&&String(v.fecha).trim()?String(v.fecha):fechamentoAuto()};
+const limpaFala=t=>String(t||'').replace(/\s+/g,' ').trim();
+/* o que vai ser falado, na ordem do vídeo (vazio = cena sem voz) */
+function vozRoteiro(){const v=vozSt();return[{k:'intro',fala:v.semAbre?'':limpaFala(abertura())},...vozSel().map(p=>({k:'p',p,fala:limpaFala(falaDe(p))})),{k:'outro',fala:v.semFecha?'':limpaFala(fechamento())}]}
+/* tempo de cada cena: a fala inteira cabe, com respiro; sem fala, o tempo padrão */
+function vozTempos(R){return R.map(s=>{const min=s.k==='intro'?3:s.k==='outro'?4:3,f=s.buf?s.buf.duration:0;return Object.assign({},s,{d:Math.max(min,f?Math.round((f+VOZ_ATRASO+0.7)*100)/100:min)})})}
+const credOf=(t,modelo)=>Math.ceil(String(t).length*(VOZMOD[modelo]||VOZMOD.eleven_multilingual_v2)[1]);
+/* ---- servidor (Tino) ---- */
+const vozLigada=()=>!!(window.TINO&&window.TINO.api)||typeof window.__VOZ_FAKE==='function';
+async function vozApi(body){if(typeof window.__VOZ_FAKE==='function')return window.__VOZ_FAKE(body);return window.TINO.api('/api/encartes/voz',body)}
+let VOZINFO=null;
+async function vozInfo(){if(!vozLigada())return null;try{VOZINFO=await vozApi(undefined)}catch(e){VOZINFO={erro:e.message||String(e)}}return VOZINFO}
+const b64ab=b=>{const s=atob(b),a=new Uint8Array(s.length);for(let i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return a.buffer};
+async function decodeAudio(ab){const ctx=new OfflineAudioContext(2,1,48000);return await ctx.decodeAudioData(ab)}
+/* ---- tela ---- */
+function renderVoz(){const el=$('#t-voz');if(!el)return;const v=vozSt(),c=vozCfg(),R=vozRoteiro(),sel=vozSel(),lig=vozLigada();
+ const tot=R.reduce((a,s)=>a+(s.fala?credOf(s.fala,c.modelo):0),0),seg=Math.round(R.reduce((a,s)=>a+(s.fala?Math.max(s.k==='outro'?4:3,s.fala.length/14+1):s.k==='outro'?4:3),0));
+ const I=VOZINFO;const stTxt=!lig?'<b>Aqui no Claude a voz não liga</b> (a chave da ElevenLabs fica guardada no Tino). Monte o vídeo aqui e teste <b>sem voz</b>; com voz, gere pelo Tino.'
+  :!I?'Conferindo a voz…':I.erro?esc(I.erro):!I.ligada?'<b>A voz ainda não está ligada.</b> Falta colocar a chave da ElevenLabs na Vercel (variável <b>ELEVENLABS_API_KEY</b>). Até lá, dá para montar tudo e gerar sem voz.'
+  :`Voz ligada. Este mês: <b>${(I.usado||0).toLocaleString('pt-BR')}</b> de ${(I.limite||0).toLocaleString('pt-BR')} créditos.`;
+ el.innerHTML=`<div class="vozBox ${lig&&I&&I.ligada?'ok':''}"><p>${stTxt}</p></div>
+ <p class="hint">Vídeo curto com locução, para Stories, Reels, Status e Feed. Marque <b>só os produtos mais fortes</b> (até ${VOZ_SUGESTAO} é o ideal): cada fala gasta crédito. O vídeo da TV continua no botão <b>Gerar vídeo</b>, sem som e com todos os produtos.</p>
+ <label>Formato<select id="vzFmt">${Object.entries(VOZFMT).map(([k,f])=>`<option value="${k}" ${v.fmt===k?'selected':''}>${esc(f.label)}</option>`).join('')}</select></label>
+ <h4>Abertura <label class="vzOff"><input type="checkbox" id="vzSemA" ${v.semAbre?'checked':''}> sem fala</label></h4>
+ <textarea id="vzAbre" class="vzTx" maxlength="${VOZ_MAXTX}" ${v.semAbre?'disabled':''}>${esc(abertura())}</textarea>
+ <h4>Produtos <small id="vzN">${sel.length} de ${S.products.length} marcados</small></h4>
+ ${sel.length>8?`<p class="warn">${sel.length} produtos deixam o vídeo longo e gastam mais crédito. O ideal é até ${VOZ_SUGESTAO}.</p>`:''}
+ <div class="bar"><button class="btn sm" id="vzDest">Marcar os destaques</button><button class="btn sm ghost" id="vzNone">Desmarcar todos</button></div>
+ <div id="vzList">${S.products.map(p=>{const on=v.sel.includes(p.id),ed=v.falas[p.id]!=null&&String(v.falas[p.id]).trim();return`<div class="vzP ${on?'on':''}" data-id="${esc(p.id)}">
+  <label class="vzChk"><input type="checkbox" ${on?'checked':''}><span><b>${esc(p.desc||'(sem nome)')}</b><small>${p.price!=null&&!isNaN(p.price)?esc(brl(p.price)):''}${hasApp(p)?' • app '+esc(brl(p.app)):''}${p.featured?' • destaque':''}</small></span></label>
+  ${on?`<textarea class="vzTx" maxlength="${VOZ_MAXTX}">${esc(falaDe(p))}</textarea><div class="vzRow"><small>${credOf(limpaFala(falaDe(p)),c.modelo)} créditos${ed?' • fala sua':' • fala automática'}</small>${ed?'<button class="btn sm ghost" data-a="auto">Voltar à automática</button>':''}</div>`:''}</div>`}).join('')||'<p class="hint">Adicione produtos na aba Produtos.</p>'}</div>
+ <h4>Fechamento <label class="vzOff"><input type="checkbox" id="vzSemF" ${v.semFecha?'checked':''}> sem fala</label></h4>
+ <textarea id="vzFecha" class="vzTx" maxlength="${VOZ_MAXTX}" ${v.semFecha?'disabled':''}>${esc(fechamento())}</textarea>
+ <details class="sec"><summary>Voz e música</summary><div class="in">
+  <label>Voz<select id="vzVoz">${VOZES.map(([id,n])=>`<option value="${id}" ${c.voz===id?'selected':''}>${esc(n)}</option>`).join('')}${VOZES.some(x=>x[0]===c.voz)?'':`<option value="${esc(c.voz)}" selected>Outra: ${esc(c.voz)}</option>`}<option value="+">Outra (colar o código da voz)…</option></select></label>
+  <p class="hint">Na ElevenLabs, a voz escolhida precisa estar em <b>My Voices</b>: abra a voz na Voice Library e toque em <b>Add to my voices</b>.</p>
+  <label>Qualidade<select id="vzMod">${Object.entries(VOZMOD).map(([k,[n]])=>`<option value="${k}" ${c.modelo===k?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
+  <label>Limite de créditos por mês<input type="number" id="vzLim" min="0" step="1000" value="${I&&I.limite!=null?I.limite:30000}" ${lig&&I&&!I.erro?'':'disabled'}></label>
+  <p class="hint">Trava de segurança: passou do limite, o app não gera mais voz no mês. O plano Starter tem 30.000.</p>
+  <label>Música de fundo (opcional, MP3 sem direitos autorais)</label><div class="bar"><button class="btn sm" id="vzMus">${v.musNome?'Trocar música':'Escolher música'}</button>${v.musNome?`<span class="hint" style="margin:0">${esc(v.musNome)}</span><button class="btn sm ghost" id="vzMusX">Tirar</button>`:''}</div>
+  ${v.musNome?`<label>Volume da música<input type="range" id="vzVol" min="0.05" max="0.6" step="0.05" value="${v.musVol}"></label><p class="hint">Abaixa sozinha enquanto a voz fala.</p>`:''}
+  <input type="file" id="vzMusIn" accept="audio/*" hidden>
+ </div></details>
+ <div class="vozSum"><b>${R.filter(s=>s.fala).length} falas • até ${tot.toLocaleString('pt-BR')} créditos • uns ${seg} segundos</b><small>Fala que já foi gerada antes não gasta de novo.</small></div>
+ <div class="prog" hidden id="vzProg"><i></i></div><p class="hint" id="vzEtapa" hidden></p>
+ <div class="bar vzAct"><button class="btn pri big" id="vzGo" ${sel.length&&lig&&I&&I.ligada?'':'disabled'}>Gerar vídeo com voz</button><button class="btn big" id="vzMudo" ${sel.length?'':'disabled'}>Gerar sem voz (teste)</button></div>`;
+ const keep=()=>persist();
+ $('#vzFmt').onchange=e=>{v.fmt=e.target.value;keep()};
+ $('#vzAbre').oninput=e=>{v.abre=e.target.value;keep()};$('#vzFecha').oninput=e=>{v.fecha=e.target.value;keep()};
+ $('#vzAbre').onchange=$('#vzFecha').onchange=()=>renderVoz();
+ $('#vzSemA').onchange=e=>{v.semAbre=e.target.checked;keep();renderVoz()};$('#vzSemF').onchange=e=>{v.semFecha=e.target.checked;keep();renderVoz()};
+ $('#vzDest').onclick=()=>{v.sel=S.products.filter(p=>p.featured).slice(0,VOZ_SUGESTAO).map(p=>p.id);if(!v.sel.length)toast('Nenhum produto marcado como destaque na lista');keep();renderVoz()};
+ $('#vzNone').onclick=()=>{v.sel=[];keep();renderVoz()};
+ el.querySelectorAll('.vzP').forEach(row=>{const id=row.dataset.id;
+  row.querySelector('.vzChk input').onchange=e=>{v.sel=v.sel.filter(x=>x!==id);if(e.target.checked){const ord=S.products.map(p=>p.id);v.sel.push(id);v.sel.sort((a,b)=>ord.indexOf(a)-ord.indexOf(b))}keep();renderVoz()};
+  const tx=row.querySelector('textarea');if(tx){tx.oninput=()=>{v.falas[id]=tx.value;keep()};tx.onchange=()=>{if(!tx.value.trim())delete v.falas[id];keep();renderVoz()}}
+  const au=row.querySelector('[data-a=auto]');if(au)au.onclick=()=>{delete v.falas[id];keep();renderVoz()}});
+ $('#vzVoz').onchange=e=>{const id=e.target.value,set=id=>{S.vozCfg=Object.assign(vozCfg(),{voz:id});changed(false);renderVoz()};if(id!=='+'){set(id);return}
+  modal(`<h3>Outra voz</h3><p class="hint">Na ElevenLabs, abra a voz e copie o <b>Voice ID</b> (letras e números).</p><label>Código da voz<input id="vzVid" autocomplete="off"></label><div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn pri" data-a="y">Usar esta voz</button></div>`,b=>{
+   b.querySelector('[data-a=n]').onclick=()=>{closeModal();renderVoz()};b.querySelector('[data-a=y]').onclick=()=>{const v=$('#vzVid').value.trim();if(!/^[A-Za-z0-9]{10,40}$/.test(v)){toast('Código de voz inválido');return}closeModal();set(v)}})};
+ $('#vzMod').onchange=e=>{S.vozCfg=Object.assign(vozCfg(),{modelo:e.target.value});changed(false);renderVoz()};
+ const lim=$('#vzLim');if(lim)lim.onchange=async()=>{const n=Math.max(0,Math.floor(+lim.value||0));try{if(CLOUD.db)await CLOUD.db.doc('app/vozcfg').set({limite:n});toast('Limite salvo: '+n.toLocaleString('pt-BR')+' créditos por mês');await vozInfo();renderVoz()}catch(e){toast('Não consegui salvar o limite')}};
+ $('#vzMus').onclick=()=>$('#vzMusIn').click();
+ $('#vzMusIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(f.size>15e6){toast('Música grande demais (até 15 MB)');return}
+  try{await decodeAudio(await f.arrayBuffer());await IDB.setRaw('voz:musica',f);v.musNome=f.name;keep();renderVoz();toast('Música pronta')}catch(err){toast('Não consegui ler esta música. Use MP3.')}};
+ const mx=$('#vzMusX');if(mx)mx.onclick=async()=>{delete v.musNome;keep();try{await IDB.setRaw('voz:musica',null)}catch(e){}renderVoz()};
+ const vol=$('#vzVol');if(vol)vol.oninput=()=>{v.musVol=+vol.value;keep()};
+ $('#vzGo').onclick=()=>vozGerar(true);$('#vzMudo').onclick=()=>vozGerar(false)}
+/* ---- gerar ---- */
+let VOZRUN=false;
+function vozProg(p,txt){const b=$('#vzProg');if(b){b.hidden=false;const i=b.querySelector('i');if(i)i.style.width=Math.round(p*100)+'%'}const e=$('#vzEtapa');if(e&&txt!=null){e.hidden=false;e.textContent=txt}}
+async function vozFalas(R,c,onP){/* pega o áudio de cada fala (do servidor; as já geradas vêm guardadas) */
+ const out=[];let i=0;for(const s of R){i++;if(!s.fala){out.push(Object.assign({},s,{buf:null}));continue}
+  onP&&onP(i/R.length,`Gerando a voz ${i} de ${R.length}…`);
+  const r=await vozApi({texto:s.fala,voz:c.voz,modelo:c.modelo});if(!r||!r.audio)throw new Error('A voz não veio. Tente de novo.');
+  out.push(Object.assign({},s,{buf:await decodeAudio(b64ab(r.audio)),cred:r.cred||0}))}
+ return out}
+async function vozEstimar(R,c){let cred=0,novas=0;for(const s of R){if(!s.fala)continue;const r=await vozApi({texto:s.fala,voz:c.voz,modelo:c.modelo,estimar:true});if(r&&!r.cache){cred+=r.cred||0;novas++}}return{cred,novas}}
+async function vozConfirma(est,I){return new Promise(res=>{const sobra=I&&I.limite!=null?I.limite-(I.usado||0):null;
+ modal(`<h3>Gerar vídeo com voz</h3>${est.novas?`<p><b>${est.novas} fala${est.novas>1?'s':''} nova${est.novas>1?'s':''}</b>: vai gastar uns <b>${est.cred.toLocaleString('pt-BR')} créditos</b>.</p>`:'<p><b>Todas as falas já foram geradas antes: não gasta crédito.</b></p>'}
+ ${sobra!=null?`<p class="hint">Sobram ${Math.max(0,sobra).toLocaleString('pt-BR')} créditos neste mês.</p>`:''}${sobra!=null&&est.cred>sobra?'<p class="warn r">Passa do limite do mês. Diminua os produtos ou aumente o limite.</p>':''}
+ <div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn pri" data-a="y" ${sobra!=null&&est.cred>sobra?'disabled':''}>Gerar</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=()=>{closeModal();res(false)};b.querySelector('[data-a=y]').onclick=()=>{closeModal();res(true)}})})}
+async function vozMusica(){const v=vozSt();if(!v.musNome)return null;try{const f=await IDB.get('voz:musica');if(!f)return null;return await decodeAudio(await f.arrayBuffer())}catch(e){return null}}
+/* junta vozes e música numa trilha só; a música abaixa enquanto a voz fala e some no fim */
+async function vozMix(L,tot,mus,vol){const SR=48000,ctx=new OfflineAudioContext(2,Math.max(1,Math.ceil(tot*SR)),SR);let t=0;const falas=[];
+ for(const s of L){if(s.buf){const src=ctx.createBufferSource();src.buffer=s.buf;src.connect(ctx.destination);src.start(t+VOZ_ATRASO);falas.push([t+VOZ_ATRASO,t+VOZ_ATRASO+s.buf.duration])}t+=s.d}
+ if(mus){const src=ctx.createBufferSource(),g=ctx.createGain();src.buffer=mus;src.loop=true;src.connect(g);g.connect(ctx.destination);const hi=vol,lo=vol*0.3;g.gain.setValueAtTime(falas.length&&falas[0][0]<0.5?lo:hi,0);
+  for(const[a,b]of falas){g.gain.setTargetAtTime(lo,Math.max(0,a-0.2),0.06);g.gain.setTargetAtTime(hi,b+0.15,0.3)}g.gain.setTargetAtTime(0,Math.max(0,tot-1.5),0.35);src.start(0)}
+ return ctx.startRendering()}
+async function vozGerar(comVoz){if(VOZRUN)return;const sel=vozSel();if(!sel.length){toast('Marque pelo menos um produto');return}
+ if(!await reviewGate(sel))return;const c=vozCfg(),v=vozSt(),f=VOZFMT[v.fmt];let R=vozRoteiro();if(!comVoz)R=R.map(s=>Object.assign({},s,{fala:''}));
+ VOZRUN=true;const bt=[$('#vzGo'),$('#vzMudo')];bt.forEach(b=>b&&(b.disabled=true));
+ try{if(comVoz){vozProg(0.02,'Conferindo quanto vai gastar…');const est=await vozEstimar(R,c);if(!await vozConfirma(est,VOZINFO)){renderVoz();return}}
+  const L=vozTempos(comVoz?await vozFalas(R,c,(p,t)=>vozProg(p*0.4,t)):R),tot=L.reduce((a,s)=>a+s.d,0);
+  vozProg(0.42,'Juntando voz e música…');const mus=await vozMusica(),mix=(comVoz||mus)?await vozMix(L,tot,mus,v.musVol):null;
+  vozProg(0.45,'Montando o vídeo…');await fontsReady();
+  const r=await vozVideo(f.w,f.h,L,mix,p=>vozProg(0.45+p*0.55,'Montando o vídeo…'));
+  if(!r){toast('Não consegui gerar o vídeo neste navegador. Use o Chrome.',5000);return}
+  if(r.ext!=='mp4')toast('Este navegador só gerou WebM: o Instagram pode não aceitar. Gere pelo Chrome no computador.',7000);
+  if(r.audio==='opus')toast('O som saiu em Opus: o Instagram e alguns celulares podem não aceitar. Gere pelo Chrome no computador (Mac ou Windows), que sai em AAC.',8000);
+  if(tot>60)toast(`O vídeo ficou com ${Math.round(tot)} segundos: o Stories corta em 60. Tire algum produto.`,7000);
+  if(comVoz)vozInfo().then(()=>{});saveFile(fname(r.ext,'_'+v.fmt+(comVoz?'_voz':'_semvoz')),r.blob,'video')}
+ catch(e){toast(e&&e.message?e.message:'Não consegui gerar o vídeo',6000)}
+ finally{VOZRUN=false;if($('#t-voz'))renderVoz()}}
+/* vídeo MP4 com som: imagem quadro a quadro (H.264) e trilha (AAC; Opus se o aparelho não tiver AAC).
+   Sem esses recursos no navegador, grava em tempo real (MediaRecorder) com o som junto. */
+async function vozVideo(W,H,L,mix,onP){try{const r=await vozMp4(W,H,L,mix,onP);if(r)return r}catch(e){}return vozRealtime(W,H,L,mix,onP)}
+async function vozMp4(W,H,L,mix,onP){
+ if(typeof VideoEncoder==='undefined'||typeof VideoFrame==='undefined')return null;if(mix&&(typeof AudioEncoder==='undefined'||typeof AudioData==='undefined'))return null;
+ const fps=30;let codec=null;for(const cd of['avc1.640028','avc1.4d0028','avc1.42003e']){try{const r=await VideoEncoder.isConfigSupported({codec:cd,width:W,height:H,bitrate:8e6,framerate:fps});if(r&&r.supported){codec=cd;break}}catch(e){}}if(!codec)return null;
+ let ac=null;if(mix){for(const[cd,mx]of[['mp4a.40.2','aac'],['opus','opus']]){try{const r=await AudioEncoder.isConfigSupported({codec:cd,sampleRate:mix.sampleRate,numberOfChannels:2,bitrate:128000});if(r&&r.supported){ac={cd,mx};break}}catch(e){}}if(!ac)return null}
+ let M;try{M=await loadLib('/vendor/mp4-muxer-5.2.2.js','Mp4Muxer')}catch(e){return null}
+ const target=new M.ArrayBufferTarget(),mux=new M.Muxer(Object.assign({target,video:{codec:'avc',width:W,height:H,frameRate:fps},fastStart:'in-memory',firstTimestampBehavior:'offset'},ac?{audio:{codec:ac.mx,numberOfChannels:2,sampleRate:mix.sampleRate}}:{}));
+ let err=null;
+ if(ac){const ae=new AudioEncoder({output:(ch,meta)=>mux.addAudioChunk(ch,meta),error:e=>{err=e}});ae.configure({codec:ac.cd,sampleRate:mix.sampleRate,numberOfChannels:2,bitrate:128000});
+  const SR=mix.sampleRate,n=mix.length,A=mix.getChannelData(0),B=mix.numberOfChannels>1?mix.getChannelData(1):A,BL=4800;
+  for(let o=0;o<n&&!err;o+=BL){const k=Math.min(BL,n-o),d=new Float32Array(k*2);d.set(A.subarray(o,o+k),0);d.set(B.subarray(o,o+k),k);
+   const ad=new AudioData({format:'f32-planar',sampleRate:SR,numberOfFrames:k,numberOfChannels:2,timestamp:Math.round(o/SR*1e6),data:d});ae.encode(ad);ad.close();if(ae.encodeQueueSize>20)await new Promise(r=>setTimeout(r,0))}
+  await ae.flush();ae.close()}
+ if(err)return null;
+ const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d'),tot=L.reduce((a,s)=>a+s.d,0),N=Math.ceil(tot*fps);
+ const enc=new VideoEncoder({output:(ch,meta)=>mux.addVideoChunk(ch,meta),error:e=>{err=e}});enc.configure({codec,width:W,height:H,bitrate:8e6,framerate:fps,avc:{format:'avc'}});
+ for(let i=0;i<N;i++){if(err)break;const{s,lt}=slideAt(L,i/fps);drawSlide(ctx,W,H,s,lt);const fr=new VideoFrame(cv,{timestamp:Math.round(i*1e6/fps),duration:Math.round(1e6/fps)});enc.encode(fr,{keyFrame:i%(fps*2)===0});fr.close();
+  if(enc.encodeQueueSize>6)await new Promise(r=>setTimeout(r,0));if(i%15===0){onP(i/N);await new Promise(r=>setTimeout(r,0))}}
+ if(err){try{enc.close()}catch(e){}return null}
+ await enc.flush();enc.close();mux.finalize();onP(1);return{blob:new Blob([target.buffer],{type:'video/mp4'}),ext:'mp4',audio:ac?ac.mx:null}}
+async function vozRealtime(W,H,L,mix,onP){if(typeof MediaRecorder==='undefined'||!HTMLCanvasElement.prototype.captureStream)return null;
+ const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d'),tot=L.reduce((a,s)=>a+s.d,0),st=cv.captureStream(30);let ac=null,src=null;
+ if(mix){try{ac=new AudioContext({sampleRate:mix.sampleRate});const dst=ac.createMediaStreamDestination();src=ac.createBufferSource();src.buffer=mix;src.connect(dst);dst.stream.getAudioTracks().forEach(t=>st.addTrack(t))}catch(e){ac=null}}
+ const mime=['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(m=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(m));
+ const rec=new MediaRecorder(st,mime?{mimeType:mime,videoBitsPerSecond:8e6}:{}),ch=[];rec.ondataavailable=e=>e.data.size&&ch.push(e.data);const done=new Promise(r=>rec.onstop=r);
+ drawSlide(ctx,W,H,L[0],0);rec.start(250);if(src){try{await ac.resume()}catch(e){}src.start()}const t0=performance.now();
+ await new Promise(res=>{const step=()=>{const t=(performance.now()-t0)/1000;if(t>=tot){res();return}const{s,lt}=slideAt(L,t);drawSlide(ctx,W,H,s,lt);onP(t/tot);setTimeout(step,1000/30)};step()});
+ rec.stop();await done;st.getTracks().forEach(t=>t.stop());if(ac)try{ac.close()}catch(e){}
+ const type=rec.mimeType||mime||'video/webm';return{blob:new Blob(ch,{type}),ext:type.includes('mp4')?'mp4':'webm',audio:mix?'rec':null}}
+/* abre a aba: confere a voz (uma vez por abertura) e desenha */
+(()=>{const b=document.querySelector('#tabs [data-t=voz]');if(!b)return;b.addEventListener('click',()=>{renderVoz();vozInfo().then(()=>{if(document.querySelector('#tabs [data-t=voz].on'))renderVoz()})})})();
 
 document.querySelectorAll('[data-wzgo]').forEach(b=>b.addEventListener('click',()=>wzGo(+b.dataset.wzgo)));
