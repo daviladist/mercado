@@ -332,11 +332,22 @@ function discOf(p){if(p.price==null||isNaN(p.price))return 0;if(p.old>p.price)re
 function tierOf(p){if(p.featured)return 3;if(p.papel==='destaque')return 2;if(p.papel==='complemento')return 0;return 1}
 function scoreOf(p){return discOf(p)+(p.phrase?0.05:0)+(p.limit>0?0.03:0)}
 const hasApp=p=>!!p.appOn&&p.app!=null&&!isNaN(p.app)&&p.price!=null&&!isNaN(p.price)&&p.app!==p.price;
+/* preço DE/POR: o preço normal aparece riscado, com o desconto calculado */
+const hasDe=p=>!hasApp(p)&&p.old!=null&&p.price!=null&&!isNaN(p.price)&&p.price>0&&p.old>p.price;
+function drawDe(c,p,x,y,w,h,sc){const lab='DE',pr=brl(p.old),pc=Math.round((p.old-p.price)/p.old*100),bt=pc>=1?'-'+pc+'%':'';
+ c.save();c.fillStyle=sc.bg;rr(c,x,y,w,h,Math.min(h*0.22,w*0.05));c.fill();
+ let s=h*0.6,lw,pw,bw;const meas=()=>{c.font=O(s*0.62,700);lw=c.measureText(lab).width;c.font=F(s);pw=c.measureText(pr).width;bw=bt?c.measureText(bt).width+s*0.5:0},tot=()=>lw+s*0.35+pw+(bt?s*0.5+bw:0);
+ meas();s*=Math.min(1,(w*0.92)/tot());meas();
+ let sx=x+(w-tot())/2;const my=y+h/2;c.fillStyle=sc.fg;c.textBaseline='middle';c.textAlign='left';
+ c.font=O(s*0.62,700);c.fillText(lab,sx,my);sx+=lw+s*0.35;c.font=F(s);c.fillText(pr,sx,my+s*0.04);
+ c.strokeStyle=sc.fg;c.lineWidth=Math.max(1.5,s*0.09);c.beginPath();c.moveTo(sx-s*0.08,my+s*0.14);c.lineTo(sx+pw+s*0.08,my-s*0.1);c.stroke();sx+=pw+s*0.5;
+ if(bt){const bh=Math.min(h*0.82,s*1.15);c.fillStyle='#ffd400';rr(c,sx,my-bh/2,bw,bh,bh*0.25);c.fill();c.fillStyle='#111111';c.textAlign='center';c.font=F(s*0.92);c.fillText(bt,sx+bw/2,my+s*0.04)}
+ c.restore()}
 function isReddish(hex){const m=/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex||'');if(!m)return false;const r=parseInt(m[1],16),g=parseInt(m[2],16),b=parseInt(m[3],16);return r>140&&g<110&&b<110}
 const semCol=(C,bg)=>isReddish(C.preco)||(bg&&isReddish(C.fundo))?{bg:'#111111',fg:'#ffffff'}:{bg:'#d71920',fg:'#ffffff'};
 /* bloco de preço: sem app x com app. mode 'stack' = sem app em cima; 'split' = lado a lado */
 function drawPriceBlock(c,p,x,y,w,h,C,mode,onBg){
- if(!hasApp(p)){drawPrice(c,x,y,w,h,p.price,p.unit,C);return}
+ if(!hasApp(p)){if(hasDe(p)){const th=h*0.27,g=Math.max(3,Math.min(w,h)*0.035);drawDe(c,p,x,y,w,th,semCol(C,onBg));drawPrice(c,x,y+th+g,w,h-th-g,p.price,p.unit,C);return}drawPrice(c,x,y,w,h,p.price,p.unit,C);return}
  const sc=semCol(C,onBg),g=Math.max(3,Math.min(w,h)*0.035);
  if(mode==='stack'){
   const th=h*0.3;c.save();c.fillStyle=sc.bg;rr(c,x,y,w,th,Math.min(th*0.22,w*0.05));c.fill();
@@ -396,7 +407,7 @@ function drawVitrine(c,p,x,y,w,h,C,iss){
  if(HIT&&c.canvas===HIT.cv)HIT.list.push({x,y,w,h,id:p.id,card:1});
  const lt=hexLum(C.fundo)>0.6,txt=lt?'#15171c':'#ffffff',horiz=w/h>1.3,app=hasApp(p),m=Math.min(w,h);
  const pr=isReddish(C.fundo)&&isReddish(C.preco)?{bg:'#ffd400',fg:'#111111'}:{bg:C.preco,fg:C.precoTexto};
- const up0=!!unitPriceText(p),vph=h*(app?0.36:0.25),vlh=p.limit>0?h*0.055:0,vuh=up0?h*0.045:0,vdh=h*0.12*(p.descK||1),vdy=y+h-vph-vlh-vuh-vdh-h*0.01;
+ const up0=!!unitPriceText(p),vph=h*(app?0.36:hasDe(p)?0.32:0.25),vlh=p.limit>0?h*0.055:0,vuh=up0?h*0.045:0,vdh=h*0.12*(p.descK||1),vdy=y+h-vph-vlh-vuh-vdh-h*0.01;
  const ix=horiz?x:x+w*0.02,iy=y+h*0.01,iw=horiz?w*0.56:w*0.96,ih=horiz?h*0.96:vdy-y-h*0.02;
  /* luz atrás do produto */
  c.save();const gx=ix+iw/2,gy=iy+ih*0.55,gr=c.createRadialGradient(gx,gy,0,gx,gy,Math.max(iw,ih)*0.62);gr.addColorStop(0,lt?'rgba(255,255,255,.9)':'rgba(255,255,255,.34)');gr.addColorStop(0.5,lt?'rgba(255,255,255,.4)':'rgba(255,255,255,.1)');gr.addColorStop(1,'rgba(255,255,255,0)');c.fillStyle=gr;c.fillRect(x-w*0.1,y-h*0.1,w*1.2,h*1.2);c.restore();
@@ -404,14 +415,16 @@ function drawVitrine(c,p,x,y,w,h,C,iss){
  if(p.featured&&destKind(p)==='raios'){c.save();const R=Math.hypot(w,h)*0.6,n=24;c.beginPath();c.rect(x,y,w,h);c.clip();c.fillStyle=lt?'rgba(0,0,0,.05)':'rgba(255,255,255,.07)';for(let i=0;i<n;i+=2){const a0=i/n*Math.PI*2,a1=(i+1)/n*Math.PI*2;c.beginPath();c.moveTo(gx,gy);c.lineTo(gx+Math.cos(a0)*R,gy+Math.sin(a0)*R);c.lineTo(gx+Math.cos(a1)*R,gy+Math.sin(a1)*R);c.closePath();c.fill()}c.restore()}
  groundShadow(c,p,ix,iy,iw,ih);prodImg(c,p,ix,iy,iw,ih,p.prOver?{x,y,w,h}:null);
  const up=!!unitPriceText(p);
- if(horiz){const tx=x+w*0.55,tw=w*0.45;const ph=h*(app?0.5:0.38),py=y+h-ph-h*0.04,lh=p.limit>0?h*0.1:0;
+ if(horiz){const tx=x+w*0.55,tw=w*0.45;const ph=h*(app?0.5:hasDe(p)?0.46:0.38),py=y+h-ph-h*0.04,lh=p.limit>0?h*0.1:0;
   const dh=py-lh-y-h*0.06-(up?h*0.08:0);drawDesc(c,p,tx,y+h*0.04,tw,dh,iss,'left',3,txt);if(up)drawUnitPrice(c,p,tx,y+h*0.04+dh,tw,h*0.08,'left',lt?'#444':'rgba(255,255,255,.85)');
   if(lh)drawLimit(c,p,tx,py-lh-h*0.02,tw,lh,!lt);
   if(app){const sh=ph*0.4;drawTag(c,tx+tw*0.22,py,tw*0.78,sh,p.price,p.unit,lt?'#15171c':'#ffffff',lt?'#ffffff':'#15171c','SEM APP',C);drawTag(c,tx-tw*0.04,py+sh+h*0.015,tw*1.04,ph-sh-h*0.015,p.app,p.unit,pr.bg,pr.fg,'COM APP',C)}
+  else if(hasDe(p)){const sh=ph*0.28;drawDe(c,p,tx,py,tw*0.96,sh,{bg:lt?'#15171c':'#ffffff',fg:lt?'#ffffff':'#15171c'});drawTag(c,tx-tw*0.04,py+sh+h*0.015,tw*1.04,ph-sh-h*0.015,p.price,p.unit,pr.bg,pr.fg,null,C)}
   else drawTag(c,tx-tw*0.04,py,tw*1.04,ph,p.price,p.unit,pr.bg,pr.fg,null,C)}
  else{const ph=vph,py=y+h-ph,dh=vdh,uh=vuh,lh=vlh,dy=vdy;
   drawDesc(c,p,x+w*0.03,dy,w*0.94,dh,iss,'center',2,txt);if(up)drawUnitPrice(c,p,x,dy+dh,w,uh,'center',lt?'#444':'rgba(255,255,255,.85)');if(lh)drawLimit(c,p,x+w*0.05,dy+dh+uh,w*0.9,lh,!lt);
   if(app){const sh=ph*0.4;drawTag(c,x+w*0.3,py,w*0.7,sh,p.price,p.unit,lt?'#15171c':'#ffffff',lt?'#ffffff':'#15171c','SEM APP',C);drawTag(c,x+w*0.02,py+sh+h*0.012,w*0.98,ph-sh-h*0.012,p.app,p.unit,pr.bg,pr.fg,'COM APP',C)}
+  else if(hasDe(p)){const sh=ph*0.28;drawDe(c,p,x+w*0.14,py,w*0.84,sh,{bg:lt?'#15171c':'#ffffff',fg:lt?'#ffffff':'#15171c'});drawTag(c,x+w*0.04,py+sh+h*0.012,w*0.96,ph-sh-h*0.012,p.price,p.unit,pr.bg,pr.fg,null,C)}
   else drawTag(c,x+w*0.04,py,w*0.96,ph,p.price,p.unit,pr.bg,pr.fg,null,C)}
  if(p.phrase)phraseAt(c,p,x,y,w,h,x+m*0.02,y+m*0.03,w*0.8,m*(horiz?0.085:0.075),C);
  if(p.venc)drawVenc(c,p,x,y+(p.phrase?h*0.16:m*0.03),w-m*0.03,m*0.045)}
@@ -444,13 +457,13 @@ function drawCard(c,p,x,y,w,h,C,iss){
  const pad=Math.max(5,Math.min(w,h)*0.05);const horiz=w/h>1.45,app=hasApp(p),up=!!unitPriceText(p),vs=Math.min(w,h)*0.045;
  if(horiz){
   const iw=w*0.5-pad*1.5,ih=h-pad*2;if(!nc)groundShadow(c,p,x+pad,y+pad,iw,ih);prodImg(c,p,x+pad,y+pad,iw,ih,p.prOver?{x,y,w,h}:null);
-  const cx=x+w*0.5+pad*0.5,cw=w*0.5-pad*1.5,ph=h*(app?0.52:0.4)*PRF()*(1-((p.descK||1)-1)*0.35),oh=p.limit>0?h*0.11:h*0.03,uh=up?h*0.075:0,dh=h-pad*2-ph-oh-uh-pad*0.4;
+  const cx=x+w*0.5+pad*0.5,cw=w*0.5-pad*1.5,ph=h*(app?0.52:hasDe(p)?0.47:0.4)*PRF()*(1-((p.descK||1)-1)*0.35),oh=p.limit>0?h*0.11:h*0.03,uh=up?h*0.075:0,dh=h-pad*2-ph-oh-uh-pad*0.4;
   drawDesc(c,p,cx,y+pad,cw,dh,iss,'center',3,dc);
   if(up)drawUnitPrice(c,p,cx,y+pad+dh,cw,uh,'center',nc?'#ffffff':'#5a5f6b');
   drawLimit(c,p,cx,y+pad+dh+uh,cw,oh,nc);
   drawPriceBlock(c,p,cx,y+h-pad-ph,cw,ph,C,'stack');
  }else{
-  const dK=p.descK||1,ph=h*(app?0.29:0.27)*PRF(),oh=h*0.07,uh=up?Math.max(h*0.055,CUR.W*0.016):0,dh=h*0.13*dK,ih=h-pad*2.3-ph-oh-dh-uh;
+  const dK=p.descK||1,ph=h*(app?0.29:hasDe(p)?0.33:0.27)*PRF(),oh=h*0.07,uh=up?Math.max(h*0.055,CUR.W*0.016):0,dh=h*0.13*dK,ih=h-pad*2.3-ph-oh-dh-uh;
   if(!nc)groundShadow(c,p,x+pad,y+pad,w-pad*2,ih);prodImg(c,p,x+pad,y+pad,w-pad*2,ih,p.prOver?{x,y,w,h}:null);
   const d0=y+pad*1.3+ih;drawDesc(c,p,x+pad,d0,w-pad*2,dh,iss,'center',2,dc);
   if(up)drawUnitPrice(c,p,x+pad,d0+dh,w-pad*2,uh,'center',nc?'#ffffff':'#5a5f6b');
@@ -1199,6 +1212,7 @@ function openEditor(id){
  <div class="seg2" id="appTg" style="margin:4px 0 10px"><button data-v="0" class="${p.appOn?'':'on'}">Preço único</button><button data-v="1" class="${p.appOn?'on':''}">Sem app × Com app</button></div>
  <div class="row2"><label>${p.appOn?'Preço sem app':'Preço'} (R$)<input name="price" inputmode="decimal" value="${moneyIn(p.price)}" placeholder="0,00"></label>
   ${p.appOn?`<label>Preço com app (R$)<input name="app" inputmode="decimal" value="${moneyIn(p.app)}" placeholder="0,00"></label>`:`<label>Limite por cliente<input name="limit" type="number" min="0" value="${p.limit||''}" placeholder="sem limite"></label>`}</div>
+ ${p.appOn?'':`<label>Preço normal (DE) <small style="color:var(--mut);font-weight:500">opcional: aparece riscado, com o desconto</small><input name="old" inputmode="decimal" value="${moneyIn(p.old)}" placeholder="0,00"></label>${p.sysPrice!=null&&p.price!=null&&p.sysPrice>p.price&&!(p.old>p.price)?`<button type="button" class="btn sm" id="oldSys" style="margin:-4px 0 10px">Usar ${brl(p.sysPrice)} do sistema como preço DE</button>`:''}`}
  ${p.appOn?`<label>Limite (unidades no preço do app)<input name="limit" type="number" min="0" value="${p.limit||''}" placeholder="sem limite"></label>`:''}
  <div class="secRow" style="flex-wrap:wrap;background:#f6f4ef">${p.cost!=null||p.sysPrice!=null?`<span style="font-weight:500">${p.sysPrice!=null?`Sistema <b>${brl(p.sysPrice)}</b> • `:''}${p.cost!=null&&!isFunc()?`Custo <b>${brl(p.cost)}</b> • `:''}<span id="edMarg">${margFlag(p)||'margem —'}</span></span>`:'<span style="font-weight:500">Sem ligação com o StarIA</span>'}<button class="btn sm dark" data-a="star">${p.code&&/^\d+$/.test(p.code)?'Atualizar':'Buscar no StarIA'}</button></div>
  <details class="edMore"><summary>Mais dados: código, unidade, setor</summary>
@@ -1240,6 +1254,7 @@ function openEditor(id){
   b.querySelector('[data-a=cores]').onclick=()=>openCores();
   const mvc=b.querySelector('[data-mv=c]');if(mvc)mvc.onclick=()=>{p.dx=0;p.dy=0;p.zoom=1;changed();openEditor(p.id)};
   b.querySelector('[data-a=star]').onclick=()=>openStarSearch(p);
+  {const os=b.querySelector('#oldSys');if(os)os.onclick=()=>{p.old=p.sysPrice;changed();openEditor(p.id)}}
   b.querySelectorAll('#appTg button').forEach(x=>x.onclick=()=>{p.appOn=x.dataset.v==='1';changed();openEditor(p.id);setTimeout(()=>{const i=$('#mbody [name='+(p.appOn?'app':'price')+']');if(i)i.focus()},40)});
   b.querySelector('[data-a=del]').onclick=()=>confirmDel(p,true);
   b.querySelector('[data-a=dupl]').onclick=()=>{const q=Object.assign(clone(p),{id:uid(),code:''});const e=imgCache.get(imgKey(p));if(e){imgCache.set(imgKey(q),e);IDB.set(imgKey(q),e.url)}S.products.splice(S.products.indexOf(p)+1,0,q);changed();openEditor(q.id)};
@@ -1247,7 +1262,7 @@ function openEditor(id){
    const ev=inp.tagName==='SELECT'||inp.type==='checkbox'?'change':'input';
    inp.addEventListener(ev,()=>{const k=inp.name;
     if(k==='code'){const oldK=imgKey(p);p.code=inp.value.trim();moveImgKey(oldK,p)}
-    else if(k==='price'||k==='app'){p[k]=parseMoney(inp.value);const em=$('#edMarg');if(em)em.innerHTML=margFlag(p)||'margem —'}
+    else if(k==='price'||k==='app'||k==='old'){p[k]=parseMoney(inp.value);const em=$('#edMarg');if(em)em.innerHTML=margFlag(p)||'margem —'}
     else if(k==='limit')p.limit=Math.max(0,parseInt(inp.value)||0);
     else if(k==='papel'){p.featured=inp.value==='icone';p.papel=inp.value==='icone'?'':inp.value}
     else if(k==='venc')p.venc=inp.checked;
@@ -2201,12 +2216,12 @@ function avRender(){const L=S.avulsas||[];AVSEL=clamp(AVSEL,0,Math.max(0,L.lengt
  $('#avList').innerHTML=L.map((p,i)=>`<div class="avI ${i===AVSEL?'on':''}" data-i="${i}">
   <button class="avPh" data-a="foto" style="${getImg(p)?`background-image:url('${imgCache.get(imgKey(p)).url}')`:''}">${getImg(p)?'':'+ foto'}</button>
   <div class="avF"><input data-k="desc" placeholder="Produto (ex.: Arroz Tio João 5kg)" value="${esc(p.desc)}">
-   <div class="avR"><label>Preço<input data-k="price" inputmode="decimal" placeholder="0,00" value="${moneyIn(p.price)}"></label><label>Com app<input data-k="app" inputmode="decimal" placeholder="opcional" value="${p.appOn?moneyIn(p.app):''}"></label><label>Limite<input data-k="limit" type="number" min="0" placeholder="—" value="${p.limit||''}"></label></div></div>
+   <div class="avR"><label>Preço<input data-k="price" inputmode="decimal" placeholder="0,00" value="${moneyIn(p.price)}"></label><label>De (riscado)<input data-k="old" inputmode="decimal" placeholder="opcional" value="${moneyIn(p.old)}"></label><label>Com app<input data-k="app" inputmode="decimal" placeholder="opcional" value="${p.appOn?moneyIn(p.app):''}"></label><label>Limite<input data-k="limit" type="number" min="0" placeholder="—" value="${p.limit||''}"></label></div></div>
   <div class="avB"><button data-a="fino" title="Ajuste fino">✎</button><button data-a="rm" title="Tirar">✕</button></div>
   ${i===AVSEL&&S.avFino?avFino(p):''}</div>`).join('');
  $('#avList').querySelectorAll('.avI').forEach(row=>{const i=+row.dataset.i,p=L[i];
   row.addEventListener('focusin',()=>{if(AVSEL!==i){AVSEL=i;avPrev();row.parentNode.querySelectorAll('.avI').forEach(r=>r.classList.toggle('on',r===row))}});
-  row.querySelectorAll('[data-k]').forEach(inp=>inp.oninput=()=>{const k=inp.dataset.k;if(k==='desc')p.desc=inp.value;else if(k==='price')p.price=parseMoney(inp.value);else if(k==='app'){const v=parseMoney(inp.value);p.app=v;p.appOn=v!=null&&v!==p.price;if(p.appOn&&p.app>p.price&&p.price!=null)0}else if(k==='limit')p.limit=Math.max(0,parseInt(inp.value)||0);AVSEL=i;persist();avPrev()});
+  row.querySelectorAll('[data-k]').forEach(inp=>inp.oninput=()=>{const k=inp.dataset.k;if(k==='desc')p.desc=inp.value;else if(k==='price')p.price=parseMoney(inp.value);else if(k==='old')p.old=parseMoney(inp.value);else if(k==='app'){const v=parseMoney(inp.value);p.app=v;p.appOn=v!=null&&v!==p.price;if(p.appOn&&p.app>p.price&&p.price!=null)0}else if(k==='limit')p.limit=Math.max(0,parseInt(inp.value)||0);AVSEL=i;persist();avPrev()});
   row.querySelector('[data-a=foto]').onclick=()=>{AVSEL=i;openPhotoSource(p)};
   row.querySelector('[data-a=fino]').onclick=()=>{S.avFino=!(AVSEL===i&&S.avFino);AVSEL=i;avRender()};
   row.querySelector('[data-a=rm]').onclick=()=>modal(`<h3>Tem certeza?</h3><p>Tirar "${esc(p.desc||'este produto')}" das plaquinhas?</p><div class="mfoot"><button class="btn" data-a="n">Não</button><button class="btn pri" data-a="y">Sim, tirar</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=closeModal;b.querySelector('[data-a=y]').onclick=()=>{closeModal();L.splice(i,1);if(!L.length)L.push(P({desc:'',price:null}));persist();avRender()}});
