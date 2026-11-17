@@ -2849,9 +2849,13 @@ $('#lgPos').onchange=e=>{S.store.logoPos=e.target.value;changed(false)};$('#lgFx
    - A fala de cada produto já vem escrita (nome + preço por extenso); dá para mudar.
    - O tempo de cada produto na tela sai do tamanho da fala.
    - A mesma fala nunca é paga duas vezes: o servidor guarda cada uma (vinheta da campanha, produto repetido).
+   - Dá para OUVIR cada fala antes de montar o vídeo e mandar gravar de novo se não ficou boa.
+   - O nome do produto vem do StarIA em caixa alta, sem acento e com códigos: nomeFalado() arruma; o que ele não acertar,
+     o admin corrige uma vez em "Como falar o nome" e fica guardado (S.vozNomes) para as próximas campanhas.
+   - Vídeo com som só sai em AAC (o que Instagram e iPhone aceitam). Sem AAC no navegador, o app não gera nem gasta crédito.
    - A chave da ElevenLabs fica só no servidor do Tino. Aqui no Claude dá para montar e testar o vídeo sem voz. */
 const VOZES=[['HR2TRGmi4QbMsO5omv7l','Rômulo Franklin: radialista (padrão)'],['zhza6dIY7yb1xz5MKTvQ','Nassif: vendedor, rápido'],['UaeEQHfiDI8l58WWXiwS','Leonardo Hamaral: comercial'],['rpNe0HOx7heUulPiOEaG','Locução para propaganda'],['4RyYr3owp1gnOgHKTs6D','Aline Mota: feminina, forte'],['Yu6uoFniEUcJhbrF7K1D','Lari Diniz: feminina, animada'],['Pxxu743NJcLUqO1QxfD6','Isabela: feminina, comercial']];
-const VOZMOD={eleven_multilingual_v2:['Melhor qualidade',1],eleven_flash_v2_5:['Econômica (metade do crédito)',0.5]};
+const VOZMOD={eleven_multilingual_v2:['Melhor qualidade',1],eleven_flash_v2_5:['Econômica (até metade do crédito)',0.5]};
 const VOZFMT={story:{w:1080,h:1920,label:'Stories / Reels / Status (1080×1920)'},feed:{w:1080,h:1350,label:'Feed do Instagram (1080×1350)'}};
 const VOZ_ATRASO=0.35,VOZ_MAXTX=300,VOZ_SUGESTAO=6;
 /* ---- números e preços falados ---- */
@@ -2866,21 +2870,50 @@ function extenso(n){n=Math.floor(Math.abs(+n||0));if(n<20)return EXT_U[n];if(n<1
 function precoFalado(v){if(v==null||isNaN(v))return'';const c=Math.round(v*100),r=Math.floor(c/100),cc=c%100;
  if(!r)return extenso(cc)+(cc===1?' centavo':' centavos');if(!cc)return extenso(r)+(r===1?' real':' reais');
  if(cc<10)return extenso(r)+(r===1?' real e ':' reais e ')+extenso(cc)+(cc===1?' centavo':' centavos');return extenso(r)+' e '+extenso(cc)}
-function qtdFalada(q,u){const v=parseFloat(String(q).replace(',','.'));if(!(v>0))return'';const int=Math.floor(v),fr=Math.round((v-int)*1000);
- const W={kg:['quilo','quilos'],g:['grama','gramas'],l:['litro','litros'],ml:['mililitro','mililitros'],un:['unidade','unidades']}[u];if(!W)return'';
- if(!fr)return extenso(int)+' '+W[int===1?0:1];if(fr===500&&int>=1)return extenso(int)+' '+W[0]+' e meio';
- return extenso(int)+' vírgula '+String(Math.round((v-int)*100)).replace(/0+$/,'').split('').map(d=>EXT_U[+d]).join(' ')+' '+W[1]}
-const UNI_RE={kg:'kg|kgs|quilos?|kilos?',g:'g|gr|grs|gramas?',l:'l|lt|lts|litros?',ml:'ml',un:'un|und|unid|unidades?'};
-/* nome do produto em texto para falar: sem caixa alta, sem abreviação, medidas por extenso */
-function nomeFalado(d){let t=' '+String(d||'').replace(/\s+/g,' ')+' ';
- t=t.replace(/(\d+)\s*x\s*(?=\d)/gi,(m,a)=>' '+extenso(+a)+' de ');
- for(const[u,re]of Object.entries(UNI_RE))t=t.replace(new RegExp('(\\d+(?:[.,]\\d+)?)\\s*(?:'+re+')(?![a-zà-ú])','gi'),(m,q)=>' '+qtdFalada(q,u)+' ');
- const AB={'c/':'com','s/':'sem','refrig.':'refrigerante','refrig':'refrigerante','pct':'pacote','pcte':'pacote','cx':'caixa','bdj':'bandeja','emb.':'embalagem','trad.':'tradicional','sab.':'sabão','cerv.':'cerveja','lt':'lata','tp':'tipo','ref.':'refil','choc.':'chocolate','biscoito rech.':'biscoito recheado'};
- const letras=String(d||'').replace(/[^A-Za-zÀ-ú]/g,''),tudoCaixaAlta=letras.length>3&&letras===letras.toUpperCase();
- t=t.split(' ').map(w=>{const k=w.toLowerCase();if(AB[k])return AB[k];if(/[A-ZÀ-Ú]/.test(w)&&w===w.toUpperCase()&&!/\d/.test(w)&&(tudoCaixaAlta?w.length>1:w.length>3))return['DE','DA','DO','DAS','DOS','COM','SEM','E'].includes(w)?k:w.charAt(0)+w.slice(1).toLowerCase();return w}).join(' ');
- return t.replace(/\b(\d+)\b/g,(m,n)=>+n<1e6?extenso(+n):m).replace(/[\/|_*#]+/g,' ').replace(/\s+/g,' ').trim()}
+/* quantidade falada: 5kg → "cinco quilos"; 1,5L → "um litro e meio"; 2,2kg → "dois quilos e duzentos gramas";
+   1,344kg → "um quilo e trezentos e quarenta e quatro gramas" */
+const UNI_W={kg:['quilo','quilos','g'],g:['grama','gramas'],l:['litro','litros','ml'],ml:['mililitro','mililitros'],m:['metro','metros'],un:['unidade','unidades']};
+function qtdFalada(q,u){const s=String(q).replace(',','.'),v=parseFloat(s),W=UNI_W[u];if(!(v>0)||!W)return'';
+ const int=Math.floor(v),dec=(s.split('.')[1]||'').replace(/0+$/,''),nome=int===1?W[0]:W[1];
+ if(!dec)return extenso(int)+' '+nome;if(dec==='5'&&int>=1)return extenso(int)+' '+nome+' e meio';
+ if(W[2]&&dec.length<=3){const mil=+(dec+'00').slice(0,3);return(int?extenso(int)+' '+nome+' e ':'')+extenso(mil)+' '+UNI_W[W[2]][1]}
+ return extenso(int)+' vírgula '+dec.split('').map(d=>EXT_U[+d]).join(' ')+' '+W[1]}
+const UNI_RE={kg:'kg|kgs|quilos?|kilos?',g:'g|gr|grs|gramas?',ml:'ml|mls',l:'l|lt|lts|litros?',m:'m|mt|mts|metros?',un:'un|und|unid|unidades?'};
+/* palavras que o StarIA manda sem acento (a voz lê "pao" e "maca" errado) */
+const ACENTO={perdigao:'perdigão',triangulo:'triângulo',facil:'fácil',sabor:'sabor',pao:'pão',paes:'pães',frances:'francês',ingles:'inglês',portugues:'português',acucar:'açúcar',maca:'maçã',macas:'maçãs',racao:'ração',oleo:'óleo',latao:'latão',litrao:'litrão',acem:'acém',suino:'suíno',suina:'suína',suinos:'suínos',file:'filé',files:'filés',cafe:'café',cha:'chá',feijao:'feijão',macarrao:'macarrão',sabao:'sabão',po:'pó',agua:'água',aguas:'águas',sanitaria:'sanitária',higienico:'higiênico',higienica:'higiênica',linguica:'linguiça',coxao:'coxão',musculo:'músculo',figado:'fígado',coracao:'coração',coracoes:'corações',mamao:'mamão',melao:'melão',limao:'limão',requeijao:'requeijão',guarana:'guaraná',liquido:'líquido',liquida:'líquida',carvao:'carvão',fuba:'fubá',carre:'carré',moida:'moída',lactea:'láctea',cachaca:'cachaça',instantaneo:'instantâneo',hamburguer:'hambúrguer',salmao:'salmão',tilapia:'tilápia',camarao:'camarão',culinario:'culinário',roca:'roça',grao:'grão',graos:'grãos',adocante:'adoçante',energetico:'energético',isotonico:'isotônico',organico:'orgânico',classico:'clássico',pessego:'pêssego',abobora:'abóbora',brocolis:'brócolis',alcool:'álcool',mocoto:'mocotó',pimentao:'pimentão',oregano:'orégano',sache:'sachê',pure:'purê',pate:'patê',algodao:'algodão',fosforo:'fósforo',lampada:'lâmpada',maracuja:'maracujá',jilo:'jiló',rucula:'rúcula',acai:'açaí',caes:'cães',cao:'cão',verao:'verão',parmesao:'parmesão',padrao:'padrão',tres:'três',uniao:'união',sao:'são',joao:'joão',duzia:'dúzia',pacoca:'paçoca',bebe:'bebê',balsamico:'balsâmico',medio:'médio',media:'média',familia:'família',economico:'econômico',economica:'econômica',pratico:'prático',unico:'único',nectar:'néctar',amendoa:'amêndoa',amendoas:'amêndoas',biologico:'biológico',quimico:'químico',tonica:'tônica',gas:'gás',botijao:'botijão',aluminio:'alumínio',plastico:'plástico',descartavel:'descartável',umido:'úmido',geriatrica:'geriátrica',lamina:'lâmina',laminas:'lâminas',antisseptico:'antisséptico',diario:'diário',coloracao:'coloração',hidratacao:'hidratação',nutricao:'nutrição',crianca:'criança',criancas:'crianças',passaro:'pássaro',passaros:'pássaros',aco:'aço',delicias:'delícias',pontoes:'pontões',cereais:'cereais',acougue:'açougue',pessegos:'pêssegos',limoes:'limões',meloes:'melões',mamoes:'mamões',feijoes:'feijões',macarroes:'macarrões',saboes:'sabões',racoes:'rações',oleos:'óleos',cafes:'cafés',chas:'chás',pes:'pés',pe:'pé',mao:'mão',maos:'mãos',limpeza:'limpeza',maionese:'maionese',espaguete:'espaguete'};
+/* abreviações de cadastro; vazio = não se fala (unidade solta, marca interna) */
+const VOZABREV={refrig:'refrigerante',pct:'pacote',pcte:'pacote',cx:'caixa',bdj:'bandeja',band:'bandeja',emb:'embalagem',trad:'tradicional',cerv:'cerveja',lt:'lata',tp:'tipo',choc:'chocolate',rech:'recheado',ling:'linguiça',liq:'líquido',inst:'instantâneo',mac:'macarrão',resf:'resfriado',cng:'congelado',cong:'congelado',sch:'sachê',ln:'long neck',bisc:'biscoito',deterg:'detergente',amac:'amaciante',desinf:'desinfetante',integ:'integral',desn:'desnatado',achoc:'achocolatado',marg:'margarina',mort:'mortadela',sabon:'sabonete',desod:'desodorante',fgo:'frango',bov:'bovino',gde:'grande',peq:'pequeno',kg:'',kgs:'',un:'',und:'',unid:''};
+const LIGA=['de','da','do','das','dos','com','sem','e','para','em','no','na','ao','a','o','long','neck'];
+const GERADA=new Set([...EXT_U,...EXT_D,...EXT_C,'cem','mil','vírgula','meio','leve','pague','tipo',...Object.values(UNI_W).flatMap(w=>w.slice(0,2))].filter(Boolean));
+/* nome do produto em texto para falar: com acento, sem código, sem abreviação, medidas por extenso.
+   Devolve também se o nome trazia "KG" solto (vendido por quilo). */
+function nomeFaladoX(d){let t=' '+String(d||'').replace(/\s+/g,' ')+' ';const kg=/(^|[\s\/])kgs?(?=[\s\/]|$)/i.test(String(d||''));
+ const letras=t.replace(/[^A-Za-zÀ-ú]/g,''),tudoCaixaAlta=letras.length>3&&letras===letras.toUpperCase();
+ t=t.replace(/\bNOT\d*\b/g,' ')                                                                  /* marca interna do StarIA */
+  .replace(/-\d{3,}\b/g,' ')                                                                      /* código colado no nome: PALETA-9710 */
+  .replace(/[()]/g,' ')
+  .replace(/\bL(\d+)\s*P(\d+)\b/gi,(m,a,b)=>` leve ${extenso(+a)} pague ${extenso(+b)} `)       /* L12P11 */
+  .replace(/\bTP\s*(\d)\b/gi,(m,a)=>' tipo '+extenso(+a)+' ')                                   /* TP1 */
+  .replace(/(^|\s)([CSP])\s*[\/-]\s*(?=[A-Za-zÀ-ú0-9])/gi,(m,sp,a)=>({c:' com ',s:' sem ',p:' para '})[a.toLowerCase()]) /* C/12, S-OSSO, P/ */
+  .replace(/(\d+(?:[.,]\d+)?)\s*(kg|gr|g|ml|l)\s*x\s*(\d+)\b/gi,(m,q,u,n)=>` ${extenso(+n)} de ${q}${u} `) /* 56GX24 */
+  .replace(/\b(\d+)\s*x\s*(?=\d)/gi,(m,a)=>' '+extenso(+a)+' de ');                              /* 12x350ml */
+ for(const[u,re]of Object.entries(UNI_RE))t=t.replace(new RegExp('(^|[^A-Za-zÀ-ú0-9.,])(\\d+(?:[.,]\\d+)?)\\s*(?:'+re+')(?![A-Za-zÀ-ú0-9])','gi'),(m,a,q)=>a+' '+qtdFalada(q,u)+' ');
+ t=t.replace(/(^|\s)(\d+)[.,](\d+)(?=\s|$)/g,(m,a,i,dc)=>a+extenso(+i)+(dc.replace(/0+$/,'')==='5'?' e meio':' vírgula '+dc.split('').map(x=>EXT_U[+x]).join(' ')))
+  .replace(/[\/|_*#]+/g,' ');
+ t=t.split(' ').filter(Boolean).map(w=>{const cru=w.replace(/[.,;:]+$/,''),k=cru.toLowerCase();if(!cru)return'';
+  if(Object.prototype.hasOwnProperty.call(VOZABREV,k))return VOZABREV[k];if(/\d/.test(cru))return cru;if(GERADA.has(k)||LIGA.includes(k)&&cru.length>1)return k;
+  const caixa=cru.length>1&&cru===cru.toUpperCase(),base=caixa||tudoCaixaAlta?k:cru,ac=Object.prototype.hasOwnProperty.call(ACENTO,k)?ACENTO[k]:null;
+  if(cru.length===1)return LIGA.includes(k)&&(caixa||tudoCaixaAlta)?k:cru;
+  if(LIGA.includes(k))return caixa||tudoCaixaAlta?k:cru;
+  const pal=ac||base;return caixa||tudoCaixaAlta||ac?pal.split('-').map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join('-'):pal}).filter(Boolean).join(' ');
+ t=t.replace(/(^|\s)(\d+)(?=\s|$)/g,(m,a,n)=>a+(+n<1e6?extenso(+n):n)).replace(/\s+/g,' ').trim();
+ return{nome:t?t.charAt(0).toUpperCase()+t.slice(1):'',kg}}
+const nomeFalado=d=>nomeFaladoX(d).nome;
+/* nome corrigido pelo admin fica guardado pela descrição do produto: vale para as próximas campanhas */
+const nomeKey=d=>String(d||'').toLowerCase().replace(/\s+/g,' ').trim();
+const nomeDe=p=>{const m=S.vozNomes&&typeof S.vozNomes==='object'?S.vozNomes[nomeKey(p.desc)]:null;return m&&String(m).trim()?String(m).trim():nomeFalado(p.desc)};
 const UNI_FALA={kg:'o quilo','100g':'os cem gramas',L:'o litro',dz:'a dúzia',bandeja:'a bandeja',cento:'o cento',metro:'o metro'};
-function falaAuto(p){const nome=nomeFalado(p.desc)||'Oferta',u=UNI_FALA[p.unit]?' '+UNI_FALA[p.unit]:'';
+function falaAuto(p){const nome=nomeDe(p)||'Oferta',u=UNI_FALA[p.unit]?' '+UNI_FALA[p.unit]:nomeFaladoX(p.desc).kg?' o quilo':'';
  if(hasApp(p))return`${nome}: no app, só ${precoFalado(Math.min(p.app,p.price))}${u}!`;
  if(p.price==null||isNaN(p.price))return nome+'!';return`${nome}: só ${precoFalado(p.price)}${u}!`}
 const titFalado=t=>String(t||'').split(/\s+/).map((w,i)=>{const l=w.toLowerCase();return i&&['da','de','do','das','dos','e','na','no'].includes(l)?l:l.charAt(0).toUpperCase()+l.slice(1)}).join(' ');
@@ -2902,44 +2935,73 @@ function vozTempos(R){return R.map(s=>{const min=s.k==='intro'?3:s.k==='outro'?4
 const credOf=(t,modelo)=>Math.ceil(String(t).length*(VOZMOD[modelo]||VOZMOD.eleven_multilingual_v2)[1]);
 /* ---- servidor (Tino) ---- */
 const vozLigada=()=>!!(window.TINO&&window.TINO.api)||typeof window.__VOZ_FAKE==='function';
-async function vozApi(body){if(typeof window.__VOZ_FAKE==='function')return window.__VOZ_FAKE(body);return window.TINO.api('/api/encartes/voz',body)}
+async function vozApi(body){if(typeof window.__VOZ_FAKE==='function')return window.__VOZ_FAKE(body);return window.TINO.api('/api/encartes/voz'+(body===undefined?'?voz='+encodeURIComponent(vozCfg().voz):''),body)}
 let VOZINFO=null;
 async function vozInfo(){if(!vozLigada())return null;try{VOZINFO=await vozApi(undefined)}catch(e){VOZINFO={erro:e.message||String(e)}}return VOZINFO}
+const dataBR=u=>{try{return new Date(u*1000).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}catch(e){return''}};
+/* quanto ainda dá para gastar: o menor entre o limite do app e o saldo de verdade na ElevenLabs */
+const vozSobra=I=>{if(!I||I.limite==null)return null;let s=I.limite-(I.usado||0);if(I.conta&&I.conta.limite!=null)s=Math.min(s,I.conta.limite-(I.conta.usado||0));return Math.max(0,s)};
+/* o navegador grava som em AAC? (Instagram e iPhone pedem AAC; Opus dentro de MP4 sai mudo em muito aparelho) */
+async function vozAacOk(){try{if(typeof AudioEncoder==='undefined'||typeof VideoEncoder==='undefined')return false;const r=await AudioEncoder.isConfigSupported({codec:'mp4a.40.2',sampleRate:48000,numberOfChannels:2,bitrate:128000});return!!(r&&r.supported)}catch(e){return false}}
+function vozSemAac(){modal(`<h3>Este computador não grava o som no formato do Instagram</h3><p>O Instagram e o iPhone pedem o som em <b>AAC</b>, e este navegador não grava assim. Para não sair vídeo mudo, o app <b>não gera aqui</b>.</p><p><b>O que fazer:</b> abra o Tino no <b>Google Chrome</b> de um computador <b>Mac ou Windows</b> e gere por lá.</p><p class="hint">Nenhum crédito foi gasto. As falas que você já ouviu continuam guardadas.</p><div class="mfoot"><button class="btn pri" data-a="y">Entendi</button></div>`,b=>{b.querySelector('[data-a=y]').onclick=closeModal})}
+const vozPergunta=(tit,html,sim)=>new Promise(res=>modal(`<h3>${esc(tit)}</h3><p>${html}</p><div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn pri" data-a="y">${esc(sim)}</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=()=>{closeModal();res(false)};b.querySelector('[data-a=y]').onclick=()=>{closeModal();res(true)}}));
+/* ouvir uma fala antes de montar o vídeo. Fala nova gasta crédito uma vez (avisa antes); "de novo" grava outra tomada. */
+let VOZAUD=null,VOZOUV=false;
+async function vozOuvir(texto,refazer){texto=limpaFala(texto);if(!texto||VOZOUV||VOZRUN)return;const c=vozCfg();VOZOUV=true;
+ try{if(VOZAUD){try{VOZAUD.pause()}catch(e){}VOZAUD=null}
+  const e=await vozApi({texto,voz:c.voz,modelo:c.modelo,estimar:true,refazer:!!refazer});
+  if(refazer||!(e&&e.cache)){const cred=e&&e.cred?e.cred:credOf(texto,c.modelo);
+   if(!await vozPergunta(refazer?'Gravar esta fala de novo':'Ouvir esta fala',refazer?`A ElevenLabs grava outra vez (cada gravação sai um pouco diferente). Gasta <b>${cred.toLocaleString('pt-BR')} créditos</b> de novo.<br><span class="hint">Se o problema é a pronúncia de uma palavra, mude o texto em vez de gravar de novo.</span>`:`Esta fala ainda não foi gravada. Gasta <b>${cred.toLocaleString('pt-BR')} créditos</b> agora; depois, no vídeo, ela não gasta de novo.`,refazer?'Gravar de novo':'Gravar e ouvir'))return}
+  toast(refazer||!(e&&e.cache)?'Gravando a fala…':'Tocando…');
+  const r=await vozApi({texto,voz:c.voz,modelo:c.modelo,refazer:!!refazer});if(!r||!r.audio)throw new Error('A voz não veio. Tente de novo.');
+  const url=URL.createObjectURL(new Blob([b64ab(r.audio)],{type:'audio/mpeg'}));VOZAUD=new Audio(url);VOZAUD.onended=()=>{try{URL.revokeObjectURL(url)}catch(e){}};window.__VOZTOCOU=(window.__VOZTOCOU||0)+1;
+  try{await VOZAUD.play()}catch(e){toast('O navegador não deixou tocar. Toque em Ouvir de novo.')}
+  if(!r.cache)vozInfo().then(()=>{if($('#vzGo')&&!VOZRUN)vozBox()})}
+ catch(e){toast(e&&e.message?e.message:'Não consegui tocar a fala',6000)}finally{VOZOUV=false}}
 const b64ab=b=>{const s=atob(b),a=new Uint8Array(s.length);for(let i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return a.buffer};
 async function decodeAudio(ab){const ctx=new OfflineAudioContext(2,1,48000);return await ctx.decodeAudioData(ab)}
 /* ---- tela ---- */
+function vozStatus(){const lig=vozLigada(),I=VOZINFO;
+ if(!lig)return{ok:false,html:'<p><b>Aqui no Claude a voz não liga</b> (a chave da ElevenLabs fica guardada no Tino). Monte o vídeo aqui e teste <b>sem voz</b>; com voz, gere pelo Tino.</p>'};
+ if(!I)return{ok:false,html:'<p>Conferindo a voz…</p>'};if(I.erro)return{ok:false,html:'<p>'+esc(I.erro)+'</p>'};
+ if(!I.ligada)return{ok:false,html:'<p><b>A voz ainda não está ligada.</b> Falta colocar a chave da ElevenLabs na Vercel (variável <b>ELEVENLABS_API_KEY</b>). Até lá, dá para montar tudo e gerar sem voz.</p>'};
+ const n=x=>(x||0).toLocaleString('pt-BR'),ct=I.conta,vz=I.voz;let h=`<p>Voz ligada. Pelo app, este mês: <b>${n(I.usado)}</b> de ${n(I.limite)} créditos.</p>`;
+ h+=ct?`<p>Na ElevenLabs (saldo de verdade): <b>${n(ct.usado)}</b> de ${n(ct.limite)} usados${ct.renova?', renova em '+dataBR(ct.renova):''}.</p>`:'<p class="hint" style="margin:4px 0 0">O saldo de verdade não apareceu: a chave não deixa ler. Confira no site da ElevenLabs.</p>';
+ let ok=true;if(vz&&vz.ok===false){ok=false;h+='<p class="warn r" style="margin:6px 0 0"><b>A voz escolhida não está na sua conta da ElevenLabs</b> (o dono pode ter tirado, ou falta o "Add to my voices"). Escolha outra em <b>Voz e música</b>.</p>'}
+ else if(vz&&vz.some)h+=`<p class="warn" style="margin:6px 0 0">Esta voz sai da ElevenLabs em <b>${dataBR(vz.some)}</b>. Escolha outra antes disso.</p>`;
+ return{ok,html:h}}
+function vozBox(){const el=$('#vzBox');if(!el)return;const st=vozStatus();el.className='vozBox'+(st.ok?' ok':'');el.innerHTML=st.html}
 function renderVoz(){const el=$('#t-voz');if(!el)return;const v=vozSt(),c=vozCfg(),R=vozRoteiro(),sel=vozSel(),lig=vozLigada();
  const tot=R.reduce((a,s)=>a+(s.fala?credOf(s.fala,c.modelo):0),0),seg=Math.round(R.reduce((a,s)=>a+(s.fala?Math.max(s.k==='outro'?4:3,s.fala.length/14+1):s.k==='outro'?4:3),0));
- const I=VOZINFO;const stTxt=!lig?'<b>Aqui no Claude a voz não liga</b> (a chave da ElevenLabs fica guardada no Tino). Monte o vídeo aqui e teste <b>sem voz</b>; com voz, gere pelo Tino.'
-  :!I?'Conferindo a voz…':I.erro?esc(I.erro):!I.ligada?'<b>A voz ainda não está ligada.</b> Falta colocar a chave da ElevenLabs na Vercel (variável <b>ELEVENLABS_API_KEY</b>). Até lá, dá para montar tudo e gerar sem voz.'
-  :`Voz ligada. Este mês: <b>${(I.usado||0).toLocaleString('pt-BR')}</b> de ${(I.limite||0).toLocaleString('pt-BR')} créditos.`;
- el.innerHTML=`<div class="vozBox ${lig&&I&&I.ligada?'ok':''}"><p>${stTxt}</p></div>
+ const I=VOZINFO,pode=!!(lig&&I&&I.ligada&&!(I.voz&&I.voz.ok===false));
+ el.innerHTML=`<div id="vzBox"></div>
  <p class="hint">Vídeo curto com locução, para Stories, Reels, Status e Feed. Marque <b>só os produtos mais fortes</b> (até ${VOZ_SUGESTAO} é o ideal): cada fala gasta crédito. O vídeo da TV continua no botão <b>Gerar vídeo</b>, sem som e com todos os produtos.</p>
  <label>Formato<select id="vzFmt">${Object.entries(VOZFMT).map(([k,f])=>`<option value="${k}" ${v.fmt===k?'selected':''}>${esc(f.label)}</option>`).join('')}</select></label>
  <h4>Abertura <label class="vzOff"><input type="checkbox" id="vzSemA" ${v.semAbre?'checked':''}> sem fala</label></h4>
- <textarea id="vzAbre" class="vzTx" maxlength="${VOZ_MAXTX}" ${v.semAbre?'disabled':''}>${esc(abertura())}</textarea>
+ <textarea id="vzAbre" class="vzTx" maxlength="${VOZ_MAXTX}" ${v.semAbre?'disabled':''}>${esc(abertura())}</textarea>${v.semAbre?'':`<div class="vzRow"><small>${credOf(limpaFala(abertura()),c.modelo)} créditos na 1ª vez</small><span class="vzBts"><button class="btn sm" data-ouvir="abre" ${pode?'':'disabled'}>▶ Ouvir</button><button class="btn sm ghost" data-denovo="abre" ${pode?'':'disabled'}>Gravar de novo</button></span></div>`}
  <h4>Produtos <small id="vzN">${sel.length} de ${S.products.length} marcados</small></h4>
  ${sel.length>8?`<p class="warn">${sel.length} produtos deixam o vídeo longo e gastam mais crédito. O ideal é até ${VOZ_SUGESTAO}.</p>`:''}
  <div class="bar"><button class="btn sm" id="vzDest">Marcar os destaques</button><button class="btn sm ghost" id="vzNone">Desmarcar todos</button></div>
  <div id="vzList">${S.products.map(p=>{const on=v.sel.includes(p.id),ed=v.falas[p.id]!=null&&String(v.falas[p.id]).trim();return`<div class="vzP ${on?'on':''}" data-id="${esc(p.id)}">
   <label class="vzChk"><input type="checkbox" ${on?'checked':''}><span><b>${esc(p.desc||'(sem nome)')}</b><small>${p.price!=null&&!isNaN(p.price)?esc(brl(p.price)):''}${hasApp(p)?' • app '+esc(brl(p.app)):''}${p.featured?' • destaque':''}</small></span></label>
-  ${on?`<textarea class="vzTx" maxlength="${VOZ_MAXTX}">${esc(falaDe(p))}</textarea><div class="vzRow"><small>${credOf(limpaFala(falaDe(p)),c.modelo)} créditos${ed?' • fala sua':' • fala automática'}</small>${ed?'<button class="btn sm ghost" data-a="auto">Voltar à automática</button>':''}</div>`:''}</div>`}).join('')||'<p class="hint">Adicione produtos na aba Produtos.</p>'}</div>
+  ${on?`${ed?'':`<label class="vzNm">Como falar o nome <small>(fica guardado para as próximas)</small><input class="vzNome" maxlength="120" autocomplete="off" value="${esc(nomeDe(p))}"></label>`}<textarea class="vzTx" maxlength="${VOZ_MAXTX}">${esc(falaDe(p))}</textarea><div class="vzRow"><small>${credOf(limpaFala(falaDe(p)),c.modelo)} créditos na 1ª vez${ed?' • fala sua':' • fala automática'}</small><span class="vzBts"><button class="btn sm" data-a="ouvir" ${pode?'':'disabled'}>▶ Ouvir</button><button class="btn sm ghost" data-a="denovo" ${pode?'':'disabled'}>Gravar de novo</button>${ed?'<button class="btn sm ghost" data-a="auto">Voltar à automática</button>':''}</span></div>`:''}</div>`}).join('')||'<p class="hint">Adicione produtos na aba Produtos.</p>'}</div>
  <h4>Fechamento <label class="vzOff"><input type="checkbox" id="vzSemF" ${v.semFecha?'checked':''}> sem fala</label></h4>
- <textarea id="vzFecha" class="vzTx" maxlength="${VOZ_MAXTX}" ${v.semFecha?'disabled':''}>${esc(fechamento())}</textarea>
+ <textarea id="vzFecha" class="vzTx" maxlength="${VOZ_MAXTX}" ${v.semFecha?'disabled':''}>${esc(fechamento())}</textarea>${v.semFecha?'':`<div class="vzRow"><small>${credOf(limpaFala(fechamento()),c.modelo)} créditos na 1ª vez</small><span class="vzBts"><button class="btn sm" data-ouvir="fecha" ${pode?'':'disabled'}>▶ Ouvir</button><button class="btn sm ghost" data-denovo="fecha" ${pode?'':'disabled'}>Gravar de novo</button></span></div>`}
  <details class="sec"><summary>Voz e música</summary><div class="in">
   <label>Voz<select id="vzVoz">${VOZES.map(([id,n])=>`<option value="${id}" ${c.voz===id?'selected':''}>${esc(n)}</option>`).join('')}${VOZES.some(x=>x[0]===c.voz)?'':`<option value="${esc(c.voz)}" selected>Outra: ${esc(c.voz)}</option>`}<option value="+">Outra (colar o código da voz)…</option></select></label>
-  <p class="hint">Na ElevenLabs, a voz escolhida precisa estar em <b>My Voices</b>: abra a voz na Voice Library e toque em <b>Add to my voices</b>.</p>
+  <p class="hint">As vozes são de locutores da biblioteca da ElevenLabs: o dono pode tirar a voz de lá, e o app avisa aqui em cima se isso acontecer. Na ElevenLabs, a voz escolhida precisa estar em <b>My Voices</b>: abra a voz na Voice Library e toque em <b>Add to my voices</b>.</p>
   <label>Qualidade<select id="vzMod">${Object.entries(VOZMOD).map(([k,[n]])=>`<option value="${k}" ${c.modelo===k?'selected':''}>${esc(n)}</option>`).join('')}</select></label>
-  <label>Limite de créditos por mês<input type="number" id="vzLim" min="0" step="1000" value="${I&&I.limite!=null?I.limite:30000}" ${lig&&I&&!I.erro?'':'disabled'}></label>
-  <p class="hint">Trava de segurança: passou do limite, o app não gera mais voz no mês. O plano Starter tem 30.000.</p>
+  <label>Limite de créditos por mês<input type="number" id="vzLim" min="0" ${I&&I.teto?`max="${I.teto}"`:''} step="1000" value="${I&&I.limite!=null?I.limite:30000}" ${lig&&I&&!I.erro?'':'disabled'}></label>
+  <p class="hint">Trava de segurança: passou do limite, o app não gera mais voz no mês. O plano Starter tem 30.000.${I&&I.teto?` Teto geral da conta: ${I.teto.toLocaleString('pt-BR')} (o limite não passa disso).`:''} A trava mais forte é a <b>cota da própria chave</b>, no site da ElevenLabs.</p>
   <label>Música de fundo (opcional, MP3 sem direitos autorais)</label><div class="bar"><button class="btn sm" id="vzMus">${v.musNome?'Trocar música':'Escolher música'}</button>${v.musNome?`<span class="hint" style="margin:0">${esc(v.musNome)}</span><button class="btn sm ghost" id="vzMusX">Tirar</button>`:''}</div>
   ${v.musNome?`<label>Volume da música<input type="range" id="vzVol" min="0.05" max="0.6" step="0.05" value="${v.musVol}"></label><p class="hint">Abaixa sozinha enquanto a voz fala.</p>`:''}
   <input type="file" id="vzMusIn" accept="audio/*" hidden>
  </div></details>
  <div class="vozSum"><b>${R.filter(s=>s.fala).length} falas • até ${tot.toLocaleString('pt-BR')} créditos • uns ${seg} segundos</b><small>Fala que já foi gerada antes não gasta de novo.</small></div>
  <div class="prog" hidden id="vzProg"><i></i></div><p class="hint" id="vzEtapa" hidden></p>
- <div class="bar vzAct"><button class="btn pri big" id="vzGo" ${sel.length&&lig&&I&&I.ligada?'':'disabled'}>Gerar vídeo com voz</button><button class="btn big" id="vzMudo" ${sel.length?'':'disabled'}>Gerar sem voz (teste)</button></div>`;
- const keep=()=>persist();
+ <div class="bar vzAct"><button class="btn pri big" id="vzGo" ${sel.length&&pode?'':'disabled'}>Gerar vídeo com voz</button><button class="btn big" id="vzMudo" ${sel.length?'':'disabled'}>Gerar sem voz (teste)</button></div>`;
+ vozBox();const keep=()=>persist();
+ el.querySelectorAll('[data-ouvir],[data-denovo]').forEach(b=>b.onclick=()=>vozOuvir((b.dataset.ouvir||b.dataset.denovo)==='abre'?abertura():fechamento(),!!b.dataset.denovo));
  $('#vzFmt').onchange=e=>{v.fmt=e.target.value;keep()};
  $('#vzAbre').oninput=e=>{v.abre=e.target.value;keep()};$('#vzFecha').oninput=e=>{v.fecha=e.target.value;keep()};
  $('#vzAbre').onchange=$('#vzFecha').onchange=()=>renderVoz();
@@ -2949,12 +3011,15 @@ function renderVoz(){const el=$('#t-voz');if(!el)return;const v=vozSt(),c=vozCfg
  el.querySelectorAll('.vzP').forEach(row=>{const id=row.dataset.id;
   row.querySelector('.vzChk input').onchange=e=>{v.sel=v.sel.filter(x=>x!==id);if(e.target.checked){const ord=S.products.map(p=>p.id);v.sel.push(id);v.sel.sort((a,b)=>ord.indexOf(a)-ord.indexOf(b))}keep();renderVoz()};
   const tx=row.querySelector('textarea');if(tx){tx.oninput=()=>{v.falas[id]=tx.value;keep()};tx.onchange=()=>{if(!tx.value.trim())delete v.falas[id];keep();renderVoz()}}
+  const nm=row.querySelector('.vzNome'),pp=S.products.find(x=>x.id===id);if(nm&&pp)nm.onchange=()=>{const t=limpaFala(nm.value),k=nomeKey(pp.desc);if(!S.vozNomes||typeof S.vozNomes!=='object')S.vozNomes={};
+   if(!t||t===nomeFalado(pp.desc))delete S.vozNomes[k];else S.vozNomes[k]=t;changed(false);renderVoz()};
+  const bo=row.querySelector('[data-a=ouvir]'),bd=row.querySelector('[data-a=denovo]');if(pp){if(bo)bo.onclick=()=>vozOuvir(falaDe(pp),false);if(bd)bd.onclick=()=>vozOuvir(falaDe(pp),true)}
   const au=row.querySelector('[data-a=auto]');if(au)au.onclick=()=>{delete v.falas[id];keep();renderVoz()}});
- $('#vzVoz').onchange=e=>{const id=e.target.value,set=id=>{S.vozCfg=Object.assign(vozCfg(),{voz:id});changed(false);renderVoz()};if(id!=='+'){set(id);return}
+ $('#vzVoz').onchange=e=>{const id=e.target.value,set=id=>{S.vozCfg=Object.assign(vozCfg(),{voz:id});changed(false);renderVoz();vozInfo().then(()=>{if($('#vzGo'))renderVoz()})};if(id!=='+'){set(id);return}
   modal(`<h3>Outra voz</h3><p class="hint">Na ElevenLabs, abra a voz e copie o <b>Voice ID</b> (letras e números).</p><label>Código da voz<input id="vzVid" autocomplete="off"></label><div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn pri" data-a="y">Usar esta voz</button></div>`,b=>{
    b.querySelector('[data-a=n]').onclick=()=>{closeModal();renderVoz()};b.querySelector('[data-a=y]').onclick=()=>{const v=$('#vzVid').value.trim();if(!/^[A-Za-z0-9]{10,40}$/.test(v)){toast('Código de voz inválido');return}closeModal();set(v)}})};
  $('#vzMod').onchange=e=>{S.vozCfg=Object.assign(vozCfg(),{modelo:e.target.value});changed(false);renderVoz()};
- const lim=$('#vzLim');if(lim)lim.onchange=async()=>{const n=Math.max(0,Math.floor(+lim.value||0));try{if(CLOUD.db)await CLOUD.db.doc('app/vozcfg').set({limite:n});toast('Limite salvo: '+n.toLocaleString('pt-BR')+' créditos por mês');await vozInfo();renderVoz()}catch(e){toast('Não consegui salvar o limite')}};
+ const lim=$('#vzLim');if(lim)lim.onchange=async()=>{const n=Math.min(Math.max(0,Math.floor(+lim.value||0)),VOZINFO&&VOZINFO.teto?VOZINFO.teto:1e9);try{if(CLOUD.db)await CLOUD.db.doc('app/vozcfg').set({limite:n});toast('Limite salvo: '+n.toLocaleString('pt-BR')+' créditos por mês');await vozInfo();renderVoz()}catch(e){toast('Não consegui salvar o limite')}};
  $('#vzMus').onclick=()=>$('#vzMusIn').click();
  $('#vzMusIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(f.size>15e6){toast('Música grande demais (até 15 MB)');return}
   try{await decodeAudio(await f.arrayBuffer());await IDB.setRaw('voz:musica',f);v.musNome=f.name;keep();renderVoz();toast('Música pronta')}catch(err){toast('Não consegui ler esta música. Use MP3.')}};
@@ -2971,35 +3036,41 @@ async function vozFalas(R,c,onP){/* pega o áudio de cada fala (do servidor; as 
   out.push(Object.assign({},s,{buf:await decodeAudio(b64ab(r.audio)),cred:r.cred||0}))}
  return out}
 async function vozEstimar(R,c){let cred=0,novas=0;for(const s of R){if(!s.fala)continue;const r=await vozApi({texto:s.fala,voz:c.voz,modelo:c.modelo,estimar:true});if(r&&!r.cache){cred+=r.cred||0;novas++}}return{cred,novas}}
-async function vozConfirma(est,I){return new Promise(res=>{const sobra=I&&I.limite!=null?I.limite-(I.usado||0):null;
+async function vozConfirma(est,I){return new Promise(res=>{const sobra=vozSobra(I);
  modal(`<h3>Gerar vídeo com voz</h3>${est.novas?`<p><b>${est.novas} fala${est.novas>1?'s':''} nova${est.novas>1?'s':''}</b>: vai gastar uns <b>${est.cred.toLocaleString('pt-BR')} créditos</b>.</p>`:'<p><b>Todas as falas já foram geradas antes: não gasta crédito.</b></p>'}
- ${sobra!=null?`<p class="hint">Sobram ${Math.max(0,sobra).toLocaleString('pt-BR')} créditos neste mês.</p>`:''}${sobra!=null&&est.cred>sobra?'<p class="warn r">Passa do limite do mês. Diminua os produtos ou aumente o limite.</p>':''}
+ ${sobra!=null?`<p class="hint">Sobram ${Math.max(0,sobra).toLocaleString('pt-BR')} créditos (o menor entre o limite do app e o saldo na ElevenLabs).</p>`:''}${sobra!=null&&est.cred>sobra?'<p class="warn r">Não cabe no que sobra. Diminua os produtos, aumente o limite ou espere o saldo renovar.</p>':''}
  <div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn pri" data-a="y" ${sobra!=null&&est.cred>sobra?'disabled':''}>Gerar</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=()=>{closeModal();res(false)};b.querySelector('[data-a=y]').onclick=()=>{closeModal();res(true)}})})}
 async function vozMusica(){const v=vozSt();if(!v.musNome)return null;try{const f=await IDB.get('voz:musica');if(!f)return null;return await decodeAudio(await f.arrayBuffer())}catch(e){return null}}
 /* junta vozes e música numa trilha só; a música abaixa enquanto a voz fala e some no fim */
 async function vozMix(L,tot,mus,vol){const SR=48000,ctx=new OfflineAudioContext(2,Math.max(1,Math.ceil(tot*SR)),SR);let t=0;const falas=[];
- for(const s of L){if(s.buf){const src=ctx.createBufferSource();src.buffer=s.buf;src.connect(ctx.destination);src.start(t+VOZ_ATRASO);falas.push([t+VOZ_ATRASO,t+VOZ_ATRASO+s.buf.duration])}t+=s.d}
- if(mus){const src=ctx.createBufferSource(),g=ctx.createGain();src.buffer=mus;src.loop=true;src.connect(g);g.connect(ctx.destination);const hi=vol,lo=vol*0.3;g.gain.setValueAtTime(falas.length&&falas[0][0]<0.5?lo:hi,0);
+ /* tudo passa por um limitador: voz + música somadas não estouram (som rachado no celular) */
+ const sai=ctx.createDynamicsCompressor();sai.threshold.value=-8;sai.knee.value=4;sai.ratio.value=12;sai.attack.value=0.003;sai.release.value=0.15;sai.connect(ctx.destination);
+ for(const s of L){if(s.buf){const src=ctx.createBufferSource();src.buffer=s.buf;src.connect(sai);src.start(t+VOZ_ATRASO);falas.push([t+VOZ_ATRASO,t+VOZ_ATRASO+s.buf.duration])}t+=s.d}
+ if(mus){const src=ctx.createBufferSource(),g=ctx.createGain();src.buffer=mus;src.loop=true;src.connect(g);g.connect(sai);const hi=vol,lo=vol*0.3;g.gain.setValueAtTime(falas.length&&falas[0][0]<0.5?lo:hi,0);
   for(const[a,b]of falas){g.gain.setTargetAtTime(lo,Math.max(0,a-0.2),0.06);g.gain.setTargetAtTime(hi,b+0.15,0.3)}g.gain.setTargetAtTime(0,Math.max(0,tot-1.5),0.35);src.start(0)}
- return ctx.startRendering()}
+ return vozNivel(await ctx.startRendering())}
+/* nivela o volume: o pico fica sempre em 0,9 (nem baixo demais, nem estourado) */
+function vozNivel(buf){let pk=0;for(let c=0;c<buf.numberOfChannels;c++){const d=buf.getChannelData(c);for(let i=0;i<d.length;i++){const a=d[i]<0?-d[i]:d[i];if(a>pk)pk=a}}
+ if(pk>0.02){const k=0.9/pk;for(let c=0;c<buf.numberOfChannels;c++){const d=buf.getChannelData(c);for(let i=0;i<d.length;i++)d[i]*=k}}return buf}
 async function vozGerar(comVoz){if(VOZRUN)return;const sel=vozSel();if(!sel.length){toast('Marque pelo menos um produto');return}
  if(!await reviewGate(sel))return;const c=vozCfg(),v=vozSt(),f=VOZFMT[v.fmt];let R=vozRoteiro();if(!comVoz)R=R.map(s=>Object.assign({},s,{fala:''}));
  VOZRUN=true;const bt=[$('#vzGo'),$('#vzMudo')];bt.forEach(b=>b&&(b.disabled=true));
- try{if(comVoz){vozProg(0.02,'Conferindo quanto vai gastar…');const est=await vozEstimar(R,c);if(!await vozConfirma(est,VOZINFO)){renderVoz();return}}
+ try{const temSom=comVoz||!!v.musNome;if(temSom&&!await vozAacOk()){vozSemAac();return}
+  if(comVoz){vozProg(0.02,'Conferindo quanto vai gastar…');const est=await vozEstimar(R,c);if(!await vozConfirma(est,VOZINFO)){renderVoz();return}}
   const L=vozTempos(comVoz?await vozFalas(R,c,(p,t)=>vozProg(p*0.4,t)):R),tot=L.reduce((a,s)=>a+s.d,0);
   vozProg(0.42,'Juntando voz e música…');const mus=await vozMusica(),mix=(comVoz||mus)?await vozMix(L,tot,mus,v.musVol):null;
   vozProg(0.45,'Montando o vídeo…');await fontsReady();
   const r=await vozVideo(f.w,f.h,L,mix,p=>vozProg(0.45+p*0.55,'Montando o vídeo…'));
-  if(!r){toast('Não consegui gerar o vídeo neste navegador. Use o Chrome.',5000);return}
+  if(!r){toast('Não consegui gerar o vídeo neste navegador. Use o Chrome no computador.',6000);return}
+  if(mix&&r.audio!=='aac'){vozSemAac();return}
   if(r.ext!=='mp4')toast('Este navegador só gerou WebM: o Instagram pode não aceitar. Gere pelo Chrome no computador.',7000);
-  if(r.audio==='opus')toast('O som saiu em Opus: o Instagram e alguns celulares podem não aceitar. Gere pelo Chrome no computador (Mac ou Windows), que sai em AAC.',8000);
   if(tot>60)toast(`O vídeo ficou com ${Math.round(tot)} segundos: o Stories corta em 60. Tire algum produto.`,7000);
   if(comVoz)vozInfo().then(()=>{});saveFile(fname(r.ext,'_'+v.fmt+(comVoz?'_voz':'_semvoz')),r.blob,'video')}
  catch(e){toast(e&&e.message?e.message:'Não consegui gerar o vídeo',6000)}
  finally{VOZRUN=false;if($('#t-voz'))renderVoz()}}
-/* vídeo MP4 com som: imagem quadro a quadro (H.264) e trilha (AAC; Opus se o aparelho não tiver AAC).
-   Sem esses recursos no navegador, grava em tempo real (MediaRecorder) com o som junto. */
-async function vozVideo(W,H,L,mix,onP){try{const r=await vozMp4(W,H,L,mix,onP);if(r)return r}catch(e){}return vozRealtime(W,H,L,mix,onP)}
+/* vídeo MP4: imagem quadro a quadro (H.264) e trilha em AAC. Onde não há AAC o codificador cai para Opus só para os
+   testes automáticos; vozGerar() NÃO salva vídeo com som fora de AAC. Sem som e sem WebCodecs, grava em tempo real. */
+async function vozVideo(W,H,L,mix,onP){let r=null;try{r=await vozMp4(W,H,L,mix,onP)}catch(e){try{console.warn('vozMp4 falhou:',e)}catch(_){}}if(r||mix)return r;return vozRealtime(W,H,L,null,onP)}
 async function vozMp4(W,H,L,mix,onP){
  if(typeof VideoEncoder==='undefined'||typeof VideoFrame==='undefined')return null;if(mix&&(typeof AudioEncoder==='undefined'||typeof AudioData==='undefined'))return null;
  const fps=30;let codec=null;for(const cd of['avc1.640028','avc1.4d0028','avc1.42003e']){try{const r=await VideoEncoder.isConfigSupported({codec:cd,width:W,height:H,bitrate:8e6,framerate:fps});if(r&&r.supported){codec=cd;break}}catch(e){}}if(!codec)return null;

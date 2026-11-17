@@ -112,7 +112,7 @@ echo "== 12. Gerador de Encartes"
 # ElevenLabs de mentira (voz dos vídeos): nada sai para a internet nem gasta crédito
 FAKE_EL="$(porta)"; python3 tests/fake_eleven.py "$FAKE_EL" & PIDS+=("$!")
 for i in $(seq 1 50); do curl -sf "localhost:$FAKE_EL/count" >/dev/null && break; sleep 0.1; done
-newdb tino_ci_encartes; ELEVENLABS_API_KEY=chave-de-teste ELEVENLABS_BASE="http://127.0.0.1:$FAKE_EL" serve tino_ci_encartes
+newdb tino_ci_encartes; ELEVENLABS_API_KEY=chave-de-teste ELEVENLABS_TETO_MES=30000 ELEVENLABS_BASE="http://127.0.0.1:$FAKE_EL" serve tino_ci_encartes
 APW="$(gen)"
 curl -sf -X POST "localhost:$PORTA/api/setup" -H 'Content-Type: application/json' -H 'X-App: 1' \
   -d "{\"code\":\"$SETUP_CODE\",\"name\":\"Dono\",\"login\":\"eduardo\",\"password\":\"$APW\"}" >/dev/null

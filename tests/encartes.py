@@ -99,6 +99,32 @@ if FAKE:
     s, _ = dono.req('/api/encartes/doc', {'p': 'app/vozcfg', 'data': {'limite': 10}}); s, x = dono.req('/api/encartes/voz', {'texto': 'Feijão carioca um quilo'}); check(s == 429 and falas()['n'] == 2, 'passou do limite do mês: recusa sem chamar a ElevenLabs')
     s, g4 = dono.req('/api/encartes/voz', fala); check(s == 200 and g4['cache'] is True, 'fala já guardada sai mesmo acima do limite (não gasta)')
     s, _ = dono.req('/api/encartes/voz', {'texto': 'x' * 400}); check(s == 400, 'fala longa demais é recusada')
+    # --- conta de créditos à prova de corrida, custo real e saldo de verdade ---
+    import threading
+    def uso(): return dono.req('/api/encartes/voz')[1]
+    s, _ = dono.req('/api/encartes/doc', {'p': 'app/vozcfg', 'data': {'limite': 999999}}); st = uso(); check(st['limite'] == 30000 and st['teto'] == 30000, 'limite da empresa não passa do teto geral da conta')
+    check(st['conta'] and st['conta']['usado'] == falas()['gasto'] and st['conta']['limite'] == 30000, 'mostra o saldo de verdade da ElevenLabs')
+    s, _ = dono.req('/api/encartes/doc', {'p': 'app/vozuso', 'data': {'mes': st['mes'], 'cred': 0}}); check(s == 403 and uso()['usado'] == st['usado'], 'ninguém zera a conta de créditos pela nuvem')
+    s, v = dono.req('/api/encartes/voz?voz=HR2TRGmi4QbMsO5omv7l'); check(v['voz'] and v['voz']['ok'] is True, 'voz padrão existe na conta')
+    s, v = dono.req('/api/encartes/voz?voz=VozSumiu0000000000'); check(v['voz'] and v['voz']['ok'] is False, 'avisa quando a voz sumiu da ElevenLabs')
+    s, v = dono.req('/api/encartes/voz?voz=VozSaindo000000000'); check(v['voz'] and v['voz']['ok'] is True and v['voz']['some'] == 1900000000, 'avisa a data em que a voz vai sair')
+    a = uso()['usado']; n0 = falas()['n']
+    s, x = dono.req('/api/encartes/voz', {'texto': 'Alcatra', 'voz': 'VozSumiu0000000000'}); check(s == 424 and 'voz' in x.get('error', '').lower() and uso()['usado'] == a, 'voz que sumiu: a mensagem chega inteira e a reserva de crédito é devolvida')
+    s, x = dono.req('/api/encartes/voz', {'texto': 'Alcatra bovina', 'voz': 'VozCara00000000000'}); check(s == 200 and x['cred'] == 28 and uso()['usado'] == a + 28, 'voz com multiplicador: conta o custo cobrado de verdade (o dobro)')
+    s, e = dono.req('/api/encartes/voz', dict(fala, estimar=True, refazer=True)); check(s == 200 and e['cred'] == len(fala['texto']) and 'audio' not in e, 'estimar o refazer mostra que vai gastar')
+    a = uso()['usado']; n0 = falas()['n']
+    s, x = dono.req('/api/encartes/voz', dict(fala, refazer=True)); check(s == 200 and x['cache'] is False and falas()['n'] == n0 + 1 and uso()['usado'] == a + len(fala['texto']), 'refazer grava a fala de novo (e conta o crédito)')
+    def junto(corpos):
+        out = [None] * len(corpos)
+        def vai(i): out[i] = dono.req('/api/encartes/voz', corpos[i])
+        ts = [threading.Thread(target=vai, args=(i,)) for i in range(len(corpos))]; [t.start() for t in ts]; [t.join() for t in ts]; return out
+    a = uso()['usado']; n0 = falas()['n']; lenta = {'texto': 'Costela devagar no bafo'}
+    r = junto([lenta, lenta, lenta]); check([x[0] for x in r] == [200, 200, 200] and falas()['n'] == n0 + 1 and uso()['usado'] == a + len(lenta['texto']) and len(set(x[1]['audio'] for x in r)) == 1, 'a mesma fala pedida 3 vezes ao mesmo tempo é paga uma vez só')
+    a = uso()['usado']; n0 = falas()['n']; f1 = {'texto': 'Fraldinha devagar um'}; f2 = {'texto': 'Fraldinha devagar dois'}
+    s, _ = dono.req('/api/encartes/doc', {'p': 'app/vozcfg', 'data': {'limite': a + len(f2['texto'])}})
+    r = junto([f1, f2]); cods = sorted(x[0] for x in r); check(cods == [200, 429] and falas()['n'] == n0 + 1 and uso()['usado'] <= a + len(f2['texto']), 'duas falas ao mesmo tempo não furam o limite do mês')
+    s, _ = dono.req('/api/encartes/doc', {'p': 'app/vozcfg', 'data': {'limite': 30000}})
+    check(uso()['conta']['usado'] == falas()['gasto'], 'saldo da ElevenLabs acompanha o gasto')
     jo = entra(TID, 'jose', z['password'], pw())
     s, _ = jo.req('/api/encartes/voz', fala); check(s == 403, 'funcionário não gera voz')
     s, _ = jo.req('/api/encartes/voz'); check(s == 403, 'funcionário não vê o uso da voz')
