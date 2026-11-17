@@ -229,6 +229,7 @@ h4:first-child{margin-top:0}
 .logos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .logo{border:1px dashed #cfcac0;border-radius:8px;height:96px;display:flex;align-items:center;justify-content:center;background:#fff center/contain no-repeat;cursor:pointer;color:var(--mut);font-size:12px;text-align:center;padding:6px;position:relative}
 .logo.has{border-style:solid;background-origin:content-box;padding:10px}
+.logo.fix{cursor:default;background-color:#3b404c;border-color:#3b404c}
 .logo .x{position:absolute;top:4px;right:4px;border:0;background:#0009;color:#fff;border-radius:4px;font-size:11px;cursor:pointer;padding:2px 6px}
 .saved{border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .saved .n{flex:1 1 100%;font-weight:600}
@@ -315,6 +316,18 @@ body.lgOn{overflow:hidden}
 body.noPlq #bPlaq,body.noPlq #wzPlaq{display:none!important}
 body.wz.usrOn .top .actions>#bModo{display:inline-flex!important}
 #uPerms[hidden]{display:none}
+
+/* vídeo com voz */
+#t-voz h4{display:flex;align-items:center;gap:10px;margin:16px 0 6px}#t-voz h4 small{font-weight:500;color:var(--mut)}
+.vozBox{background:#fff4e0;border:1px solid #f0c27a;border-radius:10px;padding:10px 12px;font-size:14px}.vozBox.ok{background:#e9f7ee;border-color:#8fd0a6}.vozBox p{margin:0}
+.vzTx{width:100%;min-height:58px;font:15px/1.35 Inter,sans-serif;padding:8px 10px;border:1px solid #d8d4cc;border-radius:8px;resize:vertical;box-sizing:border-box}
+.vzTx:disabled{opacity:.45}
+.vzOff{display:inline-flex;align-items:center;gap:4px;font:500 13px Inter,sans-serif;color:var(--mut);margin:0}
+.vzP{border:1px solid #e6e2da;border-radius:10px;padding:8px 10px;margin:6px 0;background:#fff}.vzP.on{border-color:var(--red);box-shadow:0 0 0 1px var(--red) inset}
+.vzChk{display:flex;align-items:center;gap:10px;margin:0;cursor:pointer}.vzChk input{width:22px;height:22px;flex:none}.vzChk span{display:flex;flex-direction:column}.vzChk small{color:var(--mut);font-weight:500}
+.vzP .vzTx{margin-top:8px}.vzRow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}.vzRow small{color:var(--mut)}
+.vozSum{margin:16px 0 8px;padding:10px 12px;background:#f6f4ef;border-radius:10px;display:flex;flex-direction:column;gap:2px}.vozSum small{color:var(--mut)}
+.vzAct{flex-wrap:wrap}.vzAct .btn{flex:1 1 220px}
 </style>
 </head>
 <body>
@@ -388,6 +401,7 @@ body.wz.usrOn .top .actions>#bModo{display:inline-flex!important}
    <button data-t="camp" data-dono>Campanha</button>
    <button data-t="loja" data-dono>Loja</button>
    <button data-t="salv">Salvos</button>
+   <button data-t="voz" data-dono>Vídeo com voz</button>
   </nav>
 
   <div class="tab on" id="t-prod">
@@ -411,6 +425,8 @@ body.wz.usrOn .top .actions>#bModo{display:inline-flex!important}
    <p class="hint">Toque no produto aqui ou direto no encarte para editar. Para mudar a ordem, clique e arraste o produto (no celular, segure o dedo um instante e arraste, ou use a alça ⠿). Solte uma foto em cima da linha para trocar a imagem. A caixinha de cada produto marca de quais sai plaquinha.</p>
    <div id="plist"></div>
   </div>
+
+  <div class="tab" id="t-voz"></div>
 
   <div class="tab" id="t-camp">
    <details class="sec" open><summary>Campanhas</summary><div class="in">
@@ -447,10 +463,10 @@ body.wz.usrOn .top .actions>#bModo{display:inline-flex!important}
    <div class="bar"><button class="btn sm pri" id="bankUp">Subir fotos em lote</button><span id="bankN" class="hint" style="margin:0"></span></div>
    <input type="file" id="bankIn" accept="image/*" multiple hidden>
    <h4>Logomarcas</h4>
-   <p class="hint">Ficam uma em cima da outra no cabeçalho. PNG com fundo transparente fica melhor.</p>
+   <p class="hint" id="lgHint">Fixas neste gerador: D'Ávila e RedeShow.</p>
    <div class="logos">
-    <div class="logo" id="logo0">Toque para enviar<br>logo 1</div>
-    <div class="logo" id="logo1">Toque para enviar<br>logo 2</div>
+    <div class="logo" id="logo0"></div>
+    <div class="logo" id="logo1"></div>
    </div>
    <h4>Banco de produtos</h4>
    <p class="hint">Puxa do StarIA os 1000 produtos mais vendidos dos últimos 30 dias (filial abaixo; se o banco já tiver 1000 ou mais, puxa mais 1000): código, EAN, nome, custo, preço atual e imposto. É o que aparece quando alguém bipa uma plaquinha. Atualize uma vez por mês.</p>

@@ -196,6 +196,8 @@ Gerador de encartes, plaquinhas avulsas, vídeo e TV a partir da lista de oferta
 - **Front:** `public/encartes.html` + `public/encartes/app.js` (gerado a partir do app do Claude por `tools/to_tino.py` — não editar à mão) + `public/encartes/tino.js` (login e ponte de dados). Bibliotecas em `public/vendor/` (sem CDN, por causa da CSP).
 - **Sem StarIA aqui:** o botão "Atualizar banco do StarIA" só funciona no app do Claude. Dados, fotos e modelos do app do Claude não migram sozinhos.
 - **Testes:** `tests/unit/encartes.test.js` e `tests/encartes.py` (passo 12 do `tests/ci_banco.sh`).
+- **Vídeo com voz (Stories/Feed):** aba "Vídeo com voz" no painel do admin. Locução da ElevenLabs por `POST /api/encartes/voz` (`lib/encartes-voz.js`): só administrador; a chave fica só no servidor (variável **`ELEVENLABS_API_KEY`** na Vercel); cada fala é guardada em `enc_blobs` pelo hash de voz + modelo + texto (a mesma fala não é paga duas vezes); limite de créditos por mês em `app/vozcfg` (padrão 30.000) e uso em `app/vozuso`. Sem a chave, a aba avisa e só gera sem voz. Testes com uma ElevenLabs de mentira (`tests/fake_eleven.py`), sem internet nem crédito.
+- **Do artefato para o Tino:** o artefato é multiarquivo; `python3 tools/artefato_unico.py PASTA /tmp/unico.html` junta tudo num arquivo e `python3 tools/to_tino.py /tmp/unico.html public` gera o app. Antes de publicar o artefato: `python3 tools/encartes_testes.py PASTA` (regras do app + vídeo com voz de ponta a ponta no Chrome).
 
 ## Desenvolver e testar no computador
 
