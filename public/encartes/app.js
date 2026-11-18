@@ -579,12 +579,18 @@ function logoArrange(W,hh,sl,m){
 function headerZones(W,hh){
  const sl=hh*0.13,m=hh*0.08,L=logoArrange(W,hh,sl,m),bw=L.bw,tx=m*2+bw,tw=W-tx-m*1.6,th=(hh-sl)*0.56;
  return{sl,m,logo1:L.rects[0]||null,logo2:L.rects[1]||null,title:{x:tx,y:m*0.6,w:tw,h:th*1.25},band:{x:tx+tw*0.05,y:m*0.6+th*1.25,w:tw*0.9,h:(hh-sl)*0.27}}}
+/* logos ajustadas na mão pelo dono (por campanha e formato). x/w = fração da largura; y/h = fração da altura do cabeçalho.
+   Pode ficar por cima do título (decisão do dono). LOGO_EDIT: enquanto o editor está aberto, o desenho não põe as logos */
+let LOGO_EDIT=false;
+const hasLogoAdj=(cp,W,H)=>{const fk=fmtOf(W,H);return!!(cp&&cp.logoAdj&&fk&&cp.logoAdj[fk])};
+function logoRectsOf(cp,W,H,hh,Z){const fk=fmtOf(W,H),adj=cp&&cp.logoAdj&&fk&&cp.logoAdj[fk],R=[Z.logo1,Z.logo2];if(!adj)return R;
+ return R.map((r,i)=>{const a=adj[i];if(!r||!a||!(a.w>0&&a.h>0))return r;return{x:a.x*W,y:a.y*hh,w:a.w*W,h:a.h*hh}})}
 function drawHeader(c,W,H,hh,C,cp,parts){
  const pt=Object.assign({band:true,logos:true,title:true,valid:true},parts||{});
  const Z=headerZones(W,hh),sl=Z.sl,m=Z.m;c.save();
  if(pt.band){c.fillStyle=C.cabecalho;c.beginPath();c.moveTo(0,0);c.lineTo(W,0);c.lineTo(W,hh-sl);c.lineTo(0,hh);c.closePath();c.fill();if(CUR&&CUR.motivo){c.save();c.beginPath();c.moveTo(0,0);c.lineTo(W,0);c.lineTo(W,hh-sl);c.lineTo(0,hh);c.closePath();c.clip();drawHeroMotif(c,Z.title.x,0,W-Z.title.x,hh,CUR.motivo,C);c.restore()}
   const lw=Math.max(4,hh*0.035);c.strokeStyle=C.adesivo;c.lineWidth=lw;c.beginPath();c.moveTo(0,hh+lw/2);c.lineTo(W,hh-sl+lw/2);c.stroke()}
- if(pt.logos){[Z.logo1,Z.logo2].forEach((r,i)=>{if(r)logoBox(c,i,r.x,r.y,r.w,r.h)})}
+ if(pt.logos&&!LOGO_EDIT&&!hasLogoAdj(cp,W,H)){logoRectsOf(cp,W,H,hh,Z).forEach((r,i)=>{if(r)logoBox(c,i,r.x,r.y,r.w,r.h)})}
  if(cp.validPos==='rodape')pt.valid=false;
  const tx=Z.title.x,tw=Z.title.w,cx=tx+tw/2,title=(cp.titulo||cp.nome||'').toUpperCase().trim(),vt0=validText();
  /* título preenche o cabeçalho: testa 1, 2 ou 3 linhas e fica com a que deixa a letra maior */
@@ -603,6 +609,7 @@ function drawHeader(c,W,H,hh,C,cp,parts){
  if(vt&&pt.valid){const bs=Math.min(fitLine(c,vt,tw*0.86,(hh-sl)*0.15,F),s*0.42);c.font=F(bs);const bwid=c.measureText(vt).width+bs*1.2,bht=bs*1.4;const by=pt.title?ty+bs*0.45:Z.band.y;
   c.save();c.translate(cx,by+bht/2);c.transform(1,0,-0.2,1,0,0);c.fillStyle=C.adesivo;c.fillRect(-bwid/2,-bht/2,bwid,bht);c.restore();
   c.fillStyle=C.adesivoTexto;c.textAlign='center';c.textBaseline='middle';c.fillText(vt,cx,by+bht/2+bs*0.04)}
+ if(pt.logos&&!LOGO_EDIT&&hasLogoAdj(cp,W,H))logoRectsOf(cp,W,H,hh,Z).forEach((r,i)=>{if(r)logoBox(c,i,r.x,r.y,r.w,r.h)}); /* ajustada na mão: por cima do título */
  c.restore()}
 function waDigits(){let d=(S.store.wa||'').replace(/\D/g,'');if(d.length>=10&&d.length<=11)d='55'+d;return d.length>=12?d:''}
 const qrMemo={};
@@ -1062,7 +1069,7 @@ function render(){
 function renderWarns(P,n){
  const el=$('#warns'),fk=S.format,cfg=artesOf(fk),pg=P[S.page],empty=pg.lay.auto||pg.lay.sec?0:Math.max(0,pg.cap-pg.items.length);
  let h=`<div class="laybar"><div class="seg2" id="nArtes" data-dono>${[1,2,3,4].map(k=>`<button data-k="${k}" class="${cfg.length===k?'on':''}">${k===1?'Só frente':k===2?'Frente e verso':k+' artes'}</button>`).join('')}</div>
- <button class="btn sm pri" id="pickLay" data-dono>Montar diagramação</button>
+ <button class="btn sm pri" id="pickLay" data-dono>Montar diagramação</button>${getMod(camp().modelo)||isFunc()?'':'<button class="btn sm" id="adjLogos" data-dono>Ajustar logos</button>'}
  <label class="vd" style="margin-left:auto">Validade <input type="date" id="lbIni" value="${S.val.ini||''}"> a <input type="date" id="lbFim" value="${S.val.fim||''}"></label>
  ${pg.lay.sec?'':pg.locked?`<div class="vd">Produtos nesta arte <b style="min-width:22px;text-align:center">${pg.items.length}</b></div>`:`<div class="vd">Produtos nesta arte <button class="ico" id="stM" style="width:26px">−</button><b style="min-width:22px;text-align:center">${pg.items.length}</b><button class="ico" id="stP" style="width:26px">+</button>${pg.cfg&&pg.cfg.grow?'<small style="color:#1b7a34">cresce sozinho</small>':''}</div>`}
  ${pg.lay.sec||pg.extra&&!pg.items.length?'':`<button class="btn sm lockBtn ${pg.locked?'on':''}" id="lockArt" data-dono>${pg.locked?'🔒 Arte pronta · destravar':'🔓 Travar esta arte'}</button>`}
@@ -1079,10 +1086,35 @@ function renderWarns(P,n){
  el.innerHTML=h;
  el.querySelectorAll('#nArtes button').forEach(b=>b.onclick=()=>{const k=+b.dataset.k;if(lockCut(fk,k))return;let a=artesOf(fk).slice(0,k);while(a.length<k)a.push({t:'m',lay:'auto'});setArtes(fk,a);S.page=Math.min(S.page,k-1);changed();if(k>1)openLayPicker(Math.min(k-1,1))});
  el.querySelectorAll('.artChip').forEach(b=>{const i=+b.dataset.i;drawCroqui(b.querySelector('canvas'),P[i].lay,fk,30,36,P[i].items,P[i].hf);b.onclick=()=>{if(S.page===i){openLayPicker(i)}else{S.page=i;changed()}}});
- hfBind(el,pg,fk);$('#pickLay').onclick=()=>openLayPicker(S.page);const lk=$('#lockArt');if(lk)lk.onclick=()=>toggleLock(S.page);const sm=$('#stM'),sp=$('#stP');if(sm)sm.onclick=()=>stepArte(-1);if(sp)sp.onclick=()=>stepArte(1);renderSugs(P);
+ hfBind(el,pg,fk);$('#pickLay').onclick=()=>openLayPicker(S.page);const lk=$('#lockArt');if(lk)lk.onclick=()=>toggleLock(S.page);const al=$('#adjLogos');if(al)al.onclick=()=>openLogoEditor();const sm=$('#stM'),sp=$('#stP');if(sm)sm.onclick=()=>stepArte(-1);if(sp)sp.onclick=()=>stepArte(1);renderSugs(P);
  $('#lbIni').onchange=e=>{S.val.ini=e.target.value;if(S.val.fim&&S.val.fim<S.val.ini)S.val.fim=S.val.ini;$('#vIni').value=S.val.ini;$('#vFim').value=S.val.fim;changed(false)};
  $('#lbFim').onchange=e=>{S.val.fim=e.target.value;$('#vFim').value=S.val.fim;changed(false)};
  const si=$('#showIss');if(si)si.onclick=()=>reviewGate(S.products,true);const sc=$('#showCusto');if(sc)sc.onclick=(...a)=>openCusto(...a)}
+/* ajustar logos na mão: arrasta para mudar o lugar, puxa o cantinho para aumentar/diminuir.
+   Salva como padrão da campanha naquele formato. Só o dono. */
+function openLogoEditor(){
+ if(isFunc()){toast('Só o administrador ajusta as logos');return}
+ const cp=camp(),fk=S.format,f=FORMATS[fk],W=f.w,H=f.h;if(getMod(cp.modelo)){toast('Esta campanha usa um modelo pronto');return}
+ const ids=[0,1].filter(i=>logos[i]&&!(S.logoOff||{})[i]);if(!ids.length){toast('Nenhuma logo para ajustar');return}
+ const{P}=pageInfo(),pi=Math.max(0,P.findIndex(q=>q.hf.cab==='completo')),pg=P[pi],hh=areaOf(W,H).hh,Z=headerZones(W,hh);
+ const R=logoRectsOf(cp,W,H,hh,Z).map((r,i)=>{if(!r||!ids.includes(i))return null;if(cp.logoAdj&&cp.logoAdj[fk]&&cp.logoAdj[fk][i])return Object.assign({},r);
+  const a=logoAsp(i),w=Math.min(r.w,r.h*a),h=w/a;return{x:r.x+(r.w-w)/2,y:r.y+(r.h-h)/2,w,h}});/* caixa justa na logo, para o cantinho ficar na logo */
+ modal(`<h3>Ajustar logos: ${esc(cp.nome)} · ${esc(f.label)}</h3><p class="hint">Arraste a logo para mudar o lugar. Puxe a bolinha do canto para aumentar ou diminuir. A logo pode ficar por cima do título. Vale para todo encarte desta campanha neste formato.</p>
+ <div class="lgEd" id="lgEd"><canvas id="lgCv" width="${W}" height="${H}"></canvas>${ids.map(i=>`<div class="lgBx" data-i="${i}" style="background-image:url('${logos[i].url}')"><i class="lgRz"></i></div>`).join('')}</div>
+ <div class="mfoot"><button class="btn" data-a="auto">Voltar ao automático</button><button class="btn" data-a="n">Cancelar</button><button class="btn pri" data-a="ok">Salvar</button></div>`,b=>{
+  b.classList.add('wide');const cv=$('#lgCv'),ed=$('#lgEd');
+  LOGO_EDIT=true;try{renderFlyer(cv.getContext('2d'),W,H,withVagas(pg),cp,[],pg.lay,pg)}finally{LOGO_EDIT=false}
+  const place=()=>ids.forEach(i=>{const r=R[i],el=ed.querySelector(`.lgBx[data-i="${i}"]`);Object.assign(el.style,{left:r.x/W*100+'%',top:r.y/H*100+'%',width:r.w/W*100+'%',height:r.h/H*100+'%'})});place();
+  ed.querySelectorAll('.lgBx').forEach(el=>{const i=+el.dataset.i;el.onpointerdown=e=>{e.preventDefault();const k=W/cv.getBoundingClientRect().width,r0=Object.assign({},R[i]),x0=e.clientX,y0=e.clientY,rz=e.target.classList.contains('lgRz'),asp=r0.w/r0.h;
+   el.setPointerCapture(e.pointerId);el.classList.add('on');
+   el.onpointermove=ev=>{const dx=(ev.clientX-x0)*k,dy=(ev.clientY-y0)*k,r=R[i];
+    if(rz){const w=clamp(r0.w+Math.max(dx,dy*asp),W*0.05,W*0.9);r.w=w;r.h=Math.min(w/asp,hh);r.w=r.h*asp}
+    else{r.x=clamp(r0.x+dx,0,W-r.w);r.y=clamp(r0.y+dy,0,Math.max(0,hh-r.h))}
+    r.x=clamp(r.x,0,W-r.w);r.y=clamp(r.y,0,Math.max(0,hh-r.h));place()};
+   el.onpointerup=el.onpointercancel=()=>{el.onpointermove=null;el.classList.remove('on')}}});
+  b.querySelector('[data-a=n]').onclick=(...a)=>closeModal(...a);
+  b.querySelector('[data-a=auto]').onclick=()=>{if(cp.logoAdj){const o=Object.assign({},cp.logoAdj);delete o[fk];cp.logoAdj=Object.keys(o).length?o:undefined;if(!cp.logoAdj)delete cp.logoAdj}S._sharedDirty=true;closeModal();changed();toast('Logos voltaram ao automático')};
+  b.querySelector('[data-a=ok]').onclick=()=>{const adj={};ids.forEach(i=>{const r=R[i];adj[i]={x:r.x/W,y:r.y/hh,w:r.w/W,h:r.h/hh}});cp.logoAdj=Object.assign({},cp.logoAdj||{},{[fk]:adj});S._sharedDirty=true;closeModal();changed();toast('Logos salvas para '+cp.nome+' no '+f.label)}})}
 /* não deixa apagar uma arte travada ao diminuir o número de artes */
 function lockCut(fk,k){const a=artesOf(fk),j=a.findIndex((c,i)=>i>=k&&isLocked(c));if(j<0)return false;toast(`${arteNome(j)} está travada. Destrave antes de tirar essa arte.`);return true}
 /* cabeçalho e rodapé desta arte (só aparece quando o encarte tem mais de uma arte) */
