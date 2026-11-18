@@ -634,6 +634,45 @@ function drawFooter(c,W,H,fh,C,mode='full'){
  if(s2){c.font=O(s2,500);c.fillText(ends,tx,yy);yy+=s2*1.25}
  c.globalAlpha=mode==='full'?0.82:1;c.font=`500 ${s3}px Inter, sans-serif`;c.fillText(l3,tx,yy);c.restore()}
 
+/* ---------- cabeçalho e rodapé por arte (encarte tipo jornal: capa forte, verso só produto) ---------- */
+const HF_FMTS=['a4','insta','story'];
+const CAB_OPTS=[['completo','Completo'],['faixa','Faixa fina'],['nenhum','Nenhum']],ROD_OPTS=[['completo','Completo'],['fino','Fino'],['nenhum','Nenhum']];
+/* padrão: capa com cabeçalho completo, as outras com faixa; rodapé completo só na última. TV e A4 deitado não mudam */
+function hfOf(fk,i,n,cfg){if(!HF_FMTS.includes(fk)||n<=1)return{cab:'completo',rod:'completo',auto:true};
+ const c=cfg||{},cab=CAB_OPTS.some(o=>o[0]===c.cab)?c.cab:(i===0?'completo':'faixa'),rod=ROD_OPTS.some(o=>o[0]===c.rod)?c.rod:(i===n-1?'completo':'fino');return{cab,rod}}
+const faixaH=H=>Math.round(H*0.075),finoH=H=>Math.round(H*0.036);
+const HCOLS=new WeakMap();
+/* cores da faixa: da campanha; com cabeçalho pronto (imagem), saem da imagem, como o corpo; dá para trocar na mão */
+function faixaCores(cp,C){let base=C;const im=typeof headImg==='function'?headImg(cp):null;
+ if(im){let h=HCOLS.get(im);if(!h){h=headColors(im);HCOLS.set(im,h)}base=Object.assign({},C,{cabecalho:h.cabecalho,titulo:h.titulo,adesivo:h.adesivo,adesivoTexto:h.adesivoTexto})}
+ const fc=(cp&&cp.faixaCor)||{},bg=fc.bg||base.cabecalho;let tx=fc.tx||base.titulo||'#ffffff';
+ if(!fc.tx&&Math.abs(hexLum(tx)-hexLum(bg))<0.35)tx=hexLum(bg)>0.55?'#15171c':'#ffffff';
+ let ac=base.adesivo,at=base.adesivoTexto;if(Math.abs(hexLum(ac)-hexLum(bg))<0.2&&ac.toLowerCase()!==tx.toLowerCase()){ac=tx;at=hexLum(tx)>0.55?'#15171c':'#ffffff'}
+ return{bg,tx,ac,at,auto:!fc.bg&&!fc.tx}}
+function drawFaixa(c,W,hh,C,cp){const X=faixaCores(cp,C),m=hh*0.13,st=Math.max(3,hh*0.06);c.save();
+ c.fillStyle=X.bg;c.fillRect(0,0,W,hh);c.fillStyle=X.ac;c.fillRect(0,hh-st,W,st);
+ /* logos pequenas no canto esquerdo, lado a lado */
+ const lh=hh-st-m*2,ids=[0,1].filter(i=>logos[i]&&!(S.logoOff||{})[i]);let x=m*1.4;
+ ids.forEach(i=>{const w=Math.min(W*0.2,lh*logoAsp(i));logoBox(c,i,x,m,w,lh);x+=w+m*0.8});
+ /* validade do outro lado */
+ const vt=validText();let right=W-m*1.4;
+ if(vt){const bh=(hh-st)*0.56,bs=Math.min(fitLine(c,vt,W*0.3,bh*0.6,F),bh*0.6);c.font=F(bs);const bw=c.measureText(vt).width+bs*1.3,bx=right-bw,by=(hh-st-bh)/2;
+  c.save();c.translate(bx+bw/2,by+bh/2);c.transform(1,0,-0.2,1,0,0);c.fillStyle=X.ac;c.fillRect(-bw/2,-bh/2,bw,bh);c.restore();
+  c.fillStyle=X.at;c.textAlign='center';c.textBaseline='middle';c.fillText(vt,bx+bw/2,by+bh/2+bs*0.04);right=bx-m*1.6}
+ /* nome da campanha no meio, do maior tamanho que couber */
+ const t=((cp&&(cp.titulo||cp.nome))||'').toUpperCase().trim();
+ if(t){const x0=ids.length?x+m*0.8:m*1.4,tw=right-x0,s=fitLine(c,t,tw,(hh-st)*0.66,F);c.font=F(s);c.textAlign='center';c.textBaseline='middle';c.lineJoin='round';
+  const cx=x0+tw/2,cy=(hh-st)/2+s*0.04,dk=hexLum(X.tx)<0.4;c.fillStyle=dk?'rgba(255,255,255,.3)':'rgba(0,0,0,.4)';c.fillText(t,cx+s*0.04,cy+s*0.05);c.fillStyle=X.tx;c.fillText(t,cx,cy)}
+ c.restore()}
+function finoText(){const vt=validText(),wa=S.store.wa?'PEÇA PELO WHATSAPP '+S.store.wa:'';return[vt,wa].filter(Boolean).join('   •   ')||'OFERTAS EXCLUSIVAS NAS NOSSAS LOJAS'}
+function drawFooterThin(c,W,H,fh,C,cp){const X=faixaCores(cp,C),y=H-fh,st=Math.max(2,fh*0.08);c.save();
+ c.fillStyle=X.bg;c.fillRect(0,y,W,fh);c.fillStyle=X.ac;c.fillRect(0,y,W,st);
+ const t=finoText(),s=fitLine(c,t,W*0.94,(fh-st)*0.58,z=>O(z,700));c.font=O(s,700);c.fillStyle=X.tx;c.textAlign='center';c.textBaseline='middle';c.fillText(t,W/2,y+st+(fh-st)/2+s*0.03);c.restore()}
+/* a arte mostra a validade em algum lugar? (cabeçalho pronto em imagem não mostra; o rodapé completo sempre mostra) */
+function hfValid(hf,cp,fk){if(!cp||cp.modelo&&getMod(cp.modelo))return true;const f=FORMATS[fk],art=artCache.get(artKey(cp.id,fk));
+ const cabV=hf.cab==='faixa'||hf.cab==='completo'&&(art?artOpt(cp).valid&&cp.validPos!=='rodape':!(cp.headArt&&f&&f.h>f.w&&headImg(cp))&&cp.validPos!=='rodape');
+ const rodV=hf.rod==='fino'||hf.rod==='completo'&&!(art&&artOpt(cp).rodape==='none');return cabV||rodV}
+
 function layoutGrid(n,x,y,w,h,g){
  if(!n)return[];let best=null;
  for(let cols=1;cols<=Math.min(n,6);cols++){const rows=Math.ceil(n/cols),cw=(w-g*(cols-1))/cols,ch=(h-g*(rows-1))/rows;const sc=Math.min(cw,ch*0.82)*(1-0.05*(rows*cols-n));if(!best||sc>best.sc)best={cols,rows,cw,ch,sc}}
@@ -643,7 +682,7 @@ function layoutGrid(n,x,y,w,h,g){
   cells.push({x:x0+k*(cwi+g),y:y+r*(ch+g),w:cwi,h:ch})}
  return cells}
 
-function areaOf(W,H,hhO){const land=W>H,hh=hhO||H*(land?0.2:W/H<0.6?0.165:0.2),fh=H*(land?0.085:W/H<0.6?0.062:0.07),m=W*0.022,g=W*(land?0.01:0.014),top=hh+m*1.25,bot=H-fh-m;return{W,H,land,hh,fh,m,g,top,ax:m,aw:W-m*2,ah:bot-top}}
+function areaOf(W,H,hhO,fhO){const land=W>H,hh=hhO!=null?hhO:H*(land?0.2:W/H<0.6?0.165:0.2),fh=fhO!=null?fhO:H*(land?0.085:W/H<0.6?0.062:0.07),m=W*0.022,g=W*(land?0.01:0.014),top=hh+m*1.25,bot=H-fh-m;return{W,H,land,hh,fh,m,g,top,ax:m,aw:W-m*2,ah:bot-top}}
 const fmtOf=(W,H)=>Object.keys(FORMATS).find(k=>FORMATS[k].w===W&&FORMATS[k].h===H);
 function autoSlots(items,A){
  const{land,g,top,ax,aw,ah}=A,out=[];const feat=items.filter(p=>p.featured).slice(0,4),rest=items.filter(p=>!feat.includes(p));
@@ -789,13 +828,21 @@ function drawModelo(c,W,H,items,cp,iss){const m=getMod(cp.modelo);if(m.slots)ret
  m.peq.forEach((s,i)=>{const p=items[m.herois.length+i];if(!p)return;drawPeqModelo(c,s,p);push(p,s.img[0],s.n[1],s.img[2],s.tag[1]+s.tag[3]/2-s.n[1])});
  drawModeloData(c,m);c.restore();
  if(items.length>modeloSlots(m))iss&&iss.push(`Este modelo tem ${modeloSlots(m)} espaços; o resto vai para outra arte`)}
-function renderFlyer(c,W,H,items,cp,iss,lay){
+function renderFlyer(c,W,H,items,cp,iss,lay,pg){
  if(cp&&cp.modelo&&getMod(cp.modelo)){CUR={W,H,noCards:false};drawModelo(c,W,H,items,cp,iss);return}
- const fk=fmtOf(W,H),art=fk&&artCache.get(artKey(cp.id,fk));const HD=!art&&cp?headOf(cp,W,H):null;CUR={W,H,noCards:!!art&&cp.cards===false,tema:cp.tema||'',motivo:cp.motivo||'',estilo:cp.estilo||'',validRod:cp.validPos==='rodape'||!!HD,destFundo:cp.destFundo||''};let C=cp.cores;const A=areaOf(W,H,HD?HD.hh:0);if(S.store.tinta&&!art&&(fk==='a4'||fk==='a4h'))C=Object.assign({},C,{fundo:'#ffffff'});c.save();
+ const fk=fmtOf(W,H),hf=pg&&pg.hf||{cab:'completo',rod:'completo'},full=hf.cab==='completo'&&hf.rod==='completo';
+ /* arte de fundo da campanha (com cabeçalho e rodapé desenhados nela) só entra quando a arte usa os dois completos */
+ const art=full&&fk&&artCache.get(artKey(cp.id,fk));const HD=!art&&cp&&hf.cab==='completo'?headOf(cp,W,H):null;
+ CUR={W,H,noCards:!!art&&cp.cards===false,tema:cp.tema||'',motivo:cp.motivo||'',estilo:cp.estilo||'',validRod:cp.validPos==='rodape'||!!HD,destFundo:cp.destFundo||''};let C=cp.cores;
+ const hhX=hf.cab==='faixa'?faixaH(H):hf.cab==='nenhum'?0:(HD?HD.hh:undefined),fhX=hf.rod==='fino'?finoH(H):hf.rod==='nenhum'?0:undefined;
+ const A=areaOf(W,H,hhX,fhX);if(S.store.tinta&&!art&&(fk==='a4'||fk==='a4h'))C=Object.assign({},C,{fundo:'#ffffff'});c.save();
  if(art)cover(c,art.img,0,0,W,H);else drawBg(c,W,H,C);
- if(HD){c.drawImage(HD.img,0,0,HD.img.width,Math.min(HD.img.height,HD.hh*HD.img.width/W),0,0,W,HD.hh);if(cp.headLogos)drawHeader(c,W,H,A.hh,C,cp,{band:false,title:false,valid:false,logos:true});drawFooter(c,W,H,A.fh,C)}
- else if(!art&&cp.headArt&&W>H){drawHeader(c,W,H,A.hh,C,cp,{logos:false});drawFooter(c,W,H,A.fh,C)}
- else if(!art){drawHeader(c,W,H,A.hh,C,cp);drawFooter(c,W,H,A.fh,C)}
+ const foot=()=>{if(hf.rod==='fino')drawFooterThin(c,W,H,A.fh,C,cp);else if(hf.rod==='completo')drawFooter(c,W,H,A.fh,C)};
+ if(hf.cab==='faixa'){drawFaixa(c,W,A.hh,C,cp);foot()}
+ else if(hf.cab==='nenhum')foot();
+ else if(HD){c.drawImage(HD.img,0,0,HD.img.width,Math.min(HD.img.height,HD.hh*HD.img.width/W),0,0,W,HD.hh);if(cp.headLogos)drawHeader(c,W,H,A.hh,C,cp,{band:false,title:false,valid:false,logos:true});foot()}
+ else if(!art&&cp.headArt&&W>H){drawHeader(c,W,H,A.hh,C,cp,{logos:false});foot()}
+ else if(!art){drawHeader(c,W,H,A.hh,C,cp);foot()}
  else{const o=artOpt(cp);drawHeader(c,W,H,A.hh,C,cp,o);drawFooter(c,W,H,A.fh,C,o.rodape)}
  if(lay&&lay.sec){const o=sectionSlots(items,lay,A);o.strips.forEach(st=>drawStrip(c,st,C));o.cards.forEach(r=>drawCard(c,r.p,r.x,r.y,r.w,r.h,C,iss));
   if(!items.length){c.fillStyle='#fff';c.textAlign='center';c.font=O(W*0.035,600);c.fillText(lay.setores.length?'Nenhum produto nesses setores':'Escolha os setores desta arte',W/2,A.top+A.ah/2)}c.restore();return}
@@ -810,9 +857,9 @@ function renderFlyer(c,W,H,items,cp,iss,lay){
 function cover(c,img,x,y,w,h){const s=Math.max(w/img.width,h/img.height),dw=img.width*s,dh=img.height*s;c.drawImage(img,x+(w-dw)/2,y+(h-dh)/2,dw,dh)}
 
 /* ---------- croqui ---------- */
-function drawCroqui(cv,l,fk,maxW=132,maxH=150,items){
+function drawCroqui(cv,l,fk,maxW=132,maxH=150,items,hf){
  const f=FORMATS[fk],s=Math.min(maxW/f.w,maxH/f.h);cv.width=Math.round(f.w*s);cv.height=Math.round(f.h*s);
- const c=cv.getContext('2d');c.setTransform(s,0,0,s,0,0);const A=areaOf(f.w,f.h);
+ const c=cv.getContext('2d');c.setTransform(s,0,0,s,0,0);const A=hf?areaOf(f.w,f.h,hf.cab==='faixa'?faixaH(f.h):hf.cab==='nenhum'?0:undefined,hf.rod==='fino'?finoH(f.h):hf.rod==='nenhum'?0:undefined):areaOf(f.w,f.h);
  c.fillStyle='#efece6';c.fillRect(0,0,f.w,f.h);c.fillStyle='#b8b0a1';c.fillRect(0,0,f.w,A.hh);c.fillRect(0,f.h-A.fh,f.w,A.fh);
  if(l.sec){const its=items||[];const o=sectionSlots(its,l,A);c.fillStyle='#6f6758';o.strips.forEach(r=>c.fillRect(r.x,r.y,r.w,r.h));c.lineWidth=2/s;c.strokeStyle='#fff';o.cards.forEach(r=>{c.fillStyle=r.p.featured&&l.dest?'#857d6e':'#c4bcae';c.fillRect(r.x,r.y,r.w,r.h);c.strokeRect(r.x,r.y,r.w,r.h)});
   if(!o.strips.length&&!o.cards.length){for(let i=0;i<3;i++){const y=A.top+i*A.ah/3;c.fillStyle='#6f6758';c.fillRect(A.ax,y,A.aw,A.ah*0.06);c.fillStyle='#c4bcae';for(let k=0;k<3;k++)c.fillRect(A.ax+k*A.aw/3+A.g/2,y+A.ah*0.08,A.aw/3-A.g,A.ah/3-A.ah*0.1-A.g)}}return}
@@ -974,21 +1021,31 @@ const arteNome=(i,pg)=>pg&&pg.extra?'Extra '+(i+1):(ARTE_NOMES[i]||'Arte '+(i+1)
 function artesOf(fk){
  let a=S.artes&&S.artes[fk];
  if(!Array.isArray(a)||!a.length){const old=(S.lay&&S.lay[fk])||['auto'];a=old.map(id=>({t:'m',lay:id}))}
- return a.map(c=>c.t==='s'?{t:'s',setores:(c.setores||[]).filter(n=>S.setores.some(s=>s.nome===n)),dest:c.dest!==false}:Object.assign({t:'m',lay:layFits(layById(c.lay),fk)?c.lay:'auto'},layById(c.lay).auto||!layFits(layById(c.lay),fk)?{n:c.n,grow:c.grow}:{}))}
-function setArtes(fk,a){S.artes[fk]=a}
+ const hf=c=>{const o={};if(c&&c.cab)o.cab=c.cab;if(c&&c.rod)o.rod=c.rod;if(c&&c.t!=='s'&&Array.isArray(c.lock))o.lock=c.lock.slice();return o};
+ return a.map(c=>Object.assign(c.t==='s'?{t:'s',setores:(c.setores||[]).filter(n=>S.setores.some(s=>s.nome===n)),dest:c.dest!==false}:Object.assign({t:'m',lay:layFits(layById(c.lay),fk)?c.lay:'auto'},layById(c.lay).auto||!layFits(layById(c.lay),fk)?{n:c.n,grow:c.grow}:{}),hf(c)))}
+/* trocar a diagramação não apaga o cabeçalho/rodapé escolhido para aquela arte */
+function setArtes(fk,a){const old=(S.artes&&S.artes[fk])||[];S.artes[fk]=a.map((c,i)=>{const o=old[i];if(!c||!o)return c;const n=Object.assign({},c);if(!('cab' in c)&&o.cab)n.cab=o.cab;if(!('rod' in c)&&o.rod)n.rod=o.rod;if(!('lock' in c)&&isLocked(o)&&c.t!=='s'){n.lock=o.lock;if(o.lay)n.lay=o.lay;n.n=o.n;n.grow=false}if(n.lock==null)delete n.lock;return n})}
 function pagesFor(fk){
- const cfg=artesOf(fk),N=S.products,claimed=new Set(),pages=[];
- cfg.forEach(c=>{
+ const cfg=artesOf(fk),N=S.products,claimed=new Set(),pages=[],byId=new Map(N.map(p=>[p.id,p]));
+ /* arte pronta (cadeado): os produtos dela ficam nela, na mesma ordem; o resto se distribui nas outras */
+ const locked=cfg.map(c=>{if(!isLocked(c))return null;const its=c.lock.map(id=>byId.get(id)).filter(p=>p&&!claimed.has(p));if(!its.length)return null;its.forEach(p=>claimed.add(p));return its});
+ cfg.forEach((c,ci)=>{
+  if(locked[ci]){const lay=layById(c.lay),its=locked[ci];pages.push({cfg:c,items:its,lay,cap:lay.auto?its.length:Math.max(lay.n,its.length),locked:true});return}
   if(c.t==='s'){const its=[];c.setores.forEach(sn=>N.forEach(p=>{if((p.setor||'')===sn&&!claimed.has(p)){its.push(p);claimed.add(p)}}));
    pages.push({cfg:c,items:its,lay:{id:'sec',sec:true,setores:c.setores,dest:c.dest,nome:'Por setores'},cap:its.length})}
   else pages.push({cfg:c,items:null})});
  const rest=N.filter(p=>!claimed.has(p));let i=0;
- const lastMi=pages.reduce((k,pg,j)=>pg.items?k:j,-1);
+ const lastMi=pages.reduce((k,pg,j)=>pg.items?k:j,-1),anyLock=pages.some(pg=>pg.locked);
  const MC=getMod(camp().modelo)?modeloSlots(getMod(camp().modelo)):0;
  pages.forEach((pg,j)=>{if(pg.items)return;const lay=layById(pg.cfg.lay);let cap=MC||(lay.auto?(pg.cfg.n||FORMATS[fk].limit):lay.n);if(!MC&&lay.auto&&pg.cfg.grow&&j===lastMi)cap=Math.max(cap,Math.min(40,rest.length-i));pg.lay=lay;pg.cap=cap;pg.items=rest.slice(i,i+cap);i+=cap});
- const lastM=[...cfg].reverse().find(c=>c.t==='m'),xl=layById(lastM?lastM.lay:'auto'),xc=MC||(xl.auto?FORMATS[fk].limit:xl.n);let guard=0;
- while(i<rest.length&&guard<50){pages.push({cfg:null,extra:true,lay:xl,cap:xc,items:rest.slice(i,i+xc)});i+=xc;guard++}
+ const lastM=[...cfg].reverse().find(c=>c.t==='m'&&!isLocked(c)),xl=layById(lastM?lastM.lay:'auto'),xc=MC||(xl.auto?FORMATS[fk].limit:xl.n);let guard=0;
+ while(i<rest.length&&guard<50){pages.push({cfg:null,extra:true,byLock:anyLock,lay:anyLock?LAYOUTS[0]:xl,cap:xc,items:rest.slice(i,i+xc)});i+=xc;guard++}
+ pages.forEach((pg,j)=>{pg.i=j;pg.n=pages.length;pg.fk=fk;pg.hf=hfOf(fk,j,pages.length,pg.cfg)});
  return pages}
+/* lista nova no lugar da antiga: as travas não valem mais */
+function clearLocks(){Object.keys(S.artes||{}).forEach(k=>{if(Array.isArray(S.artes[k]))S.artes[k]=S.artes[k].map(c=>{const n=Object.assign({},c);delete n.lock;return n})})}
+/* trava só vale se ainda houver na lista algum produto dela (lista trocada = trava some sozinha) */
+const isLocked=c=>!!(c&&c.t!=='s'&&Array.isArray(c.lock)&&c.lock.length&&c.lock.some(id=>S.products.some(p=>p.id===id)));
 function pageInfo(){const P=pagesFor(S.format);S.page=clamp(S.page||0,0,P.length-1);return{P,n:P.length}}
 const layLabel=pg=>pg.lay.sec?(pg.lay.setores.length?'Setores: '+pg.lay.setores.join(', '):'Por setores (escolher)'):pg.lay.nome;
 let lastIssues=[],PREV_HIT=[];
@@ -997,7 +1054,7 @@ function hitAt(e){const pv=$('#preview'),r=pv.getBoundingClientRect(),x=(e.clien
  return null}
 function render(){
  const f=FORMATS[S.format],pv=$('#preview');if(pv.width!==f.w)pv.width=f.w;if(pv.height!==f.h)pv.height=f.h;
- const{P,n}=pageInfo(),pg=P[S.page];const iss=[];HIT={cv:pv,list:[]};renderFlyer(pv.getContext('2d'),f.w,f.h,withVagas(pg),camp(),iss,pg.lay);PREV_HIT=HIT.list;HIT=null;lastIssues=iss;
+ const{P,n}=pageInfo(),pg=P[S.page];const iss=[];HIT={cv:pv,list:[]};renderFlyer(pv.getContext('2d'),f.w,f.h,withVagas(pg),camp(),iss,pg.lay,pg);PREV_HIT=HIT.list;HIT=null;lastIssues=iss;
  const th=$('#thumb');th.width=180;th.height=Math.round(180*f.h/f.w);th.getContext('2d').drawImage(pv,0,0,th.width,th.height);
  renderWarns(P,n);renderCmd(n);
  if(inWz()&&WZ===-1)avPrev();
@@ -1007,21 +1064,44 @@ function renderWarns(P,n){
  let h=`<div class="laybar"><div class="seg2" id="nArtes" data-dono>${[1,2,3,4].map(k=>`<button data-k="${k}" class="${cfg.length===k?'on':''}">${k===1?'Só frente':k===2?'Frente e verso':k+' artes'}</button>`).join('')}</div>
  <button class="btn sm pri" id="pickLay" data-dono>Montar diagramação</button>
  <label class="vd" style="margin-left:auto">Validade <input type="date" id="lbIni" value="${S.val.ini||''}"> a <input type="date" id="lbFim" value="${S.val.fim||''}"></label>
- ${pg.lay.sec?'':`<div class="vd">Produtos nesta arte <button class="ico" id="stM" style="width:26px">−</button><b style="min-width:22px;text-align:center">${pg.items.length}</b><button class="ico" id="stP" style="width:26px">+</button>${pg.cfg&&pg.cfg.grow?'<small style="color:#1b7a34">cresce sozinho</small>':''}</div>`}
- <div class="chipsA" style="flex-basis:100%">${P.map((p,i)=>`<button class="artChip ${i===S.page?'on':''}" data-i="${i}" title="Toque de novo para trocar a diagramação"><canvas></canvas><span><small>${arteNome(i,p)}</small><b>${esc(layLabel(p))}</b><i>${p.items.length}${p.lay.sec||p.lay.auto?'':' de '+p.cap} itens</i></span></button>`).join('')}</div></div>`;
+ ${pg.lay.sec?'':pg.locked?`<div class="vd">Produtos nesta arte <b style="min-width:22px;text-align:center">${pg.items.length}</b></div>`:`<div class="vd">Produtos nesta arte <button class="ico" id="stM" style="width:26px">−</button><b style="min-width:22px;text-align:center">${pg.items.length}</b><button class="ico" id="stP" style="width:26px">+</button>${pg.cfg&&pg.cfg.grow?'<small style="color:#1b7a34">cresce sozinho</small>':''}</div>`}
+ ${pg.lay.sec||pg.extra&&!pg.items.length?'':`<button class="btn sm lockBtn ${pg.locked?'on':''}" id="lockArt" data-dono>${pg.locked?'🔒 Arte pronta · destravar':'🔓 Travar esta arte'}</button>`}
+ ${hfBar(P,pg,fk)}
+ <div class="chipsA" style="flex-basis:100%">${P.map((p,i)=>`<button class="artChip ${i===S.page?'on':''}" data-i="${i}" title="Toque de novo para trocar a diagramação"><canvas></canvas><span><small>${p.locked?'🔒 ':''}${arteNome(i,p)}</small><b>${esc(layLabel(p))}</b><i>${p.items.length}${p.lay.sec||p.lay.auto?'':' de '+p.cap} itens</i></span></button>`).join('')}</div></div>`;
  const extras=P.filter(p=>p.extra);
- if(extras.length)h+=`<div class="warn">⚠ ${extras.reduce((a,p)=>a+p.items.length,0)} produtos não couberam nas artes escolhidas, então criei ${extras.length>1?extras.length+' artes extras':'uma arte extra'}. Escolha uma diagramação maior ou mais artes.</div>`;
- if(empty)h+=`<div class="warn">${arteNome(S.page,pg)} tem ${empty} ${empty>1?'espaços vazios':'espaço vazio'}: adicione produtos ou escolha uma diagramação menor.</div>`;
+ if(extras.length&&extras.some(p=>p.byLock))h+=`<div class="warn" style="background:#eef4ff;color:#123a8f">${extras.reduce((a,p)=>a+p.items.length,0)} produtos não cabem nas artes travadas, então foram para ${extras.length>1?extras.length+' artes novas':'uma arte nova'} no fim.</div>`;
+ else if(extras.length)h+=`<div class="warn">⚠ ${extras.reduce((a,p)=>a+p.items.length,0)} produtos não couberam nas artes escolhidas, então criei ${extras.length>1?extras.length+' artes extras':'uma arte extra'}. Escolha uma diagramação maior ou mais artes.</div>`;
+ if(pg.locked)h+=`<div class="warn" style="background:#eef4ff;color:#123a8f">🔒 ${arteNome(S.page,pg)} está travada: produtos, ordem e quantidade não mudam. Produto novo vai para a última arte destravada.</div>`;
+ if(empty&&!pg.locked)h+=`<div class="warn">${arteNome(S.page,pg)} tem ${empty} ${empty>1?'espaços vazios':'espaço vazio'}: adicione produtos ou escolha uma diagramação menor.</div>`;
  if(canCfg()&&CATB){const co=custoOferta(S.products);if(co.n)h+=`<div class="warn" id="showCusto" style="background:#eef4ff;color:#123a8f">Desconto estimado desta oferta: <b>${brl(co.tot)}</b> em ${co.dias} dia${co.dias>1?'s':''} (venda normal) <u>ver</u></div>`}
  const iss=collectIssues(S.products);
  if(iss.length)h+=`<div class="warn r" id="showIss">● ${iss.length} ${iss.length>1?'pontos para revisar':'ponto para revisar'} antes de baixar <u>ver</u></div>`;
  el.innerHTML=h;
- el.querySelectorAll('#nArtes button').forEach(b=>b.onclick=()=>{const k=+b.dataset.k;let a=artesOf(fk).slice(0,k);while(a.length<k)a.push({t:'m',lay:'auto'});setArtes(fk,a);S.page=Math.min(S.page,k-1);changed();if(k>1)openLayPicker(Math.min(k-1,1))});
- el.querySelectorAll('.artChip').forEach(b=>{const i=+b.dataset.i;drawCroqui(b.querySelector('canvas'),P[i].lay,fk,30,36,P[i].items);b.onclick=()=>{if(S.page===i){openLayPicker(i)}else{S.page=i;changed()}}});
- $('#pickLay').onclick=()=>openLayPicker(S.page);const sm=$('#stM'),sp=$('#stP');if(sm)sm.onclick=()=>stepArte(-1);if(sp)sp.onclick=()=>stepArte(1);renderSugs(P);
+ el.querySelectorAll('#nArtes button').forEach(b=>b.onclick=()=>{const k=+b.dataset.k;if(lockCut(fk,k))return;let a=artesOf(fk).slice(0,k);while(a.length<k)a.push({t:'m',lay:'auto'});setArtes(fk,a);S.page=Math.min(S.page,k-1);changed();if(k>1)openLayPicker(Math.min(k-1,1))});
+ el.querySelectorAll('.artChip').forEach(b=>{const i=+b.dataset.i;drawCroqui(b.querySelector('canvas'),P[i].lay,fk,30,36,P[i].items,P[i].hf);b.onclick=()=>{if(S.page===i){openLayPicker(i)}else{S.page=i;changed()}}});
+ hfBind(el,pg,fk);$('#pickLay').onclick=()=>openLayPicker(S.page);const lk=$('#lockArt');if(lk)lk.onclick=()=>toggleLock(S.page);const sm=$('#stM'),sp=$('#stP');if(sm)sm.onclick=()=>stepArte(-1);if(sp)sp.onclick=()=>stepArte(1);renderSugs(P);
  $('#lbIni').onchange=e=>{S.val.ini=e.target.value;if(S.val.fim&&S.val.fim<S.val.ini)S.val.fim=S.val.ini;$('#vIni').value=S.val.ini;$('#vFim').value=S.val.fim;changed(false)};
  $('#lbFim').onchange=e=>{S.val.fim=e.target.value;$('#vFim').value=S.val.fim;changed(false)};
  const si=$('#showIss');if(si)si.onclick=()=>reviewGate(S.products,true);const sc=$('#showCusto');if(sc)sc.onclick=(...a)=>openCusto(...a)}
+/* não deixa apagar uma arte travada ao diminuir o número de artes */
+function lockCut(fk,k){const a=artesOf(fk),j=a.findIndex((c,i)=>i>=k&&isLocked(c));if(j<0)return false;toast(`${arteNome(j)} está travada. Destrave antes de tirar essa arte.`);return true}
+/* cabeçalho e rodapé desta arte (só aparece quando o encarte tem mais de uma arte) */
+function hfBar(P,pg,fk){if(P.length<2||!HF_FMTS.includes(fk)||getMod(camp().modelo))return'';
+ if(!pg.cfg)return`<div class="hfBar" data-dono><small>${esc(arteNome(S.page,pg))}: cabeçalho e rodapé seguem o automático (faixa fina e rodapé ${pg.hf.rod==='completo'?'completo':'fino'}).</small></div>`;
+ const seg=(id,opts,v,auto)=>`<div class="seg2" id="${id}">${opts.map(([k,t])=>`<button data-v="${k}" class="${v===k?'on':''}">${t}${auto&&v===k?' <small>(auto)</small>':''}</button>`).join('')}</div>`;
+ const fx=P.some(q=>q.hf.cab==='faixa'||q.hf.rod==='fino');
+ return`<div class="hfBar" data-dono><span class="vd"><b>${esc(arteNome(S.page,pg))}</b> · Cabeçalho</span>${seg('hfCab',CAB_OPTS,pg.hf.cab,!pg.cfg.cab)}<span class="vd">Rodapé</span>${seg('hfRod',ROD_OPTS,pg.hf.rod,!pg.cfg.rod)}${fx?'<button class="btn sm" id="hfCor">Cores da faixa</button>':''}</div>`}
+function hfSet(fk,k,v){const a=artesOf(fk).slice();while(a.length<=S.page)a.push({t:'m',lay:'auto'});a[S.page]=Object.assign({},a[S.page],{[k]:v});S.artes[fk]=a;changed()}
+function hfBind(el,pg,fk){const b=(id,k)=>el.querySelectorAll('#'+id+' button').forEach(x=>x.onclick=()=>hfSet(fk,k,x.dataset.v));b('hfCab','cab');b('hfRod','rod');const fc=el.querySelector('#hfCor');if(fc)fc.onclick=openFaixaCores}
+function openFaixaCores(){const cp=camp(),X=faixaCores(cp,cp.cores);
+ modal(`<h3>Cores da faixa: ${esc(cp.nome)}</h3><p class="hint">${X.auto?(cp.headArt?'Hoje as cores saem do cabeçalho pronto (imagem) desta campanha.':'Hoje as cores saem da campanha.'):'Você trocou as cores na mão.'} Vale para a faixa fina e o rodapé fino de todas as artes desta campanha.</p>
+ <div class="colors"><label>Fundo da faixa<input type="color" id="fxBg" value="${X.bg}"></label><label>Texto da faixa<input type="color" id="fxTx" value="${X.tx}"></label></div>
+ <div class="mfoot"><button class="btn" data-a="r">Voltar às cores da campanha</button><button class="btn pri" data-a="ok">Pronto</button></div>`,b=>{
+  const up=()=>{cp.faixaCor={bg:$('#fxBg').value,tx:$('#fxTx').value};S._sharedDirty=true;changed(false)};$('#fxBg').oninput=up;$('#fxTx').oninput=up;
+  b.querySelector('[data-a=r]').onclick=()=>{delete cp.faixaCor;S._sharedDirty=true;closeModal();changed()};b.querySelector('[data-a=ok]').onclick=()=>{closeModal();changed()}})}
+/* arte sem validade em lugar nenhum: avisa antes de baixar */
+function semValidade(){const cp=camp(),o=[];if(!cp||getMod(cp.modelo))return o;
+ HF_FMTS.forEach(fk=>{const P=pagesFor(fk);if(P.length<2)return;P.forEach((pg,i)=>{if(!hfValid(pg.hf,cp,fk))o.push(`⚠ ${FORMATS[fk].label}, ${arteNome(i,pg)}: sem validade (cabeçalho e rodapé não mostram a data). Ponha faixa fina ou rodapé fino.`)})});return o}
 function collectIssues(items){
  const o=[];
  const fu=isFunc(),own=!fu&&isOwnerV()!==false;
@@ -1031,6 +1111,7 @@ function collectIssues(items){
   else if(m==null&&abaixoMin(p))o.unshift(`⚠ Margem baixa: ${nm} (abaixo do preço mínimo de ${brl(pminP(p))})`);
   if(own&&p.cost!=null&&p.sysAt&&Date.now()-p.sysAt>15*864e5)o.push(`Custo de ${nm} tem ${Math.floor((Date.now()-p.sysAt)/864e5)} dias: atualize no StarIA`);if(!getImg(p))o.push(`Sem foto: ${nm}`);if(p.price==null)o.push(`Sem preço: ${nm}`);if(p.app!=null&&p.price!=null&&p.app>p.price)o.push(`Preço com app maior que o preço sem app: ${nm}`)});
  if(!S.val.ini&&!S.val.fim)o.push('Validade da oferta não preenchida');
+ semValidade().forEach(x=>o.unshift(x));
  if(!logos[0]&&!logos[1])o.push('Logomarcas não enviadas (aba Loja)');
  if(!waDigits())o.push('WhatsApp não preenchido: o encarte sai sem QR Code (aba Loja)');
  lastIssues.forEach(x=>{if(!o.includes(x))o.push(x)});
@@ -1048,7 +1129,7 @@ function reviewGate0(items,viewOnly=false){
   modal(`<h3>Revisão antes de baixar</h3><div class="revG"><div class="revP">${PP.map((q,i)=>`<div><small>${PP.length>1?esc(arteNome(i,q)):'Prévia'}</small><canvas data-p="${i}"></canvas></div>`).join('')}</div>
   <div class="revI">${iss.length?`<p class="hint">Confira estes pontos. Dá para baixar assim, mas o ideal é corrigir:</p><ul class="issues">${iss.map(i=>`<li>${esc(i)}</li>`).join('')}</ul>`:'<p>Tudo certo!</p>'}</div></div>
   <div class="mfoot">${viewOnly?'<button class="btn pri" data-a="no">Entendi</button>':'<button class="btn" data-a="no">Voltar e corrigir</button><button class="btn pri" data-a="ok">Baixar mesmo assim</button>'}</div>`,b=>{b.classList.add('wide');
-   const f=FORMATS[S.format];b.querySelectorAll('canvas[data-p]').forEach((cv,i)=>{const big=document.createElement('canvas');big.width=f.w;big.height=f.h;renderFlyer(big.getContext('2d'),f.w,f.h,PP[i].items,camp(),[],PP[i].lay);const k=Math.min(1,900/f.w);cv.width=Math.round(f.w*k);cv.height=Math.round(f.h*k);cv.getContext('2d').drawImage(big,0,0,cv.width,cv.height)});
+   const f=FORMATS[S.format];b.querySelectorAll('canvas[data-p]').forEach((cv,i)=>{const big=document.createElement('canvas');big.width=f.w;big.height=f.h;renderFlyer(big.getContext('2d'),f.w,f.h,PP[i].items,camp(),[],PP[i].lay,PP[i]);const k=Math.min(1,900/f.w);cv.width=Math.round(f.w*k);cv.height=Math.round(f.h*k);cv.getContext('2d').drawImage(big,0,0,cv.width,cv.height)});
    b.querySelector('[data-a=no]').onclick=()=>{closeModal();res(false);if(!viewOnly&&inWz()&&WZ===4)wzGo(3)};const ok=b.querySelector('[data-a=ok]');
    const lock=isFunc()&&iss.some(x=>/^(⛔|⚠ Margem)/.test(x));if(ok&&lock)ok.textContent='Liberar com a senha do admin';
    if(ok)ok.onclick=()=>{closeModal();if(lock)unlock('Produto abaixo da margem',()=>res(true),()=>res(false));else res(true)}})})}
@@ -1071,8 +1152,8 @@ function renderPicker(first){
   ${chosen.map((n,k)=>row(n,true,k)).join('')}${rest.map(s=>row(s.nome,false)).join('')}
   ${S.products.some(p=>!p.setor)?`<p class="hint">${S.products.filter(p=>!p.setor).length} produtos estão sem setor: eles vão para as artes de modelo de grade.</p>`:''}`};
  const acc=(c,i)=>{const pg=P[i],open=i===pickOpen;
-  return `<div class="acc ${open?'open':''}"><button class="accH" data-i="${i}"><canvas></canvas><span><small>${arteNome(i)}</small><b>${esc(layLabel(pg))}</b><i>${pg.items.length} itens</i></span><em>${open?'▴':'▾'}</em></button>
-  ${open?`<div class="accB"><div class="seg2" style="margin-bottom:12px"><button data-t="m" data-i="${i}" class="${c.t==='m'?'on':''}">Modelo de grade</button><button data-t="s" data-i="${i}" class="${c.t==='s'?'on':''}">Dividido por setores</button></div>${c.t==='m'?bodyM(c,i):bodyS(c,i)}</div>`:''}</div>`};
+  return `<div class="acc ${open?'open':''}"><button class="accH" data-i="${i}"><canvas></canvas><span><small>${pg.locked?'🔒 ':''}${arteNome(i)}</small><b>${esc(layLabel(pg))}</b><i>${pg.items.length} itens</i></span><em>${open?'▴':'▾'}</em></button>
+  ${open&&pg.locked?`<div class="accB"><p class="hint">🔒 Esta arte está travada (arte pronta). Para mudar a diagramação, destrave primeiro.</p><button class="btn sm" data-unlock="${i}">🔓 Destravar ${esc(arteNome(i))}</button></div>`:open?`<div class="accB"><div class="seg2" style="margin-bottom:12px"><button data-t="m" data-i="${i}" class="${c.t==='m'?'on':''}">Modelo de grade</button><button data-t="s" data-i="${i}" class="${c.t==='s'?'on':''}">Dividido por setores</button></div>${c.t==='m'?bodyM(c,i):bodyS(c,i)}</div>`:''}</div>`};
  modal(`<h3>Montar encarte • ${FORMATS[fk].label}</h3>
  <div class="seg2" id="pkN" style="margin-bottom:8px">${[1,2,3,4].map(k=>`<button data-k="${k}" class="${cfg.length===k?'on':''}">${k===1?'Só frente':k===2?'Frente e verso':k+' artes'}</button>`).join('')}</div>
  <p class="hint">Toque numa arte para abrir. Cada arte pode ser um modelo de grade ou dividida por setores. Ex.: frente variada com "3 fortes + 8" e verso só de Açougue.</p>
@@ -1081,9 +1162,10 @@ function renderPicker(first){
   b.classList.add('wide');mb.scrollTop=keep;
   const save=a=>{setArtes(fk,a);changed();renderPicker()};
   b.querySelectorAll('.accH').forEach(h=>{const i=+h.dataset.i;drawCroqui(h.querySelector('canvas'),P[i].lay,fk,34,42,P[i].items);h.onclick=()=>{pickOpen=pickOpen===i?-1:i;S.page=i;changed();renderPicker()}});
-  b.querySelectorAll('#pkN button').forEach(x=>x.onclick=()=>{const k=+x.dataset.k;let a=cfg.slice(0,k);while(a.length<k)a.push({t:'m',lay:'auto'});pickOpen=Math.min(k-1,pickOpen<0?0:pickOpen);if(k>cfg.length)pickOpen=cfg.length;save(a)});
+  b.querySelectorAll('#pkN button').forEach(x=>x.onclick=()=>{const k=+x.dataset.k;if(lockCut(fk,k))return;let a=cfg.slice(0,k);while(a.length<k)a.push({t:'m',lay:'auto'});pickOpen=Math.min(k-1,pickOpen<0?0:pickOpen);if(k>cfg.length)pickOpen=cfg.length;save(a)});
   b.querySelectorAll('[data-t]').forEach(x=>x.onclick=()=>{const i=+x.dataset.i,a=cfg.slice();if(x.dataset.t==='m')a[i]={t:'m',lay:'auto'};else{const used=new Set(cfg.flatMap(c=>c.t==='s'?c.setores:[]));a[i]={t:'s',dest:true,setores:S.setores.filter(s=>secCount(s.nome)&&!used.has(s.nome)).map(s=>s.nome)}}save(a)});
-  const i=pickOpen,c=cfg[i];if(i<0||!c){b.querySelector('[data-a=x]').onclick=(...a)=>closeModal(...a);return}
+  b.querySelectorAll('[data-unlock]').forEach(x=>x.onclick=()=>{toggleLock(+x.dataset.unlock);renderPicker()});
+  const i=pickOpen,c=cfg[i];if(i<0||!c||P[i].locked){b.querySelector('[data-a=x]').onclick=(...a)=>closeModal(...a);return}
   b.querySelectorAll('.layOpt').forEach(el=>{drawCroqui(el.querySelector('canvas'),layById(el.dataset.id),fk);el.onclick=()=>{const a=cfg.slice();a[i]={t:'m',lay:el.dataset.id};toast(`${arteNome(i)}: ${layById(el.dataset.id).nome}`);if(i+1<a.length)pickOpen=i+1;save(a)}});
   b.querySelectorAll('[data-sec]').forEach(x=>x.onchange=()=>{const a=cfg.slice(),s=a[i].setores.slice(),n=x.dataset.sec;if(x.checked){if(!s.includes(n))s.push(n)}else s.splice(s.indexOf(n),1);a[i]={...a[i],setores:s};save(a)});
   b.querySelectorAll('[data-up],[data-dn]').forEach(x=>x.onclick=()=>{const a=cfg.slice(),s=a[i].setores.slice(),k=+(x.dataset.up??x.dataset.dn),j=x.dataset.up!=null?k-1:k+1;if(j<0||j>=s.length)return;[s[k],s[j]]=[s[j],s[k]];a[i]={...a[i],setores:s};save(a)});
@@ -1579,12 +1661,13 @@ function openQuick(pre){
   const upd=()=>{const l=parseQuick(tx.value);pv.innerHTML=l.length?`<b>Entendi ${l.length} ${l.length>1?'produtos':'produto'}:</b><br>`+l.map(p=>`• ${esc(p.desc)}${p.unit!=='un'?' ('+p.unit+')':''} — ${brl(p.price)}${p.appOn?' • app '+brl(p.app):''}`).join('<br>'):''};
   tx.oninput=upd;if(pre){tx.value=pre;upd()}setTimeout(()=>tx.focus(),40);
   const go=rep=>{const l=parseQuick(tx.value);if(!l.length){toast('Não achei produto com preço. Ex.: Arroz 5kg 24,90');return}
-   if(rep){S.products=l;S.page=0}else S.products.push(...l);changed();loadAllImages();askDistrib()};
+   if(rep){S.products=l;S.page=0;clearLocks()}else S.products.push(...l);changed();loadAllImages();askDistrib()};
   b.querySelector('[data-a=n]').onclick=(...a)=>closeModal(...a);b.querySelector('[data-a=add]').onclick=()=>go(false);b.querySelector('[data-a=rep]').onclick=()=>go(true)})}
 /* pergunta frente x verso */
 function askDistrib(){
  const fk=S.format,N=S.products.length,lim=FORMATS[fk].limit,cfg=artesOf(fk);
  if(cfg.some(c=>c.t==='s')){closeModal();toast(`${N} produtos na lista`);return}
+ if(cfg.some(isLocked)){closeModal();toast('Produtos novos entraram na última arte destravada');return}
  const sug=Math.min(N,lim);
  modal(`<h3>Como distribuir os ${N} produtos?</h3>
  <p class="hint">O formato ${FORMATS[fk].label} comporta bem até ${lim} produtos por arte. O verso cresce sozinho: cada produto que você adicionar depois entra nele e tudo se redistribui para ocupar a página inteira.</p>
@@ -1600,20 +1683,34 @@ function askDistrib(){
 /* sugestões de distribuição embaixo do encarte */
 function renderSugs(P){
  const el=$('#sugs');if(!el)return;const fk=S.format,pg=P[S.page];
- if(!pg||pg.lay.sec||!pg.items.length){el.innerHTML='';return}
+ if(!pg||pg.lay.sec||pg.locked||!pg.items.length){el.innerHTML='';return}
  const n=pg.items.length,cur=pg.lay.id,opts=[LAYOUTS[0],...LAYOUTS.filter(l=>!l.auto&&layFits(l,fk)&&l.n===n)];
  el.innerHTML=`<div class="sugH"><b>${opts.length>1?'Outras distribuições':'Distribuição'} para ${n} ${n>1?'produtos':'produto'}</b><span class="hint" style="margin:0">Toque para aplicar nesta arte</span></div>
  <div class="sugRow">${opts.map(l=>`<button class="layOpt sm ${l.id===cur?'on':''}" data-id="${l.id}"><canvas></canvas><b>${esc(l.auto?'Automático':l.nome)}</b></button>`).join('')}</div>`;
  el.querySelectorAll('.layOpt').forEach(b=>{const l=layById(b.dataset.id);drawCroqui(b.querySelector('canvas'),l,fk,70,84);
   b.onclick=()=>{const a=artesOf(fk).slice();while(a.length<=S.page)a.push({t:'m',lay:'auto'});const old=a[S.page]||{};a[S.page]=l.auto?{t:'m',lay:'auto',n:n,grow:old.grow}:{t:'m',lay:l.id};setArtes(fk,a);changed();toast(`${arteNome(S.page)}: ${l.auto?'Automático':l.nome}`)}})}
 function stepArte(d){
- const fk=S.format,{P}=pageInfo(),pg=P[S.page];if(!pg||pg.lay.sec)return;const a=artesOf(fk).slice();while(a.length<=S.page)a.push({t:'m',lay:'auto'});
- const cur=pg.items.length||pg.cap,nx=clamp(cur+d,1,40);a[S.page]={t:'m',lay:'auto',n:nx,grow:false};
- /* tirou do verso: o produto volta para a arte anterior (a frente) */
- let before=P.slice(0,S.page).reduce((s,q)=>s+q.items.length,0);
- if(d<0&&S.page>0&&nx<cur){const pv=P[S.page-1],pc=a[S.page-1];if(pv&&pc&&pc.t==='m'&&layById(pc.lay).auto){a[S.page-1]=Object.assign({},pc,{n:pv.items.length+1,grow:false});before++}}
- if(S.page===a.length-1&&nx<S.products.length-before)a.push({t:'m',lay:'auto',n:1,grow:true});
+ const fk=S.format,{P}=pageInfo(),pg=P[S.page];if(!pg||pg.lay.sec)return;
+ if(pg.locked){toast(arteNome(S.page,pg)+' está travada. Toque no cadeado para destravar.');return}
+ const a=artesOf(fk).slice();while(a.length<=S.page)a.push({t:'m',lay:'auto'});
+ const cur=pg.items.length||pg.cap,nx=clamp(cur+d,1,40);if(nx===cur)return;a[S.page]={t:'m',lay:'auto',n:nx,grow:false};
+ /* o que sai desta arte vai SEMPRE para frente (próxima arte destravada ou uma arte nova); nunca volta para trás */
+ const nxt=a.findIndex((c,j)=>j>S.page&&c.t==='m'&&!isLocked(c)&&layById(c.lay).auto);
+ const lastFree=a.reduce((k,c,j)=>c.t==='m'&&!isLocked(c)?j:k,-1);
+ if(nxt>=0){const q=P[nxt],qn=q?q.items.length:0,c=a[nxt];
+  if(!(c.grow&&nxt===lastFree))a[nxt]=Object.assign({},c,{n:Math.max(1,qn+(nx<cur?1:-1)),grow:false})}
+ else if(nx<cur)a.push({t:'m',lay:'auto',n:1,grow:true});
  setArtes(fk,a);changed()}
+/* travar / destravar a arte pronta: com o cadeado, produtos, ordem e quantidade dela não mudam */
+function toggleLock(i=S.page){
+ const fk=S.format,{P}=pageInfo(),pg=P[i];if(!pg||pg.lay.sec)return;const a=artesOf(fk).slice();while(a.length<=i)a.push({t:'m',lay:'auto'});
+ if(pg.locked){a[i]=Object.assign({},a[i],{lock:null});setArtes(fk,a);changed();toast(arteNome(i,pg)+' destravada');return}
+ if(!pg.items.length){toast('Essa arte está vazia');return}
+ /* congela também as artes antes dela, para nada mudar de lugar quando esta travar */
+ for(let j=0;j<i;j++){const c=a[j],q=P[j];if(c&&c.t==='m'&&!isLocked(c)&&layById(c.lay).auto)a[j]=Object.assign({},c,{n:q.items.length,grow:false})}
+ const c=a[i];a[i]=Object.assign({},c,{lay:c.lay||'auto',n:pg.items.length,grow:false,lock:pg.items.map(p=>p.id)});
+ if(!a.some((x,j)=>j>i&&x.t==='m'&&!isLocked(x))&&S.products.length>P.slice(0,i+1).reduce((m,q)=>m+q.items.length,0))a.push({t:'m',lay:'auto',grow:true});
+ setArtes(fk,a);changed();toast(arteNome(i,pg)+' travada: ela não muda mais')}
 
 /* ================= banco de fotos por nome + completar fotos ================= */
 const STOPW=new Set(['de','da','do','das','dos','com','e','c','tipo','tp','tp1','t1','sabor','unid','un','und','pct','cx','emb','embalagem']);
@@ -1840,7 +1937,7 @@ async function fontsReady(){try{await Promise.all([document.fonts.load('100px An
 
 $('#bPng').onclick=async()=>{
  await fontsReady();const f=FORMATS[S.format],{P,n}=pageInfo();if(!await reviewGate(S.products))return;
- for(let pg=0;pg<n;pg++){const c=document.createElement('canvas');c.width=f.w;c.height=f.h;renderFlyer(c.getContext('2d'),f.w,f.h,P[pg].items,camp(),[],P[pg].lay);
+ for(let pg=0;pg<n;pg++){const c=document.createElement('canvas');c.width=f.w;c.height=f.h;renderFlyer(c.getContext('2d'),f.w,f.h,P[pg].items,camp(),[],P[pg].lay,P[pg]);
   const ok=await saveFile(fname('png',(S.format!=='insta'?'_'+S.format:'')+(n>1?`_arte${pg+1}`:'')),await toBlob(c),'img');if(!ok&&n>1)break}};
 $('#bPdf').onclick=async()=>{
  const J=window.jspdf&&window.jspdf.jsPDF;if(!J){toast('A biblioteca de PDF não carregou. Recarregue a página.');return}
@@ -1914,7 +2011,7 @@ $('#cbModel').onclick=async()=>{await fontsReady();
   b.querySelector('[data-a=n]').onclick=closeModal;
   b.querySelectorAll('.mGrid button').forEach(bt=>bt.onclick=()=>{S.format=bt.dataset.f;S.page=0;renderFormats();renderArt();closeModal();changed()});
   let i=0;const ks=Object.keys(FORMATS);const step=()=>{if(i>=ks.length||$('#modal').hidden)return;const k=ks[i++],f=FORMATS[k],cv=b.querySelector(`canvas[data-c="${k}"]`);if(!cv)return;
-   const big=document.createElement('canvas');big.width=f.w;big.height=f.h;const pg=pagesFor(k)[0];renderFlyer(big.getContext('2d'),f.w,f.h,pg.items,camp(),[],pg.lay);
+   const big=document.createElement('canvas');big.width=f.w;big.height=f.h;const pg=pagesFor(k)[0];renderFlyer(big.getContext('2d'),f.w,f.h,pg.items,camp(),[],pg.lay,pg);
    const sc=Math.min(300/f.w,340/f.h);cv.width=Math.round(f.w*sc);cv.height=Math.round(f.h*sc);cv.getContext('2d').drawImage(big,0,0,cv.width,cv.height);setTimeout(step,10)};setTimeout(step,30)})};
 /* publicar na TV: a TV da loja abre este app uma vez, vira "tela de TV" e passa a atualizar sozinha */
 const TVKEY='encartes-esta-tela-e-tv';
@@ -2099,10 +2196,10 @@ $('#bModo').onclick=()=>{if(usersOn()){userLogout();return}if(isFunc()){askPin('
 
 /* ================= 5. kit da semana ================= */
 function plaqPdf(list,per){return plaqDoc(list,per,S.plaqOri||(per===1?'v':'h'))}
-function hiRes(fk,pg,k){const f=FORMATS[fk],c=document.createElement('canvas');c.width=Math.round(f.w*k);c.height=Math.round(f.h*k);const x=c.getContext('2d');x.scale(k,k);renderFlyer(x,f.w,f.h,pg.items,camp(),[],pg.lay);return c}
+function hiRes(fk,pg,k){const f=FORMATS[fk],c=document.createElement('canvas');c.width=Math.round(f.w*k);c.height=Math.round(f.h*k);const x=c.getContext('2d');x.scale(k,k);renderFlyer(x,f.w,f.h,pg.items,camp(),[],pg.lay,pg);return c}
 function a4Pdf(fk){const J=window.jspdf.jsPDF,land=fk==='a4h',f=FORMATS[fk],P=pagesFor(fk),doc=new J({unit:'mm',format:'a4',orientation:land?'landscape':'portrait'});
  P.forEach((pg,i)=>{if(i)doc.addPage();const c=hiRes(fk,pg,1.5);doc.addImage(c.toDataURL('image/jpeg',0.95),'JPEG',0,0,land?297:210,land?210:297,undefined,'SLOW')});return doc.output('blob')}
-async function pngs(fk){const f=FORMATS[fk],P=pagesFor(fk),o=[];for(let i=0;i<P.length;i++){const c=document.createElement('canvas');c.width=f.w;c.height=f.h;renderFlyer(c.getContext('2d'),f.w,f.h,P[i].items,camp(),[],P[i].lay);o.push(await toBlob(c))}return o}
+async function pngs(fk){const f=FORMATS[fk],P=pagesFor(fk),o=[];for(let i=0;i<P.length;i++){const c=document.createElement('canvas');c.width=f.w;c.height=f.h;renderFlyer(c.getContext('2d'),f.w,f.h,P[i].items,camp(),[],P[i].lay,P[i]);o.push(await toBlob(c))}return o}
 function gondolaCsv(){const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',n=v=>v==null?'':Number(v).toFixed(2).replace('.',',');
  const rows=[['Código','Produto','Unidade','Preço normal (sistema)','Preço da oferta','Preço com app','Limite','Setor','Válido de','Válido até','Trocou na gôndola?']];
  S.products.forEach(p=>rows.push([p.code,p.desc,p.unit,n(p.sysPrice),n(p.price),hasApp(p)?n(p.app):'',p.limit||'',p.setor,fmtD(S.val.ini),fmtD(S.val.fim),'']));
@@ -2309,7 +2406,7 @@ function wzCamps(){renderPront();const el=$('#wzCamps');const its=S.products.len
  el.innerHTML=cs.map(c=>{const last=lastOfCamp(c.id),hj=c.dia===dw;return`<div class="wzCard ${hj?'hoje':''}" data-id="${esc(c.id)}" style="--cc:${c.cores.fundo};--ch:${c.cores.cabecalho}"><canvas></canvas><div class="wzCi">${hj?'<span class="tag">CAMPANHA DE HOJE</span>':''}<b>${esc(c.nome)}</b><small>${c.dia>=0?DAYS[c.dia]:'Qualquer dia'}</small>
   <button class="btn pri" data-a="go">Usar esta</button>${last?`<button class="btn" data-a="rep">Repetir a última (${new Date(last.at).toLocaleDateString('pt-BR').slice(0,5)}) e trocar preços</button>`:''}</div></div>`}).join('');
  el.querySelectorAll('.wzCard').forEach(card=>{const c=S.campaigns.find(x=>x.id===card.dataset.id),cv=card.querySelector('canvas'),f=FORMATS.insta;
-  setTimeout(()=>{const big=document.createElement('canvas');big.width=f.w;big.height=f.h;const pg=pagesFor('insta')[0];renderFlyer(big.getContext('2d'),f.w,f.h,(pg.items.length?pg.items:its).slice(0,9),c,[],pg.lay);cv.width=270;cv.height=338;cv.getContext('2d').drawImage(big,0,0,270,338)},20);
+  setTimeout(()=>{const big=document.createElement('canvas');big.width=f.w;big.height=f.h;const pg=pagesFor('insta')[0];renderFlyer(big.getContext('2d'),f.w,f.h,(pg.items.length?pg.items:its).slice(0,9),c,[],pg.lay,pg);cv.width=270;cv.height=338;cv.getContext('2d').drawImage(big,0,0,270,338)},20);
   const pick=()=>{S.campaignId=c.id;renderCamps();renderArt();changed(false)};
   card.querySelector('[data-a=go]').onclick=e=>{e.stopPropagation();pick();wzGo(2)};
   card.querySelector('canvas').onclick=()=>{pick();wzGo(2)};
@@ -2324,7 +2421,7 @@ function wzPrevList(){const L=parseQuick($('#wzTx').value),el=$('#wzRead');
   return`<tr><td>${ent?`<i class="ph" style="background-image:url('${ent.url}')"></i>`:'<i class="ph no">sem foto</i>'}</td><td><b>${esc(p.desc)}</b>${p.unit!=='un'?` <small>${esc(p.unit)}</small>`:''}</td><td>${brl(p.price)}</td><td>${p.appOn?brl(p.app):'—'}</td></tr>`}).join('');
  el.innerHTML=`<p class="wzOk">Entendi <b>${L.length} produtos</b>. ${fot} já com foto${L.length-fot?`, ${L.length-fot} sem foto (você resolve no próximo passo)`:''}.</p><table class="sgt"><tr><th></th><th>Produto</th><th>Sem app</th><th>Com app</th></tr>${rows}</table>`;$('#wzMont').disabled=false}
 function wzMontar(){const L=parseQuick($('#wzTx').value);if(!L.length)return;
- const go=two=>{S.products=L;S.page=0;const fk=S.format;setArtes(fk,two?[{t:'m',lay:'auto',n:Math.ceil(L.length/2)},{t:'m',lay:'auto',grow:true}]:[{t:'m',lay:'auto',grow:true}]);changed();loadAllImages();$('#wzTx').value='';wzGo(3)};
+ const go=two=>{S.products=L;S.page=0;clearLocks();const fk=S.format;setArtes(fk,two?[{t:'m',lay:'auto',n:Math.ceil(L.length/2)},{t:'m',lay:'auto',grow:true}]:[{t:'m',lay:'auto',grow:true}]);changed();loadAllImages();$('#wzTx').value='';wzGo(3)};
  const lim=FORMATS[S.format].limit;
  if(L.length>lim)modal(`<h3>São ${L.length} produtos</h3><p>Numa arte só eles ficam pequenos demais para ler no celular. Quer dividir em <b>frente e verso</b>?</p><div class="mfoot"><button class="btn" data-a="n">Não, tudo numa arte</button><button class="btn pri" data-a="y">Sim, dividir</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=()=>{closeModal();go(false)};b.querySelector('[data-a=y]').onclick=()=>{closeModal();go(true)}});
  else go(false)}
@@ -2376,11 +2473,12 @@ function wzCheck(){const el=$('#wzList');if(!el)return;document.querySelectorAll
  const{P,n}=pageInfo();
  const N=S.products.length,pg=P[S.page],nf=pg&&pg.items?pg.items.filter(p=>p.featured).length:0;
  $('#wzPages').innerHTML=(n>1?P.map((q,i)=>{const before=P.slice(0,i).reduce((a,x)=>a+x.items.length,0),last=i===n-1;
-   const cnt=q.items.length+vagasDe(q),mx=Math.max(40,cnt);return`<div class="wzPg ${i===S.page?'on':''}"><button data-i="${i}">${arteNome(i,q)}</button><select data-i="${i}" title="Quantos produtos nesta arte">${Array.from({length:mx},(_,k)=>k+1).map(k=>`<option ${k===cnt?'selected':''}>${k}</option>`).join('')}</select><small>itens${vagasDe(q)?` • <b style="color:#b3121b">${vagasDe(q)} vagas</b>`:''}</small></div>`}).join(''):'')
-  +(isFunc()?'':`<div class="wzPg dst"><small>Destaque${n>1?' nesta arte':''}</small>${[0,1,2,4].map(k=>`<button data-d="${k}" class="${nf===k?'on':''}">${k===0?'Nenhum':k}</button>`).join('')}</div>`);
+   const cnt=q.items.length+vagasDe(q),mx=Math.max(40,cnt);return`<div class="wzPg ${i===S.page?'on':''}"><button data-i="${i}">${arteNome(i,q)}</button><select data-i="${i}" title="${q.locked?'Arte travada':'Quantos produtos nesta arte'}" ${q.locked?'disabled':''}>${Array.from({length:mx},(_,k)=>k+1).map(k=>`<option ${k===cnt?'selected':''}>${k}</option>`).join('')}</select>${isFunc()?'':`<button class="lockMini" data-lk="${i}" title="${q.locked?'Destravar':'Travar esta arte (arte pronta)'}">${q.locked?'🔒':'🔓'}</button>`}<small>itens${vagasDe(q)?` • <b style="color:#b3121b">${vagasDe(q)} vagas</b>`:''}</small></div>`}).join(''):'')
+  +(isFunc()?'':`<div class="wzPg dst"><small>Destaque${n>1?' nesta arte':''}</small>${[0,1,2,4].map(k=>`<button data-d="${k}" class="${nf===k?'on':''}">${k===0?'Nenhum':k}</button>`).join('')}</div>`+(isFunc()||!pg?'':hfBar(P,pg,S.format)));if(pg&&!isFunc())hfBind($('#wzPages'),pg,S.format);
+ $('#wzPages').querySelectorAll('button[data-lk]').forEach(b=>b.onclick=()=>{toggleLock(+b.dataset.lk);wzCheck()});
  $('#wzPages').querySelectorAll('.wzPg button[data-i]').forEach(b=>b.onclick=()=>{S.page=+b.dataset.i;schedule();wzCheck()});
  $('#wzPages').querySelectorAll('select[data-i]').forEach(sel=>sel.onchange=()=>{const i=+sel.dataset.i,last=i===P.length-1,a=P.map(q=>({t:'m',lay:'auto',n:q.items.length+vagasDe(q),grow:false}));a[i].n=+sel.value;
-  if(!last){const tl=a[a.length-1];if(!(vagasDe(P[P.length-1]))){tl.grow=true;delete tl.n}}setArtes(S.format,a);S.page=i;changed();wzCheck()});
+  const lf=P.reduce((k,q,j)=>j>i&&!q.locked&&!q.lay.sec?j:k,-1);if(lf<0){if(+sel.value<P[i].items.length)a.push({t:'m',lay:'auto',grow:true})}else if(lf>=0&&!vagasDe(P[lf])){a[lf].grow=true;delete a[lf].n}setArtes(S.format,a);S.page=i;changed();wzCheck()});
  $('#wzPages').querySelectorAll('button[data-d]').forEach(b=>b.onclick=()=>{const k=+b.dataset.d,its=pageInfo().P[S.page].items;const cur=its.filter(p=>p.featured);
   its.forEach(p=>{p.featured=false});const keep=cur.slice(0,k);its.filter(p=>!keep.includes(p)).slice(0,k-keep.length).forEach(p=>keep.push(p));keep.forEach(p=>{p.featured=true;p.papel=''});changed();wzCheck()});
  const bad=S.products.filter(p=>prodIssues(p).length),gen=[];if(!S.val.ini)gen.push('Validade não preenchida');
@@ -2411,8 +2509,8 @@ function wzBindFix(row,p){const f=row.querySelector('.wzFix');
 /* passo 4: baixar */
 function wzDown(){const n=pageInfo().n;$('#wzEnc').innerHTML=`Encarte<small>${FORMATS[S.format].label} • ${S.format==='insta'?'WhatsApp e Instagram':S.format==='story'?'status e story':S.format==='tv'?'TV e telão':'para imprimir'}</small>`;$('#wzStory').hidden=S.format==='story';$('#wzDInfo').textContent=`${camp().nome} • ${S.products.length} produtos • ${n>1?n+' artes':'1 arte'} • ${(()=>{const v=validText();return v?v.charAt(0)+v.slice(1).toLowerCase():'sem validade'})()}`}
 async function dlEncarte(){await fontsReady();if(!await reviewGate(S.products))return;const P=pagesFor(S.format),f=FORMATS[S.format];snapshotKit();
- for(let i=0;i<P.length;i++){const c=document.createElement('canvas');c.width=f.w;c.height=f.h;renderFlyer(c.getContext('2d'),f.w,f.h,P[i].items,camp(),[],P[i].lay);const ok=await saveFile(fname('png',P.length>1?'_'+(i===0?'frente':i===1?'verso':'arte'+(i+1)):''),await toBlob(c),'img');if(!ok&&P.length>1)break}}
-async function dlStory(){await fontsReady();if(!await reviewGate(S.products))return;const P=pagesFor('story'),f=FORMATS.story;for(let i=0;i<P.length;i++){const c=document.createElement('canvas');c.width=f.w;c.height=f.h;renderFlyer(c.getContext('2d'),f.w,f.h,P[i].items,camp(),[],P[i].lay);const ok=await saveFile(fname('png','_story'+(P.length>1?'_'+(i+1):'')),await toBlob(c),'img');if(!ok&&P.length>1)break}}
+ for(let i=0;i<P.length;i++){const c=document.createElement('canvas');c.width=f.w;c.height=f.h;renderFlyer(c.getContext('2d'),f.w,f.h,P[i].items,camp(),[],P[i].lay,P[i]);const ok=await saveFile(fname('png',P.length>1?'_'+(i===0?'frente':i===1?'verso':'arte'+(i+1)):''),await toBlob(c),'img');if(!ok&&P.length>1)break}}
+async function dlStory(){await fontsReady();if(!await reviewGate(S.products))return;const P=pagesFor('story'),f=FORMATS.story;for(let i=0;i<P.length;i++){const c=document.createElement('canvas');c.width=f.w;c.height=f.h;renderFlyer(c.getContext('2d'),f.w,f.h,P[i].items,camp(),[],P[i].lay,P[i]);const ok=await saveFile(fname('png','_story'+(P.length>1?'_'+(i+1):'')),await toBlob(c),'img');if(!ok&&P.length>1)break}}
 function dlTv(){modal(`<h3>TV da loja</h3><div class="wzBig"><button class="btn pri" data-a="vid">Gerar vídeo<small>um produto por vez, para pendrive ou status</small></button><button class="btn dark" data-a="pub">Publicar na TV<small>a TV da loja atualiza sozinha</small></button></div><div class="mfoot"><button class="btn" data-a="n">Voltar</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=closeModal;b.querySelector('[data-a=vid]').onclick=()=>$('#bVid').click();b.querySelector('[data-a=pub]').onclick=()=>$('#cbTv').click()})}
 /* desfazer */
 const UNDO=[];let undoT,undoing=false;
@@ -2434,7 +2532,7 @@ function wzAdd(){const v=pageInfo().P.reduce((a,q)=>a+vagasDe(q),0);
 $('#wzAddMore').onclick=wzAdd;
 $('#wzEnc').onclick=dlEncarte;
 $('#wzShare').onclick=async()=>{await fontsReady();if(!await reviewGate(S.products))return;const P=pagesFor(S.format),f=FORMATS[S.format],files=[];
- for(let i=0;i<P.length;i++){const c=document.createElement('canvas');c.width=f.w;c.height=f.h;renderFlyer(c.getContext('2d'),f.w,f.h,P[i].items,camp(),[],P[i].lay);files.push(new File([await toBlob(c)],fname('png',P.length>1?'_'+(i+1):''),{type:'image/png'}))}
+ for(let i=0;i<P.length;i++){const c=document.createElement('canvas');c.width=f.w;c.height=f.h;renderFlyer(c.getContext('2d'),f.w,f.h,P[i].items,camp(),[],P[i].lay,P[i]);files.push(new File([await toBlob(c)],fname('png',P.length>1?'_'+(i+1):''),{type:'image/png'}))}
  snapshotKit();
  try{if(navigator.canShare&&navigator.canShare({files})){await navigator.share({files,title:camp().nome});return}}catch(e){if(e&&e.name==='AbortError')return}
  toast('Este aparelho não deixou compartilhar direto. Vou baixar a imagem para você mandar.',4500);for(const fl of files){const ok=await saveFile(fl.name,fl,'img');if(!ok)break}};$('#wzStory').onclick=dlStory;$('#wzPlaq').onclick=()=>$('#bPlaq').click();$('#wzTvB').onclick=dlTv;$('#wzKit').onclick=()=>$('#bKit').click();$('#wzA4').onclick=()=>$('#bPdf').click();
