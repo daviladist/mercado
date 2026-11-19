@@ -220,6 +220,29 @@ check(pr['p1']['name'] == 'Whey 900g' and pr['p1']['photo'].startswith('/api/pho
 A = C('@'); s, me = A.req('/api/login', {'role': 'admin', 'login': AL, 'password': APW}); s, r = A.req('/api/banco/info'); check(s == 200 and r['banco'] is None, 'a empresa principal segue sem banco até a Central ligar')
 s, a = cen.req('/api/central/banco/usar', {'empresa': 'davila', 'banco': BK}); check(s == 200 and a['banco'] == BK, 'a empresa principal também pode ser ligada')
 
+print('== App de pedidos ligado: o produto salvo sobe sozinho para o banco')
+def banco_de(cod): return [x for x in cen.req('/api/central/banco/produtos?b=' + BK + '&q=' + cod)[1]['itens'] if x['codigo'] == cod]
+def ver(c, pid): return c.req('/api/state')[1]['V']['products'][pid]
+F504 = png()
+s, r = red.req('/api/sync', {'changes': [{'c': 'products', 'id': 'p5', 'op': 'put', 'doc': {'id': 'p5', 'name': 'Pasta de Amendoim 1kg', 'price': 40, 'cost': 24, 'code': '504', 'ean': '', 'unit': 'Caixa c/ 6', 'perPack': 6, 'photo': F504}}]})
+x = banco_de('504')
+check(s == 200 and not r.get('rejected') and len(x) == 1 and x[0]['nome'] == 'Pasta de Amendoim 1kg' and x[0]['custo'] == 4 and x[0]['foto'] and x[0]['fotoFonte'] == 'Red Teste', 'produto novo salvo na distribuidora entra no banco na hora, com custo de uma unidade e foto')
+s, img, _ = cen.req('/api/central/banco/foto?b=' + BK + '&id=' + x[0]['foto'], raw=True, headers={}); check(img == raw(F504), 'a foto do produto novo está no banco')
+antes = banco_de('501')[0]
+st = red.req('/api/state')[1]; p1 = [p for p in st['S']['products'] if p['id'] == 'p1'][0]
+s, r = red.req('/api/sync', {'changes': [{'c': 'products', 'id': 'p1', 'op': 'put', 'ver': st['V']['products']['p1'], 'doc': dict(p1, price=155, cost=99, name='Whey mudou de nome')}]})
+d = banco_de('501')[0]
+check(s == 200 and not r.get('rejected') and d['foto'] == antes['foto'] and d['custo'] == 70 and d['nome'] == antes['nome'], 'mudar preço, custo ou nome na distribuidora não mexe no que o banco já tem (nem na foto)')
+st = red.req('/api/state')[1]; p1 = [p for p in st['S']['products'] if p['id'] == 'p1'][0]; FN1 = png()
+s, r = red.req('/api/sync', {'changes': [{'c': 'products', 'id': 'p1', 'op': 'put', 'ver': st['V']['products']['p1'], 'doc': dict(p1, photo=FN1)}]})
+d = banco_de('501')[0]; s2, img, _ = cen.req('/api/central/banco/foto?b=' + BK + '&id=' + d['foto'], raw=True, headers={})
+check(s == 200 and not r.get('rejected') and d['foto'] != antes['foto'] and img == raw(FN1) and d['fotoFonte'] == 'Red Teste', 'trocar a foto na distribuidora troca a foto no banco')
+s, r = red.req('/api/sync', {'changes': [{'c': 'products', 'id': 'p6', 'op': 'put', 'doc': {'id': 'p6', 'name': 'Sem codigo 2', 'price': 10, 'cost': 5, 'code': '', 'unit': 'UN', 'photo': png()}}]})
+check(s == 200 and not r.get('rejected') and cen.req('/api/central/banco/produtos?b=' + BK + '&q=sem%20codigo')[1]['totais']['todos'] == 0, 'produto sem código salva normal na distribuidora e não entra no banco')
+n0 = cen.req('/api/central/banco/produtos?b=' + BK)[1]['totais']['todos']
+s, r = out.req('/api/sync', {'changes': [{'c': 'products', 'id': 'z1', 'op': 'put', 'doc': {'id': 'z1', 'name': 'De outra loja', 'price': 10, 'cost': 5, 'code': '777', 'unit': 'UN'}}]})
+check(s == 200 and cen.req('/api/central/banco/produtos?b=' + BK)[1]['totais']['todos'] == n0, 'empresa que NÃO foi ligada salva produto sem tocar no banco')
+
 print(f'\n{ok} verificações certas, {len(fails)} falhas')
 if fails:
     for f in fails: print('  -', f)
