@@ -463,6 +463,11 @@
       <div><button class="btn dark" type="button" id="bkImp" ${podem.length ? '' : 'disabled'}>Trazer agora</button></div>
       <div id="bkImpOut" aria-live="polite"></div>
     </div></details>
+    <details class="card fold" data-k="bk:arq"><summary><h2>Importar todos os produtos do StarIA</h2><span class="sum">arquivo da página Exportar StarIA</span></summary><div class="fb">
+      <p class="muted small" style="margin:0">Para trazer o cadastro inteiro de uma vez, sem gastar o Claude: abra a página <b>Exportar StarIA</b> (nos seus artefatos do Claude), toque em Puxar produtos, baixe o arquivo e envie aqui. O StarIA manda no nome, no código de barras e no preço de venda; foto e custo do banco não mudam. Pode repetir quando quiser.</p>
+      <div><label class="btn dark" for="bkArq" style="display:inline-flex;align-items:center">Enviar arquivo</label><input type="file" id="bkArq" accept=".json,.txt,application/json,text/plain" hidden></div>
+      <div id="bkArqOut" aria-live="polite"></div>
+    </div></details>
     <details class="card fold" data-k="bk:st"><summary><h2>Atualizar pelo StarIA</h2><span class="sum" id="bkStSum"></span></summary><div class="fb" id="bkSt"><p class="small muted" style="margin:0">Carregando…</p></div></details>
     <section class="card" style="display:grid;gap:10px">
       <div class="bk-bar"><h2>Produtos</h2><div style="display:flex;gap:6px;flex-wrap:wrap"><label class="btn" for="bkFotos" style="display:inline-flex;align-items:center" title="O nome de cada arquivo é o código interno ou o código de barras">Enviar várias fotos</label><input type="file" id="bkFotos" accept="image/*" multiple hidden><button class="btn dark" type="button" id="bkAdd">+ Produto</button></div></div>
@@ -476,6 +481,7 @@
     $('#bkRen').addEventListener('click', async () => { const n = prompt('Nome do banco de dados:', b.name); if (n == null || !n.trim() || n.trim() === b.name) return; try { const r = await api('/api/central/banco/salvar', { id: b.id, name: n, filial: b.filial }); D.bancos = r.bancos; toast('Nome salvo'); renderList(); renderBanco(); renderProd(); renderJobs(); } catch (e) { if (sessao(e)) return; toast(e.message); } });
     E.querySelectorAll('[data-go]').forEach(x => x.addEventListener('click', () => { const t = D.tenants.find(y => y.id === x.dataset.go); if (!t) return; aba = ramoOf(t); pick(t.id); window.scrollTo(0, 0); }));
     $('#bkImp').addEventListener('click', importarBanco);
+    $('#bkArq').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) importarArquivo(f); });
     let tq; $('#bkQ').addEventListener('input', e => { clearTimeout(tq); tq = setTimeout(() => { BK.q = e.target.value.trim(); BK.p = 0; BK.edit = null; loadBanco(true); }, 300); });
     $('#bkAdd').addEventListener('click', () => { BK.novoP = !BK.novoP; BK.edit = null; BK.fotoP = undefined; renderProd(); const c = $('#bpC'); if (c) c.focus(); });
     $('#bkFotos').addEventListener('change', e => { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) fotosPorNome(fs); });
@@ -492,6 +498,23 @@
       toast('Pronto: banco atualizado'); renderList(); const h = $('#bkNums'), b = bancoDe(BK.sel); if (h && b) h.textContent = numsTxt(b); BK.p = 0; loadBanco(true);
     } catch (e) { if (sessao(e)) return; toast(e.message); out.innerHTML += `<div class="err">${esc(e.message)}</div>`; }
     finally { bt.disabled = false; }
+  }
+  /* arquivo com todos os produtos do StarIA: lido aqui e enviado em pedaços de 500 */
+  async function importarArquivo(f) {
+    const out = $('#bkArqOut');
+    let itens;
+    try { const j = JSON.parse(await f.text()); itens = Array.isArray(j) ? j : j && j.itens; if (!Array.isArray(itens) || !itens.length) throw 0; }
+    catch (e) { out.innerHTML = '<div class="err">Este não é o arquivo da página Exportar StarIA.</div>'; return; }
+    let aceitos = 0, novos = 0, ruins = 0, total = 0;
+    try {
+      for (let i = 0; i < itens.length; i += 500) {
+        out.innerHTML = `<p class="small muted" style="margin:0">Enviando ${fmtN(Math.min(itens.length, i + 500))} de ${fmtN(itens.length)} produtos…</p>`;
+        const r = await api('/api/central/banco/arquivo', { banco: BK.sel, itens: itens.slice(i, i + 500) });
+        aceitos += r.aceitos; novos += r.novos; ruins += r.ruins; total = r.total;
+      }
+      out.innerHTML = `<div class="note"><b>${pl(aceitos, 'produto importado', 'produtos importados')}</b>: ${pl(novos, 'novo', 'novos')} e ${fmtN(aceitos - novos)} atualizados. O banco agora tem ${fmtN(total)}.${ruins ? ' ' + pl(ruins, 'linha sem código ou sem nome ficou', 'linhas sem código ou sem nome ficaram') + ' de fora.' : ''}</div>`;
+      toast('Importação concluída'); BK.p = 0; await loadBanco(true); recarregaBancos();
+    } catch (e) { if (sessao(e)) return; out.innerHTML = `<div class="err">Parou em ${fmtN(aceitos)} produtos: ${esc(e.message)} Envie o arquivo de novo: o que já entrou não duplica.</div>`; loadBanco(true); recarregaBancos(); }
   }
   /* ----- pedidos ao StarIA: o site não fala com o StarIA; o Claude lê o pedido, consulta e devolve ----- */
   function renderJobs() {
