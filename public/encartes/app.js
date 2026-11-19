@@ -368,7 +368,7 @@ function drawPriceBlock(c,p,x,y,w,h,C,mode,onBg){
   const sx=x+(w-(lw+pw+s*0.5))/2;c.fillStyle=sc.fg;c.textBaseline='middle';c.textAlign='left';c.font=O(s*0.62,700);c.fillText(lab,sx,y+th/2);c.font=F(s);c.fillText(pr,sx+lw+s*0.5,y+th/2+s*0.04);c.restore();
   drawPrice(c,x,y+th+g,w,h-th-g,p.app,p.unit,C,true,{label:'COM APP'})}
  else{const lw=w*0.4;drawPrice(c,x,y,lw,h,p.price,p.unit,C,true,{label:'SEM APP',bg:sc.bg,fg:sc.fg});drawPrice(c,x+lw+g,y,w-lw-g,h,p.app,p.unit,C,true,{label:'COM APP'})}}
-function limitText(p,short){if(!(p.limit>0))return'';const n=p.limit,u=n===1?'UNIDADE':'UNIDADES';return hasApp(p)?(short?`LIMITE ${n} UN. NO APP`:`LIMITE DE ${n} ${u} NO PREÇO DO APP`):(short?`LIMITE ${n} UN.`:`LIMITE DE ${n} ${u} POR CLIENTE`)}
+function limitText(p,short){if(!(p.limit>0))return'';const n=p.limit,un=!p.unit||p.unit==='un',u=un?(n===1?'UNIDADE':'UNIDADES'):unitLabel(p.unit),us=un?'UN.':unitLabel(p.unit);return hasApp(p)?(short?`LIMITE ${n} ${us} NO APP`:`LIMITE DE ${n} ${u} NO PREÇO DO APP`):(short?`LIMITE ${n} ${us}`:`LIMITE DE ${n} ${u} POR CLIENTE`)}
 function drawLimit(c,p,x,y,w,h,dark=false){
  const t=limitText(p);if(!t)return false;c.save();let s=h*0.62;c.font=O(s,700);const tw=c.measureText(t).width;if(tw+s*0.7>w)s*=w/(tw+s*0.7);
  pill(c,t,x+w/2,y+(h-s*1.35)/2,s,'center',dark?'#ffd400':'#111111',dark?'#111111':'#ffd400');c.restore();return true}
@@ -698,7 +698,12 @@ function layoutGrid(n,x,y,w,h,g){
   cells.push({x:x0+k*(cwi+g),y:y+r*(ch+g),w:cwi,h:ch})}
  return cells}
 
-function areaOf(W,H,hhO,fhO){const land=W>H,hh=hhO!=null?hhO:H*(land?0.2:W/H<0.6?0.165:0.2),fh=fhO!=null?fhO:H*(land?0.085:W/H<0.6?0.062:0.07),m=W*0.022,g=W*(land?0.01:0.014),top=hh+m*1.25,bot=H-fh-m;return{W,H,land,hh,fh,m,g,top,ax:m,aw:W-m*2,ah:bot-top}}
+/* observações do rodapé: faixa logo acima do rodapé, que empurra os produtos para cima */
+let PLAQKG=false;/* preço por kg/litro na plaquinha: sempre começa desmarcado */
+const notasL=()=>(S.notas||[]).map(t=>String(t||'').trim()).filter(Boolean).slice(0,4);
+function notasH(W,H){const n=notasL().length;return n?n*H*(W>H?0.045:0.024)+H*0.012:0}
+function drawNotas(c,W,H,fh){const L=notasL();if(!L.length)return;const nh=notasH(W,H),y=H-fh-nh,lh=(nh-H*0.012)/L.length;c.save();c.fillStyle='#ffffff';c.fillRect(0,y,W,nh);c.fillStyle='#111111';c.fillRect(0,y,W,Math.max(2,H*0.0015));c.textAlign='center';c.textBaseline='middle';const f=s=>`700 ${s}px Inter, sans-serif`;L.forEach((t,i)=>{const s=fitLine(c,t,W*0.94,lh*0.68,f);c.font=f(s);c.fillText(t,W/2,y+H*0.006+lh*(i+0.5))});c.restore()}
+function areaOf(W,H,hhO,fhO){const land=W>H,hh=hhO!=null?hhO:H*(land?0.2:W/H<0.6?0.165:0.2),fh=fhO!=null?fhO:H*(land?0.085:W/H<0.6?0.062:0.07),m=W*0.022,g=W*(land?0.01:0.014),top=hh+m*1.25,bot=H-fh-m-notasH(W,H);return{W,H,land,hh,fh,m,g,top,ax:m,aw:W-m*2,ah:bot-top}}
 const fmtOf=(W,H)=>Object.keys(FORMATS).find(k=>FORMATS[k].w===W&&FORMATS[k].h===H);
 function autoSlots(items,A){
  const{land,g,top,ax,aw,ah}=A,out=[];const feat=items.filter(p=>p.featured).slice(0,4),rest=items.filter(p=>!feat.includes(p));
@@ -860,6 +865,7 @@ function renderFlyer(c,W,H,items,cp,iss,lay,pg){
  else if(!art&&cp.headArt&&W>H){drawHeader(c,W,H,A.hh,C,cp,{logos:false});foot()}
  else if(!art){drawHeader(c,W,H,A.hh,C,cp);foot()}
  else{const o=artOpt(cp);drawHeader(c,W,H,A.hh,C,cp,o);drawFooter(c,W,H,A.fh,C,o.rodape)}
+ drawNotas(c,W,H,A.fh);
  if(lay&&lay.sec){const o=sectionSlots(items,lay,A);o.strips.forEach(st=>drawStrip(c,st,C));o.cards.forEach(r=>drawCard(c,r.p,r.x,r.y,r.w,r.h,C,iss));
   if(!items.length){c.fillStyle='#fff';c.textAlign='center';c.font=O(W*0.035,600);c.fillText(lay.setores.length?'Nenhum produto nesses setores':'Escolha os setores desta arte',W/2,A.top+A.ah/2)}c.restore();return}
  if(lay&&!lay.auto){
@@ -897,8 +903,8 @@ function renderPlaque(c,W,H,p,cp,fold){
  c.fillStyle=C.cabecalho;c.fillRect(0,y0,W,hb);c.fillStyle=C.adesivo;c.fillRect(0,y0+hb,W,Math.max(4,hb*0.06));
  const lh=hb*0.8,lw=lh*1.6;logoBox(c,0,m,y0+(hb-lh)/2,lw,lh);logoBox(c,1,m*1.5+lw,y0+(hb-lh)/2,lw,lh);
  const tx=m*2.5+lw*2,tw=W-tx-m,tt=(cp.titulo||cp.nome).toUpperCase();const ts=fitLine(c,tt,tw,hb*0.62,F);c.font=F(ts);c.fillStyle=C.titulo;c.textAlign='right';c.textBaseline='middle';c.fillText(tt,W-m,y0+hb/2+ts*0.04);
- const upq=unitPriceText(p,true,p.precoKg!==false),by=y0+hb+m,rest=H-by-m;const vH=rest*(upq?0.12:0.07);
- const vt=(p.venc?(p.vencData?'Vence em '+fmtDY(p.vencData)+' • ':'Vencimento próximo • '):'')+(S.val.fim?'Oferta válida até '+fmtD(S.val.fim):'')+(noImg?'':' • Imagem meramente ilustrativa')+(p.code?' • Cód. '+p.code:p.ean?' • EAN '+p.ean:'')+' • Impressa em '+fmtD(today());
+ const upq=PLAQKG?unitPriceText(p,true,true):'',by=y0+hb+m,rest=H-by-m;const vH=rest*(upq?0.12:0.07);
+ const vt=(p.venc?(p.vencData?'Vence em '+fmtDY(p.vencData)+' • ':'Vencimento próximo • '):'')+((p.valFim||S.val.fim)?'Oferta válida até '+fmtD(p.valFim||S.val.fim):'')+(noImg?'':' • Imagem meramente ilustrativa')+(p.code?' • Cód. '+p.code:p.ean?' • EAN '+p.ean:'')+' • Impressa em '+fmtD(today());
  if(noImg&&land){/* sem foto: nome grande à esquerda, preço à direita, ocupa tudo */
   const lw2=W*0.5,lx=m*1.5,px=lx+lw2+m*1.5,pw=W-px-m*1.5;let yy=by+rest*0.02;
   if(p.phrase){drawSticker(c,p.phrase,lx,yy,lw2,rest*0.085,C,-0.04);yy+=rest*0.15}
@@ -1516,7 +1522,7 @@ const CLOUD={db:null,as:null,map:{},on:false,wq:Promise.resolve(),base:null,base
 function cloudStatus(t,cls){const el=$('#cloudSt');if(el){el.textContent=t;el.className='cloud '+(cls||'')}}
 function dataURLtoBlob(u){const[h,b]=u.split(',');const mime=(h.match(/data:([^;]+)/)||[])[1]||'image/png';const bin=atob(b);const a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:mime})}
 function cloudQueue(fn){CLOUD.wq=CLOUD.wq.then(fn).catch(()=>{});return CLOUD.wq}
-const DRAFT=['voz','avulsas','avTitle','avCamp','avVal','avPer','avOri','logoOff','tvAt','products','val','artes','page','campaignId','format','lay','listMode','ui','kitOpt'];
+const DRAFT=['notas','voz','avulsas','avTitle','avCamp','avVal','avPer','avOri','logoOff','tvAt','products','val','artes','page','campaignId','format','lay','listMode','ui','kitOpt'];
 const SHAREDK=['fotoNomes','fotoEan','catalogo','ofertaHist','padroes','funcSeen','plaqLog'];
 const LOCALK=['saved','_sharedDirty','draftAt','savedAt','localAt','draftSyncAt','tvPub'];
 const LSB='encartes-base',DEVK='encartes-dev';
@@ -1584,7 +1590,8 @@ async function cloudSyncImages(){
  Object.keys(CLOUD.map).forEach(k=>KNOWN.add(k));if(!CLOUD.as)return;const up=(await IDB.keys()).filter(k=>!(k in CLOUD.map)&&!/^(kv:|catalogo:)/.test(k));
  for(let i=0;i<up.length;i++){cloudStatus(`Enviando fotos para a nuvem ${i+1}/${up.length}…`);const u=await IDB.get(up[i]);if(u)await cloudPutImage(up[i],u,true)}
  if(up.length)cloudSaveMap();await loadAllImages()}
-function fillInputs(){$('#vIni').value=S.val.ini||'';$('#vFim').value=S.val.fim||'';$('#phr').value=S.phrases.join('\n');
+function syncNotas(){const v=(S.notas||[]).join('\n');['#notasT','#wzNotas'].forEach(q=>{const e=$(q);if(e&&e!==document.activeElement)e.value=v})}
+function fillInputs(){syncNotas();$('#vIni').value=S.val.ini||'';$('#vFim').value=S.val.fim||'';$('#phr').value=S.phrases.join('\n');
  [['sNome','nome'],['sWa','wa'],['sEnd','ends'],['sExtra','extra'],['sFil','filial'],['sMarg','margMin'],['sMAlvo','margAlvo'],['sFils','filiais']].forEach(([id,k])=>{const e=$('#'+id);if(e&&document.activeElement!==e)e.value=S.store[k]??''});renderPinInfo();$('#lgPos').value=S.store.logoPos||'lado';$('#lgFx').value=S.store.logoFx||'auto';$('#oSec').checked=S.store.secCor!==false;$('#oTinta').checked=!!S.store.tinta}
 function refreshAll(){fillInputs();renderFormats();renderCamps();renderList();renderLogos();renderSaved();renderSecs();renderArt();schedule()}
 /* rascunho mexido em outro aparelho: pergunta em vez de sobrescrever */
@@ -1828,6 +1835,7 @@ $('#dupC').onclick=()=>{const c=camp(),n=Object.assign(clone(c),{id:uid(),nome:c
 $('#delC').onclick=()=>{if(S.campaigns.length<2){toast('Precisa ter pelo menos uma campanha');return}const c=camp();modal(`<h3>Excluir "${esc(c.nome)}"?</h3><div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn pri" data-a="y">Excluir</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=(...a)=>closeModal(...a);b.querySelector('[data-a=y]').onclick=()=>{S.campaigns=S.campaigns.filter(x=>x!==c);S.campaignId=S.campaigns[0].id;closeModal();renderCamps();changed(false)}})};
 $('#vIni').oninput=e=>{S.val.ini=e.target.value;if(S.val.fim&&S.val.fim<S.val.ini){S.val.fim=S.val.ini;$('#vFim').value=S.val.fim}changed(false)};
 $('#vFim').oninput=e=>{S.val.fim=e.target.value;changed(false)};
+['#notasT','#wzNotas'].forEach(q=>{const e=$(q);if(e)e.oninput=()=>{S.notas=e.value.split('\n').slice(0,4);syncNotas();changed(false)}});
 $('#phr').oninput=e=>{S.phrases=e.target.value.split('\n').map(s=>s.trim().toUpperCase()).filter(Boolean);persist()};
 
 /* ================= arte própria (Photoshop) ================= */
@@ -1935,13 +1943,13 @@ function renderSaved(){const el=$('#savedList');
  el.innerHTML=S.saved.map(s=>`<div class="saved" data-id="${s.id}"><div class="n">${esc(s.name)}<small>${esc((S.campaigns.find(c=>c.id===s.campaignId)||{}).nome||'')} • ${s.products.length} produtos • salvo ${new Date(s.at).toLocaleDateString('pt-BR')}</small></div>
  <button class="btn sm dark" data-a="res" data-dono>Resultado</button><button class="btn sm" data-a="chk" data-dono>Conferir sistema</button><button class="btn sm" data-a="open">Abrir</button><button class="btn sm" data-a="dup">Duplicar</button><button class="ico" data-a="del" title="Excluir">✕</button></div>`).join('');
  el.querySelectorAll('.saved').forEach(r=>{const s=S.saved.find(x=>x.id===r.dataset.id);
-  const load=(fresh)=>{S.products=clone(s.products).map(p=>fresh?Object.assign(p,{id:p.code?p.id:p.id}):p);if(S.campaigns.some(c=>c.id===s.campaignId))S.campaignId=s.campaignId;S.format=s.format||S.format;S.val=fresh?{ini:today(),fim:today()}:clone(s.val);S.page=0;$('#vIni').value=S.val.ini;$('#vFim').value=S.val.fim;renderFormats();renderCamps();changed();loadAllImages()};
+  const load=(fresh)=>{S.products=clone(s.products).map(p=>fresh?Object.assign(p,{id:p.code?p.id:p.id}):p);if(S.campaigns.some(c=>c.id===s.campaignId))S.campaignId=s.campaignId;S.notas=clone(s.notas||[]);syncNotas();S.format=s.format||S.format;S.val=fresh?{ini:today(),fim:today()}:clone(s.val);S.page=0;$('#vIni').value=S.val.ini;$('#vFim').value=S.val.fim;renderFormats();renderCamps();changed();loadAllImages()};
   r.querySelector('[data-a=open]').onclick=()=>{load(false);toast('Encarte aberto')};
   r.querySelector('[data-a=res]').onclick=()=>openResult(s);r.querySelector('[data-a=chk]').onclick=()=>conferirSistema(s.products,s.name);
   r.querySelector('[data-a=dup]').onclick=()=>{load(true);$('#saveName').value=s.name+' (nova)';toast('Cópia aberta com validade de hoje. Atualize os preços e salve.',4000)};
   r.querySelector('[data-a=del]').onclick=()=>modal(`<h3>Tem certeza?</h3><p>O encarte salvo "${esc(s.name)}" vai ser apagado.</p><div class="mfoot"><button class="btn" data-a="n">Não</button><button class="btn pri" data-a="y">Sim, apagar</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=(...a)=>closeModal(...a);b.querySelector('[data-a=y]').onclick=()=>{closeModal();S.saved=S.saved.filter(x=>x!==s);cloudDelEnc(s.id);renderSaved();persist()}})});
  if(CLOUD.on&&!CLOUD.salvosAll){const m=document.createElement('button');m.className='btn sm';m.style.cssText='width:100%;margin-top:8px';m.textContent='Carregar encartes mais antigos';m.onclick=async()=>{m.disabled=true;m.textContent='Carregando…';try{await loadSalvos(1000)}catch(e){}renderSaved()};el.appendChild(m)}}
-$('#saveB').onclick=()=>{const name=$('#saveName').value.trim()||`${camp().nome} ${fmtD(S.val.ini)}`;const ex=S.saved.find(s=>s.name===name);const rec={id:ex?ex.id:uid(),name,at:Date.now(),por:curName(),campaignId:S.campaignId,format:S.format,val:clone(S.val),products:clone(S.products)};
+$('#saveB').onclick=()=>{const name=$('#saveName').value.trim()||`${camp().nome} ${fmtD(S.val.ini)}`;const ex=S.saved.find(s=>s.name===name);const rec={id:ex?ex.id:uid(),name,at:Date.now(),por:curName(),campaignId:S.campaignId,format:S.format,val:clone(S.val),notas:notasL(),products:clone(S.products)};
  if(ex)Object.assign(ex,rec);else S.saved.unshift(rec);renderSaved();persist();cloudSaveEnc(ex||rec);toast(ex?'Encarte atualizado':'Encarte salvo')};
 /* ================= modal, abas ================= */
 function modal(html,mount){FILL_NEXT=null;$('#mbody').classList.remove('wide');const sd=!!editingId;$('#modal').classList.toggle('side',sd);$('#modal').classList.toggle('r',sd&&inWz());$('#modal').classList.toggle('l',sd&&!inWz());$('#mbody').innerHTML=html;$('#modal').hidden=false;mount&&mount($('#mbody'))}
@@ -1982,6 +1990,7 @@ $('#bPlaq').onclick=()=>{const sel=S.products.filter(p=>p.sel);
  modal(`<h3>Baixar plaquinhas</h3><p><b>${sel.length}</b> de ${S.products.length} produtos marcados. Marque ou desmarque na lista de produtos.</p>
  <div class="row2"><label>Quantas por folha A4?<select id="plqPer"><option value="2" ${S.plaqPer==2?'selected':''}>2 por folha (padrão)</option><option value="1" ${S.plaqPer==1?'selected':''}>1 por folha (grande)</option></select></label>
  <label>Plaquinha<select id="plqOri"><option value="h" ${(S.plaqOri||(S.plaqPer==1?'v':'h'))==='h'?'selected':''}>Deitada (horizontal)</option><option value="v" ${(S.plaqOri||(S.plaqPer==1?'v':'h'))==='v'?'selected':''}>Em pé (vertical)</option></select></label></div>
+ <label class="chk2"><input type="checkbox" id="plqKg" ${PLAQKG?'checked':''}> Mostrar o preço por quilo ou litro</label>
  <label class="chk2"><input type="checkbox" id="plqEco" ${S.plaqEco?'checked':''}> Economizar tinta (cabeçalho e preço sem fundo colorido)</label>
  <p class="hint">Cada plaquinha tem uma faixa de 3 cm em cima, com linha tracejada, para dobrar e prender no suporte da gôndola.</p>
  <p class="hint" style="margin:6px 0 4px">Prévia da folha A4 como sai na impressora:</p><canvas id="plqPrev" style="width:100%;box-shadow:0 2px 10px #0003"></canvas>
@@ -1994,6 +2003,7 @@ $('#bPlaq').onclick=()=>{const sel=S.products.filter(p=>p.sel);
     x.drawImage(t,px*PX,py*PX)});
    if(d.cut){x.strokeStyle='#888';x.lineWidth=2;x.setLineDash([9,6]);x.beginPath();x.moveTo(d.cut[0]*PX,d.cut[1]*PX);x.lineTo(d.cut[2]*PX,d.cut[3]*PX);x.stroke();x.setLineDash([])}
    x.strokeStyle='#bbb';x.lineWidth=2;x.strokeRect(1,1,cv.width-2,cv.height-2)};prev();
+  $('#plqKg').onchange=e=>{PLAQKG=e.target.checked;prev()};
   $('#plqEco').onchange=e=>{S.plaqEco=e.target.checked;persist();prev()};
   $('#plqPer').onchange=()=>{S.plaqPer=+$('#plqPer').value;persist();prev()};$('#plqOri').onchange=()=>{S.plaqOri=$('#plqOri').value;persist();prev()};
   b.querySelector('[data-a=n]').onclick=closeModal;
@@ -2237,7 +2247,7 @@ function gondolaCsv(){const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',n=v=>v
  const rows=[['Código','Produto','Unidade','Preço normal (sistema)','Preço da oferta','Preço com app','Limite','Setor','Válido de','Válido até','Trocou na gôndola?']];
  S.products.forEach(p=>rows.push([p.code,p.desc,p.unit,n(p.sysPrice),n(p.price),hasApp(p)?n(p.app):'',p.limit||'',p.setor,fmtD(S.val.ini),fmtD(S.val.fim),'']));
  return new Blob(['﻿'+rows.map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv'})}
-function snapshotKit(){const name=`${camp().nome} ${fmtD(S.val.ini)}`,ex=S.saved.find(s=>s.name===name);const rec={id:ex?ex.id:uid(),name,at:Date.now(),por:curName(),campaignId:S.campaignId,format:S.format,val:clone(S.val),products:clone(S.products),kit:true};
+function snapshotKit(){const name=`${camp().nome} ${fmtD(S.val.ini)}`,ex=S.saved.find(s=>s.name===name);const rec={id:ex?ex.id:uid(),name,at:Date.now(),por:curName(),campaignId:S.campaignId,format:S.format,val:clone(S.val),notas:notasL(),products:clone(S.products),kit:true};
  if(ex)Object.assign(ex,rec);else S.saved.unshift(rec);S.ofertaHist=S.ofertaHist||{};S.products.forEach(p=>{if(/^\d+$/.test(p.code||'')&&p.price!=null)S.ofertaHist[p.code]={price:p.price,at:Date.now()}});renderSaved();persist();cloudSaveEnc(ex||rec)}
 $('#bKit').onclick=()=>{const K=Object.assign({insta:true,story:true,a4:true,plaq:true,gond:true,plaqSel:false},S.kitOpt||{});
  modal(`<h3>Gerar kit da semana</h3><p class="hint">Sai tudo num arquivo só (.zip), com as mesmas artes e preços. O encarte fica guardado em Salvos para repetir e para ver o resultado depois.</p>
@@ -2374,18 +2384,19 @@ function avRender(){const L=S.avulsas||[];AVSEL=clamp(AVSEL,0,Math.max(0,L.lengt
   row.querySelector('[data-a=rm]').onclick=()=>modal(`<h3>Tem certeza?</h3><p>Tirar "${esc(p.desc||'este produto')}" das plaquinhas?</p><div class="mfoot"><button class="btn" data-a="n">Não</button><button class="btn pri" data-a="y">Sim, tirar</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=closeModal;b.querySelector('[data-a=y]').onclick=()=>{closeModal();L.splice(i,1);if(!L.length)L.push(P({desc:'',price:null}));persist();avRender()}});
   const fz=row.querySelector('.avFino');if(fz){fz.querySelectorAll('[data-z]').forEach(b=>b.onclick=()=>{const v=b.dataset.z;NMV(p,v);
    if(v==='z+')p.zoom=Math.min(1.8,(p.zoom||1)+0.1);if(v==='z-')p.zoom=Math.max(0.5,(p.zoom||1)-0.1);if(v==='up')p.dy=(p.dy||0)-0.04;if(v==='dn')p.dy=Math.min(0.2,(p.dy||0)+0.04);if(v==='d+')p.descK=Math.min(1.8,(p.descK||1)+0.15);if(v==='d-')p.descK=Math.max(0.7,(p.descK||1)-0.15);if(v==='p+')p.phK=Math.min(2.2,(p.phK||1)+0.15);if(v==='p-')p.phK=Math.max(0.5,(p.phK||1)-0.15);if(v==='rs'){p.zoom=1;p.dy=0;p.descK=1;p.phK=1;p.nameDy=0}persist();avRender()});
-   const ph=fz.querySelector('select');if(ph)ph.onchange=()=>{p.phrase=ph.value;persist();avPrev()};const m8=fz.querySelector('[data-m18]');if(m8)m8.onchange=()=>{p.m18=m8.checked;persist();avPrev()};const ob8=fz.querySelector('[data-obs]');if(ob8)ob8.oninput=()=>{p.obs=ob8.value;persist();avPrev()};const vc=fz.querySelector('[data-venc]');if(vc)vc.onchange=()=>{p.venc=vc.checked;persist();avRender()};const vd=fz.querySelector('[data-vd]');if(vd)vd.onchange=()=>{p.vencData=vd.value;persist();avPrev()}}});
+   const ph=fz.querySelector('select');if(ph)ph.onchange=()=>{p.phrase=ph.value;persist();avPrev()};const vf=fz.querySelector('[data-vf]');if(vf)vf.onchange=()=>{p.valFim=vf.value||'';persist();avRender()};const vfx=fz.querySelector('[data-vfx]');if(vfx)vfx.onclick=()=>{p.valFim='';persist();avRender()};const m8=fz.querySelector('[data-m18]');if(m8)m8.onchange=()=>{p.m18=m8.checked;persist();avPrev()};const ob8=fz.querySelector('[data-obs]');if(ob8)ob8.oninput=()=>{p.obs=ob8.value;persist();avPrev()};const vc=fz.querySelector('[data-venc]');if(vc)vc.onchange=()=>{p.venc=vc.checked;persist();avRender()};const vd=fz.querySelector('[data-vd]');if(vd)vd.onchange=()=>{p.vencData=vd.value;persist();avPrev()}}});
  avPrev()}
 function avFino(p){const phr=[...new Set([...S.phrases,p.phrase].filter(Boolean))];return`<div class="avFino">
  <div class="szR"><span>Foto</span><button data-z="z-">−</button><b>${Math.round((p.zoom||1)*100)}%</b><button data-z="z+">+</button><button data-z="up">↑</button><button data-z="dn">↓</button></div>
  <div class="szR"><span>Letra do nome</span><button data-z="d-">A−</button><b>${Math.round((p.descK||1)*100)}%</b><button data-z="d+">A+</button><span style="margin-left:10px">Posição do nome</span><button data-z="nup" title="Subir o nome">↑</button><button data-z="ndn" title="Descer o nome">↓</button></div>
  <div class="szR"><span>Frase</span><select>${['',...phr].map(f=>`<option value="${esc(f)}" ${f===(p.phrase||'')?'selected':''}>${f?esc(f):'Nenhuma'}</option>`).join('')}</select>${p.phrase?`<button data-z="p-">A−</button><b>${Math.round((p.phK||1)*100)}%</b><button data-z="p+">A+</button>`:''}</div>
  <div class="szR"><span>Observação</span><input data-obs maxlength="40" value="${esc(p.obs||'')}" placeholder="opcional (ex.: sabores variados)" style="margin:0;flex:1;min-width:120px"></div>
+ <div class="szR"><span>Válida até (só esta)</span><input type="date" data-vf value="${p.valFim||''}" style="margin:0;width:auto">${p.valFim?'<button class="btn sm ghost" data-vfx>Usar a data geral</button>':'<small style="color:var(--mut)">vazio = data geral</small>'}</div>
  <label class="chk2"><input type="checkbox" data-m18 ${p.m18?'checked':''}> Selo +18</label>
  <label class="chk2"><input type="checkbox" data-venc ${p.venc?'checked':''}> Vencimento próximo</label>${p.venc?`<input type="date" data-vd value="${p.vencData||''}" style="width:auto;display:inline-block;margin:0 8px">`:''} <button class="btn sm ghost" data-z="rs">Voltar ao padrão</button></div>`}
 const avOk=p=>(p.desc||'').trim()&&p.price!=null;
 function avPrev(){const L=S.avulsas||[],nOk=L.filter(avOk).length;$('#avN').textContent=`${nOk} plaquinha${nOk===1?'':'s'} pronta${nOk===1?'':'s'}`;const per=S.avPer||2,ori=S.avOri||(per===1?'v':'h'),d=plaqDims(per,ori),cv=$('#avPrev'),PX=3,pw=d.page==='portrait'?210:297,ph=d.page==='portrait'?297:210;
- $('#avPer').value=per;$('#avOri').value=ori;{const ec=$('#avEco');if(ec)ec.checked=!!S.plaqEco}cv.width=pw*PX;cv.height=ph*PX;const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cv.width,cv.height);
+ $('#avPer').value=per;$('#avOri').value=ori;{const ec=$('#avEco');if(ec)ec.checked=!!S.plaqEco;const kg=$('#avKg');if(kg)kg.checked=!!PLAQKG}cv.width=pw*PX;cv.height=ph*PX;const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cv.width,cv.height);
  const start=Math.floor(AVSEL/d.pos.length)*d.pos.length;
  withVal(avVal(),()=>d.pos.forEach(([px,py],k)=>{const p=L[start+k];const t=document.createElement('canvas');t.width=Math.round(d.w*PX);t.height=Math.round(d.h*PX);const tx=t.getContext('2d');
   if(p&&avOk(p))renderPlaque(tx,t.width,t.height,p,avCamp(),30*PX);else{tx.fillStyle='#f6f4ef';tx.fillRect(0,0,t.width,t.height);tx.fillStyle='#999';tx.font='600 20px Inter,sans-serif';tx.textAlign='center';tx.fillText(p?'Preencha nome e preço':'Espaço livre na folha',t.width/2,t.height/2)}
@@ -2396,7 +2407,7 @@ $('#avAdd').onclick=()=>{S.avulsas.push(P({desc:'',price:null}));AVSEL=S.avulsas
 $('#avPaste').onclick=()=>modal(`<h3>Colar lista</h3><p class="hint">Um produto por linha, com o preço na frente. Dois preços = sem app e com app. "lim 6" vira limite.</p><textarea id="avTx" style="min-height:150px"></textarea><div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn pri" data-a="y">Adicionar</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=closeModal;setTimeout(()=>$('#avTx').focus(),40);
  b.querySelector('[data-a=y]').onclick=()=>{const L=parseQuick($('#avTx').value);if(!L.length){toast('Não achei produto com preço');return}S.avulsas=S.avulsas.filter(avOk).concat(L);closeModal();persist();loadAllImages();avRender()}});
 $('#avTit').oninput=e=>{S.avTitle=e.target.value;persist();avPrev()};$('#avDate').onchange=e=>{S.avVal=e.target.value;persist();avPrev()};
-{const ec=$('#avEco');if(ec)ec.onchange=e=>{S.plaqEco=e.target.checked;persist();avPrev()}}
+{const ec=$('#avEco');if(ec)ec.onchange=e=>{S.plaqEco=e.target.checked;persist();avPrev()};const kg=$('#avKg');if(kg)kg.onchange=e=>{PLAQKG=e.target.checked;avPrev()}}
 $('#avPer').onchange=e=>{S.avPer=+e.target.value;persist();avPrev()};$('#avOri').onchange=e=>{S.avOri=e.target.value;persist();avPrev()};
 const avPdf=wpp=>async()=>{const L=(S.avulsas||[]).filter(avOk);if(!L.length){toast('Preencha pelo menos um produto com nome e preço');return}if(!window.jspdf){toast('A biblioteca de PDF não carregou. Recarregue.');return}
  if(!await plaqGate(L))return;toast('Montando as plaquinhas…');await fontsReady();plaqLog(L,avVal(),'avulsa');const per=S.avPer||2,ori=S.avOri||(per===1?'v':'h');const blob=withVal(avVal(),()=>plaqDoc(L,per,ori,avCamp()));(wpp?sendWpp:saveFile)('plaquinhas_'+slug(S.avTitle||'oferta')+'_'+(S.avVal||today())+'.pdf',blob,'pdf')};
@@ -2444,7 +2455,7 @@ function wzCamps(){renderPront();const el=$('#wzCamps');const its=S.products.len
   card.querySelector('[data-a=go]').onclick=e=>{e.stopPropagation();pick();wzGo(2)};
   card.querySelector('canvas').onclick=()=>{pick();wzGo(2)};
   const r=card.querySelector('[data-a=rep]');if(r)r.onclick=async e=>{e.stopPropagation();pick();const s=lastOfCamp(c.id);S.products=clone(s.products).map(p=>Object.assign(p,{id:uid()}));S.artes=clone(s.artes||S.artes);wzSetVal();S.page=0;changed();loadAllImages();wzGo(3);if(S.products.some(p=>/^\d+$/.test(p.code||'')))starRefreshAll()}});
- $('#wzIni').value=S.val.ini||'';$('#wzFim').value=S.val.fim||''}
+ $('#wzIni').value=S.val.ini||'';$('#wzFim').value=S.val.fim||'';syncNotas()}
 function wzSetVal(){S.val={ini:$('#wzIni').value||today(),fim:$('#wzFim').value||$('#wzIni').value||today()};$('#vIni').value=S.val.ini;$('#vFim').value=S.val.fim}
 /* passo 2: colar a lista */
 function wzPaste(){const tx=$('#wzTx');setTimeout(()=>tx.focus(),60);wzPrevList()}
@@ -2997,7 +3008,7 @@ function openCusto(){const c=custoOferta(S.products);
 /* ================= início ================= */
 if(S.store&&S.store.pin){const v=String(S.store.pin);delete S.store.pin;if(!hasPin())setPin(v);persist()}
 IDB.get('kv:saved').then(u=>{if(!u)return;try{const L=JSON.parse(u),m=new Map((S.saved||[]).map(x=>[x.id,x]));L.forEach(x=>{const l=m.get(x.id);if(!l||(x.at||0)>(l.at||0))m.set(x.id,x)});S.saved=[...m.values()].sort((a,b)=>(b.at||0)-(a.at||0));renderSaved()}catch(e){}});
-$('#vIni').value=S.val.ini;$('#vFim').value=S.val.fim;$('#phr').value=S.phrases.join('\n');
+$('#vIni').value=S.val.ini;$('#vFim').value=S.val.fim;syncNotas();$('#phr').value=S.phrases.join('\n');
 if(!S.campaigns.some(c=>c.modelo==='superdia')){S.campaigns.push({id:'superdiad',nome:'Super Dia D',titulo:'Super Dia D',dia:-1,modelo:'superdia',cores:{fundo:'#232126',cabecalho:'#b31a0c',titulo:'#ffffff',preco:'#d23a17',precoTexto:'#ffffff',adesivo:'#f5a623',adesivoTexto:'#111111',cartao:'#ffffff'}});S._sharedDirty=true}
 renderFormats();renderCamps();renderList();renderLogos();renderSaved();renderSecs();render();applyModo();bankCount();if(inWz()&&S.format!=='insta'){S.format='insta';renderFormats()}document.body.classList.toggle('wz',inWz());$('#bDono').textContent=inWz()?'Painel do admin':'Voltar ao passo a passo';if(inWz())wzGo(0);undoSnap();renderVenc();applyPerms();if(window.TINO){const u=$('#catUp');if(u)u.hidden=true;const ex=$('#catExp');if(ex)ex.hidden=true;const im=$('#catImp');if(im){im.textContent='Atualizar banco com arquivo';im.classList.add('pri')}const h=im&&im.closest('.bar')&&im.closest('.bar').previousElementSibling;if(h&&h.tagName==='P')h.innerHTML='O banco completo vem do Gerador do Claude: lá, toque em <b>Exportar banco</b>, mande o arquivo para o celular e toque aqui em <b>Atualizar banco com arquivo</b>. Uma vez por semana basta. Para os produtos de um encarte, use <b>Pedir conferência no StarIA</b> na tela Confira.'}if(usersOn()&&!curUser())showLogin();else if(window.TINO&&inWz()&&canDo('encarte')!==canDo('plaquinha')){if(canDo('encarte'))wzGo(1);else avGo()}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&usersOn()&&!curUser()&&(!$('#loginOv')||$('#loginOv').hidden))showLogin()});
