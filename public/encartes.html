@@ -365,6 +365,7 @@ body.wz.usrOn .top .actions>#bModo{display:inline-flex!important}
    <div class="bar avBar"><button class="btn pri" id="avScan">📷 Bipar código</button><button class="btn" id="avAdd">+ Adicionar produto</button><button class="btn" id="avPaste">Colar lista</button></div>
   </div><div class="avP">
    <div class="row2"><label>Por folha A4<select id="avPer"><option value="2">2 por folha</option><option value="1">1 por folha</option></select></label><label>Plaquinha<select id="avOri"><option value="h">Deitada</option><option value="v">Em pé</option></select></label></div>
+   <label class="chk2"><input type="checkbox" id="avKg"> Mostrar o preço por quilo ou litro</label>
    <label class="chk2"><input type="checkbox" id="avEco"> Economizar tinta (cabeçalho e preço sem fundo colorido)</label>
    <canvas id="avPrev"></canvas>
    <div class="avAct"><button class="btn big" id="avBack" aria-label="Voltar">‹ Voltar</button><button class="btn pri big" id="avGo" style="width:100%;margin-top:10px">Baixar PDF</button><button class="btn big" id="avWpp" style="width:100%;margin-top:8px">Enviar</button></div>
@@ -374,6 +375,7 @@ body.wz.usrOn .top .actions>#bModo{display:inline-flex!important}
   <button class="prontB" id="prontB" hidden></button>
   <div class="wzT1"><h2>Qual é a campanha?</h2><button class="btn y big" id="wzPadrao">Campanhas padrão<small>20 ações do dia e 5 da semana, prontas</small></button></div>
   <div class="wzVal">Válido de <input type="date" id="wzIni"> até <input type="date" id="wzFim"></div>
+  <label style="display:block;margin:8px 0">Observações no rodapé da arte <small style="color:var(--mut);font-weight:500">opcional, uma por linha</small><textarea id="wzNotas" rows="2" style="min-height:54px" placeholder="Ex.: Oferta válida só para compras presenciais"></textarea></label>
   <div class="wzCamps" id="wzCamps"></div>
  </section>
  <section class="wzS" data-s="2" hidden>
@@ -446,7 +448,8 @@ body.wz.usrOn .top .actions>#bModo{display:inline-flex!important}
    <div class="row2">
     <label>De<input type="date" id="vIni"></label>
     <label>Até<input type="date" id="vFim"></label>
-   </div></div></details>
+   </div>
+   <label>Observações no rodapé da arte <small style="color:var(--mut);font-weight:500">uma por linha, até 4</small><textarea id="notasT" rows="2" style="min-height:54px" placeholder="Ex.: Oferta válida só para compras presenciais"></textarea></label></div></details>
    <details class="sec"><summary>Cabeçalho pronto <small>só o topo; o app monta o resto com as cores dele</small></summary><div class="in"><div id="headBox"></div></div></details>
    <details class="sec"><summary>Modelo a partir de imagem <small>encarte pronto vira modelo: só troca produto, preço e data</small></summary><div class="in"><p class="hint">Suba a arte do tema (o encarte sem produtos, ou <b>só o cabeçalho</b>) e marque <b>um retângulo grande</b> onde vão os produtos: o app distribui sozinho, com qualquer quantidade. Se preferir controle total, dá para marcar vaga por vaga.</p><div class="bar"><button class="btn pri sm" id="modNew">+ Novo tema a partir de imagem</button><button class="btn sm" id="modEd" hidden>Editar este tema</button></div></div></details>
    <details class="sec"><summary>Arte própria do Photoshop</summary><div class="in"><div id="artBox"></div></div></details>
