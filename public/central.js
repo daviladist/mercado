@@ -465,7 +465,7 @@
     </div></details>
     <details class="card fold" data-k="bk:arq"><summary><h2>Importar todos os produtos do StarIA</h2><span class="sum">arquivo da página Exportar StarIA</span></summary><div class="fb">
       <p class="muted small" style="margin:0">Para trazer o cadastro inteiro de uma vez, sem gastar o Claude: abra a página <b>Exportar StarIA</b> (nos seus artefatos do Claude), toque em Puxar produtos, baixe o arquivo e envie aqui. O StarIA manda no nome, no código de barras e no preço de venda; foto e custo do banco não mudam. Pode repetir quando quiser.</p>
-      <div><label class="btn dark" for="bkArq" style="display:inline-flex;align-items:center">Enviar arquivo</label><input type="file" id="bkArq" accept=".json,.txt,application/json,text/plain" hidden></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="${EXPORTAR_STARIA}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none;color:inherit">1. Abrir a página Exportar StarIA</a><label class="btn dark" for="bkArq" style="display:inline-flex;align-items:center">2. Enviar arquivo</label><input type="file" id="bkArq" accept=".json,.txt,application/json,text/plain" hidden></div>
       <div id="bkArqOut" aria-live="polite"></div>
     </div></details>
     <details class="card fold" data-k="bk:st"><summary><h2>Atualizar pelo StarIA</h2><span class="sum" id="bkStSum"></span></summary><div class="fb" id="bkSt"><p class="small muted" style="margin:0">Carregando…</p></div></details>
@@ -533,6 +533,8 @@
     const chk = $('#bkChk'); if (chk) chk.addEventListener('click', async () => { await loadBanco(); recarregaBancos(); const p2 = ((BK.jobs && BK.jobs.pedidos) || []).find(j => j.status === 'pendente'); toast(p2 ? 'O pedido ainda está esperando o Claude' : 'Banco atualizado pelo StarIA'); });
   }
   /* ----- lista de produtos ----- */
+  /* página do Claude (artefato do dono do sistema) que puxa os produtos direto do conector StarIA e baixa o arquivo */
+  const EXPORTAR_STARIA = 'https://claude.ai/artifact/4HuQdMiqnGPG6RxcjkZ4SG';
   const FILTROS_BK = [['todos', 'Todos'], ['semfoto', 'Sem foto'], ['semcusto', 'Sem custo'], ['erros', 'Possivelmente errados']];
   function formProd(x) {
     const novo = !x; x = x || { codigo: '', nome: '', ean: '', custo: null, foto: null };
