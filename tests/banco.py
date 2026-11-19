@@ -214,6 +214,16 @@ s, r = cen.req('/api/central/banco/pedido-cancelar', {'id': J3['id']}); check(s 
 s, r = cen.req('/api/central/banco/pedido-cancelar', {'id': J3['id']}); check(s == 409, 'cancelar de novo: 409')
 s, r = cen.req('/api/central/banco/pedir', {'banco': BK2}); check(s == 400, 'banco vazio: não há o que conferir')
 
+print('== Importar o arquivo com todos os produtos do StarIA')
+arq = [{'c': '501', 'e': E501, 'd': 'WHEY DO ARQUIVO 900G', 'pv': 160}, {'c': '08001', 'e': '', 'd': 'PRODUTO DO ARQUIVO', 'pv': 0}, {'c': '', 'd': 'sem codigo'}, {'c': '8002', 'd': ''}, 'lixo']
+a0 = [x for x in cen.req('/api/central/banco/produtos?b=' + BK + '&q=501')[1]['itens'] if x['codigo'] == '501'][0]
+s, r = cen.req('/api/central/banco/arquivo', {'banco': BK, 'itens': arq}); check(s == 200 and r['aceitos'] == 2 and r['ruins'] == 3 and r['novos'] == 1, 'arquivo: entra o que tem código e nome; o resto é contado')
+a1 = [x for x in cen.req('/api/central/banco/produtos?b=' + BK + '&q=501')[1]['itens'] if x['codigo'] == '501'][0]
+check(a1['nome'] == 'WHEY DO ARQUIVO 900G' and a1['preco'] == 160 and a1['foto'] == a0['foto'] and a1['custo'] == a0['custo'], 'arquivo: o StarIA manda no nome e no preço; foto e custo ficam')
+s, r = cen.req('/api/central/banco/arquivo', {'banco': BK, 'itens': arq}); check(s == 200 and r['novos'] == 0, 'enviar o mesmo arquivo de novo não duplica')
+s, r = cen.req('/api/central/banco/arquivo', {'banco': BK, 'itens': [{'c': str(i), 'd': 'x'} for i in range(1, 1002)]}); check(s == 400, 'envio acima de 1000 produtos é recusado')
+s, r = red.req('/api/central/banco/arquivo', {'banco': BK, 'itens': arq}); check(s == 401, 'só a Central importa arquivo')
+
 print('== o que já existia continua igual')
 s, st = red.req('/api/state'); pr = {p['id']: p for p in st['S']['products']}
 check(pr['p1']['name'] == 'Whey 900g' and pr['p1']['photo'].startswith('/api/photo/') and pr['p2']['cost'] == 120, 'o cadastro da distribuidora não foi mexido pelo banco')
