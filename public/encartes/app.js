@@ -285,14 +285,18 @@ function prodFx(c,img,x,y,w,h){
  if(dist>0.3&&dl>0.18)return null; /* já contrasta bem */
  const k=Math.min(1,(0.3-Math.min(dist,0.3))/0.3+0.35); /* quanto mais parecido, mais forte (ainda leve) */
  return lb>0.55?{color:`rgba(25,28,36,${(0.22+0.2*k).toFixed(2)})`,blur:0.045,off:0.012}:{color:`rgba(255,255,255,${(0.28+0.22*k).toFixed(2)})`,blur:0.05,off:0}}
-function prodImg(c,p,x,y,w,h,clipR){
+/* lim = espaço do cartão que a foto pode ocupar ao ser aumentada: a foto cresce até a borda do cartão e nunca sai cortada (igual em todos os formatos) */
+function prodImg(c,p,x,y,w,h,clipR,lim){
  const img=getImg(p);if(!img){placeholder(c,x,y,w,h);return}
  const fx=prodFx(c,img,x,y,w,h),pl=multiPlan(p,img,w,h),n=pl.n;
  const zoom=p.zoom||1,setFx=sz=>{if(fx){c.shadowColor=fx.color;c.shadowBlur=sz*fx.blur*2;c.shadowOffsetY=sz*fx.off}};
- const clip=()=>{c.beginPath();if(clipR)c.rect(clipR.x,clipR.y,clipR.w,clipR.h);else c.rect(x-w*0.03,y-h*0.03,w*1.06,h*1.06);c.clip()},DX=(p.dx||0)*w;
- if(n<=1){const s=Math.min(w/img.width,h/img.height)*zoom,dw=img.width*s,dh=img.height*s,yy=y+h-dh+(p.dy||0)*h;
-  c.save();clip();setFx(Math.min(dw,dh));c.drawImage(img,x+(w-dw)/2+DX,yy,dw,dh);c.restore();return}
- const s0=pl.s*zoom,dw=img.width*s0,dh=img.height*s0,cx=x+w/2+DX-(pl.x0+pl.x1)/2*dw,base=y+h+(p.dy||0)*h-pl.y1*dh;
+ const clip=()=>{c.beginPath();if(clipR)c.rect(clipR.x,clipR.y,clipR.w,clipR.h);else if(lim)c.rect(lim.x,lim.y,lim.w,lim.h);else c.rect(x-w*0.03,y-h*0.03,w*1.06,h*1.06);c.clip()},DX=(p.dx||0)*w,bot=y+h+(p.dy||0)*h;
+ /* teto do aumento: largura do cartão e altura do topo do cartão até o pé da foto */
+ const cap=(s,gw,gh)=>!lim||zoom<=1?s:Math.max(s/zoom,Math.min(s,lim.w/gw,(bot-lim.y)/gh));
+ const fitX=(left,ww)=>!lim||ww>lim.w?left:Math.min(Math.max(left,lim.x),lim.x+lim.w-ww);
+ if(n<=1){const s=cap(Math.min(w/img.width,h/img.height)*zoom,img.width,img.height),dw=img.width*s,dh=img.height*s,yy=bot-dh;
+  c.save();clip();setFx(Math.min(dw,dh));c.drawImage(img,fitX(x+(w-dw)/2+DX,dw),yy,dw,dh);c.restore();return}
+ const s0=cap(pl.s*zoom,(pl.x1-pl.x0)*img.width,(pl.y1-pl.y0)*img.height),dw=img.width*s0,dh=img.height*s0,gl=x+w/2+DX-(pl.x1-pl.x0)/2*dw,cx=fitX(gl,(pl.x1-pl.x0)*dw)+(pl.x1-pl.x0)/2*dw-(pl.x0+pl.x1)/2*dw,base=bot-pl.y1*dh;
  c.save();clip();
  pl.L.forEach(([ox,oy,sc])=>{const ww=dw*sc,hh=dh*sc,xx=cx+ox*dw-ww/2,yy=base+oy*dh-hh;
   c.filter=sc<0.8?'brightness(0.8)':sc<1?'brightness(0.9)':'none';
@@ -428,7 +432,7 @@ function drawVitrine(c,p,x,y,w,h,C,iss){
  c.save();const gx=ix+iw/2,gy=iy+ih*0.55,gr=c.createRadialGradient(gx,gy,0,gx,gy,Math.max(iw,ih)*0.62);gr.addColorStop(0,lt?'rgba(255,255,255,.9)':'rgba(255,255,255,.34)');gr.addColorStop(0.5,lt?'rgba(255,255,255,.4)':'rgba(255,255,255,.1)');gr.addColorStop(1,'rgba(255,255,255,0)');c.fillStyle=gr;c.fillRect(x-w*0.1,y-h*0.1,w*1.2,h*1.2);c.restore();
  if(p.featured&&destKind(p)!=='raios'&&destKind(p)!=='nenhum'){featBurst(c,x,y,w,h,Math.min(w,h)*0.03,C,horiz,destKind(p))}
  if(p.featured&&destKind(p)==='raios'){c.save();const R=Math.hypot(w,h)*0.6,n=24;c.beginPath();c.rect(x,y,w,h);c.clip();c.fillStyle=lt?'rgba(0,0,0,.05)':'rgba(255,255,255,.07)';for(let i=0;i<n;i+=2){const a0=i/n*Math.PI*2,a1=(i+1)/n*Math.PI*2;c.beginPath();c.moveTo(gx,gy);c.lineTo(gx+Math.cos(a0)*R,gy+Math.sin(a0)*R);c.lineTo(gx+Math.cos(a1)*R,gy+Math.sin(a1)*R);c.closePath();c.fill()}c.restore()}
- groundShadow(c,p,ix,iy,iw,ih);prodImg(c,p,ix,iy,iw,ih,p.prOver?{x,y,w,h}:null);
+ groundShadow(c,p,ix,iy,iw,ih);prodImg(c,p,ix,iy,iw,ih,p.prOver?{x,y,w,h}:null,horiz?{x,y,w:w*0.55,h}:{x,y,w,h:ih+iy-y});
  const up=!!unitPriceText(p);
  if(horiz){const tx=x+w*0.55,tw=w*0.45;const ph=h*(app?0.5:hasDe(p)?0.46:0.38),py=y+h-ph-h*0.04,lh=p.limit>0?h*0.1:0;
   const dh=py-lh-y-h*0.06-(up?h*0.08:0);drawDesc(c,p,tx,y+h*0.04,tw,dh,iss,'left',3,txt);if(up)drawUnitPrice(c,p,tx,y+h*0.04+dh,tw,h*0.08,'left',lt?'#444':'rgba(255,255,255,.85)');
@@ -457,6 +461,8 @@ function featBurst(c,x,y,w,h,r,C,horiz,kind='raios'){const cx=horiz?x+w*0.26:x+w
  if(kind==='moldura'){c.restore();c.save();rr(c,x,y,w,h,r);c.clip()}
  const g=c.createRadialGradient(cx,cy,0,cx,cy,Math.min(w,h)*0.55);g.addColorStop(0,'rgba(255,255,255,.95)');g.addColorStop(0.55,'rgba(255,255,255,.55)');g.addColorStop(1,'rgba(255,255,255,0)');c.fillStyle=g;c.fillRect(x,y,w,h);
  const lw=Math.max(4,Math.min(w,h)*0.022);c.lineWidth=lw;c.strokeStyle=col;rr(c,x+lw/2,y+lw/2,w-lw,h-lw,r);c.stroke();c.restore()}
+/* cartão largo (a partir de 1,3 de largura por altura) vira deitado: foto à esquerda, nome e preço à direita. Assim o destaque sai igual no Instagram, no A4 e no story */
+const CARD_HZ=1.3;
 function drawCard(c,p,x,y,w,h,C,iss){
  if(p.precoCor)C=Object.assign({},C,{preco:p.precoCor,precoTexto:hexLum(p.precoCor)>0.6?'#111111':'#ffffff'});
  if(p.vaga){if(HIT&&c.canvas===HIT.cv)HIT.list.push({x,y,w,h,id:p.id,card:1});c.save();c.fillStyle='rgba(255,255,255,.14)';rr(c,x,y,w,h,Math.min(w,h)*0.035);c.fill();c.strokeStyle='rgba(255,255,255,.8)';c.lineWidth=Math.max(2,Math.min(w,h)*0.012);c.setLineDash([Math.min(w,h)*0.05,Math.min(w,h)*0.035]);rr(c,x+c.lineWidth,y+c.lineWidth,w-c.lineWidth*2,h-c.lineWidth*2,Math.min(w,h)*0.03);c.stroke();c.setLineDash([]);
@@ -467,19 +473,19 @@ function drawCard(c,p,x,y,w,h,C,iss){
  if(!nc){c.save();c.fillStyle='rgba(0,0,0,.3)';rr(c,x+sh,y+sh,w,h,r);c.fill();c.fillStyle=C.cartao;rr(c,x,y,w,h,r);c.fill();
   if(tc){c.save();rr(c,x,y,w,h,r);c.clip();const gr=c.createLinearGradient(0,y,0,y+h);gr.addColorStop(0,hexA(tc,0.02));gr.addColorStop(0.55,hexA(tc,0.07));gr.addColorStop(1,hexA(tc,0.2));c.fillStyle=gr;c.fillRect(x,y,w,h);
    c.fillStyle=tc;c.fillRect(x,y,w,Math.max(4,Math.min(w,h)*0.018));c.restore()}
-  if(p.featured)featBurst(c,x,y,w,h,r,C,w/h>1.45,destKind(p));
+  if(p.featured)featBurst(c,x,y,w,h,r,C,w/h>CARD_HZ,destKind(p));
   c.restore()}
- const pad=Math.max(5,Math.min(w,h)*0.05);const horiz=w/h>1.45,app=hasApp(p),up=!!unitPriceText(p),vs=Math.min(w,h)*0.045;
+ const pad=Math.max(5,Math.min(w,h)*0.05);const horiz=w/h>CARD_HZ,app=hasApp(p),up=!!unitPriceText(p),vs=Math.min(w,h)*0.045;
  if(horiz){
-  const iw=w*0.5-pad*1.5,ih=h-pad*2;if(!nc)groundShadow(c,p,x+pad,y+pad,iw,ih);prodImg(c,p,x+pad,y+pad,iw,ih,p.prOver?{x,y,w,h}:null);
+  const iw=w*0.5-pad*1.5,ih=h-pad*2;if(!nc)groundShadow(c,p,x+pad,y+pad,iw,ih);prodImg(c,p,x+pad,y+pad,iw,ih,p.prOver?{x,y,w,h}:null,{x:x+pad*0.3,y:y+pad*0.3,w:w*0.5-pad*0.3,h:h-pad*0.6});
   const cx=x+w*0.5+pad*0.5,cw=w*0.5-pad*1.5,ph=h*(app?0.52:hasDe(p)?0.47:0.4)*PRF()*(1-((p.descK||1)-1)*0.35),oh=p.limit>0?h*0.11:h*0.03,uh=up?h*0.075:0,dh=h-pad*2-ph-oh-uh-pad*0.4;
   drawDesc(c,p,cx,y+pad,cw,dh,iss,'center',3,dc);
   if(up)drawUnitPrice(c,p,cx,y+pad+dh,cw,uh,'center',nc?'#ffffff':'#5a5f6b');
   drawLimit(c,p,cx,y+pad+dh+uh,cw,oh,nc);
   drawPriceBlock(c,p,cx,y+h-pad-ph,cw,ph,C,'stack');
  }else{
-  const dK=p.descK||1,ph=h*(app?0.29:hasDe(p)?0.33:0.27)*PRF(),oh=h*0.07,uh=up?Math.max(h*0.055,CUR.W*0.016):0,dh=h*0.13*dK,ih=h-pad*2.3-ph-oh-dh-uh;
-  if(!nc)groundShadow(c,p,x+pad,y+pad,w-pad*2,ih);prodImg(c,p,x+pad,y+pad,w-pad*2,ih,p.prOver?{x,y,w,h}:null);
+  const dK=p.descK||1,ph=h*(app?0.29:hasDe(p)?0.33:0.27)*PRF(),oh=h*0.07,uh=up?Math.max(h*0.055,CUR.W*0.016):0,dh=h*(getImg(p)?0.16:0.22)*dK,ih=h-pad*2.3-ph-oh-dh-uh;
+  if(!nc)groundShadow(c,p,x+pad,y+pad,w-pad*2,ih);prodImg(c,p,x+pad,y+pad,w-pad*2,ih,p.prOver?{x,y,w,h}:null,{x:x+pad*0.3,y:y+pad*0.3,w:w-pad*0.6,h:ih+pad*0.7});
   const d0=y+pad*1.3+ih;drawDesc(c,p,x+pad,d0,w-pad*2,dh,iss,'center',2,dc);
   if(up)drawUnitPrice(c,p,x+pad,d0+dh,w-pad*2,uh,'center',nc?'#ffffff':'#5a5f6b');
   drawLimit(c,p,x+pad,d0+dh+uh,w-pad*2,oh,nc);
@@ -2003,7 +2009,7 @@ $('#bPlaq').onclick=()=>{const sel=S.products.filter(p=>p.sel);
     x.drawImage(t,px*PX,py*PX)});
    if(d.cut){x.strokeStyle='#888';x.lineWidth=2;x.setLineDash([9,6]);x.beginPath();x.moveTo(d.cut[0]*PX,d.cut[1]*PX);x.lineTo(d.cut[2]*PX,d.cut[3]*PX);x.stroke();x.setLineDash([])}
    x.strokeStyle='#bbb';x.lineWidth=2;x.strokeRect(1,1,cv.width-2,cv.height-2)};prev();
-  $('#plqKg').onchange=e=>{PLAQKG=e.target.checked;prev()};
+  $('#plqKg').onchange=e=>{PLAQKG=e.target.checked;persist();prev()};
   $('#plqEco').onchange=e=>{S.plaqEco=e.target.checked;persist();prev()};
   $('#plqPer').onchange=()=>{S.plaqPer=+$('#plqPer').value;persist();prev()};$('#plqOri').onchange=()=>{S.plaqOri=$('#plqOri').value;persist();prev()};
   b.querySelector('[data-a=n]').onclick=closeModal;
@@ -2474,7 +2480,7 @@ function photoSugs(p,max=3){const bank=S.fotoNomes||{},q=norm2(p.desc).filter(t=
  for(const[bk,ik]of Object.entries(bank)){if(!imgCache.has(ik))continue;const b=bk.split(' ').filter(t=>!isSize(t));const hit=q.filter(t=>b.some(x=>tokEq(t,x))).length;if(hit)out.push({ik,sc:hit/Math.max(q.length,b.length)+hit*0.01})}
  return out.sort((a,b)=>b.sc-a.sc).filter((x,i,a)=>a.findIndex(y=>y.ik===x.ik)===i).slice(0,max).map(x=>x.ik)}
 /* problemas de cada produto, cada um com um conserto automático */
-function imgFill(p){const img=getImg(p),h=PREV_HIT.find(x=>x.id===p.id);if(!img||!h)return null;const horiz=h.w/h.h>1.45,bw=horiz?h.w*0.46:h.w*0.9,bh=horiz?h.h*0.9:h.h*0.45,pl=multiPlan(p,img,bw,bh);return pl.cov}
+function imgFill(p){const img=getImg(p),h=PREV_HIT.find(x=>x.id===p.id);if(!img||!h)return null;const horiz=h.w/h.h>CARD_HZ,bw=horiz?h.w*0.46:h.w*0.9,bh=horiz?h.h*0.9:h.h*0.45,pl=multiPlan(p,img,bw,bh);return pl.cov}
 function prodIssues(p){const o=[],m=margem(p);if(CATB&&CATB.itens.length&&!(p.code&&CATIX.c[String(p.code)])&&p.desc)o.push(['banco','Sem ligação com o banco']);if(!getImg(p))o.push(['foto','Sem foto']);if(p.price==null)o.push(['preco','Sem preço']);if(p.app!=null&&p.price!=null&&p.appOn&&p.app>p.price)o.push(['appinv','Preço com app maior que o sem app']);
  if(m!=null&&m<0)o.push(['margem','Abaixo do custo']);else if(m!=null&&m<margMin())o.push(['margem','Margem baixa']);
  lastIssues.forEach(x=>{if(x.includes(p.desc)&&/cortada|pequena/i.test(x))o.push(['nome',/cortada/i.test(x)?'Nome não cabe':'Letra do nome pequena'])});
@@ -3308,5 +3314,105 @@ async function vozRealtime(W,H,L,mix,onP){if(typeof MediaRecorder==='undefined'|
  const type=rec.mimeType||mime||'video/webm';return{blob:new Blob(ch,{type}),ext:type.includes('mp4')?'mp4':'webm',audio:mix?'rec':null}}
 /* abre a aba: confere a voz (uma vez por abertura) e desenha */
 (()=>{const b=document.querySelector('#tabs [data-t=voz]');if(!b)return;b.addEventListener('click',()=>{renderVoz();vozInfo().then(()=>{if(document.querySelector('#tabs [data-t=voz].on'))renderVoz()})})})();
+/* ================= 18 · melhorias (19/11/2026) =================
+   Junto com um ajuste em 03-desenho.js (espaço do nome no cartão: maior quando o produto não tem foto).
+   1) Produto sem foto nunca sai com caixa cinza "SEM FOTO": sai com o desenho do setor, na cor do setor, e o nome cresce.
+   2) O app confere se a campanha combina com os produtos (ex.: "Quinta da Carne" só com hortifrúti).
+   3) Nome de cadastro comprido vira ponto para revisar, com conserto automático.
+   4) Modo simples: esconde as opções avançadas; um toque mostra tudo de novo. */
+
+const _semAc=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+
+/* setor pelo nome do produto, quando o produto não tem setor marcado */
+const SETOR_KW=[
+ ['Frios e laticínios',/\b(queijo|presunto|mortadela|salame|iogurte|requeijao|manteiga|margarina|leite|mussarela|mucarela|apresuntado|peito de peru|nata)\b/],
+ ['Açougue',/\b(carne|bovin[oa]|picanha|alcatra|costela|acem|patinho|musculo|cupim|maminha|fraldinha|contra ?file|coxao|bife|moida|frango|coxa|sobrecoxa|asa|linguica|suin[oa]|pernil|bisteca|lombo|toucinho|bacon|figado|chuleta|paleta)\b/],
+ ['Hortifruti',/\b(laranja|maca|banana|mamao|melao|melancia|abacaxi|uva|manga|pera|kiwi|limao|tangerina|mexerica|morango|abacate|goiaba|maracuja|tomate|cebola|batata|cenoura|chuchu|abobora|abobrinha|repolho|alface|couve|beterraba|pepino|pimentao|mandioca|aipim|inhame|alho|quiabo|jilo|berinjela|brocolis|coentro|cheiro verde)\b/],
+ ['Bebidas',/\b(cerveja|refri|refrigerante|suco|agua mineral|vinho|vodka|cachaca|whisky|energetico|coca|guarana|skol|brahma|heineken|itaipava|amstel|budweiser)\b/],
+ ['Padaria',/\b(pao|paes|bolo|rosca|broa|sonho|pao de queijo)\b/],
+ ['Limpeza',/\b(detergente|sabao|amaciante|desinfetante|agua sanitaria|alvejante|esponja|limpador|multiuso)\b/],
+ ['Higiene e beleza',/\b(shampoo|condicionador|sabonete|creme dental|desodorante|papel higienico|absorvente|fralda)\b/],
+];
+function setorDe(p){if(!p)return'';if(p.setor)return p.setor;const t=' '+_semAc(p.desc)+' ';for(const[s,r]of SETOR_KW)if(r.test(t))return s;return''}
+const SETOR_MOTIF={'Hortifruti':'leaf','Açougue':'steak','Mercearia':'basket','Frios e laticínios':'cheese','Padaria':'wheat','Bebidas':'cube','Limpeza':'bubble','Higiene e beleza':'sparkle','Congelados':'cube','Bazar':'tag'};
+function setorCor(s){const x=(S.setores||[]).find(z=>z.nome===s);return x&&/^#[0-9a-f]{6}$/i.test(x.cor)?x.cor:null}
+
+/* 1) desenho do setor no lugar da foto que falta */
+function semFotoArte(c,p,x,y,w,h){
+ const s=setorDe(p),cp=camp()||{},d=_semAc(p&&p.desc);
+ const kind=/\b(frango|coxa|sobrecoxa|asa)\b/.test(d)?'drum':SETOR_MOTIF[s]||'basket';
+ let cor=setorCor(s)||(cp.cores&&/^#[0-9a-f]{6}$/i.test(cp.cores.cabecalho||'')?cp.cores.cabecalho:'#6b7280');
+ const nc=!!(CUR&&CUR.noCards);
+ c.save();
+ const m=Math.min(w,h)*0.06,r=Math.min(w,h)*0.08;rr(c,x+m,y+m,w-m*2,h-m*2,r);
+ const g=c.createRadialGradient(x+w/2,y+h*0.42,0,x+w/2,y+h/2,Math.max(w,h)*0.62);
+ g.addColorStop(0,nc?'rgba(255,255,255,.30)':hexA(cor,0.18));g.addColorStop(1,nc?'rgba(255,255,255,.08)':hexA(cor,0.05));c.fillStyle=g;c.fill();
+ const sz=Math.min(w,h)*0.62;
+ if(sz>6&&MOTIF[kind]){/* desenha numa tela à parte: os desenhos "furam" o fundo e não podem furar o encarte */
+  const k=Math.ceil(sz*1.25),o=document.createElement('canvas');o.width=o.height=k;const oc=o.getContext('2d');
+  oc.translate(k/2,k/2);oc.fillStyle=oc.strokeStyle=nc?'rgba(255,255,255,.9)':hexA(cor,0.78);MOTIF[kind](oc,sz);
+  c.drawImage(o,x+(w-k)/2,y+(h-k)/2)}
+ c.restore()}
+const _prodImg0=prodImg;
+prodImg=function(c,p,x,y,w,h,...a){if(!getImg(p)){semFotoArte(c,p,x,y,w,h);return}return _prodImg0(c,p,x,y,w,h,...a)};
+const _vidImg0=vidImg;
+vidImg=function(c,p,x,y,w,h){if(!getImg(p)){semFotoArte(c,p,x,y,w,h);return}return _vidImg0(c,p,x,y,w,h)};
+placeholder=function(c,x,y,w,h){semFotoArte(c,null,x,y,w,h)};
+
+/* 2) campanha x produtos */
+const TEMA_KW=[['Açougue',/carne|acougue|churras|bovin|picanha|frango/],['Hortifruti',/verde|hortifr|feira|fruta|legume|sacolao/],['Bebidas',/cerveja|bebida|gelad/],['Padaria',/padaria|\bpao\b|cafe da manha/],['Limpeza',/limpeza|faxina/]];
+function temaDe(cp){if(!cp)return null;const t=_semAc((cp.titulo||'')+' '+(cp.nome||''));const h=TEMA_KW.find(([,r])=>r.test(t));return h?h[0]:null}
+function temaIssue(items){const cp=camp(),tema=temaDe(cp);if(!tema||getMod(cp.modelo))return null;
+ const L=(items||S.products).filter(p=>p.desc);if(L.length<3)return null;
+ const n=L.filter(p=>setorDe(p)===tema).length;if(n/L.length>=0.25)return null;
+ /* setor que mais aparece e uma campanha que combina com ele */
+ const cnt={};L.forEach(p=>{const s=setorDe(p);if(s)cnt[s]=(cnt[s]||0)+1});const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];
+ const alt=top&&top[1]/L.length>=0.5?S.campaigns.find(c=>temaDe(c)===top[0]&&c.id!==cp.id):null;
+ const nome=(cp.titulo||cp.nome).toUpperCase();
+ return{tema,alt,msg:`⚠ O título diz "${nome}", mas ${n?`só ${n} de ${L.length}`:`nenhum dos ${L.length}`} produtos é de ${tema.toLowerCase()}${top?` (a maioria é ${top[0].toLowerCase()})`:''}. Troque a campanha ou o título.`}}
+const _ci0=collectIssues;
+collectIssues=function(items){const o=_ci0(items),ti=temaIssue(items);if(ti)o.unshift(ti.msg);
+ return o.map(x=>/^Sem foto: /.test(x)?x+' (sai com o desenho do setor, não com caixa cinza)':x)};
+
+/* 3) nome de cadastro comprido */
+const NOME_LIXO=[/\bfilmad[oa]s?\b/gi,/\bund\b/gi,/\bbdj\b/gi];
+function nomeVitrine(t){let x=String(t||'');x=x.replace(/\bbdj\b/gi,'bandeja').replace(/\bfilmad[oa]s?\b/gi,'').replace(/\bund\b/gi,'').replace(/\s{2,}/g,' ').trim();return shortName(x)}
+const _pi0=prodIssues;
+prodIssues=function(p){const o=_pi0(p);const d=p.desc||'';
+ if(d&&(d.length>28||NOME_LIXO.some(r=>{r.lastIndex=0;return r.test(d)}))&&nomeVitrine(d)!==d)o.push(['nomecad','Nome de cadastro (o cliente não entende)']);return o};
+const _fx0=fixIssue;
+fixIssue=function(p,t){if(t==='nomecad'){const nv=nomeVitrine(p.desc);p.desc=nv;changed();toast(`Nome para o cliente: ${nv}`,4000);return}return _fx0(p,t)};
+const _fa0=fixAll;
+fixAll=function(){let k=0;S.products.forEach(p=>{if(prodIssues(p).some(([t])=>t==='nomecad')){p.desc=nomeVitrine(p.desc);k++}});if(k)changed();_fa0()};
+const _wc0=wzCheck;
+wzCheck=function(){_wc0();const el=$('#wzSum');if(!el)return;const ti=temaIssue();if(!ti)return;
+ const d=document.createElement('div');d.className='wzBad';d.style.marginBottom='8px';
+ d.innerHTML=`${esc(ti.msg.replace(/^⚠ /,''))}<div class="bar" style="margin-top:8px">${ti.alt?`<button class="btn sm pri" data-a="alt">Usar "${esc(ti.alt.nome)}"</button>`:''}<button class="btn sm" data-a="camp">Escolher outra campanha</button></div>`;
+ el.prepend(d);
+ const a=d.querySelector('[data-a=alt]');if(a)a.onclick=()=>{S.campaignId=ti.alt.id;changed();wzCheck();toast('Campanha trocada para '+ti.alt.nome)};
+ d.querySelector('[data-a=camp]').onclick=()=>wzGo(1)};
+
+/* 4) modo simples */
+const SIMPLES_K='encartes-modo-simples';
+function simplesOn(){try{return localStorage.getItem(SIMPLES_K)!=='0'}catch(e){return true}}
+function marcaAvancado(){
+ document.querySelectorAll('#t-camp details.sec').forEach(d=>{const s=(d.querySelector('summary')||{}).textContent||'';if(/Modelo a partir|Photoshop|Frases|Setores/.test(s))d.classList.add('adv')});
+ const pr=document.querySelector('#t-prod > p.hint');if(pr)pr.classList.add('adv');
+ /* aba Loja: blocos por título */
+ const loja=$('#t-loja');if(loja){let on=false;[...loja.children].forEach(e=>{if(e.tagName==='H4')on=/Banco de produtos|Acabamento/.test(e.textContent);if(on)e.classList.add('adv')})}
+ ['#lgSwap','#lgFx'].forEach(q=>{const e=$(q);if(e){const b=q==='#lgSwap'?e:e.closest('.row2');if(b){b.classList.add('adv');const n=b.nextElementSibling;if(n&&n.classList.contains('hint')&&q==='#lgFx')n.classList.add('adv')}}})}
+function aplicaSimples(){document.body.classList.toggle('simples',simplesOn());const b=$('#bSimples');if(b)b.innerHTML=simplesOn()?'<b>Modo simples</b> · mostrar tudo':'<b>Mostrando tudo</b> · voltar ao simples'}
+(function(){
+ const st=document.createElement('style');st.textContent=`
+ #bSimples{display:block;width:100%;margin:0 0 10px;padding:9px 12px;border-radius:10px;border:1px dashed #b8bcc6;background:#f6f7f9;color:#2a2d35;font:500 13px Inter,sans-serif;text-align:left;cursor:pointer}
+ #bSimples b{font-weight:700}
+ body.simples .adv,body.simples #cform label:has([data-k=estilo]),body.simples #cform label:has([data-k=destFundo]),body.simples #cform label:has([data-k=motivo]),body.simples #cform label:has([data-k=tema]),body.simples #cform label:has([data-c]),
+ body.simples .cmdbar .cb[data-dono],body.simples #bKit,body.simples #bVid,body.simples #tabs [data-t=voz],body.simples #adjLogos,body.simples #lgAuto{display:none!important}`;
+ document.head.appendChild(st);
+ const tabs=$('#tabs');if(tabs&&!$('#bSimples')){const b=document.createElement('button');b.id='bSimples';b.type='button';tabs.insertAdjacentElement('afterend',b);
+  b.onclick=()=>{try{localStorage.setItem(SIMPLES_K,simplesOn()?'0':'1')}catch(e){}aplicaSimples();toast(simplesOn()?'Modo simples: só o que se usa toda semana':'Todas as opções à mostra')}}
+ marcaAvancado();aplicaSimples();
+ try{schedule();if(typeof inWz==='function'&&inWz()&&WZ===3)wzCheck()}catch(e){}
+})();
 
 document.querySelectorAll('[data-wzgo]').forEach(b=>b.addEventListener('click',()=>wzGo(+b.dataset.wzgo)));
