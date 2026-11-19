@@ -5607,12 +5607,20 @@ async function stariaCall(tool,input){
   try{return (await mcp.callTool(STARIA,tool,input)).payload}
   catch(e){if(e&&e.retryable){await new Promise(r=>setTimeout(r,(e.retryAfterMs||1200)+Math.random()*600));return (await mcp.callTool(STARIA,tool,input)).payload}throw e}
 }
+/* empresa ligada a um banco de dados de produtos (Central › Utilizar banco de dados): o código é procurado primeiro no banco,
+   na hora, e traz nome, código de barras, custo de uma unidade e foto. Só o que o banco não tem segue para o StarIA. */
+async function bancoBusca(t){
+  if(!(typeof TENANT!=='undefined'&&TENANT&&TENANT.banco))return null;
+  try{const r=await api('/api/banco/consulta',{termos:[t]}),x=r&&r.resultados&&r.resultados[t];if(!x||!x.nome)return null;
+    return {code:String(x.codigo),ean:String(x.ean||''),name:String(x.nome),cost:x.custo>0?Math.round(x.custo*100)/100:'',
+      src:x.custo>0?'banco de dados '+r.banco.name+(x.custoFonte?', veio de '+x.custoFonte:''):'o banco de dados '+r.banco.name+' ainda não tem o custo deste produto',many:!!x.varios,photo:x.foto||'',banco:r.banco.name}}
+  catch(e){return null}}
 /* procura pelo EAN ou pelo código; custo = valor do fornecedor na última compra (valor da nota, não o CMV) ÷ quantidade comprada */
 async function stariaLookup(term){
   const t=String(term||'').trim().replace(/[\s.\-]/g,'');if(!t)return null;
   if(!/^\d+$/.test(t))throw {code:'bad_term'};
   /* no site (fora do claude.ai) a consulta vai por um pedido que o Claude atende e devolve */
-  if(stariaWeb()){const c=stariaCached(t);if(c!==undefined)return c;stariaQueue([t]);throw {code:'queued'}}
+  if(stariaWeb()){const bk=await bancoBusca(t);if(bk)return bk;const c=stariaCached(t);if(c!==undefined)return c;stariaQueue([t]);throw {code:'queued'}}
   const tries=[];
   if(t.length>=8&&t.length<=14)tries.push({ean:t});
   if(t.length<=9&&Number(t)>=1&&Number(t)<=2147483647)tries.push({codigoMercadoria:Number(t)});
@@ -5673,7 +5681,10 @@ function bindStaria(){
         set('pcode',r.code);set('pean',r.ean);set('pn',r.name);
         if(r.cost!==''){set('pcost',money(Math.round(r.cost*m*100)/100));const ic=$('#pcost');if(ic)ic.dispatchEvent(new Event('input'))}
         if(m>1){const pu=$('#pu');if(pu&&!pu.value.trim())pu.value='Embalagem c/ '+m+' unidades';const pk=$('#ppk');if(pk){pk.value=m;pk.dataset.touched='1';pk.dispatchEvent(new Event('input'))}}
-        res.innerHTML='<div class="small" style="color:var(--ok);font-weight:700">Dados do StarIA aplicados. Confira e complete o preço de venda, a categoria e a foto.</div>';
+        /* veio do banco de dados com foto: a foto entra junto, se o produto ainda não tiver uma */
+        const comFoto=!!(r.photo&&!ui.edit.photo);
+        if(comFoto)fetch(r.photo,{credentials:'same-origin'}).then(x=>x.ok?x.blob():null).then(bl=>{if(bl)setPhoto(bl)}).catch(()=>{});
+        res.innerHTML=r.banco?`<div class="small" style="color:var(--ok);font-weight:700">Dados do banco ${esc(r.banco)} aplicados${comFoto?', com a foto':''}. Confira e complete o preço de venda e a categoria.</div>`:'<div class="small" style="color:var(--ok);font-weight:700">Dados do StarIA aplicados. Confira e complete o preço de venda, a categoria e a foto.</div>';
         const pp=$('#pp');if(pp)pp.focus();
       };
       const op=$('#stopen');if(op)op.onclick=()=>{ui.edit=JSON.parse(JSON.stringify(dup));renderAdmin()};

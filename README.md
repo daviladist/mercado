@@ -14,6 +14,7 @@ App de pedidos de atacado do ATACADO D'ÁVILA. Seis acessos: cliente, administra
 | `lib/auth.js` | Senhas com hash **scrypt** (N=2^17, r=8, p=1), sessões e bloqueio por tentativas. |
 | `lib/policy.js` | **Quem vê o quê e quem pode mudar o quê.** Filtra antes de enviar e confere tudo que chega. |
 | `lib/store.js` | Banco: registros, fotos, usuários, importação de backup, senhas provisórias. |
+| `lib/banco.js` | Banco de dados de produtos (cadastro mestre): bancos, produtos, fotos, ligação com as empresas e pedidos ao StarIA. |
 | `lib/core.generated.js` | As mesmas regras de preço/margem/comissão do app, copiadas por `scripts/build-core.js` para o servidor recalcular tudo. |
 | `src/app.source.html` | Código original do app (onde se mexe nas telas). |
 | `src/server-client.js` | Parte do app que conversa com o servidor (login, sincronização). |
@@ -203,6 +204,21 @@ Gerador de encartes, plaquinhas avulsas, vídeo e TV a partir da lista de oferta
   - **Som:** o vídeo com som só é salvo em H.264 + AAC (Instagram e iPhone). Navegador sem AAC (Linux, por exemplo) recebe aviso antes de gastar crédito. Erro da ElevenLabs sai como 424/429, nunca 5xx (o servidor troca a mensagem de 5xx por "Erro no servidor").
   - **Falas:** `nomeFalado()` arruma o nome do StarIA (acento, códigos, abreviações, peso); o que não acertar, o admin corrige em "Como falar o nome" e fica em `S.vozNomes`.
 - **Do artefato para o Tino:** o artefato é multiarquivo; `python3 tools/artefato_unico.py PASTA /tmp/unico.html` junta tudo num arquivo e `python3 tools/to_tino.py /tmp/unico.html public` gera o app. Antes de publicar o artefato: `python3 tools/encartes_testes.py PASTA` (regras do app + vídeo com voz de ponta a ponta no Chrome).
+
+## Banco de dados de produtos (cadastro mestre)
+Um **banco** guarda os produtos de um sistema de origem (ex.: o StarIA da Dávila): **código interno**, código de barras, nome, foto e custo de uma unidade. O código interno é a chave: é ele que liga o mesmo produto entre os apps. A foto e o custo são cadastrados uma vez e valem para todas as empresas que usam o banco. Outro cliente = outro banco.
+- **Onde fica:** Central → aba **Banco de dados**. O banco "StarIA Dávila" já nasce criado; **+ Novo** cria outro.
+- **Ligar uma empresa:** abra a empresa na Central e, no fim da tela, **Utilizar banco de dados** → toque no banco (ou em "Nenhum"). Vale para Atacado e varejo e para o Gerador de Encartes. Ao ligar, o que a empresa já tem entra no banco.
+- **Trazer o que já está nas empresas** (pode repetir): do app de pedidos vêm os produtos com código, o custo e a foto; do Gerador de Encartes vêm o banco de produtos dele (código, código de barras, nome, custo, preço) e as fotos ligadas a um código ou a um código de barras. **Só preenche o que está vazio**: o que já está no banco não muda. Custo de embalagem (`perPack` > 1) entra dividido pela quantidade. Produto sem código e foto ligada só pelo nome ficam de fora (e são contados).
+- **Produtos:** busca, filtros **Sem foto**, **Sem custo** e **Possivelmente errados** (sem nome, sem código de barras, dígito verificador errado, código de barras repetido, custo zerado, custo maior que o preço de venda, não encontrado no sistema de origem). Editar nome, código de barras, custo e foto; **Enviar várias fotos** usa o nome do arquivo como código interno ou código de barras.
+- **Atualizar pelo StarIA:** o site não fala com o StarIA. A Central deixa um pedido (`banco_jobs`, até 200 códigos; em branco pega os produtos nunca conferidos) e o Claude consulta e devolve em `/api/central/banco/resultado` ("processa o banco de dados", atalho `1414`). O StarIA manda no nome, no código de barras e no preço de venda. **O custo não vem daí por enquanto** (o custo de margem zero ainda não tem consulta para todos os itens): fica o que veio das empresas ou o que for digitado; o resultado aceita `custo` e `custoFonte` para quando houver.
+- **O que a empresa ligada ganha:**
+  - *App de pedidos:* em Produtos → "Puxar do StarIA", o código é procurado primeiro no banco, na hora (`POST /api/banco/consulta`): vêm nome, código de barras, custo e foto. O que o banco não tem segue para o StarIA como antes. Só administrador com acesso a produtos consulta; o custo só vai para quem tem "Ver custo".
+  - *Gerador de Encartes* (tudo no servidor, em `lib/banco.js`; o app não muda): ao ler o mapa de fotos (`comum/imagens`), as fotos do banco entram pela chave `c:<código>` e valem mais que a da empresa; ao ler o banco de produtos (`app/catalogo`), entram os produtos do banco que a empresa não tem (`src: 'banco'`), então digitar o nome já liga ao código e à foto; a foto nova de um produto com código sobe para o banco. O que veio do banco não é gravado nos documentos da empresa: desligada, ela volta a ter só o que é dela.
+- **Tabelas:** `bancos`, `banco_produtos` (chave `banco_id` + `codigo`), `banco_fotos` (base64, id = SHA-256, como `enc_blobs`), `banco_jobs`; coluna `tenants.banco_id`.
+- **Rotas:** `/api/central/banco/*` (só a Central) e `/api/banco/*` (empresa de atacado ligada). Um banco não enxerga o outro; empresa não ligada recebe 404.
+- **Testes:** `tests/unit/banco.test.js` e `tests/banco.py` (passo 13 do `tests/ci_banco.sh`).
+- **Para depois:** custo de margem zero vindo do StarIA; importação em massa do app de pedidos consultar o banco; Loja online usar o banco.
 
 ## Desenvolver e testar no computador
 

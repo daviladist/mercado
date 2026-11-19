@@ -33,7 +33,7 @@
     nota: () => 'Gerador de Encartes: encartes, plaquinhas, vídeo e TV a partir da lista de ofertas. O dono monta campanhas e modelos; o funcionário segue o passo a passo. A equipe é criada pelo dono, dentro do app.',
     stats: () => '',
     links: base => [['Gerador de Encartes', base + '/', 'Dono e funcionários (computador ou celular)']] };
-  const ABAS = [['atacado', 'Atacado e varejo'], ['rural', 'Rural'], ['loja', 'Loja online'], ['caixa', 'Painel gerencial'], ['encartes', 'Gerador de Encartes']];
+  const ABAS = [['atacado', 'Atacado e varejo'], ['rural', 'Rural'], ['loja', 'Loja online'], ['caixa', 'Painel gerencial'], ['encartes', 'Gerador de Encartes'], ['banco', 'Banco de dados']];
 
   async function api(path, body) {
     const opt = body === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-App': '1' }, body: JSON.stringify(body) };
@@ -76,6 +76,7 @@
     catch (e) { if (e.status === 401) return showLogin(); toast(e.message); return; }
     $('#loginView').hidden = true; $('#appView').hidden = false; $('#who').hidden = false; $('#whoName').textContent = D.me.login; errCount(D.errUnseen);
     if (pendingDraft) { const p = pendingDraft; pendingDraft = null; sel = p.sel; pick(sel); draft = p.draft; dirty = true; renderList(); renderEditor(); return; }
+    if (aba === 'banco') { dirty = false; if (BK.sel !== null && !bancoDe(BK.sel)) BK.sel = (D.bancos[0] || {}).id || null; renderList(); renderBanco(); if (BK.sel) loadBanco(); return; }
     const cur = D.tenants.find(t => t.id === sel);
     if (keep && cur) aba = ramoOf(cur);
     if (!keep || !cur) sel = (naAba()[0] || {}).id || null;
@@ -93,25 +94,36 @@
   function matchSegment() { return (D.segments.find(s => D.modules.every(m => m.essential || !!s.modules[m.code] === !!draft.modules[m.code])) || {}).id || null; }
 
   function renderTabs() {
-    const n = k => D.tenants.filter(t => ramoOf(t) === k).length;
+    const n = k => k === 'banco' ? (D.bancos || []).length : D.tenants.filter(t => ramoOf(t) === k).length;
     $('#rtabs').innerHTML = ABAS.map(([k, lb]) => `<button type="button" role="tab" data-aba="${k}" aria-selected="${aba === k}">${lb} <small>${n(k)}</small></button>`).join('');
     $('#rtabs').querySelectorAll('[data-aba]').forEach(b => b.addEventListener('click', () => {
       if (b.dataset.aba === aba) return;
       if (dirty && !confirm('Sair sem salvar as mudanças?')) return;
-      aba = b.dataset.aba; segUI = null; pick((naAba()[0] || {}).id || null);
+      aba = b.dataset.aba; segUI = null;
+      if (aba === 'banco') { dirty = false; return pickBanco(bancoDe(BK.sel) ? BK.sel : (D.bancos[0] || {}).id || null); }
+      pick((naAba()[0] || {}).id || null);
     }));
   }
   function renderList() {
     renderTabs();
     const L = $('#tlist');
+    document.querySelector('nav .head h2').textContent = aba === 'banco' ? 'Bancos' : 'Empresas';
+    $('#newT').textContent = aba === 'banco' ? '+ Novo' : '+ Nova';
+    if (aba === 'banco') {
+      L.innerHTML = (D.bancos || []).map(b => { const ne = D.tenants.filter(t => t.banco === b.id).length; return `<button type="button" class="tn" data-b="${esc(b.id)}" aria-current="${b.id === BK.sel}"><b>${esc(b.name)}</b><span>${fmtN(b.produtos)} produtos · ${ne} empresa${ne === 1 ? '' : 's'}</span></button>`; }).join('')
+        + (BK.sel === null ? '<button type="button" class="tn" aria-current="true"><b>Novo banco de dados</b><span>ainda não salvo</span></button>' : '');
+      L.querySelectorAll('[data-b]').forEach(b => b.addEventListener('click', () => pickBanco(b.dataset.b)));
+      return;
+    }
     const lista = naAba();
     L.innerHTML = (!lista.length && sel !== null ? '<p class="small muted" style="margin:0">Nenhuma empresa aqui ainda. Toque em "+ Nova".</p>' : '') + lista.map(t => `<button type="button" class="tn" data-t="${esc(t.id)}" aria-current="${t.id === sel}"><b>${esc(t.name)}${t.primary ? ' <span class="st ativa">principal</span>' : ''}</b><span>${esc(ramoOf(t) !== 'atacado' ? RAMO_UI[ramoOf(t)].tipo : (D.segments.find(s => s.id === t.segment) || {}).name || 'Sem segmento')} · <span class="st ${esc(t.status)}">${esc(STATUS[t.status] || t.status)}</span></span></button>`).join('')
       + (sel === null ? `<button type="button" class="tn" aria-current="true"><b>${aba !== 'atacado' ? RAMO_UI[aba].novo : 'Nova empresa'}</b><span>ainda não salva</span></button>` : '');
     L.querySelectorAll('[data-t]').forEach(b => b.addEventListener('click', () => { if (dirty && !confirm('Sair sem salvar as mudanças?')) return; pick(b.dataset.t); }));
   }
-  $('#newT').addEventListener('click', () => { if (dirty && !confirm('Sair sem salvar as mudanças?')) return; pick(null); });
+  $('#newT').addEventListener('click', () => { if (aba === 'banco') return pickBanco(null); if (dirty && !confirm('Sair sem salvar as mudanças?')) return; pick(null); });
 
   function renderEditor() {
+    if (aba === 'banco') return renderBanco();
     if (ramoOf(draft) !== 'atacado') return renderRamo();
     const t = draft, on = Object.entries(t.modules).filter(([k, v]) => v).length, seg = matchSegment();
     const groups = [...new Set(D.modules.map(m => m.group))];
@@ -151,6 +163,7 @@
     ${groups.filter(g => g !== 'Acesso').map(g => { const gm = D.modules.filter(m => m.group === g), gon = gm.filter(m => m.essential || (t.modules[m.code] && !(m.requires && !t.modules[m.requires]))).length; return `<details class="card grp fold" data-k="g:${esc(g)}"><summary><h2>${esc(g)}</h2><span class="sum">${g === 'Essenciais' ? 'Sempre ativos' : gon + ' de ' + gm.length + ' ligados'}</span></summary><div class="fb">
       ${D.modules.filter(m => m.group === g).map(m => { const blk = m.requires && !t.modules[m.requires]; return `<div class="mod"><div class="t"><div class="n">${esc(m.name)}${blk ? `<span class="tag">precisa de "${esc((D.modules.find(x => x.code === m.requires) || {}).name || m.requires)}"</span>` : !m.essential && !m.enforced ? '<span class="tag">efeito na próxima etapa</span>' : m.enforced === 'tela' ? '<span class="tag">só esconde a tela</span>' : ''}</div><div class="d">${esc(m.desc)}</div></div>
         ${m.essential ? '<span class="lock">Sempre ativo</span>' : `<button type="button" class="sw-t" role="switch" data-m="${esc(m.code)}" aria-checked="${!blk && !!t.modules[m.code]}" aria-label="${esc(m.name)}" ${blk ? 'disabled style="opacity:.45;cursor:not-allowed"' : ''}><span></span></button>`}</div>` }).join('')}</div></details>`; }).join('')}
+    ${bancoCard(t)}
     <div class="bar${dirty ? ' dirty' : ''}"><span>${dirty ? 'Há mudanças sem salvar.' : 'Tudo salvo.'}</span><div style="display:flex;gap:8px"><button class="btn ghost-light" type="button" id="undo" ${dirty ? '' : 'disabled'}>Desfazer</button><button class="btn primary" type="button" id="save" ${dirty ? '' : 'disabled'}>Salvar configuração</button></div></div>`;
     bind();
   }
@@ -181,6 +194,7 @@
     ${groups.map(g => { const gm = mods.filter(m => m.group === g), gon = gm.filter(m => m.essential || t.modules[m.code]).length; return `<details class="card grp fold" data-k="g:${esc(g)}"><summary><h2>${esc(g)}</h2><span class="sum">${g === 'Essenciais' ? 'Sempre ativas' : gon + ' de ' + gm.length + ' ligadas'}</span></summary><div class="fb">
       ${mods.filter(m => m.group === g).map(m => `<div class="mod"><div class="t"><div class="n">${esc(m.name)}</div><div class="d">${esc(m.desc)}</div></div>
         ${m.essential ? '<span class="lock">Sempre ativo</span>' : `<button type="button" class="sw-t" role="switch" data-m="${esc(m.code)}" aria-checked="${!!t.modules[m.code]}" aria-label="${esc(m.name)}"><span></span></button>`}</div>`).join('')}</div></details>`; }).join('')}
+    ${bancoCard(t)}
     <div class="bar${dirty ? ' dirty' : ''}"><span>${dirty ? 'Há mudanças sem salvar.' : 'Tudo salvo.'}</span><div style="display:flex;gap:8px"><button class="btn ghost-light" type="button" id="undo" ${dirty ? '' : 'disabled'}>Desfazer</button><button class="btn primary" type="button" id="save" ${dirty ? '' : 'disabled'}>${t.id ? 'Salvar configuração' : esc(U.criar)}</button></div></div>`;
     bindCommon();
     const E = $('#editor');
@@ -259,6 +273,7 @@
     $('#save').addEventListener('click', save);
     const ag = $('#agen'); if (ag) ag.addEventListener('click', genAdmin);
     const ae = $('#aent'); if (ae) ae.addEventListener('click', entrar);
+    bindBancoCard();
     E.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Endereço copiado'); } catch (e) { toast('Não consegui copiar: selecione o endereço e copie.'); } }));
   }
   function bind() {
@@ -278,6 +293,7 @@
     $('#save').addEventListener('click', save);
     const ag = $('#agen'); if (ag) ag.addEventListener('click', genAdmin);
     const ae = $('#aent'); if (ae) ae.addEventListener('click', entrar);
+    bindBancoCard();
     E.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Endereço copiado'); } catch (e) { toast('Não consegui copiar: selecione o endereço e copie.'); } }));
     $('#segNew').addEventListener('click', () => { segUI = { edit: { id: null, name: '', modules: segMods(draft.modules) }, fromCo: true }; renderSegs(); });
     $('#segList').addEventListener('click', () => { segUI = { edit: null }; renderSegs(); });
@@ -366,6 +382,226 @@
     img.onerror = () => toast('Não consegui abrir essa imagem (formato HEIC/RAW?). Salve como JPG ou PNG e tente de novo.');
     fr.readAsDataURL(f);
   }
+  /* ---------- Banco de dados de produtos (cadastro mestre) ---------- */
+  /* Um banco guarda código interno, código de barras, nome, foto e custo. Cada empresa escolhe o banco que usa. */
+  const BK = { sel: undefined, f: 'todos', q: '', p: 0, L: null, jobs: null, edit: null, novoP: false, fotoP: undefined, out: {} };
+  const bancoDe = id => (D && D.bancos || []).find(b => b.id === id) || null;
+  const usaBanco = t => (D.bancoRamos || []).includes(ramoOf(t));
+  const fmtN = n => Number(n || 0).toLocaleString('pt-BR');
+  const brl = v => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 4 });
+  const fotoUrl = id => '/api/central/banco/foto?b=' + encodeURIComponent(BK.sel) + '&id=' + encodeURIComponent(id);
+  const pl = (n, um, varios) => fmtN(n) + ' ' + (n === 1 ? um : varios);
+  const sessao = e => { if (e.status === 401) { showLogin('Sua sessão terminou. Entre de novo.'); return true; } return false; };
+  /* o que entrou no banco quando a empresa foi ligada (ou quando se trouxe de novo) */
+  function trouxeTxt(x) {
+    if (!x || x.pulou) return 'Este tipo de empresa não tem produtos para trazer.';
+    const partes = [pl(x.produtos, 'produto novo', 'produtos novos'), pl(x.fotos, 'foto', 'fotos'), pl(x.custos, 'custo', 'custos')];
+    return 'Entraram no banco: ' + partes.join(', ') + '.' + (x.semCodigo ? ' ' + (ramoOf({ ramo: (D.tenants.find(t => t.id === x.empresa) || {}).ramo }) === 'encartes' ? pl(x.semCodigo, 'foto sem código ficou', 'fotos sem código ficaram') : pl(x.semCodigo, 'produto sem código ficou', 'produtos sem código ficaram')) + ' de fora.' : '');
+  }
+  /* dentro da empresa: "Utilizar banco de dados" abre a lista dos bancos; tocar num deles liga na hora */
+  function bancoCard(t) {
+    if (!t.id || !usaBanco(t) || !(D.bancos || []).length) return '';
+    const cur = bancoDe(t.banco);
+    return `<details class="card fold" data-k="bk"><summary><h2 id="hbk">Utilizar banco de dados</h2><span class="sum">${cur ? esc(cur.name) : 'Nenhum'}</span></summary><div class="fb">
+      <p class="muted small" style="margin:0">${ramoOf(t) === 'encartes' ? 'Com um banco ligado, o produto com código já aparece no encarte com o nome e a foto do banco, e a foto nova colocada no encarte sobe para o banco.' : 'Com um banco ligado, o cadastro de produto busca nome, código de barras, custo e foto pelo código, na hora.'} Ao ligar, o que esta empresa já tem (produtos com código, fotos e custos) entra no banco.</p>
+      <div class="presets" id="bkUse">${D.bancos.map(b => `<button type="button" data-bk="${esc(b.id)}" aria-pressed="${t.banco === b.id}">${esc(b.name)}</button>`).join('')}<button type="button" data-bk="" aria-pressed="${!t.banco}">Nenhum</button></div>
+      <div id="bkOut" aria-live="polite">${BK.out[t.id] ? `<div class="note">${esc(BK.out[t.id])}</div>` : ''}</div>
+    </div></details>`;
+  }
+  function bindBancoCard() { document.querySelectorAll('#bkUse [data-bk]').forEach(b => b.addEventListener('click', () => usarBanco(b.dataset.bk))); }
+  async function usarBanco(id) {
+    if ((draft.banco || '') === id) return;
+    const bs = document.querySelectorAll('#bkUse [data-bk]'); bs.forEach(b => { b.disabled = true; });
+    $('#bkOut').innerHTML = '<p class="small muted" style="margin:0">' + (id ? 'Ligando e trazendo os produtos desta empresa…' : 'Desligando…') + '</p>';
+    try {
+      const r = await api('/api/central/banco/usar', { empresa: draft.id, banco: id || null });
+      D.bancos = r.bancos; const t = D.tenants.find(x => x.id === draft.id); if (t) t.banco = r.banco; draft.banco = r.banco;
+      BK.out[draft.id] = r.banco ? 'Agora usa o banco ' + (bancoDe(r.banco) || {}).name + '. ' + trouxeTxt(r.trouxe) : 'Esta empresa não usa mais banco de dados. O que ela já colocou no banco continua lá.';
+      toast(r.banco ? 'Banco de dados ligado' : 'Banco de dados desligado');
+      const y = window.scrollY; renderList(); renderEditor(); window.scrollTo(0, y);
+    } catch (e) { if (sessao(e)) return; toast(e.message); bs.forEach(b => { b.disabled = false; }); $('#bkOut').innerHTML = ''; }
+  }
+  function pickBanco(id) { BK.sel = id; BK.f = 'todos'; BK.q = ''; BK.p = 0; BK.L = null; BK.jobs = null; BK.edit = null; BK.novoP = false; renderList(); renderBanco(); window.scrollTo(0, 0); if (id) loadBanco(); }
+  async function loadBanco(soLista) {
+    const id = BK.sel; if (!id) return;
+    try {
+      const [L, Jb] = await Promise.all([
+        api('/api/central/banco/produtos?b=' + encodeURIComponent(id) + '&f=' + BK.f + '&p=' + BK.p + '&q=' + encodeURIComponent(BK.q)),
+        soLista ? Promise.resolve(BK.jobs) : api('/api/central/banco/jobs?b=' + encodeURIComponent(id))]);
+      if (BK.sel !== id) return;
+      BK.L = L; BK.jobs = Jb; renderProd(); if (!soLista) renderJobs();
+    } catch (e) { if (sessao(e)) return; toast(e.message); }
+  }
+  async function recarregaBancos() { try { D.bancos = (await api('/api/central/banco/lista')).bancos; renderList(); const h = $('#bkNums'); const b = bancoDe(BK.sel); if (h && b) h.textContent = numsTxt(b); } catch (e) { /* segue com os números antigos */ } }
+  const numsTxt = b => `${pl(b.produtos, 'produto', 'produtos')} · ${fmtN(b.comFoto)} com foto · ${fmtN(b.comCusto)} com custo`;
+  function renderBanco() {
+    const E = $('#editor');
+    if (!BK.sel) {
+      E.innerHTML = `<section class="card top"><div><h1>Novo banco de dados</h1><p class="muted small" style="margin:4px 0 0">Um banco por sistema de origem: cada cliente tem o dele.</p></div></section>
+        <form class="card" id="bkNew" style="display:grid;gap:12px"><div class="grid">
+          <div class="field"><label for="bkNm">Nome do banco</label><input type="text" id="bkNm" maxlength="60" placeholder="Ex.: StarIA Mercado do Zé" required></div>
+          <div class="field"><label for="bkFl">Filial usada nas consultas</label><input type="text" id="bkFl" inputmode="numeric" maxlength="4" value="1"></div></div>
+          <div><button class="btn primary" type="submit">Criar banco</button></div></form>`;
+      $('#bkNew').addEventListener('submit', async e => { e.preventDefault(); try { const r = await api('/api/central/banco/salvar', { name: $('#bkNm').value, filial: $('#bkFl').value }); D.bancos = r.bancos; toast('Banco criado'); pickBanco(r.id); } catch (er) { if (sessao(er)) return; toast(er.message); } });
+      return;
+    }
+    const b = bancoDe(BK.sel); if (!b) { E.innerHTML = ''; return; }
+    const usam = D.tenants.filter(t => t.banco === b.id), podem = D.tenants.filter(usaBanco);
+    E.innerHTML = `
+    <section class="card top">
+      <div><h1>${esc(b.name)}</h1><p class="muted small" style="margin:4px 0 0" id="bkNums">${numsTxt(b)}</p></div>
+      <button class="btn" type="button" id="bkRen">Renomear</button>
+    </section>
+    <div class="note">O <b>código interno</b> liga o mesmo produto em todos os apps: a foto e o custo são cadastrados uma vez aqui e valem para as empresas que usam este banco.</div>
+    <details class="card fold" data-k="bk:emp"><summary><h2>Empresas que usam este banco</h2><span class="sum">${usam.length ? usam.map(t => esc(t.name)).join(', ') : 'Nenhuma ainda'}</span></summary><div class="fb">
+      ${usam.length ? `<div class="links">${usam.map(t => `<div class="lk"><div class="lk-t"><b>${esc(t.name)}</b></div><span class="small muted">${esc(ramoOf(t) === 'atacado' ? 'Atacado e varejo' : RAMO_UI[ramoOf(t)].tipo)}</span><div class="lk-b"><button type="button" class="btn" data-go="${esc(t.id)}">Abrir a empresa</button></div></div>`).join('')}</div>` : ''}
+      <p class="small muted" style="margin:0">Para ligar uma empresa: abra a empresa e, no fim da tela, toque em <b>Utilizar banco de dados</b>.</p>
+    </div></details>
+    <details class="card fold" data-k="bk:imp"><summary><h2>Trazer o que já está nas empresas</h2><span class="sum">produtos com código, fotos e custos</span></summary><div class="fb">
+      <p class="muted small" style="margin:0">Só preenche o que está vazio: o que já está no banco não muda. Custo de embalagem (fardo, caixa) entra dividido pela quantidade. Pode repetir quando quiser.</p>
+      ${podem.length ? podem.map(t => `<label class="subopt" style="margin-top:0"><input type="checkbox" data-imp="${esc(t.id)}" checked><span><b>${esc(t.name)}</b><span class="small muted">${esc(ramoOf(t) === 'atacado' ? `App de pedidos · ${fmtN((t.stats || {}).products)} produtos` : 'Gerador de Encartes · produtos e fotos com código')}${t.banco === b.id ? ' · usa este banco' : ''}</span></span></label>`).join('') : '<p class="small muted" style="margin:0">Nenhuma empresa de atacado ou de encartes ainda.</p>'}
+      <div><button class="btn dark" type="button" id="bkImp" ${podem.length ? '' : 'disabled'}>Trazer agora</button></div>
+      <div id="bkImpOut" aria-live="polite"></div>
+    </div></details>
+    <details class="card fold" data-k="bk:st"><summary><h2>Atualizar pelo StarIA</h2><span class="sum" id="bkStSum"></span></summary><div class="fb" id="bkSt"><p class="small muted" style="margin:0">Carregando…</p></div></details>
+    <section class="card" style="display:grid;gap:10px">
+      <div class="bk-bar"><h2>Produtos</h2><div style="display:flex;gap:6px;flex-wrap:wrap"><label class="btn" for="bkFotos" style="display:inline-flex;align-items:center" title="O nome de cada arquivo é o código interno ou o código de barras">Enviar várias fotos</label><input type="file" id="bkFotos" accept="image/*" multiple hidden><button class="btn dark" type="button" id="bkAdd">+ Produto</button></div></div>
+      <input type="text" id="bkQ" placeholder="Buscar por nome, código ou código de barras" value="${esc(BK.q)}" aria-label="Buscar produto">
+      <div class="presets" id="bkTabs"></div>
+      <div id="bkFotosOut" aria-live="polite"></div>
+      <div id="bkNovo"></div>
+      <div id="bkRows"><p class="small muted" style="margin:0">Carregando…</p></div>
+      <div class="bk-bar" id="bkPag"></div>
+    </section>`;
+    $('#bkRen').addEventListener('click', async () => { const n = prompt('Nome do banco de dados:', b.name); if (n == null || !n.trim() || n.trim() === b.name) return; try { const r = await api('/api/central/banco/salvar', { id: b.id, name: n, filial: b.filial }); D.bancos = r.bancos; toast('Nome salvo'); renderList(); renderBanco(); renderProd(); renderJobs(); } catch (e) { if (sessao(e)) return; toast(e.message); } });
+    E.querySelectorAll('[data-go]').forEach(x => x.addEventListener('click', () => { const t = D.tenants.find(y => y.id === x.dataset.go); if (!t) return; aba = ramoOf(t); pick(t.id); window.scrollTo(0, 0); }));
+    $('#bkImp').addEventListener('click', importarBanco);
+    let tq; $('#bkQ').addEventListener('input', e => { clearTimeout(tq); tq = setTimeout(() => { BK.q = e.target.value.trim(); BK.p = 0; BK.edit = null; loadBanco(true); }, 300); });
+    $('#bkAdd').addEventListener('click', () => { BK.novoP = !BK.novoP; BK.edit = null; BK.fotoP = undefined; renderProd(); const c = $('#bpC'); if (c) c.focus(); });
+    $('#bkFotos').addEventListener('change', e => { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) fotosPorNome(fs); });
+    if (BK.L) { renderProd(); renderJobs(); }
+  }
+  async function importarBanco() {
+    const ids = [...document.querySelectorAll('[data-imp]:checked')].map(x => x.dataset.imp), out = $('#bkImpOut'), bt = $('#bkImp');
+    if (!ids.length) { toast('Marque pelo menos uma empresa.'); return; }
+    bt.disabled = true; out.innerHTML = '<p class="small muted" style="margin:0">Trazendo… pode levar alguns segundos quando há muitas fotos.</p>';
+    const linhas = [];
+    try {
+      // uma empresa por vez: cada pedido termina dentro do tempo do servidor, mesmo com muitas fotos
+      for (const id of ids) { const r = await api('/api/central/banco/importar', { banco: BK.sel, empresas: [id] }); D.bancos = r.bancos; linhas.push(r.empresas[0]); out.innerHTML = linhas.map(x => `<div class="note" style="margin-top:6px"><b>${esc(x.nome)}</b>: ${esc(trouxeTxt(x))}</div>`).join(''); }
+      toast('Pronto: banco atualizado'); renderList(); const h = $('#bkNums'), b = bancoDe(BK.sel); if (h && b) h.textContent = numsTxt(b); BK.p = 0; loadBanco(true);
+    } catch (e) { if (sessao(e)) return; toast(e.message); out.innerHTML += `<div class="err">${esc(e.message)}</div>`; }
+    finally { bt.disabled = false; }
+  }
+  /* ----- pedidos ao StarIA: o site não fala com o StarIA; o Claude lê o pedido, consulta e devolve ----- */
+  function renderJobs() {
+    const box = $('#bkSt'); if (!box) return;
+    const P = (BK.jobs && BK.jobs.pedidos) || [], pend = P.find(j => j.status === 'pendente'), ult = P.find(j => j.status === 'pronta');
+    $('#bkStSum').textContent = pend ? `pedido esperando o Claude (${pend.termos.length} códigos)` : ult ? 'última em ' + dt(ult.prontoEm) : 'nome, código de barras e preço';
+    const ultTxt = ult ? `<p class="small muted" style="margin:0">Última atualização: ${esc(dt(ult.prontoEm))} · ${pl((ult.resumo || {}).atualizados || 0, 'produto atualizado', 'produtos atualizados')}${((ult.resumo || {}).naoAchou || []).length ? ' · não encontrados: ' + esc(ult.resumo.naoAchou.slice(0, 30).join(', ')) : ''}</p>` : '';
+    box.innerHTML = pend ? `
+      <div class="note"><b>Pedido esperando o Claude</b> · ${pl(pend.termos.length, 'código', 'códigos')} · pedido em ${esc(dt(pend.pedidoEm))}.<br>Com esta tela aberta no computador, peça ao Claude: <b>"processa o banco de dados"</b> (atalho: <code>1414</code>). Quando ele terminar, toque em Conferir.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn dark" type="button" id="bkChk">Conferir</button><button class="btn" type="button" id="bkCan">Cancelar pedido</button></div>${ultTxt}` : `
+      <p class="muted small" style="margin:0">O StarIA confere o <b>nome</b>, o <b>código de barras</b> e o <b>preço de venda</b> de cada código. O custo não vem daqui por enquanto: fica o que veio das empresas ou o que você digitar. Em branco, o pedido pega até 200 produtos do banco, começando pelos que nunca foram conferidos.</p>
+      <div class="field"><label for="bkCod">Códigos para buscar (opcional: código interno ou código de barras, um por linha)</label><textarea id="bkCod" rows="3" placeholder="Em branco = conferir os produtos que já estão no banco"></textarea></div>
+      <div><button class="btn dark" type="button" id="bkPed">Pedir atualização</button></div>${ultTxt}`;
+    const ped = $('#bkPed'); if (ped) ped.addEventListener('click', async () => { ped.disabled = true; try { const r = await api('/api/central/banco/pedir', { banco: BK.sel, codigos: $('#bkCod').value }); toast(r.jaPedido ? 'Já havia um pedido esperando' : 'Pedido criado'); BK.jobs = await api('/api/central/banco/jobs?b=' + encodeURIComponent(BK.sel)); renderJobs(); } catch (e) { if (sessao(e)) return; toast(e.message); ped.disabled = false; } });
+    const can = $('#bkCan'); if (can) can.addEventListener('click', async () => { if (!confirm('Cancelar o pedido que está esperando?')) return; try { await api('/api/central/banco/pedido-cancelar', { id: pend.id }); } catch (e) { if (sessao(e)) return; toast(e.message); } loadBanco(); });
+    const chk = $('#bkChk'); if (chk) chk.addEventListener('click', async () => { await loadBanco(); recarregaBancos(); const p2 = ((BK.jobs && BK.jobs.pedidos) || []).find(j => j.status === 'pendente'); toast(p2 ? 'O pedido ainda está esperando o Claude' : 'Banco atualizado pelo StarIA'); });
+  }
+  /* ----- lista de produtos ----- */
+  const FILTROS_BK = [['todos', 'Todos'], ['semfoto', 'Sem foto'], ['semcusto', 'Sem custo'], ['erros', 'Possivelmente errados']];
+  function formProd(x) {
+    const novo = !x; x = x || { codigo: '', nome: '', ean: '', custo: null, foto: null };
+    return `<form class="bp-form" id="bpF">
+      <div class="grid">
+        ${novo ? '<div class="field"><label for="bpC">Código interno</label><input type="text" id="bpC" maxlength="30" autocapitalize="off" spellcheck="false" required></div>' : ''}
+        <div class="field"><label for="bpN">Nome</label><input type="text" id="bpN" maxlength="160" value="${esc(x.nome)}"></div>
+        <div class="field"><label for="bpE">Código de barras</label><input type="text" id="bpE" inputmode="numeric" maxlength="14" value="${esc(x.ean)}"></div>
+        <div class="field"><label for="bpK">Custo de uma unidade (R$)</label><input type="text" id="bpK" inputmode="decimal" maxlength="14" value="${x.custo == null ? '' : esc(String(x.custo).replace('.', ','))}"></div>
+      </div>
+      <div class="logo-row"><label class="btn" for="bpFo" style="display:inline-flex;align-items:center">${x.foto ? 'Trocar foto' : 'Enviar foto'}</label><input type="file" id="bpFo" accept="image/*" hidden>${x.foto ? '<button type="button" class="btn" id="bpRm">Tirar foto</button>' : ''}<span class="small muted" id="bpFn"></span></div>
+      <div class="err" id="bpErr" role="alert"></div>
+      <div class="bk-bar">${novo ? '<span></span>' : '<button type="button" class="btn" id="bpDel" style="color:var(--danger)">Apagar do banco</button>'}<div style="display:flex;gap:8px"><button type="button" class="btn" id="bpX">Cancelar</button><button type="submit" class="btn primary">Salvar</button></div></div>
+    </form>`;
+  }
+  function renderProd() {
+    const L = BK.L, rows = $('#bkRows'); if (!L || !rows) return;
+    const T = L.totais;
+    $('#bkTabs').innerHTML = FILTROS_BK.map(([k, lb]) => `<button type="button" data-f="${k}" aria-pressed="${BK.f === k}">${lb} <small>${fmtN(T[k])}</small></button>`).join('');
+    $('#bkTabs').querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => { if (BK.f === b.dataset.f) return; BK.f = b.dataset.f; BK.p = 0; BK.edit = null; loadBanco(true); }));
+    $('#bkNovo').innerHTML = BK.novoP ? `<div class="bp on"><div class="bp-t" style="grid-column:1/-1"><b>Novo produto</b></div>${formProd(null)}</div>` : '';
+    rows.innerHTML = L.itens.length ? L.itens.map(x => `<div class="bp${BK.edit === x.codigo ? ' on' : ''}">
+        <div class="bp-f">${x.foto ? `<img loading="lazy" alt="" src="${esc(fotoUrl(x.foto))}">` : '<span>sem foto</span>'}</div>
+        <div class="bp-t"><b>${x.nome ? esc(x.nome) : '<span class="muted">(sem nome)</span>'}</b><span class="small muted">Cód. ${esc(x.codigo)}${x.ean ? ' · ' + esc(x.ean) : ''}${x.preco != null ? ' · venda ' + brl(x.preco) : ''}</span>${x.erros.length ? `<span class="bp-e">${x.erros.map(e => `<span class="tag warn">${esc(e)}</span>`).join('')}</span>` : ''}</div>
+        <div class="bp-c"><b class="num">${x.custo == null ? '—' : brl(x.custo)}</b><span class="small muted">${x.custo == null ? 'sem custo' : esc(x.custoFonte)}</span></div>
+        <div class="bp-a"><button type="button" class="btn" data-ed="${esc(x.codigo)}">${BK.edit === x.codigo ? 'Fechar' : 'Editar'}</button></div>
+        ${BK.edit === x.codigo ? formProd(x) : ''}</div>`).join('')
+      : `<p class="small muted" style="margin:0">${T.todos ? 'Nenhum produto neste filtro.' : BK.q ? 'Nenhum produto com essa busca.' : 'O banco ainda está vazio. Abra "Trazer o que já está nas empresas" logo acima.'}</p>`;
+    const ini = L.pagina * L.porPagina, tot = T[BK.f];
+    $('#bkPag').innerHTML = tot > L.porPagina ? `<span class="small muted">${fmtN(ini + 1)}–${fmtN(Math.min(tot, ini + L.itens.length))} de ${fmtN(tot)}</span><div style="display:flex;gap:6px"><button class="btn" type="button" id="bkPrev" ${L.pagina ? '' : 'disabled'}>Anterior</button><button class="btn" type="button" id="bkNext" ${ini + L.itens.length < tot ? '' : 'disabled'}>Próxima</button></div>` : '';
+    const pv = $('#bkPrev'), nx = $('#bkNext');
+    if (pv) pv.addEventListener('click', () => { BK.p = Math.max(0, BK.p - 1); BK.edit = null; loadBanco(true).then(() => $('#bkQ').scrollIntoView({ block: 'start' })); });
+    if (nx) nx.addEventListener('click', () => { BK.p++; BK.edit = null; loadBanco(true).then(() => $('#bkQ').scrollIntoView({ block: 'start' })); });
+    rows.querySelectorAll('[data-ed]').forEach(b => b.addEventListener('click', () => { BK.edit = BK.edit === b.dataset.ed ? null : b.dataset.ed; BK.novoP = false; BK.fotoP = undefined; renderProd(); }));
+    bindFormProd();
+  }
+  function bindFormProd() {
+    const f = $('#bpF'); if (!f) return;
+    const cur = BK.novoP ? null : BK.L.itens.find(x => x.codigo === BK.edit);
+    $('#bpX').addEventListener('click', () => { BK.edit = null; BK.novoP = false; BK.fotoP = undefined; renderProd(); });
+    $('#bpFo').addEventListener('change', async e => { const fl = e.target.files && e.target.files[0]; if (!fl) return; try { BK.fotoP = await reduzFoto(fl); $('#bpFn').textContent = 'Foto escolhida: ' + fl.name + ' (entra ao salvar)'; } catch (er) { $('#bpErr').textContent = er.message; } });
+    const rm = $('#bpRm'); if (rm) rm.addEventListener('click', () => { BK.fotoP = null; $('#bpFn').textContent = 'A foto sai ao salvar.'; });
+    const del = $('#bpDel'); if (del) del.addEventListener('click', async () => { if (!confirm('Apagar "' + (cur.nome || cur.codigo) + '" do banco? As empresas que usam este banco deixam de receber o nome e a foto dele.')) return; try { await api('/api/central/banco/produto-del', { banco: BK.sel, codigo: cur.codigo }); toast('Produto apagado do banco'); BK.edit = null; await loadBanco(true); recarregaBancos(); } catch (e) { if (sessao(e)) return; $('#bpErr').textContent = e.message; } });
+    f.addEventListener('submit', async e => {
+      e.preventDefault(); const bt = f.querySelector('button[type=submit]'); bt.disabled = true; $('#bpErr').textContent = '';
+      const body = { banco: BK.sel, codigo: cur ? cur.codigo : $('#bpC').value.trim() };
+      if (!cur) body.novo = true;
+      const nome = $('#bpN').value.trim(), ean = $('#bpE').value.trim(), custo = $('#bpK').value.trim();
+      if (!cur || nome !== cur.nome) body.nome = nome;
+      if (!cur || ean !== cur.ean) body.ean = ean;
+      if (!cur ? custo !== '' : custo !== (cur.custo == null ? '' : String(cur.custo).replace('.', ','))) body.custo = custo === '' ? null : custo;
+      if (BK.fotoP !== undefined) body.foto = BK.fotoP;
+      try { await api('/api/central/banco/produto', body); toast(cur ? 'Produto salvo' : 'Produto criado no banco'); BK.edit = null; BK.novoP = false; BK.fotoP = undefined; await loadBanco(true); recarregaBancos(); }
+      catch (er) { if (sessao(er)) return; $('#bpErr').textContent = er.message; bt.disabled = false; }
+    });
+  }
+  /* foto do produto: reduzida no aparelho (lado maior até 1000 px) antes de enviar, como no Gerador de Encartes */
+  function reduzFoto(f) {
+    return new Promise((ok, no) => {
+      if (f.type && !/^image\//.test(f.type)) return no(new Error('Esse arquivo não é uma imagem.'));
+      const img = new Image(), fr = new FileReader();
+      fr.onerror = () => no(new Error('Não consegui ler esse arquivo.'));
+      fr.onload = () => { img.src = fr.result; };
+      img.onerror = () => no(new Error('Não consegui abrir essa imagem (formato HEIC/RAW?). Salve como JPG ou PNG e tente de novo.'));
+      img.onload = () => {
+        const w = img.naturalWidth || 1, h = img.naturalHeight || 1;
+        for (const lado of [1000, 800, 600]) {
+          const k = Math.min(1, lado / Math.max(w, h)), c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          let d = c.toDataURL('image/webp', .86); if (!d.startsWith('data:image/webp')) d = c.toDataURL('image/png');
+          if (d.length > 2400000) d = c.toDataURL('image/jpeg', .88);
+          if (d.length <= 2400000) return ok(d);
+        }
+        no(new Error('Não consegui reduzir essa imagem. Tente outra.'));
+      };
+      fr.readAsDataURL(f);
+    });
+  }
+  /* várias fotos de uma vez: o nome do arquivo (sem a extensão) é o código interno ou o código de barras */
+  async function fotosPorNome(fs) {
+    const out = $('#bkFotosOut'); let ok = 0; const ruins = [];
+    for (let i = 0; i < fs.length; i++) {
+      out.innerHTML = `<p class="small muted" style="margin:0">Enviando fotos ${i + 1} de ${fs.length}…</p>`;
+      const termo = fs[i].name.replace(/\.[^.]+$/, '').trim();
+      try { const r = await api('/api/central/banco/foto-nome', { banco: BK.sel, termo, foto: await reduzFoto(fs[i]) }); if (r.ok) ok++; else ruins.push(fs[i].name + ': ' + r.motivo); }
+      catch (e) { if (sessao(e)) return; ruins.push(fs[i].name + ': ' + e.message); }
+    }
+    out.innerHTML = `<div class="note"><b>${pl(ok, 'foto entrou', 'fotos entraram')} no banco.</b>${ruins.length ? '<br>Ficaram de fora:<br>' + ruins.slice(0, 40).map(esc).join('<br>') : ''}</div>`;
+    await loadBanco(true); recarregaBancos();
+  }
+
   async function save() {
     const b = $('#save'); b.disabled = true;
     const ramo = ramoOf(draft), outro = ramo !== 'atacado';

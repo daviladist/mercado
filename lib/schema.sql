@@ -893,3 +893,61 @@ create table if not exists enc_blobs (
   created_at timestamptz not null default now(),
   primary key (tenant_id, id)
 );
+
+-- ===== Tino: Banco de dados de produtos (cadastro mestre), usado por uma ou mais empresas =====
+-- Um banco reúne os produtos de um sistema de origem (ex.: o StarIA da Dávila): código interno, código de barras,
+-- nome, foto e custo. A Central liga cada empresa ao banco que ela usa (tenants.banco_id). Outro cliente = outro banco.
+-- banco_produtos.codigo é o código interno do sistema de origem: é ele que liga o mesmo produto entre os apps.
+create table if not exists bancos (
+  id text primary key,
+  name text not null,
+  origem text not null default 'staria',
+  filial int not null default 1,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create table if not exists banco_produtos (
+  banco_id text not null references bancos(id) on delete cascade,
+  codigo text not null,
+  ean text,
+  ean_ruim boolean not null default false,
+  nome text not null default '',
+  custo numeric(14,4),
+  custo_fonte text,
+  custo_at timestamptz,
+  preco numeric(14,2),
+  foto text,
+  foto_fonte text,
+  fonte text,
+  staria text,
+  staria_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (banco_id, codigo)
+);
+create index if not exists banco_produtos_ean on banco_produtos(banco_id, ean);
+-- fotos do banco, em base64; o id é o hash da imagem (igual ao do Gerador de Encartes: a mesma foto não grava duas vezes)
+create table if not exists banco_fotos (
+  banco_id text not null references bancos(id) on delete cascade,
+  id text not null,
+  mime text not null,
+  b64 text not null,
+  created_at timestamptz not null default now(),
+  primary key (banco_id, id)
+);
+-- pedidos de consulta ao sistema de origem (o site não fala com o StarIA: o Claude atende e devolve)
+create table if not exists banco_jobs (
+  id text primary key,
+  banco_id text not null references bancos(id) on delete cascade,
+  status text not null default 'pendente',
+  termos jsonb not null,
+  resumo jsonb,
+  created_at timestamptz not null default now(),
+  done_at timestamptz
+);
+create index if not exists banco_jobs_banco on banco_jobs(banco_id, created_at);
+-- banco que a empresa usa (nenhum = a empresa segue só com os próprios cadastros)
+alter table tenants add column if not exists banco_id text;
+do $$ begin if not exists (select 1 from pg_constraint where conname='tenants_banco_fk') then alter table tenants add constraint tenants_banco_fk foreign key (banco_id) references bancos(id) on delete set null; end if; end $$;
+-- o banco do dono do sistema já nasce criado; os outros são criados na Central (aba Banco de dados)
+insert into bancos(id,name,origem,filial) values('staria-davila','StarIA Dávila','staria',1) on conflict (id) do nothing;
