@@ -403,7 +403,7 @@
     if (!t.id || !usaBanco(t) || !(D.bancos || []).length) return '';
     const cur = bancoDe(t.banco);
     return `<details class="card fold" data-k="bk"><summary><h2 id="hbk">Utilizar banco de dados</h2><span class="sum">${cur ? esc(cur.name) : 'Nenhum'}</span></summary><div class="fb">
-      <p class="muted small" style="margin:0">${ramoOf(t) === 'encartes' ? 'Com um banco ligado, o produto com código já aparece no encarte com o nome e a foto do banco, e a foto nova colocada no encarte sobe para o banco.' : 'Com um banco ligado, o cadastro de produto busca nome, código de barras, custo e foto pelo código, na hora.'} Ao ligar, o que esta empresa já tem (produtos com código, fotos e custos) entra no banco.</p>
+      <p class="muted small" style="margin:0">${ramoOf(t) === 'encartes' ? 'Com um banco ligado, o produto com código já aparece no encarte com o nome e a foto do banco, e a foto nova colocada no encarte sobe para o banco.' : 'Com um banco ligado, o cadastro de produto busca nome, código de barras, custo e foto pelo código, na hora. E o produto com código que for salvo aqui sobe sozinho para o banco: a foto nova troca a do banco; nome e custo só entram onde o banco está vazio.'} Ao ligar, o que esta empresa já tem (produtos com código, fotos e custos) entra no banco.</p>
       <div class="presets" id="bkUse">${D.bancos.map(b => `<button type="button" data-bk="${esc(b.id)}" aria-pressed="${t.banco === b.id}">${esc(b.name)}</button>`).join('')}<button type="button" data-bk="" aria-pressed="${!t.banco}">Nenhum</button></div>
       <div id="bkOut" aria-live="polite">${BK.out[t.id] ? `<div class="note">${esc(BK.out[t.id])}</div>` : ''}</div>
     </div></details>`;
