@@ -10,7 +10,7 @@ export async function mostrar(raiz) {
         <li><b>Tamanho:</b> 2160 × 800 px (a largura toda do encarte). Salve em JPG ou PNG.</li>
         <li><b>Quadrado azul:</b> não escreva nada ali. As logos cadastradas no app ficam por cima, lado a lado ou uma em cima da outra.</li>
         <li><b>Linha vermelha:</b> nome da campanha e coisas importantes ficam do lado de dentro.</li>
-        <li>Os produtos o app encaixa sozinho embaixo do cabeçalho.</li>
+        <li>Importe o cabeçalho no cadastro do modelo. Os produtos o app encaixa sozinho embaixo dele.</li>
       </ul>
       <a class="btn esc" href="${arq}" download="modelo-cabecalho-2160x800.png">Baixar modelo</a>
     </div>`;

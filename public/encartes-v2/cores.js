@@ -14,7 +14,7 @@ export const CAMPOS_COR = [
   ['fundo', 'Fundo'],
   ['cartaoDestaque', 'Quadro dos destaques'],
   ['cartaoNormal', 'Quadro dos outros produtos'],
-  ['pilula', 'Preço (quadros)'],
-  ['etiqueta', 'Preço (cards)'],
+  ['pilula', 'Fundo do preço'],
+  ['etiqueta', 'Fundo do preço'],
   ['rodape', 'Rodapé'],
 ];

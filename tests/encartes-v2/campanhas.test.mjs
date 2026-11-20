@@ -65,3 +65,14 @@ test('duplicar muda id e nome e não mexe na original', () => {
   assert.notEqual(d.id, 'a'); assert.equal(d.nome, 'Quarta (cópia)');
   d.cores.fundo = '#fff'; assert.equal(o.cores.fundo, '#000');
 });
+
+import { modelosDaEquipe, podeMarcarDestaque } from '../../public/encartes-v2/campanhas.js';
+test('modelo pausado ou incompleto não aparece para a equipe', () => {
+  const L2 = [{ ...quarta }, { ...quarta, nome: 'Pausado', pausado: true }, { nome: 'Sem cabeçalho', dias: [3] }];
+  assert.deepEqual(modelosDaEquipe(L2, 3).map(c => c.nome), ['Quarta Imbatível']);
+});
+test('máximo de destaques do modelo trava a equipe', () => {
+  const m = { maxDestaques: 2 };
+  assert.equal(podeMarcarDestaque([{ destaque: true }, {}], m), true);
+  assert.equal(podeMarcarDestaque([{ destaque: true }, { destaque: true }], m), false);
+});

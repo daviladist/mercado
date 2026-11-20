@@ -1,4 +1,6 @@
-// Campanhas (temas) da loja. Regras do Eduardo (20/11/2026):
+// MODELOS de encarte da loja (no código o arquivo ainda se chama campanhas.js).
+// Modelo = o molde que o dono cadastra; Encarte = o que a equipe monta a partir dele.
+// Regras do Eduardo (20/11/2026):
 // - a lista começa vazia: o funcionário só vê campanha que o dono cadastrou;
 // - toda campanha tem os dias da semana em que pode ser usada (um ou vários, ex.: segunda e terça)
 //   ou "todos os dias" (ex.: Oferta Relâmpago);
@@ -21,6 +23,8 @@ export function novaCampanha() {
     estilo: 'quadros',
     fogo: false,
     cores: { fundo: '#a50f14', cartaoDestaque: '#ffc81f', cartaoNormal: '#d5141b', etiqueta: '#16161a', etiquetaTexto: '#ffffff', pilula: '#16161a', destaque: '#ffd21f', cabecalho: '#c8161d', rodape: '#16161a' },
+    pausado: false,           // pausado: some para a equipe, sem apagar (ex.: Black Friday fora de novembro)
+    maxDestaques: 3,          // quantos produtos a equipe pode marcar como destaque na capa
     versoFino: true,          // verso com faixa fininha (nome da campanha em letras) para caber mais itens
     porPagina: { capa: 10, verso: 16 },
   };
@@ -32,6 +36,15 @@ export const valeTodoDia = c => (c.dias || []).includes(TODOS);
 export function campanhasDoDia(lista, dia) {
   if (dia == null) return [...lista];
   return lista.filter(c => valeTodoDia(c) || (c.dias || []).includes(dia));
+}
+
+// o que a EQUIPE vê no dia: só modelo liberado (completo) e não pausado
+export const modelosDaEquipe = (lista, dia) => campanhasDoDia(lista, dia).filter(c => !c.pausado && podeLiberar(c));
+
+// marca destaque respeitando o máximo do modelo; devolve false se já chegou no máximo
+export function podeMarcarDestaque(produtos, modelo) {
+  const max = modelo.maxDestaques ?? 3;
+  return produtos.filter(p => p.destaque).length < max;
 }
 
 // o que falta para a campanha poder ser liberada para a equipe
