@@ -1,108 +1,110 @@
-// O cartão de um produto. Regra do Eduardo: a foto fica SEMPRE dentro do cartão.
-import { FONTE, fonte, caminhoArredondado, sombraMacia, encaixarTexto, desenharLinhas, produtoContido, tom, textoSobre } from './util.js';
-import { desenharPreco, FAIXA_APP } from './preco.js';
+// Cartão de produto. A foto fica SEMPRE dentro do cartão.
+// Em pé (produto normal): foto em cima, nome, preço embaixo.
+// Deitado (destaque, como no Esquenta): foto à esquerda, nome e preço à direita, fundo na cor de destaque do tema.
+import { FONTE, fonte, caminhoArredondado, sombraMacia, encaixarTexto, desenharLinhas, produtoContido, areaUtil, tom, textoSobre } from './util.js';
+import { desenharPreco, temApp } from './preco.js';
 
-// prod: { nome, preco, precoApp, limite, unidade, foto (imagem carregada), peso (0..3), frase }
-// opt: { reservarFaixa, tamanhoNome (para igualar nomes da mesma linha) }
 export function desenharCartao(c, prod, x, y, w, h, cores, opt = {}) {
-  const r = Math.min(w, h) * 0.07;
-  const destaque = (prod.peso || 1) >= 2;
-
-  sombraMacia(c, x, y, w, h, r, 1.2);
+  const deitado = opt.deitado ?? w / h >= 1.3;
+  const r = Math.min(w, h) * 0.035;
+  const fundo = deitado ? cores.cartaoDestaque : '#ffffff';
+  sombraMacia(c, x, y, w, h, r, 1.3);
   c.save();
   caminhoArredondado(c, x, y, w, h, r);
   const g = c.createLinearGradient(0, y, 0, y + h);
-  g.addColorStop(0, '#ffffff');
-  g.addColorStop(1, '#f2f2f2');
+  g.addColorStop(0, tom(fundo, 0.08));
+  g.addColorStop(1, tom(fundo, -0.06));
   c.fillStyle = g;
   c.fill();
-  if (destaque) {
-    c.lineWidth = Math.max(3, Math.min(w, h) * 0.018);
-    c.strokeStyle = cores.destaque;
-    caminhoArredondado(c, x + c.lineWidth / 2, y + c.lineWidth / 2, w - c.lineWidth, h - c.lineWidth, r - c.lineWidth / 2);
+  if (deitado) {
+    c.lineWidth = Math.max(3, h * 0.012);
+    c.strokeStyle = tom(fundo, -0.25);
     c.stroke();
   }
   c.restore();
-
-  const deitado = w / h >= 1.3;
-  const pad = Math.min(w, h) * 0.045;
-  if (!prod.foto) return semFoto(c, prod, x, y, w, h, pad, cores, opt);
+  const pad = Math.min(w, h) * 0.05;
   return deitado ? cartaoDeitado(c, prod, x, y, w, h, pad, cores, opt) : cartaoEmPe(c, prod, x, y, w, h, pad, cores, opt);
 }
 
 function cartaoEmPe(c, prod, x, y, w, h, pad, cores, opt) {
-  const iw = w - pad * 2;
-  const temFaixa = opt.reservarFaixa || prod.precoApp != null;
-  const precoH = h * (temFaixa ? 0.36 : 0.25);
-  const nomeH = h * 0.135;
-  const fotoH = h - pad * 1.6 - nomeH - precoH - pad * 0.2;
-  const fy = y + pad;
-  // foto: dentro da caixa, encostada embaixo (o produto "pisa" no nome)
-  c.save();
-  caminhoArredondado(c, x, y, w, h, Math.min(w, h) * 0.07);
-  c.clip();
-  produtoContido(c, prod.foto, x + pad, fy, iw, fotoH, 'bottom');
-  c.restore();
-  if (prod.frase) selo(c, prod.frase, x + pad * 0.6, y + pad * 0.6, iw * 0.62, Math.max(18, h * 0.07), cores);
-  const ny = fy + fotoH + pad * 0.1;
-  nome(c, prod.nome, x + w / 2, ny, iw, nomeH, opt.tamanhoNome);
-  desenharPreco(c, prod, x + pad * 0.6, y + h - pad * 0.8 - precoH, w - pad * 1.2, precoH, cores, opt);
+  const app = temApp(prod);
+  const precoH = h * (app ? (prod.limite ? 0.36 : 0.31) : 0.26);
+  const nomeH = h * 0.17;
+  const fotoH = h - pad * 2 - nomeH - precoH - pad * 0.4;
+  foto(c, prod, x + pad, y + pad, w - pad * 2, fotoH, 'bottom');
+  if (prod.frase) selo(c, prod.frase, x + pad * 0.4, y + pad * 0.4, w * 0.7, Math.max(16, h * 0.075));
+  const m = medirNome(c, prod.nome, w - pad * 2, nomeH, 2);
+  const tam = Math.min(m.tamanho, opt.tamanhoNome || Infinity);
+  desenharLinhas(c, { ...m, tamanho: tam }, x + w / 2, y + pad + fotoH + pad * 0.2 + nomeH / 2, { peso: 700, familia: FONTE.nome, cor: '#16161a', entrelinha: 1.0 });
+  desenharPreco(c, prod, x + pad, y + h - pad - precoH, w - pad * 2, precoH, cores);
 }
 
 function cartaoDeitado(c, prod, x, y, w, h, pad, cores, opt) {
-  const fotoW = w * 0.46;
-  c.save();
-  caminhoArredondado(c, x, y, w, h, Math.min(w, h) * 0.07);
-  c.clip();
-  produtoContido(c, prod.foto, x + pad, y + pad, fotoW - pad, h - pad * 2, 'center');
-  c.restore();
-  if (prod.frase) selo(c, prod.frase, x + pad * 0.6, y + pad * 0.6, fotoW * 0.8, Math.max(18, h * 0.1), cores);
-  const cx = x + fotoW + pad * 0.5, cw = w - fotoW - pad * 1.5;
-  const nomeH = h * 0.34;
-  nome(c, prod.nome, cx + cw / 2, y + pad, cw, nomeH, opt.tamanhoNome, 3);
-  const temFaixa = opt.reservarFaixa || prod.precoApp != null;
-  const precoH = Math.min(h - pad * 2 - nomeH, h * (temFaixa ? 0.56 : 0.46));
-  desenharPreco(c, prod, cx, y + h - pad - precoH, cw, precoH, cores, opt);
-}
-
-function semFoto(c, prod, x, y, w, h, pad, cores, opt) {
-  const precoH = h * 0.4;
-  nome(c, prod.nome, x + w / 2, y + pad, w - pad * 2, h - precoH - pad * 2.2, null, 3);
-  desenharPreco(c, prod, x + pad * 0.5, y + h - pad * 0.7 - precoH, w - pad, precoH, cores, opt);
+  const fotoW = w * 0.47;
+  foto(c, prod, x + pad, y + pad, fotoW - pad, h - pad * 2, 'center');
+  if (prod.frase) selo(c, prod.frase, x - w * 0.012, y + pad * 0.5, fotoW * 0.95, Math.max(18, h * 0.13));
+  const cx = x + fotoW + pad * 0.6, cw = w - fotoW - pad * 1.6;
+  const app = temApp(prod);
+  const precoH = h * (app ? (prod.limite ? 0.6 : 0.52) : 0.44);
+  const nomeH = h - pad * 2.2 - precoH;
+  const m = medirNome(c, prod.nome, cw, nomeH, 3);
+  const txt = textoSobre(cores.cartaoDestaque);
+  desenharLinhas(c, m, cx + cw / 2, y + pad + nomeH / 2, { peso: 700, familia: FONTE.nome, cor: txt === '#ffffff' ? '#fff' : '#16161a', entrelinha: 1.02 });
+  desenharPreco(c, prod, cx, y + h - pad - precoH, cw, precoH, cores);
 }
 
 export function medirNome(c, texto, larg, alt, maxLinhas = 2) {
-  return encaixarTexto(c, String(texto || '').toUpperCase(), { larg, alt, maxLinhas, max: alt * 0.62, min: 9, peso: 700, familia: FONTE.nome, entrelinha: 1.0 });
+  return encaixarTexto(c, String(texto || '').toUpperCase(), { larg, alt, maxLinhas, max: alt * (maxLinhas > 2 ? 0.4 : 0.6), min: 9, peso: 700, familia: FONTE.nome, entrelinha: 1.0 });
 }
 
-function nome(c, texto, cx, y, larg, alt, tamanhoFixo, maxLinhas = 2) {
-  let m = medirNome(c, texto, larg, alt, maxLinhas);
-  if (tamanhoFixo && tamanhoFixo < m.tamanho) m = { ...m, tamanho: tamanhoFixo };
-  desenharLinhas(c, m, cx, y + alt / 2, { peso: 700, familia: FONTE.nome, cor: '#1d1d22', entrelinha: 1.0 });
-}
-
-// Frase de impacto ("TÁ MUITO BARATO"): faixa inclinada no canto da foto.
-function selo(c, texto, x, y, maxW, h, cores) {
-  texto = String(texto).toUpperCase();
+// Foto do produto. "Leve vários" (kit, fardo, combo): três cópias em cascata, como o deslocamento do Photoshop.
+function foto(c, prod, x, y, w, h, alinhar) {
+  if (!prod.foto) return semFoto(c, prod, x, y, w, h);
   c.save();
-  let t = h * 0.6;
-  c.font = fonte(400, t, FONTE.forte);
-  let lw = c.measureText(texto).width;
-  if (lw > maxW - h * 0.8) { t *= (maxW - h * 0.8) / lw; c.font = fonte(400, t, FONTE.forte); lw = c.measureText(texto).width; }
-  const bw = lw + h * 0.8;
-  c.translate(x, y + h / 2);
-  c.rotate(-0.06);
-  caminhoArredondado(c, 0, -h / 2, bw, h, h * 0.22);
-  c.fillStyle = tom(cores.destaque, -0.3);
-  c.fill();
-  caminhoArredondado(c, 0, -h / 2, bw, h * 0.92, h * 0.22);
-  c.fillStyle = cores.destaque;
-  c.fill();
-  c.fillStyle = textoSobre(cores.destaque);
-  c.textBaseline = 'middle';
-  c.textAlign = 'center';
-  c.fillText(texto, bw / 2, -h * 0.03);
+  c.beginPath();
+  c.rect(x, y, w, h);
+  c.clip();
+  if (prod.repetir) {
+    const a = areaUtil(prod.foto), asp = a.w / a.h;
+    // cada cópia ocupa ~62% da largura; ficam lado a lado, a do meio na frente
+    let cw = w * 0.5, ch = cw / asp;
+    if (ch > h * 0.92) { ch = h * 0.92; cw = ch * asp; }
+    const passo = (w - cw) / 2, base = y + h;
+    const pos = [[x, base - ch * 0.94, 0.94], [x + passo * 2, base - ch * 0.94, 0.94], [x + passo, base - ch, 1]];
+    for (const [px, py, k] of pos) produtoContido(c, prod.foto, px + cw * (1 - k) / 2, py, cw * k, ch * k, 'bottom');
+  } else produtoContido(c, prod.foto, x, y, w, h, alinhar);
   c.restore();
 }
 
-export { FAIXA_APP };
+function semFoto(c, prod, x, y, w, h) {
+  c.save();
+  caminhoArredondado(c, x + w * 0.2, y + h * 0.15, w * 0.6, h * 0.7, 12);
+  c.fillStyle = 'rgba(0,0,0,0.05)';
+  c.fill();
+  c.restore();
+}
+
+// Frase de impacto ("TÁ MUITO BARATO!"): faixa amarela inclinada, saindo do canto como no Esquenta.
+function selo(c, texto, x, y, maxW, h) {
+  texto = String(texto).toUpperCase();
+  c.save();
+  let t = h * 0.72;
+  c.font = fonte(400, t, FONTE.numero);
+  let lw = c.measureText(texto).width;
+  if (lw > maxW - h * 0.6) { t *= (maxW - h * 0.6) / lw; c.font = fonte(400, t, FONTE.numero); lw = c.measureText(texto).width; }
+  const bw = lw + h * 0.6;
+  c.translate(x, y + h / 2);
+  c.rotate(-0.05);
+  c.fillStyle = 'rgba(0,0,0,0.3)';
+  c.fillRect(3, -h / 2 + 4, bw, h);
+  c.fillStyle = '#ffd21f';
+  c.fillRect(0, -h / 2, bw, h);
+  c.strokeStyle = '#16161a';
+  c.lineWidth = Math.max(2, h * 0.06);
+  c.strokeRect(0, -h / 2, bw, h);
+  c.fillStyle = '#16161a';
+  c.textBaseline = 'middle';
+  c.textAlign = 'center';
+  c.fillText(texto, bw / 2, h * 0.02);
+  c.restore();
+}

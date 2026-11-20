@@ -2,7 +2,7 @@
 import sys, os, base64, functools, threading, http.server, socket
 from playwright.sync_api import sync_playwright
 RAIZ = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-caso = sys.argv[1] if len(sys.argv) > 1 else 'sabado'; fmt = sys.argv[2] if len(sys.argv) > 2 else 'feed'
+caso = sys.argv[1] if len(sys.argv) > 1 else 'esquenta'; fmt = sys.argv[2] if len(sys.argv) > 2 else 'feed'
 saida = sys.argv[3] if len(sys.argv) > 3 else f'/tmp/prova-{caso}-{fmt}.png'
 s = socket.socket(); s.bind(('127.0.0.1', 0)); PORTA = s.getsockname()[1]; s.close()
 class Q(http.server.SimpleHTTPRequestHandler):

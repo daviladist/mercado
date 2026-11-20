@@ -1,6 +1,6 @@
-// Junta as partes e desenha o encarte inteiro numa tela (canvas).
+// Junta as partes e desenha UMA página do encarte numa tela (canvas).
 import { desenharFundo } from './fundo.js';
-import { desenharCabecalho } from './cabecalho.js';
+import { desenharCabecalho, alturaCabecalho } from './cabecalho.js';
 import { desenharRodape } from './rodape.js';
 import { desenharCartao, medirNome } from './cartao.js';
 import { posicionar } from './diagrama.js';
@@ -11,50 +11,41 @@ export const FORMATOS = {
   a4: { w: 2480, h: 3508, nome: 'A4 para imprimir' },
 };
 
-// enc: { formato, cores, cabecalho, rodape, produtos, fogo, economiaTinta }
-export function desenharEncarte(c, enc) {
-  const F = FORMATOS[enc.formato] || FORMATOS.feed;
-  const W = F.w, H = F.h;
+// pag: { formato, tema: { cores, cabecalho, logosLado, fogo }, logos, produtos, rodape }
+export function desenharPagina(c, pag) {
+  const F = FORMATOS[pag.formato] || FORMATOS.feed;
+  const W = F.w, H = F.h, tema = pag.tema, cores = tema.cores;
   c.canvas.width = W;
   c.canvas.height = H;
-  const cores = enc.cores;
   const topo = F.seguroTopo || 0, base = F.seguroBase || 0;
 
-  desenharFundo(c, W, H, cores, { fogo: enc.fogo, economiaTinta: enc.economiaTinta });
+  desenharFundo(c, W, H, cores, { fogo: tema.fogo });
+  if (topo) { c.fillStyle = cores.cabecalho || cores.etiqueta; c.fillRect(0, 0, W, topo); }
 
-  // story: a faixa coberta pelo Instagram leva a cor do cabeçalho/rodapé, sem "buraco"
-  if (topo) { c.fillStyle = cores.cabecalho; c.fillRect(0, 0, W, topo); }
-  const cabH = Math.round(W * 0.27);
+  const cabH = alturaCabecalho(tema.cabecalho, W, H - topo - base);
   c.save();
   c.translate(0, topo);
-  desenharCabecalho(c, W, cabH, enc.cabecalho, cores);
+  desenharCabecalho(c, W, cabH, { imagem: tema.cabecalho, logos: pag.logos, logosLado: tema.logosLado }, cores);
   c.restore();
 
-  const rodH = Math.round(W * 0.105);
+  const rodH = Math.round(W * (pag.rodape && pag.rodape.observacao ? 0.08 : 0.06));
   const rodY = H - base - rodH;
-  if (base) { c.fillStyle = cores.cabecalho; c.fillRect(0, H - base, W, base); }
+  if (base) { c.fillStyle = cores.rodape || cores.etiqueta; c.fillRect(0, H - base, W, base); }
 
-  const m = W * 0.03;
-  const area = { x: m, y: topo + cabH + m * 1.1, w: W - m * 2, h: rodY - (topo + cabH) - m * 2.1 };
-  const pos = posicionar(enc.produtos, area);
+  const m = W * 0.025;
+  const area = { x: m, y: topo + cabH + m, w: W - m * 2, h: rodY - (topo + cabH) - m * 2 };
+  const pos = posicionar(pag.produtos, area);
 
-  // mesmo tamanho de nome dentro de cada linha e mesma reserva para a faixa "sem app"
-  // a faixa "sem app" é reservada por linha: cartões lado a lado ficam com o preço do mesmo tamanho
-  const faixaPorLinha = {};
-  for (const p of pos) if (p.prod.precoApp != null) faixaPorLinha[p.linha] = true;
-  const nomePorLinha = {};
+  // nomes da mesma linha com o mesmo tamanho de letra
+  const tamLinha = {};
   for (const p of pos) {
-    const deitado = p.w / p.h >= 1.3;
-    const pad = Math.min(p.w, p.h) * 0.045;
-    const larg = deitado ? p.w * 0.54 - pad * 1.5 : p.w - pad * 2;
-    const alt = deitado ? p.h * 0.34 : p.h * 0.135;
-    const t = medirNome(c, p.prod.nome, larg, alt, deitado ? 3 : 2).tamanho;
-    nomePorLinha[p.linha] = Math.min(nomePorLinha[p.linha] ?? Infinity, t);
+    if (p.deitado) continue;
+    const pad = Math.min(p.w, p.h) * 0.05;
+    const t = medirNome(c, p.prod.nome, p.w - pad * 2, p.h * 0.17, 2).tamanho;
+    tamLinha[p.linha] = Math.min(tamLinha[p.linha] ?? Infinity, t);
   }
-  for (const p of pos) {
-    desenharCartao(c, p.prod, p.x, p.y, p.w, p.h, cores, { reservarFaixa: !!faixaPorLinha[p.linha], tamanhoNome: nomePorLinha[p.linha] });
-  }
+  for (const p of pos) desenharCartao(c, p.prod, p.x, p.y, p.w, p.h, cores, { deitado: p.deitado, tamanhoNome: tamLinha[p.linha] });
 
-  desenharRodape(c, 0, rodY, W, rodH, enc.rodape, cores);
+  desenharRodape(c, 0, rodY, W, rodH, pag.rodape || {}, cores);
   return { W, H, posicoes: pos };
 }
