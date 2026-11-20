@@ -154,7 +154,9 @@ O banco de produtos da Central entra **somente** por `lib/encartes.js` (`BK.encL
 fundos desenhados pelo app — madeira, lousa, kraft, cimento (e), desenhos decorativos do tema (f).
 O fundo com tema de fogo (dia D) é pedido do Eduardo e **fica**.
 
-**FICA:** foto repetida em cascata (d), arte própria do Photoshop (g), vídeo com voz (h), TV da loja (i),
+**SAI também (20/11, 15h41):** importar a arte inteira do Photoshop com vagas marcadas (g). Do Photoshop entra **só o cabeçalho**; os produtos o app distribui sozinho.
+
+**FICA:** foto repetida em cascata (d), vídeo com voz (h), TV da loja (i),
 plaquinha pela câmera (j), ofertas sugeridas / kit da semana / resultado / custo da oferta (k),
 economia de tinta (l), story com área segura (m), recorte do fundo branco da foto (n).
 
