@@ -101,6 +101,19 @@ check(st['saldo'] == 15500, 'saldo cai com a sangria: 18.000 − 2.500 = 15.500'
 s, r = A.req('/api/caixa/sangria', {'valor': '1000', 'data': '2026-10-03', 'motivo': 'reforço no banco'}); SG2 = r.get('id')
 check(s == 200, 'admin também pode lançar sangria')
 s, st = A.req('/api/caixa/state'); check(st['saldo'] == 14500, 'saldo: 15.500 − 1.000 = 14.500')
+cat = {m['id']: m.get('categoria') for m in st['mov']}
+check(cat.get(SG1) == 'deposito' and cat.get(SG2) == 'despesa', 'sangrias sem categoria: o servidor deduz do motivo (depósito → depósito; o resto → pagamento) (%s, %s)' % (cat.get(SG1), cat.get(SG2)))
+s, _ = A.req('/api/caixa/sangria', {'valor': '10', 'data': '2026-10-03', 'motivo': 'x y', 'categoria': 'presente'}); check(s == 400, 'categoria inventada recusada')
+s, _ = A.req('/api/caixa/sangria', {'valor': '10', 'data': '2026-10-03', 'motivo': '', 'categoria': 'despesa'}); check(s == 400, 'pagamento sem dizer o quê/a quem recusado')
+s, _ = A.req('/api/caixa/sangria', {'valor': '10', 'data': '2026-10-03', 'motivo': '', 'categoria': 'cheque'}); check(s == 400, 'cheque sem dizer de quem recusado')
+s, _ = M.req('/api/caixa/sangria', {'valor': '10', 'data': '2026-10-03', 'categoria': 'impostos'}); check(s == 403, 'caixista não manda para a gaveta de impostos nem pela categoria')
+s, r = A.req('/api/caixa/sangria', {'valor': '10', 'data': '2026-10-03', 'motivo': '', 'categoria': 'deposito'}); SGC = r.get('id')
+check(s == 200 and r.get('categoria') == 'deposito', 'depósito no banco não precisa de motivo')
+s, st = A.req('/api/caixa/state'); mc = next((m for m in st['mov'] if m['id'] == SGC), {})
+check(mc.get('motivo') == 'Depósito no banco' and mc.get('categoria') == 'deposito', 'o motivo do depósito vem preenchido sozinho')
+s, r = A.req('/api/caixa/sangria', {'valor': '10', 'data': '2026-10-03', 'motivo': 'Cheque do Sr. João', 'categoria': 'cheque'}); SGCH = r.get('id'); check(s == 200 and r.get('categoria') == 'cheque', 'lança cheque')
+for _id in (SGC, SGCH): A.req('/api/caixa/mov/excluir', {'id': _id})
+s, st = A.req('/api/caixa/state'); check(st['saldo'] == 14500, 'apagadas as sangrias de teste de categoria, o saldo volta a 14.500')
 
 print('== marcar sangria como depositada (não muda o saldo)')
 s, _ = M.req('/api/caixa/depositado', {'id': SG1, 'depositadoEm': '2026-10-05'}); check(s == 403, 'caixista NÃO confirma o banco: quem tira o dinheiro não confirma que ele chegou')
@@ -396,14 +409,24 @@ s, st = A.req('/api/caixa/state'); j = next(x for x in st['jobs'] if x['id'] == 
 print('== "quanto eu tenho agora e está tudo certo?": resumo do dono, contagem cega da equipe, alertas')
 s, st = A.req('/api/caixa/state'); rs = st.get('resumo', {})
 check(rs.get('naMatriz') == st['saldo'] and rs.get('status') in ('verde', 'amarelo', 'vermelho') and isinstance(rs.get('alertas'), list), 'o dono recebe o resumo: dinheiro na matriz, semáforo e alertas')
-check(round(rs['naMatriz'] + rs['nasLojas']['total'] + rs['aCaminhoDoBanco']['total'] + rs['gaveta'], 2) == rs['tudo'], '"tudo que é seu" = matriz + nas lojas + a caminho do banco + gaveta')
+check(round(rs['naMatriz'] + rs['nasLojas']['total'] + rs['gaveta'], 2) == rs['tudo'], '"total em dinheiro" = matriz + nas lojas + gaveta (o que foi ao banco ou foi gasto não entra)')
+sm = rs.get('saidasMes') or {}
+check(all(k in sm for k in ('desde', 'deposito', 'despesa', 'cheque', 'impostos')) and sm['desde'].endswith('-01'), 'o resumo traz o que saiu do cofre no mês, separado por para quê')
+import datetime as _dt
+_hj = (_dt.datetime.utcnow() - _dt.timedelta(hours=3)).strftime('%Y-%m-%d')
+s, r = A.req('/api/caixa/sangria', {'valor': '33', 'data': _hj, 'motivo': 'Pagamento teste', 'categoria': 'despesa'}); SGD = r.get('id')
+s, st2 = A.req('/api/caixa/state'); sm2 = st2['resumo']['saidasMes']
+check(sm2['despesa'] == round(sm['despesa'] + 33, 2) and sm2['deposito'] == sm['deposito'], 'um pagamento de hoje entra em "pagamentos em dinheiro" do mês, não em depósitos')
+A.req('/api/caixa/mov/excluir', {'id': SGD})
 check(rs['nasLojas']['total'] >= 390, 'caixas do StarIA ainda esperando contam em "nas lojas" (310 + 80)')
 cods = [a['codigo'] for a in rs['alertas']]
-import datetime as _dt
 _d5 = (_dt.datetime.utcnow() - _dt.timedelta(hours=3) - _dt.timedelta(days=5)).strftime('%Y-%m-%d')
 s, r = F.req('/api/caixa/sangria', {'valor': '700', 'data': _d5, 'motivo': 'Depósito no banco'}); SGB = r.get('id')
 s, st = A.req('/api/caixa/state'); rs = st['resumo']; cods = [a['codigo'] for a in rs['alertas']]
 check('SANGRIA_SEM_BANCO' in cods and rs['aCaminhoDoBanco']['qtd'] == 1 and rs['aCaminhoDoBanco']['total'] == 700, 'sangria da equipe há 5 dias que o dono ainda não confirmou no banco vira alerta (%s)' % rs['aCaminhoDoBanco'])
+s, r = F.req('/api/caixa/sangria', {'valor': '90', 'data': _d5, 'motivo': 'Pagamento Eder', 'categoria': 'despesa'}); SGP = r.get('id')
+s, st = A.req('/api/caixa/state'); check(st['resumo']['aCaminhoDoBanco']['qtd'] == 1 and st['resumo']['aCaminhoDoBanco']['total'] == 700, 'pagamento em dinheiro da equipe não vai ao banco: não pede confirmação no extrato')
+A.req('/api/caixa/mov/excluir', {'id': SGP})
 s, _ = A.req('/api/caixa/depositado', {'id': SGB, 'depositadoEm': _d5}); s, st = A.req('/api/caixa/state')
 check('SANGRIA_SEM_BANCO' not in [a['codigo'] for a in st['resumo']['alertas']] and st['resumo']['aCaminhoDoBanco']['qtd'] == 0, 'depois que o dono confirma no banco, o alerta some')
 rs = st['resumo']; cods = [a['codigo'] for a in rs['alertas']]
@@ -455,13 +478,16 @@ s, r = A.req('/api/caixa/staria/resultado', {'id': JCR2, 'resultado': {'crediari
 s, stf = F.req('/api/caixa/state'); meus = [c for c in stf['crediarios'] if c['data'] == _dc and c['filial'] == 2]
 check(len(meus) == 6 and all(c['valor'] > 0 and c['cliente'] for c in meus) and all('banco' not in c for c in meus), 'o financeiro vê cliente e valor para marcar a forma (mas não vê se o dono já conferiu no banco)')
 s, stm = M2.req('/api/caixa/state'); check('crediarios' not in stm, 'a caixista não vê os recebimentos de crediário')
+fpn = {c['numero']: c for c in meus}
+check(fpn['7003']['forma'] == 'cartao' and fpn['7004']['forma'] == 'pix' and 'Automático' in (fpn['7003']['formaPor'] or ''), 'conta de cartão/banco no StarIA já entra com a forma marcada (cartão, Pix), sem clique')
+check(fpn['7001']['forma'] is None and fpn['7002']['forma'] is None, 'convênio continua sem forma: o financeiro decide (pode ser dinheiro)')
 porNum = {}
 for c in meus: porNum.setdefault(c['numero'], []).append(c['id'])
 s, st = A.req('/api/caixa/state'); check('CREDI_SEM_FORMA' in [a['codigo'] for a in st['resumo']['alertas']], 'recebimento sem forma marcada há dias vira alerta')
 s, _ = M2.req('/api/caixa/credi/forma', {'itens': [{'id': porNum['7001'][0], 'forma': 'dinheiro'}]}); check(s == 403, 'caixista não marca a forma')
 s, _ = F.req('/api/caixa/credi/forma', {'itens': [{'id': porNum['7001'][0], 'forma': 'boleto'}]}); check(s == 400, 'forma inválida recusada')
 FORMAS = [(porNum['7001'][0], 'dinheiro'), (porNum['7002'][0], 'dinheiro'), (porNum['7003'][0], 'cartao'), (porNum['7004'][0], 'pix'), (porNum['7005'][0], 'pix'), (porNum['7005'][1], 'outro')]
-s, r = F.req('/api/caixa/credi/forma', {'itens': [{'id': i, 'forma': f} for i, f in FORMAS]}); check(s == 200 and r['alteradas'] == 6, 'financeiro marca a forma dos 6 de uma vez')
+s, r = F.req('/api/caixa/credi/forma', {'itens': [{'id': i, 'forma': f} for i, f in FORMAS]}); check(s == 200 and r['alteradas'] == 6 and r['travadas'] == 0, 'financeiro marca a forma dos 6 de uma vez, sem aviso falso de "travado" (%s)' % r)
 s, st = A.req('/api/caixa/state'); rs = st['resumo']; cods = [a['codigo'] for a in rs['alertas']]
 check(rs['nasLojas']['porFilial']['2']['crediario'] == 450, 'o crediário em dinheiro (300 + 150) aparece como dinheiro nas lojas, ainda não contado')
 check('CREDI_CONFERIR_BANCO' in cods and 'CREDI_SEM_FORMA' not in cods and 'CREDI_DINHEIRO_PARADO' in cods, 'alertas: Pix/cartão para o dono conferir, e dinheiro do crediário parado há dias')
