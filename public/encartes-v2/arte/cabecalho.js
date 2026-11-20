@@ -1,6 +1,6 @@
 // Cabeçalho: SEMPRE a imagem do Photoshop do tema (decisão do Eduardo, 20/11).
 // O app só coloca as logos no canto esquerdo, lado a lado ou uma em cima da outra (escolha do tema).
-import { imagemContida } from './util.js';
+import { imagemContida, FONTE, fonte, tom, textoSobre } from './util.js';
 
 // Altura do cabeçalho: a da própria imagem (ela é feita na largura do encarte), no máximo 38% da arte.
 export function alturaCabecalho(img, W, H) {
@@ -52,4 +52,29 @@ function logos(c, imgs, a, lado) {
     imagemContida(c, img, bx, by, bw, bh);
     c.restore();
   });
+}
+
+// Verso: faixa fininha com o nome da campanha em letras, para sobrar espaço para os produtos.
+// As logos vão pequenas no canto esquerdo.
+export function desenharFaixaFina(c, W, H, nome, logosImgs, cores) {
+  const base = cores.cabecalho || cores.etiqueta;
+  c.save();
+  const g = c.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, tom(base, 0.1));
+  g.addColorStop(1, tom(base, -0.15));
+  c.fillStyle = g;
+  c.fillRect(0, 0, W, H);
+  c.fillStyle = cores.destaque || '#ffd21f';
+  c.fillRect(0, H - Math.max(3, H * 0.06), W, Math.max(3, H * 0.06));
+  logos(c, logosImgs, { x: W * 0.02, y: H * 0.1, w: W * 0.26, h: H * 0.76 }, true);
+  const txt = String(nome || '').toUpperCase();
+  let t = H * 0.62;
+  c.font = fonte(400, t, FONTE.numero);
+  const max = W * 0.66, lw = c.measureText(txt).width;
+  if (lw > max) { t *= max / lw; c.font = fonte(400, t, FONTE.numero); }
+  c.fillStyle = textoSobre(base);
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillText(txt, W * 0.64, H * 0.5);
+  c.restore();
 }

@@ -12,7 +12,7 @@ for (const f of ['400 40px Anton', '700 40px Oswald', '600 40px Oswald', '400 40
 const logos = await Promise.all(['/public/encartes-v2/logos/davila.png', '/public/encartes-v2/logos/redeshow.png'].map(carregar));
 for (const p of caso.produtos) if (p.foto) p.foto = await carregar(FX + p.foto);
 if (caso.tema.cabecalho) caso.tema.cabecalho = await carregar(FX + caso.tema.cabecalho);
-const paginas = paginar(caso.produtos, caso.porPagina || caso.produtos.length);
-desenharPagina(document.getElementById('cv').getContext('2d'), { formato: q.get('formato') || caso.formato, tema: caso.tema, logos, produtos: paginas[+(q.get('pagina') || 0)], rodape: caso.rodape });
+const paginas = paginar(caso.produtos, caso.capa || caso.porPagina || caso.produtos.length, caso.verso);
+desenharPagina(document.getElementById('cv').getContext('2d'), { formato: q.get('formato') || caso.formato, tema: caso.tema, logos, produtos: paginas[+(q.get('pagina') || 0)], verso: +(q.get('pagina') || 0) > 0, rodape: caso.rodape });
 window.PRONTO = true;
 </script>

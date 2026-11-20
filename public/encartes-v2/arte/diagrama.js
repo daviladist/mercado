@@ -44,11 +44,18 @@ export function posicionar(produtos, area, opt = {}) {
   return out;
 }
 
-// Divide a lista em páginas de "porPagina" produtos. Os destaques vão primeiro.
-export function paginar(produtos, porPagina) {
-  porPagina = Math.max(1, Math.floor(porPagina || produtos.length || 1));
+// Divide a lista em páginas: a capa leva "capa" produtos e cada verso leva "verso" (cabe mais,
+// porque o verso tem só uma faixa fininha em cima). Os destaques vão primeiro.
+export function paginar(produtos, capa, verso = capa) {
+  capa = Math.max(1, Math.floor(capa || produtos.length || 1));
+  verso = Math.max(1, Math.floor(verso || capa));
   const ordem = [...produtos.filter(p => p.destaque), ...produtos.filter(p => !p.destaque)];
   const paginas = [];
-  for (let i = 0; i < ordem.length; i += porPagina) paginas.push(ordem.slice(i, i + porPagina));
+  let i = 0;
+  while (i < ordem.length) {
+    const n = paginas.length ? verso : capa;
+    paginas.push(ordem.slice(i, i + n));
+    i += n;
+  }
   return paginas.length ? paginas : [[]];
 }

@@ -1,6 +1,6 @@
 // Junta as partes e desenha UMA página do encarte numa tela (canvas).
 import { desenharFundo } from './fundo.js';
-import { desenharCabecalho, alturaCabecalho } from './cabecalho.js';
+import { desenharCabecalho, alturaCabecalho, desenharFaixaFina } from './cabecalho.js';
 import { desenharRodape } from './rodape.js';
 import { desenharCartao, medirNome } from './cartao.js';
 import { posicionar } from './diagrama.js';
@@ -22,10 +22,12 @@ export function desenharPagina(c, pag) {
   desenharFundo(c, W, H, cores, { fogo: tema.fogo });
   if (topo) { c.fillStyle = cores.cabecalho || cores.etiqueta; c.fillRect(0, 0, W, topo); }
 
-  const cabH = alturaCabecalho(tema.cabecalho, W, H - topo - base);
+  const verso = pag.verso && tema.versoFino !== false;
+  const cabH = verso ? Math.round(W * 0.09) : alturaCabecalho(tema.cabecalho, W, H - topo - base);
   c.save();
   c.translate(0, topo);
-  desenharCabecalho(c, W, cabH, { imagem: tema.cabecalho, logos: tema.logosNaImagem ? [] : pag.logos, logosLado: tema.logosLado }, cores);
+  if (verso) desenharFaixaFina(c, W, cabH, tema.nome, pag.logos, cores);
+  else desenharCabecalho(c, W, cabH, { imagem: tema.cabecalho, logos: tema.logosNaImagem ? [] : pag.logos, logosLado: tema.logosLado }, cores);
   c.restore();
 
   const rodH = Math.round(W * (pag.rodape && pag.rodape.observacao ? 0.08 : 0.06));
