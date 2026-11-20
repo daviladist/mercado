@@ -9,6 +9,27 @@ export const END = {
   loja: 'app/v2-loja',             // dados da loja (rodapé, QR do app, frases)
 };
 
+// Dentro do Tino sem mexer no servidor: o app abre em /encartes-v2/?t=<empresa> e usa a mesma sessão
+// (o mesmo login) do app atual. As chamadas vão para as mesmas rotas /api/encartes/*.
+if (typeof window !== 'undefined' && !window.TINO) {
+  const slug = new URLSearchParams(location.search).get('t');
+  if (slug && /^[a-z0-9-]{1,40}$/.test(slug)) {
+    window.TINO = {
+      slug,
+      async api(path, body) {
+        const h = { 'X-App': '1', 'X-Tenant': slug };
+        const opt = body === undefined ? { credentials: 'same-origin', headers: h } : { method: 'POST', credentials: 'same-origin', headers: { ...h, 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+        let r;
+        try { r = await fetch(path, opt); } catch (_) { throw new Error('Sem internet. Confira a conexão.'); }
+        let j = {};
+        try { j = await r.json(); } catch (_) { /* vazio */ }
+        if (r.status === 401) { location.href = '/t/' + slug + '/'; throw new Error('Entre com seu usuário e volte para este link.'); }
+        if (!r.ok) throw new Error(j.error || 'Erro ' + r.status);
+        return j;
+      },
+    };
+  }
+}
 const noTino = () => typeof window !== 'undefined' && window.TINO && typeof window.TINO.api === 'function';
 const memoria = {};
 const local = {
@@ -18,12 +39,16 @@ const local = {
 
 // id de quem está usando (para o rascunho de cada pessoa)
 let _me = null;
+let _dono = true;
 export async function meuId() {
   if (_me) return _me;
   if (!noTino()) return (_me = 'local');
   const r = await window.TINO.api('/api/encartes/me');
+  _dono = !!r.dono;
   return (_me = r.id);
 }
+// dono (administrador) vê Modelos, Dados da loja e Logos; funcionário só faz encarte e plaquinha
+export async function souDono() { await meuId(); return _dono; }
 
 export async function apagar(p) {
   if (!noTino()) { delete memoria[p]; try { localStorage.removeItem('encv2:' + p); } catch (_) { /* nada */ } return; }

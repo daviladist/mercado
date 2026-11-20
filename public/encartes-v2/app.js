@@ -1,5 +1,6 @@
 // Entrada do app: carrega os dados e troca de tela pelas abas.
 import { carregar } from './estado.js';
+import { souDono } from './nuvem.js';
 import { $, $$, avisar } from './telas/comum.js';
 import * as campanhas from './telas/campanhas.js';
 import * as logos from './telas/logos.js';
@@ -19,5 +20,6 @@ $$('#abas button').forEach(b => b.addEventListener('click', () => abrir(b.datase
 
 for (const f of ['400 20px Anton', '700 20px Oswald', '600 20px Oswald', '700 20px Archivo', '400 20px "Archivo Black"']) await document.fonts.load(f);
 try { await carregar(); } catch (e) { avisar('Não consegui abrir os dados: ' + e.message, 6000); }
+try { if (!(await souDono())) $$('#abas button').forEach(b => { if (!['fazer', 'plaquinhas'].includes(b.dataset.tela)) b.hidden = true; }); } catch (_) { /* fica tudo à mostra só no teste local */ }
 await abrir(new URLSearchParams(location.search).get('tela') || 'fazer');
 window.PRONTO = true;
