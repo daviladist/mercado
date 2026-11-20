@@ -36,6 +36,7 @@ export async function subirImagem(dataURL) {
 
 export function enderecoImagem(id) {
   if (!id) return null;
+  if (String(id).startsWith('pronto:')) return new URL('./modelos/prontos/' + String(id).slice(7) + '.jpg', import.meta.url).href;
   if (String(id).startsWith('local:')) return local.ler('img/' + id);
   return '/api/encartes/blob?id=' + encodeURIComponent(id);
 }

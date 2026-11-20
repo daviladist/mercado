@@ -1,0 +1,50 @@
+<!doctype html><meta charset="utf-8">
+<link rel="stylesheet" href="/public/encartes-v2/fontes/fontes.css">
+<body style="margin:0;background:#222"><canvas id="cv"></canvas>
+<script type="module">
+// Refaz os cabeçalhos antigos no formato do modelo (2160x800): canto esquerdo livre para as logos,
+// título no meio, foto à direita. Só roda uma vez, para gerar os arquivos dos modelos prontos.
+const q = new URLSearchParams(location.search);
+const C = JSON.parse(q.get('c'));
+await document.fonts.load('400 80px Anton'); await document.fonts.load('400 40px "Archivo Black"');
+const img = await new Promise(ok => { const i = new Image(); i.onload = () => ok(i); i.src = '/tests/fixtures/encartes-v2/originais/' + C.arq; });
+const W = 2160, H = 800, cv = document.getElementById('cv'); cv.width = W; cv.height = H;
+const c = cv.getContext('2d');
+// fundo
+const g = c.createLinearGradient(0, 0, W, H); g.addColorStop(0, C.fundo1); g.addColorStop(1, C.fundo2);
+c.fillStyle = g; c.fillRect(0, 0, W, H);
+const rg = c.createRadialGradient(W * 0.45, H * 0.5, 50, W * 0.45, H * 0.5, W * 0.6); rg.addColorStop(0, 'rgba(255,255,255,0.10)'); rg.addColorStop(1, 'rgba(0,0,0,0.25)');
+c.fillStyle = rg; c.fillRect(0, 0, W, H);
+// foto: o pedaço da direita do cabeçalho antigo, ocupando a direita, com a borda esquerda sumindo no fundo
+const sx = img.width * C.fotoDe, sw = img.width - sx, k = H / img.height, dw = sw * k, dx = W - dw;
+// a foto vai para uma tela à parte e ganha uma máscara: some suave na borda esquerda, sem emenda
+const o = document.createElement('canvas'); o.width = W; o.height = H; const oc = o.getContext('2d');
+oc.drawImage(img, sx, 0, sw, img.height, dx, 0, dw, H);
+oc.globalCompositeOperation = 'destination-in';
+const m = oc.createLinearGradient(dx, 0, dx + dw * 0.45, 0); m.addColorStop(0, 'rgba(0,0,0,0)'); m.addColorStop(1, 'rgba(0,0,0,1)');
+oc.fillStyle = m; oc.fillRect(0, 0, W, H);
+c.drawImage(o, 0, 0);
+// título no meio (entre a zona das logos e a foto)
+const x0 = W * 0.355, x1 = Math.max(x0 + W * 0.3, dx + dw * 0.22), tw = x1 - x0;
+const linhas = C.titulo; let tam = 400;
+c.font = `400 ${tam}px Anton`;
+const larg = Math.max(...linhas.map(l => c.measureText(l).width));
+tam = Math.min(tam * tw / larg, (H * 0.7) / (linhas.length * 0.95));
+c.textBaseline = 'alphabetic'; c.textAlign = 'left';
+const capa = tam * 0.735, passo = tam * 0.95, bloco = (linhas.length - 1) * passo + capa;
+let y = (H * 0.8 - bloco) / 2 + capa + H * 0.04;
+linhas.forEach((l, i) => {
+  c.font = `400 ${tam}px Anton`;
+  c.fillStyle = 'rgba(0,0,0,0.6)'; for (let d = 1; d <= 8; d++) c.fillText(l, x0 + d * tam * 0.006, y + d * tam * 0.008);
+  c.fillStyle = i === linhas.length - 1 ? C.corDestaque : '#ffffff'; c.fillText(l, x0, y);
+  y += passo;
+});
+// faixa de chamada
+if (C.chamada) {
+  let t = H * 0.07; c.font = `400 ${t}px "Archivo Black"`;
+  const lw = c.measureText(C.chamada).width, bh = t * 1.7, bx = x0, by = y - passo + capa * 0.35 + H * 0.05;
+  c.fillStyle = C.corFaixa; c.beginPath(); c.roundRect(bx, by, lw + t * 1.2, bh, bh * 0.22); c.fill();
+  c.fillStyle = '#fff'; c.textBaseline = 'middle'; c.fillText(C.chamada, bx + t * 0.6, by + bh / 2 + t * 0.05);
+}
+window.PRONTO = true;
+</script>

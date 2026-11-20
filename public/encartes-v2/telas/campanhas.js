@@ -8,6 +8,7 @@ import { subirImagem, enderecoImagem, carregarImagem, arquivoParaDataURL } from 
 import { desenharPagina } from '../arte/encarte.js';
 import { paginar } from '../arte/diagrama.js';
 import { produtosDemo } from '../demo.js';
+import { PRONTOS, enderecoPronto, modeloDePronto } from '../prontos.js';
 
 const ORDEM = [1, 2, 3, 4, 5, 6, 0];         // a semana começa na segunda
 let filtro = new Date().getDay();
@@ -22,14 +23,20 @@ export async function mostrar(raiz) {
       <button data-d="" class="${filtro == null ? 'on' : ''}">Todas</button>
       ${ORDEM.map(d => `<button data-d="${d}" class="${filtro === d ? 'on' : ''} ${d === hoje ? 'hoje' : ''}">${DIAS_CURTOS[d]}</button>`).join('')}
     </div>
-    ${lista.length ? `<div class="grade">${lista.map(cartao).join('')}</div>` : vazio()}`;
+    ${lista.length ? `<div class="grade">${lista.map(cartao).join('')}</div>` : vazio()}
+    ${prontosQueFaltam().length ? `<h3 style="font:700 16px Oswald,sans-serif;text-transform:uppercase;margin:26px 0 8px">Começar de um modelo pronto</h3>
+      <div class="grade">${prontosQueFaltam().map(p => `<div class="camp pronto" data-p="${p.arq}"><div class="cab" style="background-image:url('${enderecoPronto(p.arq)}')"></div><div class="info"><div class="nome">${esc(p.nome)}</div><div class="dd">Toque para usar e ajustar</div></div></div>`).join('')}</div>` : ''}`;
   $$('#filtro button', raiz).forEach(b => b.onclick = () => { filtro = b.dataset.d === '' ? null : +b.dataset.d; mostrar(raiz); });
   $('#nova', raiz).onclick = () => editar(raiz, novaCampanha(), true);
-  $$('.camp', raiz).forEach(el => el.onclick = () => {
+  $$('.camp.pronto', raiz).forEach(el => el.onclick = () => editar(raiz, modeloDePronto(PRONTOS.find(p => p.arq === el.dataset.p)), true));
+  $$('.camp:not(.pronto)', raiz).forEach(el => el.onclick = () => {
     const c = estado.campanhas.find(x => x.id === el.dataset.id);
     if (c) editar(raiz, garantir(structuredClone(c)), false);
   });
 }
+
+// prontos que ainda não viraram modelo
+const prontosQueFaltam = () => PRONTOS.filter(p => !estado.campanhas.some(c => c.cabecalho === 'pronto:' + p.arq));
 
 function cartao(c) {
   const falta = oQueFalta(c), src = enderecoImagem(c.cabecalho);
