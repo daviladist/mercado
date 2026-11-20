@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/public/encartes-v2/fontes/fontes.css">
+<body style="margin:0;background:#666"><canvas id="cv" style="width:600px"></canvas>
+<script type="module">
+import { desenharFolha } from '/public/encartes-v2/arte/plaquinha.js';
+import { tamanho, precoPorMedida } from '/public/encartes-v2/plaquinhas-dados.js';
+const FX = '/tests/fixtures/encartes-v2/';
+const carregar = s => new Promise(ok => { const i = new Image(); i.onload = () => ok(i); i.src = s; });
+for (const f of ['400 40px Anton', '700 40px Oswald', '700 40px Archivo']) await document.fonts.load(f);
+const q = new URLSearchParams(location.search);
+const logos = await Promise.all(['/public/encartes-v2/logos/davila.png', '/public/encartes-v2/logos/redeshow.png'].map(carregar));
+const itens = [
+  { nome: 'Coxa e sobrecoxa com dorsal', preco: 9.79, precoApp: 7.79, limite: 20, unidade: 'kg', foto: await carregar(FX + 'sassami.webp'), codigo: '17874', validade: '2026-11-21' },
+  { nome: 'Café 3 Corações Tradicional 500g', preco: 17.98, foto: null, codigo: '101', validade: '2026-11-21', mostrarPrecoKg: true, pertoVencer: '2026-12-02', obs: 'Limite de 5 por cliente' },
+];
+itens[1].precoKg = precoPorMedida(itens[1]);
+desenharFolha(document.getElementById('cv').getContext('2d'), tamanho(q.get('t') || 'a5'), itens, { cores: { cabecalho: '#16161a', destaque: '#ffd21f' }, logos, titulo: 'Oferta Relâmpago', impressaEm: '2026-11-20' }, 8);
+window.PRONTO = true;
+</script>

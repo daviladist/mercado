@@ -6,8 +6,9 @@ import * as logos from './telas/logos.js';
 import * as modelo from './telas/modelo.js';
 import * as loja from './telas/loja.js';
 import * as fazer from './telas/fazer.js';
+import * as plaquinhas from './telas/plaquinhas.js';
 
-const TELAS = { fazer, campanhas, loja, logos, modelo };
+const TELAS = { fazer, plaquinhas, campanhas, loja, logos, modelo };
 
 async function abrir(nome) {
   $$('#abas button').forEach(b => b.classList.toggle('on', b.dataset.tela === nome));

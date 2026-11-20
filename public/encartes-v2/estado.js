@@ -8,6 +8,8 @@ export const estado = {
   logos: [],          // ids das imagens das logos (1 ou 2)
   loja: completarLoja(null),
   rascunho: null,     // o encarte em edição desta pessoa
+  avulsas: [],        // plaquinhas avulsas em edição desta pessoa
+  registro: [],       // plaquinhas impressas (de todos), para avisar as vencidas
   carregado: false,
 };
 
@@ -15,6 +17,8 @@ export async function carregar() {
   const [c, l, lj] = await Promise.all([ler(END.campanhas), ler(END.logos), ler(END.loja)]);
   estado.loja = completarLoja(lj);
   try { const r = await ler(`data/users/${await meuId()}/v2-rascunho`); estado.rascunho = r && r.encarte ? r.encarte : null; } catch (_) { estado.rascunho = null; }
+  try { const a = await ler(`data/users/${await meuId()}/v2-avulsas`); estado.avulsas = (a && a.lista) || []; } catch (_) { estado.avulsas = []; }
+  try { const g = await ler(REGISTRO); estado.registro = (g && g.lista) || []; } catch (_) { estado.registro = []; }
   estado.campanhas = (c && Array.isArray(c.lista)) ? c.lista : [];
   estado.logos = (l && Array.isArray(l.logos)) ? l.logos : [];
   estado.carregado = true;
@@ -64,3 +68,18 @@ export async function salvarEncarte(enc) {
 }
 export async function encartesRecentes() { return ((await ler(RECENTES)) || { lista: [] }).lista; }
 export async function abrirSalvo(id) { const r = await ler('salvos/v2-' + id); return r && r.encarte; }
+
+// ---------- plaquinhas ----------
+const REGISTRO = 'comum/v2-plaquinhas-impressas';
+let tAv = 0;
+export function salvarAvulsas() {
+  clearTimeout(tAv);
+  tAv = setTimeout(async () => { try { await gravar(`data/users/${await meuId()}/v2-avulsas`, { lista: estado.avulsas }); } catch (_) { /* tenta na próxima */ } }, 600);
+}
+// relê antes de gravar: outra pessoa pode ter impresso plaquinha ao mesmo tempo
+export async function salvarRegistro(atualizar) {
+  const g = await ler(REGISTRO);
+  const lista = atualizar((g && g.lista) || []);
+  await gravar(REGISTRO, { lista });
+  estado.registro = lista;
+}

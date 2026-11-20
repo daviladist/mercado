@@ -80,7 +80,8 @@ function passo2(raiz, ir) {
 
   const achar = el => e.produtos.find(p => p.id === el.closest('[data-id]').dataset.id);
   const mudou = () => { salvarRascunho(); passo2(raiz, ir); };
-  $$('[data-a]', raiz).forEach(b => b.onclick = async () => {
+  $$('[data-a]', raiz).forEach(b => b.onclick = async ev => {
+    ev.preventDefault();
     const p = achar(b), i = e.produtos.indexOf(p);
     const a = b.dataset.a;
     if (a === 'dest') { if (!alternarDestaque(e, p.id, m)) avisar(`Este modelo permite até ${maxDestaques(m)} destaques.`); return mudou(); }
@@ -105,22 +106,24 @@ function passo2(raiz, ir) {
 
 function linhaProduto(p, i, n, frases) {
   const src = fotoDe(p);
-  return `<div class="item" data-id="${esc(p.id)}" style="display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;border-top:1px solid var(--linha);padding:8px 0">
-    <div style="width:64px;height:64px;border-radius:8px;background:#f4f3ef center/contain no-repeat;${src ? `background-image:url('${esc(src)}')` : ''};display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--mut)">${src ? '' : 'sem foto'}</div>
-    <div>
-      <input type="text" data-k="nome" value="${esc(p.nome)}" style="font-weight:700">
-      <div class="linha" style="margin-top:6px;gap:6px">
-        <label class="sub" style="margin:0">Preço <input type="text" data-k="preco" value="${reais(p.preco)}" style="width:80px;padding:6px"></label>
-        <label class="sub" style="margin:0">Com app <input type="text" data-k="precoApp" value="${reais(p.precoApp)}" style="width:80px;padding:6px" placeholder="—"></label>
-        ${p.precoApp != null ? `<label class="sub" style="margin:0">Limite <input type="number" data-k="limite" value="${p.limite || ''}" style="width:64px;padding:6px" placeholder="—"></label>` : ''}
-        <select data-k="frase" style="width:auto;padding:6px"><option value="">Sem frase</option>${frases.map(f => `<option ${p.frase === f ? 'selected' : ''}>${esc(f)}</option>`).join('')}</select>
+  return `<div class="item" data-id="${esc(p.id)}">
+    <div class="foto" style="${src ? `background-image:url('${esc(src)}')` : ''}">${src ? '' : 'sem foto'}</div>
+    <div class="meio">
+      <input type="text" data-k="nome" value="${esc(p.nome)}" class="nome">
+      <div class="campos">
+        <label>R$ <input type="text" data-k="preco" value="${reais(p.preco)}" inputmode="decimal"></label>
+        <label>App <input type="text" data-k="precoApp" value="${reais(p.precoApp)}" placeholder="—" inputmode="decimal"></label>
+        ${p.precoApp != null ? `<label>Limite <input type="number" data-k="limite" value="${p.limite || ''}" placeholder="—"></label>` : ''}
+        <select data-k="frase"><option value="">Sem frase</option>${frases.map(f => `<option ${p.frase === f ? 'selected' : ''}>${esc(f)}</option>`).join('')}</select>
       </div>
-      <div class="sub" style="margin:4px 0 0;font-size:12px">${p.banco ? `No banco: ${esc(p.banco.nomeBanco)}` : '<b style="color:var(--aviso)">Não achei no banco</b>'} • <a href="#" data-a="banco">trocar</a>${src ? '' : ' • <a href="#" data-a="foto">foto do aparelho</a> • <a href="#" data-a="web">foto da internet</a>'}${src ? ' • <a href="#" data-a="foto">trocar foto</a>' : ''}</div>
+      <div class="info">${p.banco ? `No banco: ${esc(p.banco.nomeBanco)}` : '<b class="alerta">Não achei no banco</b>'} · <a href="#" data-a="banco">trocar</a> · <a href="#" data-a="foto">${src ? 'trocar foto' : 'foto do aparelho'}</a>${src ? '' : ' · <a href="#" data-a="web">foto da internet</a>'}</div>
     </div>
-    <div class="linha" style="gap:4px;flex-direction:column;align-items:stretch">
-      <button class="btn ${p.destaque ? 'esc' : ''}" data-a="dest" title="Destaque">★ Destaque</button>
-      <button class="btn ${p.repetir ? 'esc' : ''}" data-a="casc" title="Foto repetida (leve vários)">⧉ Vários</button>
-      <div class="linha" style="gap:4px"><button class="btn" data-a="sobe" ${i ? '' : 'disabled'}>↑</button><button class="btn" data-a="desce" ${i < n - 1 ? '' : 'disabled'}>↓</button><button class="btn" data-a="tira">✕</button></div>
+    <div class="acoes">
+      <button class="ic ${p.destaque ? 'on' : ''}" data-a="dest" title="Destaque">★</button>
+      <button class="ic ${p.repetir ? 'on' : ''}" data-a="casc" title="Foto repetida (leve vários)">⧉</button>
+      <button class="ic" data-a="sobe" title="Subir" ${i ? '' : 'disabled'}>↑</button>
+      <button class="ic" data-a="desce" title="Descer" ${i < n - 1 ? '' : 'disabled'}>↓</button>
+      <button class="ic" data-a="tira" title="Tirar do encarte">✕</button>
     </div></div>`;
 }
 

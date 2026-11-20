@@ -49,5 +49,15 @@ with sync_playwright() as pw:
     d.value.save_as('/tmp/fazer-a4eco.pdf'); print('baixou', d.value.suggested_filename)
     with pg.expect_download() as d: pg.click('[data-b="feed"]')
     print('baixou', d.value.suggested_filename)
+    # plaquinhas do encarte
+    pg.click('#abas button[data-tela="plaquinhas"]'); pg.wait_for_timeout(800)
+    pg.locator('[data-id]').nth(0).locator('[data-k="perto"]').check(); pg.wait_for_timeout(400)
+    pg.screenshot(path='/tmp/plaq-tela.png')
+    with pg.expect_download() as d: pg.click('#pdf')
+    d.value.save_as('/tmp/plaq-encarte.pdf'); print('baixou', d.value.suggested_filename)
+    pg.wait_for_timeout(500)
+    # avulsa digitada
+    pg.click('[data-o="avulsas"]'); pg.fill('#txt', 'Óleo de soja 900ml 7,99'); pg.click('#add'); pg.wait_for_timeout(400)
+    print('avulsas:', pg.locator('[data-id]').count())
     br.close()
 print('erros:', erros or 'nenhum')
