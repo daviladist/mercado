@@ -332,6 +332,17 @@ body.wz.usrOn .top .actions>#bModo{display:inline-flex!important}
 .vzAct{flex-wrap:wrap}.vzAct .btn{flex:1 1 220px}
 .lockBtn.on{background:#123a8f;color:#fff;border-color:#123a8f}
 .wzPg .lockMini{border:0;background:none;font-size:15px;padding:0 2px;cursor:pointer}
+
+/* revisão antes de baixar: o que trava e o que só melhora */
+.rvH{margin:10px 0 4px;font-weight:700;color:#15171c}
+.rvH small{font-weight:500;color:var(--mut);margin-left:6px}
+.rvH.t{color:#b3121b}
+.rvL{list-style:none;padding:0;margin:0}
+.rvL .rv{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:#f4f5f7;margin-bottom:5px;font-size:14px}
+.rvL .rv.t{background:#fdeaea;color:#8a0b0b}
+.rvL .rv span{flex:1;min-width:0}
+.rvL .rv .fx{flex:none}
+.wzBad.wzOk2{background:#eef7ee;color:#1b5e20}
 </style>
 </head>
 <body>
@@ -364,7 +375,7 @@ body.wz.usrOn .top .actions>#bModo{display:inline-flex!important}
    <div id="avList"></div>
    <div class="bar avBar"><button class="btn pri" id="avScan">📷 Bipar código</button><button class="btn" id="avAdd">+ Adicionar produto</button><button class="btn" id="avPaste">Colar lista</button></div>
   </div><div class="avP">
-   <div class="row2"><label>Por folha A4<select id="avPer"><option value="2">2 por folha</option><option value="1">1 por folha</option></select></label><label>Plaquinha<select id="avOri"><option value="h">Deitada</option><option value="v">Em pé</option></select></label></div>
+   <div class="row2"><label>Tamanho<select id="avPer"></select></label><label>Plaquinha<select id="avOri"><option value="h">Deitada</option><option value="v">Em pé</option></select></label></div>
    <label class="chk2"><input type="checkbox" id="avKg"> Mostrar o preço por quilo ou litro</label>
    <label class="chk2"><input type="checkbox" id="avEco"> Economizar tinta (cabeçalho e preço sem fundo colorido)</label>
    <canvas id="avPrev"></canvas>
