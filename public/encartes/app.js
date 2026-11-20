@@ -4458,7 +4458,7 @@ if(!window.TINO)setTimeout(()=>{cargaFotos().catch(()=>{})},4000);
    No Story, o Instagram cobre o topo (barra de progresso, foto e nome do perfil) e a base (caixa de resposta).
    Aqui o cabeçalho desce um pouco e o rodapé sobe: nada de preço, nome ou logo fica atrás da interface.
    A faixa de cima ganha a cor do cabeçalho e a de baixo continua a cor do rodapé, então a arte não fica com "buraco". */
-const STORY_TOP=0.07,STORY_BOT=0.177; /* 134 px e 340 px num Story de 1920 */
+const STORY_TOP=0.131,STORY_BOT=0.177; /* 252 px e 340 px num Story de 1920 (o Instagram cobre ~250 em cima; com 134 o título ficava 71 px atrás da barra) */
 const isStory=(W,H)=>W<H&&W/H<0.6;
 const storyTop=(W,H)=>isStory(W,H)?Math.round(H*STORY_TOP):0,storyBot=(W,H)=>isStory(W,H)?Math.round(H*STORY_BOT):0;
 {const _ao=areaOf;areaOf=function(W,H,hhO,fhO){const T=storyTop(W,H),B=storyBot(W,H);if(!T&&!B)return _ao(W,H,hhO,fhO);
@@ -4531,6 +4531,46 @@ footerLines=function(){
 
 /* 6) título de campanha que era descrição */
 (S.campaigns||[]).forEach(c=>{if(c.id==='sabado'&&!c.titulo){c.titulo='Sábado em Família';c.nome='Sábado em Família'}});
+/* ================= 28 · correções da auditoria de 20/11 =================
+   1) Preço por kg/L de fardo: "350ml c/ 12 un" conta as 12 (antes contava 1 lata).
+   2) Linha da lista sem preço não some calada: aparece um aviso com o nome dela.
+   3) "Digitar ou colar lista" abria com "[object PointerEvent]" escrito na caixa.
+   4) Preço fora do normal (muito longe do sistema, ou kg/L barato demais) vira aviso para conferir.
+   (O Story que não fica atrás da barra do Instagram está no 26-story-seguro.js.) */
+
+/* 1 ---- fardo / caixa: "c/ 12", "com 12 un", "fardo 12", "cx 24" multiplicam a medida */
+const qtdFardo=d=>{d=String(d||'');if(/(\d+)\s*(?:x|un\.?\s*de|unidades\s*de)\s*\d/i.test(d))return 1;
+ const m=/(?:\bc\/|\bcom\s|\bfardo\s*(?:c\/|com)?\s*|\bcx\.?\s*(?:c\/|com)?\s*|\bpack\s*(?:c\/|com)?\s*)\s*(\d{1,3})\b/i.exec(d);const n=m?parseInt(m[1]):1;return n>1&&n<=200?n:1};
+{const _pk=packOf;packOf=function(p){const k=_pk(p);if(!k)return k;const n=qtdFardo(p&&p.desc);return n>1?{q:k.q*n,u:k.u}:k}}
+
+/* 2 ---- linhas sem preço: cada linha que tem nome mas não virou produto */
+function linhasSemPreco(txt){return String(txt||'').replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(l=>/[a-zà-ú]{2}/i.test(l)&&!parseQuick(l).length)}
+const avisoSemPreco=txt=>{const L=linhasSemPreco(txt);if(!L.length)return'';
+ return`<div class="warn r" id="wzSemPreco"><b>${L.length===1?'1 linha ficou de fora porque está sem preço':L.length+' linhas ficaram de fora porque estão sem preço'}:</b> ${L.slice(0,6).map(esc).join(' • ')}${L.length>6?' • …':''}. Escreva o preço na frente e cole de novo.</div>`};
+{const _wp=wzPrevList;wzPrevList=function(){_wp.apply(this,arguments);try{const el=$('#wzRead'),tx=$('#wzTx');if(!el||!tx)return;const old=el.querySelector('#wzSemPreco');if(old)old.remove();const h=avisoSemPreco(tx.value);if(h)el.insertAdjacentHTML('afterbegin',h)}catch(e){}}}
+{const _wm=wzMontar;wzMontar=function(){let n=0;try{n=linhasSemPreco($('#wzTx').value).length}catch(e){}const r=_wm.apply(this,arguments);if(n)toast(`${n===1?'1 linha sem preço ficou':n+' linhas sem preço ficaram'} de fora da lista`,5000);return r}}
+/* a caixa e o botão foram ligados às funções antigas quando a tela montou: religa nas novas */
+{const tx=$('#wzTx');if(tx&&tx.oninput)tx.oninput=wzPrevList;const mb=$('#wzMont');if(mb&&mb.onclick)mb.onclick=wzMontar}
+{const pl=n=>n===1?'1 produto':n+' produtos';try{const tx=$('#wzRead');if(tx&&!tx.dataset.pl){tx.dataset.pl=1;new MutationObserver(()=>{const b=tx.querySelector('b');if(b&&/^\d+ produtos$/.test(b.textContent)&&b.textContent==='1 produtos')b.textContent='1 produto'}).observe(tx,{childList:true,subtree:true})}}catch(e){}}
+
+/* 3 ---- o clique não é texto: "Digitar ou colar lista" abre vazio */
+{const _oq=openQuick;openQuick=function(pre,...r){return _oq.call(this,typeof pre==='string'?pre:undefined,...r)}}
+
+/* 4 ---- preço fora do normal: só avisa (não trava), e "Está certo" cala o aviso daquele produto */
+function precoEstranho(p){if(!p||p.price==null||p.precoOk)return'';const e=effPrice(p);if(!(e>0))return'';
+ const ref=p.sysPrice!=null&&p.sysPrice>0?p.sysPrice:null;
+ if(ref&&(e<ref*0.3||e>ref*3))return`Preço muito diferente do sistema (${brl(ref)})`;
+ const k=packOf(p);if(k&&k.q>0&&e/k.q<1.2&&!/[áa]gua|gelo/i.test(p.desc||''))return`Preço baixo demais: sai ${brl(e/k.q)} o ${k.u}`;
+ if(!ref&&e>=500)return`Preço alto (${brl(e)})`;
+ return''}
+{const _pi=prodIssues;prodIssues=function(p){const o=_pi(p);try{const t=precoEstranho(p);if(t)o.push(['precoestranho',t])}catch(e){}return o}}
+{const _fi=fixIssue;fixIssue=function(p,t){if(t!=='precoestranho')return _fi.apply(this,arguments);
+ modal(`<h3>Conferir o preço</h3><p><b>${esc(p.desc)}</b> por <b>${brl(p.price)}</b>${hasApp(p)?` (app ${brl(p.app)})`:''}.</p><p class="hint">${esc(precoEstranho(p))}. Se o preço é esse mesmo, toque em "Está certo".</p>
+ <div class="mfoot"><button class="btn" data-a="c">Corrigir o preço</button><button class="btn pri" data-a="ok">Está certo</button></div>`,b=>{
+  b.querySelector('[data-a=ok]').onclick=()=>{p.precoOk=true;closeModal();changed();toast('Preço confirmado')};
+  b.querySelector('[data-a=c]').onclick=()=>{closeModal();_fi.call(this,p,'preco')}})}}
+/* mudou o preço: confere de novo */
+{const _ch=changed;changed=function(){try{S.products.forEach(p=>{if(p.precoOk&&p._precoVisto!==p.price){if(p._precoVisto!=null)delete p.precoOk;p._precoVisto=p.price}})}catch(e){}return _ch.apply(this,arguments)}}
 
 document.querySelectorAll('[data-wzgo]').forEach(b=>b.addEventListener('click',()=>wzGo(+b.dataset.wzgo)));
 
