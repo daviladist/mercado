@@ -61,7 +61,8 @@ Ele não é programador: explique decisões em linguagem simples, sem jargão.
 - Logos: D'Ávila e RedeShow Supermercados Express (Itarana-ES). São largas e precisam destacar
   do fundo. Padrão: lado a lado. Deixar sempre um canto livre para as logos (padrão: lateral
   esquerda).
-- **A foto do produto fica DENTRO do cartão.** Não pode passar por cima da borda.
+- **A foto do produto fica DENTRO do cartão.** Não pode passar por cima da borda (pode descer um pouco por trás do preço).
+- **Centralizado:** nome e preço sempre centralizados no quadro; nome em cima, sem nada por cima dele.
 - Não usar "de/por". O formato é preço sem app × preço com app, e o limite de unidades vale no
   preço do app.
 - Rodapé com as lojas (Joatuba e Itarana) e a validade da oferta.

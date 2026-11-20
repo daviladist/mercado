@@ -83,8 +83,9 @@ function quadro(c, prod, x, y, w, h, cores, opt) {
   if (prod.frase) selo(c, prod.frase, x + pad * 0.3, fy, w * 0.7, Math.max(16, h * 0.07));
   const corPilula = cores.pilula || '#16161a';
   const pilula = { etiqueta: corPilula, etiquetaTexto: cores.pilulaTexto || textoSobre(corPilula), destaque: cores.destaque };
-  const pw = app ? w - pad * 2 : w * 0.72;
-  desenharPreco(c, prod, x + pad, y + h - pad * 0.7 - precoH, pw, precoH, pilula);
+  // preço sempre centralizado no quadro (pedido do Eduardo)
+  const pw = app ? w - pad * 2 : w * 0.76;
+  desenharPreco(c, prod, x + (w - pw) / 2, y + h - pad * 0.7 - precoH, pw, precoH, pilula);
 }
 
 export function medirNome(c, texto, larg, alt, maxLinhas = 2) {
