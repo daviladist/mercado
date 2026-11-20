@@ -40,14 +40,14 @@ function cartaoEmPe(c, prod, x, y, w, h, pad, cores, opt) {
   const atras = precoH * (app ? 0.25 : 0.5);
   const fh = y + h - pad - precoH + atras - fy;
   foto(c, prod, x + pad, fy, w - pad * 2, fh, 'bottom');
-  if (prod.frase) selo(c, prod.frase, x + pad * 0.4, fy, w * 0.7, Math.max(16, h * 0.075));
+  if (prod.frase) { const f = frase(opt, h, w); selo(c, prod.frase, x + pad * 0.4, fy + f.alt * 0.25 + f.larg * 0.03, f.larg, f.alt); }
   desenharPreco(c, prod, x + pad, y + h - pad - precoH, w - pad * 2, precoH, cores);
 }
 
 function cartaoDeitado(c, prod, x, y, w, h, pad, cores, opt) {
   const fotoW = w * 0.47;
   foto(c, prod, x + pad, y + pad, fotoW - pad, h - pad * 2, 'center');
-  if (prod.frase) selo(c, prod.frase, x - w * 0.012, y + pad * 0.5, fotoW * 0.95, Math.max(18, h * 0.13));
+  if (prod.frase) { const f = frase(opt, h * 1.25, fotoW * 1.05); selo(c, prod.frase, x - w * 0.012, y + pad * 0.5, f.larg, f.alt); }
   const cx = x + fotoW + pad * 0.6, cw = w - fotoW - pad * 1.6;
   const app = temApp(prod);
   const precoH = h * (app ? (prod.limite ? 0.6 : 0.52) : 0.44);
@@ -80,7 +80,7 @@ function quadro(c, prod, x, y, w, h, cores, opt) {
   const precoH = h * (app ? (prod.limite ? 0.34 : 0.3) : 0.25);
   const fy = y + pad * 0.6 + nomeH + pad * 0.3, fh = h - (fy - y) - precoH - pad * 0.5;
   foto(c, prod, x + pad, fy, w - pad * 2, fh + precoH * (app ? 0.2 : 0.5), 'bottom');
-  if (prod.frase) selo(c, prod.frase, x + pad * 0.3, fy, w * 0.7, Math.max(16, h * 0.07));
+  if (prod.frase) { const f = frase(opt, h, w); selo(c, prod.frase, x + pad * 0.3, fy + f.alt * 0.25 + f.larg * 0.03, f.larg, f.alt); }
   const corPilula = cores.pilula || '#16161a';
   const pilula = { etiqueta: corPilula, etiquetaTexto: cores.pilulaTexto || textoSobre(corPilula), destaque: cores.destaque };
   // preço sempre centralizado no quadro (pedido do Eduardo)
@@ -110,6 +110,10 @@ function foto(c, prod, x, y, w, h, alinhar) {
   } else produtoContido(c, prod.foto, x, y, w, h, alinhar);
   c.restore();
 }
+
+// tamanho da frase de impacto (escolhido no modelo pelo dono), sempre proporcional ao quadro
+const FRASE = { pequena: [0.075, 0.62], media: [0.1, 0.78], grande: [0.13, 0.95] };
+const frase = (opt, h, w) => { const [k, l] = FRASE[opt.tamanhoFrase] || FRASE.media; return { alt: Math.max(16, h * k), larg: w * l }; };
 
 function semFoto(c, prod, x, y, w, h) {
   c.save();

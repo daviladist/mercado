@@ -24,7 +24,8 @@ export function novaCampanha() {
     fogo: false,
     cores: { fundo: '#a50f14', cartaoDestaque: '#ffc81f', cartaoNormal: '#d5141b', etiqueta: '#16161a', etiquetaTexto: '#ffffff', pilula: '#16161a', destaque: '#ffd21f', cabecalho: '#c8161d', rodape: '#16161a' },
     pausado: false,           // pausado: some para a equipe, sem apagar (ex.: Black Friday fora de novembro)
-    maxDestaques: 3,          // quantos produtos a equipe pode marcar como destaque na capa
+    maxDestaques: 3,
+    tamanhoFrase: 'media',    // frase de impacto: 'pequena' | 'media' | 'grande' (sempre proporcional ao quadro)          // quantos produtos a equipe pode marcar como destaque na capa
     versoFino: true,          // verso com faixa fininha (nome da campanha em letras) para caber mais itens
     porPagina: { capa: 10, verso: 16 },
   };

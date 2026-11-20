@@ -2,7 +2,7 @@
 import { $, $$, esc, avisar, escolherArquivo } from './comum.js';
 import { estado, salvarCampanhas, imagensDasLogos, montarRodape } from '../estado.js';
 import { DIAS_CURTOS, TODOS, ESTILOS, novaCampanha, campanhasDoDia, oQueFalta, textoDias, validadePadrao, textoValidade, duplicarCampanha } from '../campanhas.js';
-const garantir = c => Object.assign({ pausado: false, maxDestaques: 3 }, c);
+const garantir = c => Object.assign({ pausado: false, maxDestaques: 3, tamanhoFrase: 'media' }, c);
 import { PALETAS, CAMPOS_COR } from '../cores.js';
 import { subirImagem, enderecoImagem, carregarImagem, arquivoParaDataURL } from '../nuvem.js';
 import { desenharPagina } from '../arte/encarte.js';
@@ -78,6 +78,8 @@ function editar(raiz, c, nova) {
           <div class="paletas" id="paletas">${Object.entries(PALETAS).map(([k, p]) => `<button data-p="${k}" title="${esc(p.nome)}"><i style="background:${p.fundo}"></i><i style="background:${p.cartaoDestaque}"></i><i style="background:${p.cartaoNormal}"></i><i style="background:${p.pilula}"></i></button>`).join('')}</div>
           <div class="cores" id="cores">${CAMPOS_COR.map(([k, n]) => `<label><input type="color" data-k="${k}" value="${c.cores[k] || '#000000'}">${n}</label>`).join('')}</div>
           <label class="chk"><input type="checkbox" id="fogo" ${c.fogo ? 'checked' : ''}> Fundo com fogo (dia D)</label>
+          <label class="c">Tamanho da frase de impacto ("Tá muito barato!")</label>
+          <div class="seg" id="tamFrase"><button data-v="pequena">Pequena</button><button data-v="media">Média</button><button data-v="grande">Grande</button></div>
         </div>
         <div class="caixa"><h3>4. Produtos por página</h3>
           <div class="dupla"><div><label class="c">Na capa</label><input type="number" id="capa" min="1" max="30" value="${c.porPagina.capa}"></div>
@@ -101,6 +103,7 @@ function editar(raiz, c, nova) {
   };
   seg('logosLado', c.logosLado ? 1 : 0, v => { c.logosLado = v === '1'; });
   seg('estilo', c.estilo, v => { c.estilo = v; });
+  seg('tamFrase', c.tamanhoFrase || 'media', v => { c.tamanhoFrase = v; });
 
   const mostrarCab = () => {
     const src = enderecoImagem(c.cabecalho), el = $('#cab', raiz);

@@ -49,7 +49,7 @@ export function desenharPagina(c, pag) {
     const t = medirNome(c, p.prod.nome, p.w - pad * 2, p.h * (estilo === 'quadros' ? 0.2 : 0.17), 2).tamanho;
     tamLinha[p.linha] = Math.min(tamLinha[p.linha] ?? Infinity, t);
   }
-  for (const p of pos) desenharCartao(c, p.prod, p.x, p.y, p.w, p.h, cores, { estilo, deitado: p.deitado, destaqueLinha: p.destaqueLinha, tamanhoNome: tamLinha[p.linha] });
+  for (const p of pos) desenharCartao(c, p.prod, p.x, p.y, p.w, p.h, cores, { estilo, deitado: p.deitado, destaqueLinha: p.destaqueLinha, tamanhoNome: tamLinha[p.linha], tamanhoFrase: tema.tamanhoFrase });
 
   desenharRodape(c, 0, rodY, W, rodH, pag.rodape || {}, cores);
   return { W, H, posicoes: pos };
