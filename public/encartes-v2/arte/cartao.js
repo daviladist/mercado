@@ -5,6 +5,7 @@ import { FONTE, fonte, caminhoArredondado, sombraMacia, encaixarTexto, desenharL
 import { desenharPreco, temApp } from './preco.js';
 
 export function desenharCartao(c, prod, x, y, w, h, cores, opt = {}) {
+  if (opt.estilo === 'quadros') return quadro(c, prod, x, y, w, h, cores, opt);
   const deitado = opt.deitado ?? w / h >= 1.3;
   const r = Math.min(w, h) * 0.035;
   const fundo = deitado ? cores.cartaoDestaque : '#ffffff';
@@ -51,6 +52,33 @@ function cartaoDeitado(c, prod, x, y, w, h, pad, cores, opt) {
   const txt = textoSobre(cores.cartaoDestaque);
   desenharLinhas(c, m, cx + cw / 2, y + pad + nomeH / 2, { peso: 700, familia: FONTE.nome, cor: txt === '#ffffff' ? '#fff' : '#16161a', entrelinha: 1.02 });
   desenharPreco(c, prod, cx, y + h - pad - precoH, cw, precoH, cores);
+}
+
+// Estilo "quadros" (como os encartes do Eduardo no Photoshop): quadros coloridos colados,
+// nome em cima, foto grande no meio, preço numa pílula embaixo à esquerda.
+function quadro(c, prod, x, y, w, h, cores, opt) {
+  const fundo = opt.destaqueLinha ? cores.cartaoDestaque : (cores.cartaoNormal || cores.etiqueta);
+  c.save();
+  const g = c.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, tom(fundo, 0.1));
+  g.addColorStop(1, tom(fundo, -0.1));
+  c.fillStyle = g;
+  c.fillRect(x, y, w, h);
+  c.restore();
+  const pad = Math.min(w, h) * 0.045;
+  const txt = textoSobre(fundo) === '#ffffff' ? '#ffffff' : '#16161a';
+  const nomeH = h * 0.2;
+  const m = medirNome(c, prod.nome, w - pad * 2, nomeH, 2);
+  const tam = Math.min(m.tamanho, opt.tamanhoNome || Infinity);
+  desenharLinhas(c, { ...m, tamanho: tam }, x + w / 2, y + pad * 0.6 + nomeH / 2, { peso: 700, familia: FONTE.nome, cor: txt, entrelinha: 1.0 });
+  const app = temApp(prod);
+  const precoH = h * (app ? (prod.limite ? 0.34 : 0.3) : 0.25);
+  const fy = y + pad * 0.6 + nomeH + pad * 0.3, fh = h - (fy - y) - precoH - pad * 0.5;
+  foto(c, prod, x + pad, fy, w - pad * 2, fh + precoH * (app ? 0 : 0.35), 'center');
+  if (prod.frase) selo(c, prod.frase, x + pad * 0.3, fy, w * 0.7, Math.max(16, h * 0.07));
+  const pilula = { etiqueta: cores.pilula || '#16161a', etiquetaTexto: cores.pilulaTexto || '#ffffff', destaque: cores.destaque };
+  const pw = app ? w - pad * 2 : w * 0.72;
+  desenharPreco(c, prod, x + pad, y + h - pad * 0.7 - precoH, pw, precoH, pilula);
 }
 
 export function medirNome(c, texto, larg, alt, maxLinhas = 2) {
