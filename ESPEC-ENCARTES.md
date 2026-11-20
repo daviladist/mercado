@@ -125,26 +125,59 @@ O banco de produtos da Central entra **somente** por `lib/encartes.js` (`BK.encL
 - **Testes**: os testes atuais do servidor e do banco continuam passando sem alteração. As regras de
   negócio do `99-testes.js` viram testes do app novo.
 
-## 6. Decisões do Eduardo (antes de construir)
+## 6. Decisões do Eduardo (20/11/2026)
 
-Marque **FICA**, **SAI** ou **DEPOIS**:
+**SAI:** foto por cima da borda do cartão (a), preço "de/por" riscado (b), estilo vitrine (c),
+fundos desenhados pelo app — madeira, lousa, kraft, cimento (e), desenhos decorativos do tema (f).
+O fundo com tema de fogo (dia D) é pedido do Eduardo e **fica**.
 
-| # | Recurso | Por que perguntar |
-|---|---|---|
-| a | Foto passando por cima da borda do cartão | Você reclamou. Proposta: **SAI** |
-| b | Preço "de/por" (riscado) | Você usa sem app × com app. Proposta: **SAI** |
-| c | Estilo "vitrine" (produto solto no fundo, sem cartão) | Visual diferente do seu padrão |
-| d | Foto repetida em cascata ("leve vários") | Recurso automático, pode confundir |
-| e | Fundos desenhados (madeira, lousa, kraft, cimento) | Você quer cara de encarte real, não de IA |
-| f | Desenhos decorativos do tema no fundo | Mesmo motivo |
-| g | Arte própria do Photoshop (kit PSD, vagas marcadas) | Pesa quase 1 MB a mais no app |
-| h | Vídeo com voz (ElevenLabs) | Gasta crédito; é usado? |
-| i | TV da loja | É usada hoje? |
-| j | Plaquinha avulsa pela câmera (bipar código) | É usada hoje? |
-| k | Ofertas sugeridas pelo StarIA, kit da semana, resultado da campanha, custo da oferta | É usado? |
-| l | Modo "economia de tinta" | É usado? |
-| m | Story com área segura do Instagram | Proposta: **FICA** |
-| n | Recorte automático do fundo branco da foto | Proposta: **FICA** |
-| o | Repositório público → privado | Proposta: **deixar privado** |
+**FICA:** foto repetida em cascata (d), arte própria do Photoshop (g), vídeo com voz (h), TV da loja (i),
+plaquinha pela câmera (j), ofertas sugeridas / kit da semana / resultado / custo da oferta (k),
+economia de tinta (l), story com área segura (m), recorte do fundo branco da foto (n).
 
-Depois das respostas, vem a Fase 2 (arquitetura) e a construção começa pela arte.
+**Repositório público → privado (o):** quem muda é o Eduardo, no GitHub, conferindo antes se a Vercel
+continua publicando.
+
+## 7. Arquitetura proposta (Fase 2)
+
+### Onde fica
+- `public/encartes-v2/` — o app novo, em arquivos pequenos, um por assunto. O navegador carrega os
+  arquivos direto, sem etapa de "juntar" (acaba o artefato → bundle).
+- `public/encartes.html` só troca de app quando o Eduardo aprovar. Até lá, o app novo abre por
+  `/t/<empresa>/?v2=1` (o servidor escolhe a página) e pelo link de prévia da Vercel.
+- `lib/encartes.js` (servidor) **não muda**.
+
+### Arquivos
+| Arquivo | Faz o quê |
+|---|---|
+| `estado.js` | os dados do encarte em edição, num lugar só; toda tela lê daqui |
+| `nuvem.js` | conversa com `/api/encartes/*` (mesmos endereços de hoje) |
+| `lista.js` | entende a lista colada (preço, unidade, fardo, linha sem preço) |
+| `banco.js` | liga produto ao banco (código, EAN, DUN-14, nome) e acha foto — **só leitura e as mesmas gravações de hoje** |
+| `conferir.js` | o que trava e o que só avisa; "ajustar tudo sozinho" |
+| `arte/diagrama.js` | onde cada produto fica (peso, linhas, frente e verso, cadeado) |
+| `arte/cartao.js` | o cartão: foto **dentro**, nome, bloco sem app × com app |
+| `arte/cabecalho.js` | título, cores, foto no cabeçalho, cabeçalho pronto em imagem, logos |
+| `arte/fundo.js` | cor da campanha, luz, tema de fogo |
+| `arte/rodape.js` | lojas, validade, observações |
+| `fotos.js` | carregar, recortar fundo branco, limpar xadrez |
+| `baixar.js` | 1080×1350, story, A4, zip, compartilhar |
+| `plaquinhas.js`, `tv.js`, `voz.js`, `photoshop.js`, `staria.js`, `extras.js` | cada ferramenta no seu arquivo |
+| `telas/*.js` | as telas: entrada, passo a passo (4 passos), painel do admin |
+| `testes/` | as regras de negócio viram testes que rodam sozinhos |
+
+Regra: nenhum arquivo troca função de outro. Se algo está errado, corrige no arquivo dono do assunto.
+
+### Segurança dos dados durante o teste
+- O link de prévia usa **a mesma nuvem de verdade**. Para não estragar nada enquanto testa:
+  - o rascunho do app novo fica em `data/users/<id>/rascunho-v2` (o de hoje não é tocado);
+  - campanhas, configuração, usuários e banco são **só lidos** pelo app novo até a troca;
+  - fotos novas sobem do mesmo jeito que hoje (é o que já acontece).
+- Na troca, o app novo passa a gravar nos endereços normais, no mesmo formato.
+
+### Ordem de construção (cada etapa mostrada antes da próxima)
+1. Arte do encarte (cartão, cabeçalho, fundo, rodapé, diagrama) com um encarte real.
+2. Passo a passo: campanha → colar lista → conferir → baixar.
+3. Plaquinhas.
+4. TV, vídeo com voz, Photoshop, StarIA e extras.
+5. Comparação lado a lado com o app atual e troca.
