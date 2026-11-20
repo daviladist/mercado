@@ -76,7 +76,8 @@ function quadro(c, prod, x, y, w, h, cores, opt) {
   const fy = y + pad * 0.6 + nomeH + pad * 0.3, fh = h - (fy - y) - precoH - pad * 0.5;
   foto(c, prod, x + pad, fy, w - pad * 2, fh + precoH * (app ? 0 : 0.35), 'center');
   if (prod.frase) selo(c, prod.frase, x + pad * 0.3, fy, w * 0.7, Math.max(16, h * 0.07));
-  const pilula = { etiqueta: cores.pilula || '#16161a', etiquetaTexto: cores.pilulaTexto || '#ffffff', destaque: cores.destaque };
+  const corPilula = cores.pilula || '#16161a';
+  const pilula = { etiqueta: corPilula, etiquetaTexto: cores.pilulaTexto || textoSobre(corPilula), destaque: cores.destaque };
   const pw = app ? w - pad * 2 : w * 0.72;
   desenharPreco(c, prod, x + pad, y + h - pad * 0.7 - precoH, pw, precoH, pilula);
 }

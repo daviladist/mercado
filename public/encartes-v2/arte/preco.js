@@ -9,7 +9,7 @@ export const rotuloUnidade = u => UNIDADE[String(u || 'un').toLowerCase()] || St
 export const temApp = p => p.precoApp != null && p.precoApp < p.preco;
 
 export function desenharPreco(c, prod, x, y, w, h, cores) {
-  if (!temApp(prod)) return etiqueta(c, prod.preco, prod.unidade, x, y, w, h, cores.etiqueta, cores.etiquetaTexto || '#fff');
+  if (!temApp(prod)) return etiqueta(c, prod.preco, prod.unidade, x, y, w, h, cores.etiqueta, cores.etiquetaTexto || textoSobre(cores.etiqueta));
 
   let topo = 0;
   if (prod.limite) {
@@ -18,7 +18,7 @@ export function desenharPreco(c, prod, x, y, w, h, cores) {
   }
   const by = y + topo, bh = h - topo, gap = w * 0.03;
   const ws = (w - gap) * 0.43, wc = w - gap - ws;
-  caixaApp(c, 'SEM APP', prod.preco, prod.unidade, x, by + bh * 0.06, ws, bh * 0.94, cores.etiqueta, cores.etiquetaTexto || '#fff');
+  caixaApp(c, 'SEM APP', prod.preco, prod.unidade, x, by + bh * 0.06, ws, bh * 0.94, cores.etiqueta, cores.etiquetaTexto || textoSobre(cores.etiqueta));
   caixaApp(c, 'COM APP', prod.precoApp, prod.unidade, x + ws + gap, by, wc, bh, '#ffffff', '#111111');
 }
 
