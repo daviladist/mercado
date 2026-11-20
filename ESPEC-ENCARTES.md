@@ -189,7 +189,7 @@ continua publicando.
   destaque (até o máximo do modelo), frase (da lista do dono), limite, ordem e excluir.
 - **Nome no encarte:** o que o funcionário colou, com acento e maiúsculas arrumados pelo app.
   O banco só serve para achar foto e conferir preço.
-- Sem resposta do Eduardo, ficou a sugestão do Claude: cascata automática pelo nome (kit, fardo, combo, "c/ 12",
+- Confirmado pelo Eduardo (16h08): cascata automática pelo nome (kit, fardo, combo, "c/ 12",
   "leve 3") com liga/desliga no produto; preço por kg/L só na plaquinha; produto sem banco entra com aviso
   (não trava); adicionar produto colando a lista ou digitando um por um (câmera só nas plaquinhas).
 
