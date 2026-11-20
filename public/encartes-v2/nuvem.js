@@ -16,6 +16,20 @@ const local = {
   gravar(p, d) { memoria[p] = d; try { localStorage.setItem('encv2:' + p, JSON.stringify(d)); } catch (_) { /* sem espaço: fica só na memória */ } },
 };
 
+// id de quem está usando (para o rascunho de cada pessoa)
+let _me = null;
+export async function meuId() {
+  if (_me) return _me;
+  if (!noTino()) return (_me = 'local');
+  const r = await window.TINO.api('/api/encartes/me');
+  return (_me = r.id);
+}
+
+export async function apagar(p) {
+  if (!noTino()) { delete memoria[p]; try { localStorage.removeItem('encv2:' + p); } catch (_) { /* nada */ } return; }
+  await window.TINO.api('/api/encartes/doc', { p, del: true });
+}
+
 export async function ler(p) {
   if (!noTino()) return local.ler(p);
   const r = await window.TINO.api('/api/encartes/doc?p=' + encodeURIComponent(p));

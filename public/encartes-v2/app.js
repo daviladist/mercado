@@ -5,8 +5,9 @@ import * as campanhas from './telas/campanhas.js';
 import * as logos from './telas/logos.js';
 import * as modelo from './telas/modelo.js';
 import * as loja from './telas/loja.js';
+import * as fazer from './telas/fazer.js';
 
-const TELAS = { campanhas, loja, logos, modelo };
+const TELAS = { fazer, campanhas, loja, logos, modelo };
 
 async function abrir(nome) {
   $$('#abas button').forEach(b => b.classList.toggle('on', b.dataset.tela === nome));
@@ -17,5 +18,5 @@ $$('#abas button').forEach(b => b.addEventListener('click', () => abrir(b.datase
 
 for (const f of ['400 20px Anton', '700 20px Oswald', '600 20px Oswald', '700 20px Archivo', '400 20px "Archivo Black"']) await document.fonts.load(f);
 try { await carregar(); } catch (e) { avisar('Não consegui abrir os dados: ' + e.message, 6000); }
-await abrir('campanhas');
+await abrir(new URLSearchParams(location.search).get('tela') || 'fazer');
 window.PRONTO = true;

@@ -68,6 +68,7 @@ function quadro(c, prod, x, y, w, h, cores, opt) {
   g.addColorStop(1, tom(fundo, -0.1));
   c.fillStyle = g;
   c.fillRect(x, y, w, h);
+  if (fundo.toLowerCase() === '#ffffff') { c.strokeStyle = '#c9c9c9'; c.lineWidth = Math.max(2, w * 0.006); c.strokeRect(x, y, w, h); }
   c.restore();
   const pad = Math.min(w, h) * 0.045;
   const txt = textoSobre(fundo) === '#ffffff' ? '#ffffff' : '#16161a';

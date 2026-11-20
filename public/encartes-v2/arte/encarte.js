@@ -14,12 +14,14 @@ export const FORMATOS = {
 // pag: { formato, tema: { estilo ('cards' | 'quadros'), cores, cabecalho, logosLado, fogo }, logos, produtos, rodape }
 export function desenharPagina(c, pag) {
   const F = FORMATOS[pag.formato] || FORMATOS.feed;
-  const W = F.w, H = F.h, tema = pag.tema, cores = tema.cores;
+  const W = F.w, H = F.h, tema = pag.tema;
+  // economia de tinta (A4): fundo e quadros brancos, preço preto, sem fogo
+  const cores = pag.economiaTinta ? { ...tema.cores, fundo: '#ffffff', cartaoDestaque: '#ffffff', cartaoNormal: '#ffffff', pilula: '#16161a', etiqueta: '#16161a', rodape: '#16161a' } : tema.cores;
   c.canvas.width = W;
   c.canvas.height = H;
   const topo = F.seguroTopo || 0, base = F.seguroBase || 0;
 
-  desenharFundo(c, W, H, cores, { fogo: tema.fogo });
+  desenharFundo(c, W, H, cores, { fogo: tema.fogo && !pag.economiaTinta, economiaTinta: pag.economiaTinta });
   if (topo) { c.fillStyle = cores.cabecalho || cores.etiqueta; c.fillRect(0, 0, W, topo); }
 
   const verso = pag.verso && tema.versoFino !== false;
