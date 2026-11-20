@@ -27,16 +27,20 @@ export function desenharCartao(c, prod, x, y, w, h, cores, opt = {}) {
   return deitado ? cartaoDeitado(c, prod, x, y, w, h, pad, cores, opt) : cartaoEmPe(c, prod, x, y, w, h, pad, cores, opt);
 }
 
+// Em pé: nome em cima (nunca encoberto), foto grande no meio descendo um pouco por trás do preço
+// (o produto fica maior; pedido do Eduardo), preço embaixo por cima da foto.
 function cartaoEmPe(c, prod, x, y, w, h, pad, cores, opt) {
   const app = temApp(prod);
-  const precoH = h * (app ? (prod.limite ? 0.36 : 0.31) : 0.26);
+  const precoH = h * (app ? (prod.limite ? 0.36 : 0.31) : 0.24);
   const nomeH = h * 0.17;
-  const fotoH = h - pad * 2 - nomeH - precoH - pad * 0.4;
-  foto(c, prod, x + pad, y + pad, w - pad * 2, fotoH, 'bottom');
-  if (prod.frase) selo(c, prod.frase, x + pad * 0.4, y + pad * 0.4, w * 0.7, Math.max(16, h * 0.075));
   const m = medirNome(c, prod.nome, w - pad * 2, nomeH, 2);
   const tam = Math.min(m.tamanho, opt.tamanhoNome || Infinity);
-  desenharLinhas(c, { ...m, tamanho: tam }, x + w / 2, y + pad + fotoH + pad * 0.2 + nomeH / 2, { peso: 700, familia: FONTE.nome, cor: '#16161a', entrelinha: 1.0 });
+  desenharLinhas(c, { ...m, tamanho: tam }, x + w / 2, y + pad * 0.6 + nomeH / 2, { peso: 700, familia: FONTE.nome, cor: '#16161a', entrelinha: 1.0 });
+  const fy = y + pad * 0.6 + nomeH + pad * 0.3;
+  const atras = precoH * (app ? 0.25 : 0.5);
+  const fh = y + h - pad - precoH + atras - fy;
+  foto(c, prod, x + pad, fy, w - pad * 2, fh, 'bottom');
+  if (prod.frase) selo(c, prod.frase, x + pad * 0.4, fy, w * 0.7, Math.max(16, h * 0.075));
   desenharPreco(c, prod, x + pad, y + h - pad - precoH, w - pad * 2, precoH, cores);
 }
 
@@ -74,7 +78,7 @@ function quadro(c, prod, x, y, w, h, cores, opt) {
   const app = temApp(prod);
   const precoH = h * (app ? (prod.limite ? 0.34 : 0.3) : 0.25);
   const fy = y + pad * 0.6 + nomeH + pad * 0.3, fh = h - (fy - y) - precoH - pad * 0.5;
-  foto(c, prod, x + pad, fy, w - pad * 2, fh + precoH * (app ? 0 : 0.35), 'center');
+  foto(c, prod, x + pad, fy, w - pad * 2, fh + precoH * (app ? 0.2 : 0.5), 'bottom');
   if (prod.frase) selo(c, prod.frase, x + pad * 0.3, fy, w * 0.7, Math.max(16, h * 0.07));
   const corPilula = cores.pilula || '#16161a';
   const pilula = { etiqueta: corPilula, etiquetaTexto: cores.pilulaTexto || textoSobre(corPilula), destaque: cores.destaque };
