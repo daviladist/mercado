@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8"><title>Prova da arte</title>
+<link rel="stylesheet" href="/public/encartes-v2/fontes/fontes.css">
+<body style="margin:0;background:#333"><canvas id="cv" style="width:540px"></canvas>
+<script type="module">
+import { desenharEncarte } from '/public/encartes-v2/arte/encarte.js';
+const FX = '/tests/fixtures/encartes-v2/';
+const carregar = src => new Promise((ok, erro) => { const i = new Image(); i.onload = () => ok(i); i.onerror = erro; i.src = src; });
+const q = new URLSearchParams(location.search);
+const caso = await (await fetch(FX + (q.get('caso') || 'sabado') + '.json')).json();
+await document.fonts.load('400 40px Anton'); await document.fonts.load('700 40px Oswald'); await document.fonts.load('600 40px Oswald'); await document.fonts.load('400 40px "Archivo Black"'); await document.fonts.load('700 40px Archivo');
+const logos = await Promise.all(['/public/encartes-v2/logos/redeshow.png', '/public/encartes-v2/logos/davila.png'].map(carregar));
+for (const p of caso.produtos) if (p.foto) p.foto = await carregar(FX + p.foto);
+if (caso.cabecalho.foto) caso.cabecalho.foto = await carregar(FX + caso.cabecalho.foto);
+if (caso.cabecalho.imagemPronta) caso.cabecalho.imagemPronta = await carregar(FX + caso.cabecalho.imagemPronta);
+caso.cabecalho.logos = logos;
+if (q.get('formato')) caso.formato = q.get('formato');
+desenharEncarte(document.getElementById('cv').getContext('2d'), caso);
+window.PRONTO = true;
+</script>
