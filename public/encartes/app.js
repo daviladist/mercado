@@ -3085,12 +3085,16 @@ function openCusto(){const c=custoOferta(S.products);
  modal(`<h3>Custo estimado desta oferta</h3><p>Em ${c.dias} dia${c.dias>1?'s':''}, vendendo o mesmo que o normal, o desconto custa cerca de <b>${brl(c.tot)}</b>. Se vender o dobro, <b>${brl(c.tot*2)}</b>.</p><p class="hint">Conta: (preço normal − preço da oferta) × venda média por dia dos últimos 30 dias × dias da oferta. ${c.sem?c.sem+' produto(s) sem histórico no banco ficaram de fora.':''}</p>
  <div style="max-height:44vh;overflow:auto"><table class="sgt"><tr><th>Produto</th><th>Desconto/un</th><th>Venda/dia</th><th>Custo</th></tr>${c.rows.map(r=>`<tr><td><b>${esc(r.d)}</b></td><td>${brl(r.desc)}</td><td>${r.qd.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td><td>${brl(r.v)}</td></tr>`).join('')}</table></div>
  <div class="mfoot"><button class="btn" data-a="chk">Conferir com o sistema</button><button class="btn pri" data-a="x">Fechar</button></div>`,b=>{b.querySelector('[data-a=x]').onclick=closeModal;b.querySelector('[data-a=chk]').onclick=()=>conferirSistema(S.products,camp().nome)})}
-/* ================= início ================= */
+/* ================= início =================
+ Fica numa função chamada na ÚLTIMA linha do arquivo: os blocos de baixo declaram const
+ (TEMA_NOMES, temaCor, PLAQ_TAM...) que o primeiro desenho já usa. Chamar antes deles
+ quebra o app inteiro ("Cannot access ... before initialization"). */
+function inicio(){
 if(S.store&&S.store.pin){const v=String(S.store.pin);delete S.store.pin;if(!hasPin())setPin(v);persist()}
 IDB.get('kv:saved').then(u=>{if(!u)return;try{const L=JSON.parse(u),m=new Map((S.saved||[]).map(x=>[x.id,x]));L.forEach(x=>{const l=m.get(x.id);if(!l||(x.at||0)>(l.at||0))m.set(x.id,x)});S.saved=[...m.values()].sort((a,b)=>(b.at||0)-(a.at||0));renderSaved()}catch(e){}});
 $('#vIni').value=S.val.ini;$('#vFim').value=S.val.fim;syncNotas();$('#phr').value=S.phrases.join('\n');
 if(!S.campaigns.some(c=>c.modelo==='superdia')){S.campaigns.push({id:'superdiad',nome:'Super Dia D',titulo:'Super Dia D',dia:-1,modelo:'superdia',cores:{fundo:'#232126',cabecalho:'#b31a0c',titulo:'#ffffff',preco:'#d23a17',precoTexto:'#ffffff',adesivo:'#f5a623',adesivoTexto:'#111111',cartao:'#ffffff'}});S._sharedDirty=true}
-renderFormats();renderCamps();renderList();renderLogos();renderSaved();renderSecs();render();applyModo();bankCount();if(inWz()&&S.format!=='insta'){S.format='insta';renderFormats()}document.body.classList.toggle('wz',inWz());$('#bDono').textContent=inWz()?'Painel do admin':'Voltar ao passo a passo';if(inWz())wzGo(0);undoSnap();renderVenc();applyPerms();if(window.TINO){const u=$('#catUp');if(u)u.hidden=true;const ex=$('#catExp');if(ex)ex.hidden=true;const im=$('#catImp');if(im){im.textContent='Atualizar banco com arquivo';im.classList.add('pri')}const h=im&&im.closest('.bar')&&im.closest('.bar').previousElementSibling;if(h&&h.tagName==='P')h.innerHTML='O banco completo vem do Gerador do Claude: lá, toque em <b>Exportar banco</b>, mande o arquivo para o celular e toque aqui em <b>Atualizar banco com arquivo</b>. Uma vez por semana basta. Para os produtos de um encarte, use <b>Pedir conferência no StarIA</b> na tela Confira.'}if(usersOn()&&!curUser())showLogin();else if(window.TINO&&inWz()&&canDo('encarte')!==canDo('plaquinha')){if(canDo('encarte'))wzGo(1);else avGo()}
+renderFormats();renderCamps();renderList();renderLogos();renderSaved();renderSecs();render();applyModo();bankCount();if(inWz()&&S.format!=='insta'){S.format='insta';renderFormats()}document.body.classList.toggle('wz',inWz());$('#bDono').textContent=inWz()?'Painel do admin':'Voltar ao passo a passo';if(inWz())wzGo(0);undoSnap();renderVenc();applyPerms();if(window.TINO){const u=$('#catUp');if(u)u.hidden=true;const ex=$('#catExp');if(ex)ex.hidden=true;const im=$('#catImp');if(im){im.textContent='Atualizar banco com arquivo';im.classList.add('pri')}const h=im&&im.closest('.bar')&&im.closest('.bar').previousElementSibling;if(h&&h.tagName==='P')h.innerHTML='O banco completo vem do Gerador do Claude: lá, toque em <b>Exportar banco</b>, mande o arquivo para o celular e toque aqui em <b>Atualizar banco com arquivo</b>. Uma vez por semana basta. Para os produtos de um encarte, use <b>Pedir conferência no StarIA</b> na tela Confira.'}if(usersOn()&&!curUser())showLogin();else if(window.TINO&&inWz()&&canDo('encarte')!==canDo('plaquinha')){if(canDo('encarte'))wzGo(1);else avGo()}}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&usersOn()&&!curUser()&&(!$('#loginOv')||$('#loginOv').hidden))showLogin()});
 let phDrag=null,phMoved=false;
 function phDown(cv,e){const r=cv.getBoundingClientRect(),x=(e.clientX-r.left)*cv.width/r.width,y=(e.clientY-r.top)*cv.height/r.height;
@@ -3983,3 +3987,6 @@ drawCard=function(c,p,x,y,w,h,C,iss){
  _recuo=ant;return r};
 
 document.querySelectorAll('[data-wzgo]').forEach(b=>b.addEventListener('click',()=>wzGo(+b.dataset.wzgo)));
+
+/* sempre por último: ver o comentário de início() */
+inicio();
