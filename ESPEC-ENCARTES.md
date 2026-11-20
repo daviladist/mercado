@@ -199,6 +199,25 @@ continua publicando.
   O destaque é **tamanho + lugar (linha de cima) + cor do quadro**, como nos encartes do Photoshop do Eduardo.
   O fundo de fogo continua como opção do modelo inteiro (dia D).
 
+## 6e. Conferir e plaquinhas (20/11/2026, 16h18)
+
+**Conferir**
+- Conferência de preço/custo com o StarIA: **não é obrigatória**. O banco de produtos é atualizado de vez em quando
+  e traz os últimos custos; o app usa o que tiver, sem travar.
+- **Margem mínima: só ALERTA** (amarelo), nunca trava — o custo no sistema às vezes está errado e travar atrasa a operação.
+  Normalmente o Eduardo manda para a equipe os produtos e os preços.
+- **SAI:** aviso de preço fora do normal.
+- **FICA:** aviso de foto borrada (pouca resolução).
+- "Ajustar tudo sozinho" (escolha do Claude): **vira automático ao colar a lista**, sem botão. O app já liga ao banco,
+  acha a foto e arruma o nome na hora; não precisa de um botão para isso.
+- O download só trava por: produto sem preço, preço com app maior que o sem app, validade em branco.
+
+**Plaquinhas**
+- **FICAM:** tamanhos, câmera (bipar código de barras), validade própria por plaquinha, "perto de vencer",
+  preço por kg/L com caixinha sim/não.
+- **FICAM também:** registro das plaquinhas impressas (é ele que permite o aviso "venceu, tire da gôndola")
+  e conferência gôndola × sistema (preço da plaquinha × preço do StarIA no banco).
+
 ## 7. Arquitetura proposta (Fase 2)
 
 ### Onde fica
