@@ -1,4 +1,5 @@
-// Fundo do encarte: a cor da campanha com luz no meio e bordas mais fechadas.
+// Fundo do encarte: a cor do modelo com luz no meio e bordas mais fechadas.
+// Sem raios de sol, pontilhado ou brilho atrás do destaque: o Eduardo achou feio (20/11). Destaque é tamanho, lugar e cor do quadro.
 // Sem texturas desenhadas (madeira, lousa…) e sem desenhos decorativos: decisão do Eduardo.
 // Única exceção: o tema de fogo, usado no dia D.
 import { tom } from './util.js';
@@ -18,19 +19,6 @@ export function desenharFundo(c, W, H, cores, opt = {}) {
   c.fillStyle = g;
   c.fillRect(0, 0, W, H);
 
-  // raios leves saindo do alto (o "estouro" clássico de encarte), bem sutis
-  c.globalAlpha = 0.06;
-  c.fillStyle = '#ffffff';
-  const cx = W / 2, cy = H * 0.18, n = 28, R = Math.hypot(W, H);
-  for (let i = 0; i < n; i += 2) {
-    const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
-    c.beginPath();
-    c.moveTo(cx, cy);
-    c.lineTo(cx + Math.cos(a0) * R, cy + Math.sin(a0) * R);
-    c.lineTo(cx + Math.cos(a1) * R, cy + Math.sin(a1) * R);
-    c.closePath();
-    c.fill();
-  }
   c.globalAlpha = 1;
   if (opt.fogo) fogo(c, W, H);
   c.restore();

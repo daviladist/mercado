@@ -193,6 +193,12 @@ continua publicando.
   "leve 3") com liga/desliga no produto; preço por kg/L só na plaquinha; produto sem banco entra com aviso
   (não trava); adicionar produto colando a lista ou digitando um por um (câmera só nas plaquinhas).
 
+## 6d. Destaque (20/11/2026, 16h12)
+
+- **Sem efeito atrás do destaque**: nada de raio de sol, pontilhado, brilho desfocado ou fogo dentro do quadro.
+  O destaque é **tamanho + lugar (linha de cima) + cor do quadro**, como nos encartes do Photoshop do Eduardo.
+  O fundo de fogo continua como opção do modelo inteiro (dia D).
+
 ## 7. Arquitetura proposta (Fase 2)
 
 ### Onde fica
