@@ -218,6 +218,14 @@ continua publicando.
 - **FICAM também:** registro das plaquinhas impressas (é ele que permite o aviso "venceu, tire da gôndola")
   e conferência gôndola × sistema (preço da plaquinha × preço do StarIA no banco).
 
+## 6f. Últimas pendências do app antigo (20/11/2026, 16h35)
+
+- **Cadeado na página: FICA** (decisão do Eduardo; o Claude sugeriu tirar). Regra simples: página travada guarda
+  quais produtos tem e em que ordem; produto novo ou alterado na lista vai para as páginas seguintes, nunca entra
+  numa travada. Destravar devolve tudo ao automático.
+- **Encartes salvos: FICAM os últimos 30**, para abrir, baixar de novo ou reaproveitar a lista.
+- **Economia de tinta: FICA no A4** (fundo branco, preço com contorno).
+
 ## 7. Arquitetura proposta (Fase 2)
 
 ### Onde fica
