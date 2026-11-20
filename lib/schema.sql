@@ -561,6 +561,9 @@ create table if not exists caixa_mov (
   primary key (tenant_id, id)
 );
 create index if not exists caixa_mov_tenant on caixa_mov(tenant_id, data desc, created_at desc);
+-- para que saiu a sangria: depósito no banco, pagamento/despesa em dinheiro, cheque ou gaveta de impostos.
+-- Vazio nas sangrias antigas: o servidor deduz do motivo (ver categoriaDe em lib/caixa.js).
+alter table caixa_mov add column if not exists categoria text check (categoria is null or categoria in ('deposito','despesa','cheque','impostos'));
 -- pedido de consulta ao StarIA (vendas em dinheiro + recebimento de crediário em dinheiro, por filial, no período).
 -- O Claude consulta e devolve o total; aplicar o resultado cria UM lançamento 'venda_staria' (status 'aplicada', sem repetir período)
 create table if not exists caixa_jobs (
