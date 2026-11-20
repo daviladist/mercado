@@ -35,7 +35,19 @@ js=R(js,"loadImg('/_blob/'+id)","loadImg((window.ENC_BLOB||'/_blob/')+id)")
 # download direto quando não há o recurso de downloads do Claude
 js=R(js," const url=URL.createObjectURL(blob);\n modal(`<h3>Seu arquivo</h3>",
      " const url=URL.createObjectURL(blob);\n if(window.TINO){const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);toast('Arquivo baixado: '+name);return true}\n modal(`<h3>Seu arquivo</h3>")
+# início do app: no app do Claude cada app/*.js é um <script> separado e o 16-inicio.js roda antes do
+# 19-arte.js etc. Lá o typeof de um const que ainda não existe é seguro; juntando tudo num arquivo só,
+# o mesmo início acessa const (TEMA_NOMES, temaCor, PLAQ_TAM...) antes da declaração e o app inteiro para
+# ("Cannot access ... before initialization"). Por isso o primeiro desenho vira inicio(), chamada no fim.
+INI='/* ================= início ================= */\n'
+if js.count(INI)!=1: raise SystemExit('não achei (uma vez só) o bloco de início: '+INI.strip())
+a=js.index(INI)+len(INI); b=js.find('\nrenderFormats();renderCamps();',a)
+nx=js.find('\n/* =================',a)
+if b<0 or (nx>=0 and nx<b): raise SystemExit('não achei a linha do primeiro desenho dentro do bloco de início')
+b=js.index('\n',b+1)+1
+js=js[:a]+'function inicio(){\n'+js[a:b]+'}\n'+js[b:]
 js+="\ndocument.querySelectorAll('[data-wzgo]').forEach(b=>b.addEventListener('click',()=>wzGo(+b.dataset.wzgo)));\n"
+js+='\n/* sempre por último: ver o comentário de início() em tools/to_tino.py */\ninicio();\n'
 assert 'cdn.jsdelivr' not in js and 'cdnjs' not in js, 'sobrou biblioteca de fora'
 assert not re.search(r'\son[a-z]+="',html), 'sobrou onclick na página'
 os.makedirs(os.path.join(out,'encartes'),exist_ok=True)
