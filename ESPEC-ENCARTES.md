@@ -178,6 +178,21 @@ continua publicando.
 - **Extras agora:** só "Duplicar campanha". Repetir última lista, ofertas sugeridas pelo StarIA, resultado da
   campanha, kit da semana, TV e vídeo com voz: **depois** que o básico estiver rodando na loja.
 
+
+## 6c. Decisões sobre os itens do encarte (20/11/2026, 16h05)
+
+- **Lista:** uma linha por produto: `Nome  preço` ou `Nome  preço  preço-app` (o 2º preço é o do app).
+  O limite o funcionário marca depois, no produto.
+- **Foto:** o app acha sozinho no banco (código, código de barras, nome). Se não achar: foto do aparelho
+  (câmera ou arquivo) **ou da internet** (abre a busca de imagens e a pessoa cola a imagem). A foto nova sobe para o banco.
+- **Ajustes manuais por produto (zoom, letra, posição do nome, mover frase): SAEM.** O funcionário só mexe em:
+  destaque (até o máximo do modelo), frase (da lista do dono), limite, ordem e excluir.
+- **Nome no encarte:** o que o funcionário colou, com acento e maiúsculas arrumados pelo app.
+  O banco só serve para achar foto e conferir preço.
+- Sem resposta do Eduardo, ficou a sugestão do Claude: cascata automática pelo nome (kit, fardo, combo, "c/ 12",
+  "leve 3") com liga/desliga no produto; preço por kg/L só na plaquinha; produto sem banco entra com aviso
+  (não trava); adicionar produto colando a lista ou digitando um por um (câmera só nas plaquinhas).
+
 ## 7. Arquitetura proposta (Fase 2)
 
 ### Onde fica
