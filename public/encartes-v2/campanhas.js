@@ -17,8 +17,7 @@ export function novaCampanha() {
     nome: '',
     dias: [],                 // números 0..6 (domingo = 0) ou ['todos']
     cabecalho: null,          // endereço da imagem salva na nuvem
-    logosNaImagem: true,      // o Photoshop já traz as logos
-    logosLado: true,          // se o app colocar as logos: lado a lado (true) ou em pé (false)
+    logosLado: true,          // logos do app por cima do cabeçalho: lado a lado (true) ou em pé (false)
     estilo: 'quadros',
     fogo: false,
     cores: { fundo: '#a50f14', cartaoDestaque: '#ffc81f', cartaoNormal: '#d5141b', etiqueta: '#16161a', etiquetaTexto: '#ffffff', pilula: '#16161a', destaque: '#ffd21f', cabecalho: '#c8161d', rodape: '#16161a' },

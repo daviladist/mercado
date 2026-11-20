@@ -1,5 +1,10 @@
-// Cabeçalho: SEMPRE a imagem do Photoshop do tema (decisão do Eduardo, 20/11).
-// O app só coloca as logos no canto esquerdo, lado a lado ou uma em cima da outra (escolha do tema).
+// Cabeçalho: SEMPRE a imagem do Photoshop da campanha (decisão do Eduardo, 20/11).
+// As logos NÃO vão no Photoshop: o app coloca as logos cadastradas (uma ou duas) por cima,
+// no canto esquerdo, lado a lado ou uma em cima da outra (escolha da campanha).
+// O modelo de cabeçalho para baixar marca exatamente esta zona (ZONA_LOGOS).
+
+// zona das logos, em fração do cabeçalho
+export const ZONA_LOGOS = { x: 0.025, y: 0.08, w: 0.305, h: 0.84 };
 import { imagemContida, FONTE, fonte, tom, textoSobre } from './util.js';
 
 // Altura do cabeçalho: a da própria imagem (ela é feita na largura do encarte), no máximo 38% da arte.
@@ -24,9 +29,8 @@ export function desenharCabecalho(c, W, H, cab, cores) {
     c.fillRect(0, 0, W, H);
   }
   // canto esquerdo livre: até 30% da largura
-  const lado = cab.logosLado !== false;
-  const area = lado ? { x: W * 0.03, y: H * 0.14, w: W * 0.36, h: H * 0.72 } : { x: W * 0.04, y: H * 0.06, w: W * 0.24, h: H * 0.88 };
-  logos(c, cab.logos, area, lado);
+  const Z = ZONA_LOGOS;
+  logos(c, cab.logos, { x: W * Z.x, y: H * Z.y, w: W * Z.w, h: H * Z.h }, cab.logosLado !== false);
   // sombra caindo no fundo, separa o cabeçalho dos produtos
   const g = c.createLinearGradient(0, H, 0, H + H * 0.1);
   g.addColorStop(0, 'rgba(0,0,0,0.3)');
