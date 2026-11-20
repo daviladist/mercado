@@ -355,6 +355,13 @@ body.wz.usrOn .top .actions>#bModo{display:inline-flex!important}
 body.wz .top .bUndo{display:none!important}
 
 .prontB i{z-index:0}.prontB b,.prontB small{z-index:1}
+
+/* tela Confira no computador: o encarte (esquerda) rola sozinho, sem precisar descer a lista de produtos (direita).
+   A lista continua rolando com a página, como antes (o arrastar produto usa a rolagem da página). */
+@media(min-width:861px){
+ .wz3 .wzL{max-height:calc(100vh - 132px);max-height:calc(100dvh - 132px);overflow-y:auto;overscroll-behavior:contain;padding:0 8px 8px 0;scrollbar-width:thin;scrollbar-gutter:stable}
+ .wz3 .wzL::-webkit-scrollbar{width:8px}.wz3 .wzL::-webkit-scrollbar-thumb{background:#0003;border-radius:8px}
+}
 </style>
 </head>
 <body>
