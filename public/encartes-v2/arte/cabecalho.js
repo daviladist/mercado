@@ -4,7 +4,7 @@
 // O modelo de cabeçalho para baixar marca exatamente esta zona (ZONA_LOGOS).
 
 // zona das logos, em fração do cabeçalho
-export const ZONA_LOGOS = { x: 0.025, y: 0.08, w: 0.305, h: 0.84 };
+export const ZONA_LOGOS = { x: 0.025, y: 0.05, w: 0.305, h: 0.9 };
 import { imagemContida, FONTE, fonte, tom, textoSobre } from './util.js';
 
 // Altura do cabeçalho: a da própria imagem (ela é feita na largura do encarte), no máximo 38% da arte.
@@ -43,7 +43,7 @@ export function desenharCabecalho(c, W, H, cab, cores) {
 function logos(c, imgs, a, lado) {
   imgs = (imgs || []).filter(Boolean);
   if (!imgs.length) return;
-  const n = imgs.length, gap = (lado ? a.w : a.h) * 0.06;
+  const n = imgs.length, gap = (lado ? a.w : a.h) * 0.035;
   imgs.forEach((img, i) => {
     const bw = lado ? (a.w - gap * (n - 1)) / n : a.w;
     const bh = lado ? a.h : (a.h - gap * (n - 1)) / n;

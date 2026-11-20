@@ -17,6 +17,18 @@ const rg = c.createRadialGradient(W * 0.45, H * 0.5, 50, W * 0.45, H * 0.5, W * 
 c.fillStyle = rg; c.fillRect(0, 0, W, H);
 // foto: o pedaço da direita do cabeçalho antigo, ocupando a direita, com a borda esquerda sumindo no fundo
 const sx = img.width * C.fotoDe, sw = img.width - sx, k = H / img.height, dw = sw * k, dx = W - dw;
+if (C.selo) {
+  // selo redondo (ex.: Super Dia D): recortado em círculo, sem caixa em volta
+  const [fx, fy, fw, fh] = C.selo.map((v, i) => v * (i % 2 ? img.height : img.width));
+  const d = H * 0.98, cx = W - d / 2 - W * 0.015, cy = H / 2;
+  const o = document.createElement('canvas'); o.width = W; o.height = H; const oc = o.getContext('2d');
+  oc.drawImage(img, fx, fy, fw, fh, cx - d / 2, cy - d / 2, d, d * fh / fw);
+  oc.globalCompositeOperation = 'destination-in';
+  const m = oc.createRadialGradient(cx, cy, d * 0.36, cx, cy, d * 0.5); m.addColorStop(0, 'rgba(0,0,0,1)'); m.addColorStop(1, 'rgba(0,0,0,0)');
+  oc.fillStyle = m; oc.fillRect(0, 0, W, H);
+  c.drawImage(o, 0, 0);
+  window.FIM_FOTO = cx - d / 2;
+} else {
 // a foto vai para uma tela à parte e ganha uma máscara: some suave na borda esquerda, sem emenda
 const o = document.createElement('canvas'); o.width = W; o.height = H; const oc = o.getContext('2d');
 oc.drawImage(img, sx, 0, sw, img.height, dx, 0, dw, H);
@@ -24,19 +36,20 @@ oc.globalCompositeOperation = 'destination-in';
 const m = oc.createLinearGradient(dx, 0, dx + dw * 0.45, 0); m.addColorStop(0, 'rgba(0,0,0,0)'); m.addColorStop(1, 'rgba(0,0,0,1)');
 oc.fillStyle = m; oc.fillRect(0, 0, W, H);
 c.drawImage(o, 0, 0);
+}
 // título no meio (entre a zona das logos e a foto)
-const x0 = W * 0.355, x1 = Math.max(x0 + W * 0.3, dx + dw * 0.22), tw = x1 - x0;
+const x0 = W * 0.355, x1 = C.selo ? window.FIM_FOTO - W * 0.01 : Math.max(x0 + W * 0.3, dx + dw * 0.22), tw = x1 - x0;
 const linhas = C.titulo; let tam = 400;
 c.font = `400 ${tam}px Anton`;
 const larg = Math.max(...linhas.map(l => c.measureText(l).width));
-tam = Math.min(tam * tw / larg, (H * 0.7) / (linhas.length * 0.95));
+tam = Math.min(tam * tw / larg, (H * (C.chamada ? 0.7 : 0.86)) / (linhas.length * 0.95));
 c.textBaseline = 'alphabetic'; c.textAlign = 'left';
 const capa = tam * 0.735, passo = tam * 0.95, bloco = (linhas.length - 1) * passo + capa;
-let y = (H * 0.8 - bloco) / 2 + capa + H * 0.04;
+let y = ((C.chamada ? H * 0.8 : H) - bloco) / 2 + capa + (C.chamada ? H * 0.04 : 0);
 linhas.forEach((l, i) => {
   c.font = `400 ${tam}px Anton`;
   c.fillStyle = 'rgba(0,0,0,0.6)'; for (let d = 1; d <= 8; d++) c.fillText(l, x0 + d * tam * 0.006, y + d * tam * 0.008);
-  c.fillStyle = i === linhas.length - 1 ? C.corDestaque : '#ffffff'; c.fillText(l, x0, y);
+  c.fillStyle = C.coresLinhas ? C.coresLinhas[i] : (i === linhas.length - 1 ? C.corDestaque : '#ffffff'); c.fillText(l, x0, y);
   y += passo;
 });
 // faixa de chamada

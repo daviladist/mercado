@@ -1,7 +1,7 @@
 // Modelos prontos: os cabeçalhos que o Eduardo já tinha (Quinta da Carne, Quarta Imbatível, Segunda e Terça,
-// Ofertas de Sábado), refeitos no formato do modelo, com o canto esquerdo livre para as logos.
+// Ofertas de Sábado, Super Dia D), refeitos no formato do modelo, com o canto esquerdo livre para as logos.
 // Viram um modelo novo com um toque; depois ele muda o que quiser.
-import { novaCampanha } from './campanhas.js';
+import { novaCampanha, TODOS } from './campanhas.js';
 import { PALETAS } from './cores.js';
 
 export const PRONTOS = [
@@ -9,6 +9,7 @@ export const PRONTOS = [
   { arq: 'quarta-imbativel', nome: 'Quarta Imbatível', dias: [3], paleta: 'preto' },
   { arq: 'segunda-e-terca', nome: 'Segunda e Terça de Ofertas', dias: [1, 2], paleta: 'vermelho' },
   { arq: 'ofertas-de-sabado', nome: 'Ofertas de Sábado', dias: [6], paleta: 'laranja' },
+  { arq: 'super-dia-d', nome: 'Super Dia D', dias: [TODOS], paleta: 'preto', fogo: true },
 ];
 
 export const enderecoPronto = arq => new URL('./modelos/prontos/' + arq + '.jpg', import.meta.url).href;
@@ -16,5 +17,6 @@ export const enderecoPronto = arq => new URL('./modelos/prontos/' + arq + '.jpg'
 export function modeloDePronto(p) {
   const c = novaCampanha();
   const { nome: _n, ...cores } = PALETAS[p.paleta];
-  return Object.assign(c, { nome: p.nome, dias: [...p.dias], cabecalho: 'pronto:' + p.arq, cores: { ...c.cores, ...cores } });
+  // logos uma em cima da outra: nesses cabeçalhos ocupam melhor o canto esquerdo (pedido do Eduardo)
+  return Object.assign(c, { nome: p.nome, dias: [...p.dias], cabecalho: 'pronto:' + p.arq, cores: { ...c.cores, ...cores }, logosLado: false, fogo: !!p.fogo });
 }
