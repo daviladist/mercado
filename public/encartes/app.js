@@ -228,8 +228,12 @@ async function loadAllImages(){
  renderList();renderLogos();renderArt();schedule();catLoad()}
 /* ================= desenho ================= */
 let CUR={W:1080,H:1350};
-const F=s=>`${s}px Anton, Impact, "Arial Narrow", sans-serif`;
-const O=(s,w=700)=>`${w} ${s}px Oswald, "Arial Narrow", sans-serif`;
+/* famílias de letra: a 1ª é a do número do preço e do título, a 2ª é a do texto */
+const FAMS={padrao:['Anton','Oswald'],bloco:['Archivo Black','Archivo'],alta:['Bebas Neue','Oswald'],feira:['Alfa Slab One','Archivo']};
+const FAM_NOMES={padrao:'Padrão (Anton)',bloco:'Bloco (grossa e larga)',alta:'Alta (bem estreita)',feira:'Feira (com serifa grossa)'};
+const _ff=()=>FAMS[(CUR&&CUR.fonte)||'padrao']||FAMS.padrao;
+const F=s=>`${s}px ${_ff()[0]}, Anton, Impact, "Arial Narrow", sans-serif`;
+const O=(s,w=700)=>`${w} ${s}px ${_ff()[1]}, Oswald, "Arial Narrow", sans-serif`;
 function rr(c,x,y,w,h,r){r=Math.max(0,Math.min(r,w/2,h/2));c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
 function wrap(c,t,maxW){const ws=String(t).split(/\s+/).filter(Boolean),L=[];let cur='';for(const w of ws){const n=cur?cur+' '+w:w;if(!cur||c.measureText(n).width<=maxW)cur=n;else{L.push(cur);cur=w}}if(cur)L.push(cur);return L}
 function fitBlock(c,t,maxW,maxH,maxL,start,min,fn,lh=1.04){
@@ -490,6 +494,7 @@ function drawCard(c,p,x,y,w,h,C,iss){
  if(!nc){/* cartão: sombra macia, canto arredondado e um degradê bem leve para não ficar chapado */
   softShadow(c,x,y,w,h,r,m0*0.06,0.36);c.save();
   const cg=c.createLinearGradient(0,y,0,y+h);cg.addColorStop(0,C.cartao);cg.addColorStop(1,shade(C.cartao,-0.06));c.fillStyle=cg;rr(c,x,y,w,h,r);c.fill();
+  if(C.cartaoBorda){const lw=Math.max(1.5,m0*0.011);c.strokeStyle=C.cartaoBorda;c.lineWidth=lw;rr(c,x+lw/2,y+lw/2,w-lw,h-lw,r);c.stroke()}
   if(tc){c.save();rr(c,x,y,w,h,r);c.clip();const gr=c.createLinearGradient(0,y,0,y+h);gr.addColorStop(0,hexA(tc,0.02));gr.addColorStop(0.55,hexA(tc,0.07));gr.addColorStop(1,hexA(tc,0.2));c.fillStyle=gr;c.fillRect(x,y,w,h);
    c.fillStyle=tc;c.fillRect(x,y,w,Math.max(4,m0*0.018));c.restore()}
   if(p.featured)featBurst(c,x,y,w,h,r,C,w/h>CARD_HZ,destKind(p));
@@ -899,11 +904,11 @@ function drawModelo(c,W,H,items,cp,iss){const m=getMod(cp.modelo);if(m.slots)ret
  drawModeloData(c,m);c.restore();
  if(items.length>modeloSlots(m))iss&&iss.push(`Este modelo tem ${modeloSlots(m)} espaços; o resto vai para outra arte`)}
 function renderFlyer(c,W,H,items,cp,iss,lay,pg){
- if(cp&&cp.modelo&&getMod(cp.modelo)){CUR={W,H,noCards:false};drawModelo(c,W,H,items,cp,iss);return}
+ if(cp&&cp.modelo&&getMod(cp.modelo)){CUR={W,H,noCards:false,fonte:cp.fonte||''};drawModelo(c,W,H,items,cp,iss);return}
  const fk=fmtOf(W,H),hf=pg&&pg.hf||{cab:'completo',rod:'completo'},full=hf.cab==='completo'&&hf.rod==='completo';
  /* arte de fundo da campanha (com cabeçalho e rodapé desenhados nela) só entra quando a arte usa os dois completos */
  const art=full&&fk&&artCache.get(artKey(cp.id,fk));const HD=!art&&cp&&hf.cab==='completo'?headOf(cp,W,H):null;
- CUR={W,H,noCards:!!art&&cp.cards===false,tema:cp.tema||'',motivo:cp.motivo||'',estilo:cp.estilo||'',validRod:cp.validPos==='rodape'||!!HD,destFundo:cp.destFundo||''};let C=typeof temaCor==='function'?temaCor(cp,cp.cores):cp.cores;
+ CUR={W,H,noCards:!!art&&cp.cards===false,fonte:cp.fonte||'',tema:cp.tema||'',motivo:cp.motivo||'',estilo:cp.estilo||'',validRod:cp.validPos==='rodape'||!!HD,destFundo:cp.destFundo||''};let C=typeof temaCor==='function'?temaCor(cp,cp.cores):cp.cores;
  const hhX=hf.cab==='faixa'?faixaH(H):hf.cab==='nenhum'?0:(HD?HD.hh:undefined),fhX=hf.rod==='fino'?finoH(H):hf.rod==='nenhum'?0:undefined;
  const A=areaOf(W,H,hhX,fhX);if(S.store.tinta&&!art&&(fk==='a4'||fk==='a4h'))C=Object.assign({},C,{fundo:'#ffffff'});c.save();
  if(art)cover(c,art.img,0,0,W,H);else drawBg(c,W,H,C);
@@ -945,7 +950,7 @@ function drawCroqui(cv,l,fk,maxW=132,maxH=150,items,hf){
 /* economia de tinta: cabeçalho e caixa de preço brancos com contorno preto */
 const ecoC=C=>Object.assign({},C,{cabecalho:'#ffffff',titulo:'#111111',preco:'#ffffff',precoTexto:'#111111',adesivo:'#111111',adesivoTexto:'#ffffff',eco:true});
 function renderPlaque(c,W,H,p,cp,fold){
- CUR={W:W*0.75,H,plaq:true};const C=S.plaqEco?ecoC(cp.cores):cp.cores;c.save();c.fillStyle='#fff';c.fillRect(0,0,W,H);
+ CUR={W:W*0.75,H,plaq:true,fonte:(cp&&cp.fonte)||''};const C=S.plaqEco?ecoC(cp.cores):cp.cores;c.save();c.fillStyle='#fff';c.fillRect(0,0,W,H);
  c.strokeStyle='#9a9a9a';c.lineWidth=3;c.setLineDash([W*0.014,W*0.009]);c.beginPath();c.moveTo(0,fold);c.lineTo(W,fold);c.stroke();c.setLineDash([]);
  c.fillStyle='#a8a8a8';c.textAlign='center';c.textBaseline='middle';c.font=`500 ${fold*0.16}px Inter, sans-serif`;c.fillText('▲  DOBRE AQUI E PRENDA NO SUPORTE DA GÔNDOLA  ▲',W/2,fold*0.55);
  const y0=fold,bh=H-fold,land=W>bh,noImg=!getImg(p),hb=bh*(land?0.15:0.1)*(noImg?1.35:1),m=W*0.03;
@@ -1045,7 +1050,7 @@ const easeBack=t=>{const s=1.70158;t=t-1;return t*t*((s+1)*t+s)+1};
 function slides(){return[{k:'intro',d:3},...S.products.map(p=>({k:'p',p,d:+S.tvSec||5})),{k:'outro',d:4}]}
 function slideAt(L,t){const tot=L.reduce((a,s)=>a+s.d,0);t=((t%tot)+tot)%tot;for(const s of L){if(t<s.d)return{s,lt:t};t-=s.d}return{s:L[0],lt:0}}
 function drawSlide(c,W,H,s,lt){
- const cp=camp();CUR={W,H,tema:cp.tema||'',motivo:cp.motivo||'',destFundo:cp.destFundo||''};const C=typeof temaCor==='function'?temaCor(cp,cp.cores):cp.cores,land=W>H;c.save();drawBg(c,W,H,C);
+ const cp=camp();CUR={W,H,fonte:cp.fonte||'',tema:cp.tema||'',motivo:cp.motivo||'',destFundo:cp.destFundo||''};const C=typeof temaCor==='function'?temaCor(cp,cp.cores):cp.cores,land=W>H;c.save();drawBg(c,W,H,C);
  const pr=k=>clamp((lt-k)/0.55,0,1),pop=k=>easeBack(pr(k)),fade=k=>clamp((lt-k)/0.35,0,1);
  if(s.k==='intro'){
   const a=pop(0.1);const bw=land?W*0.2:W*0.42,bh=bw*0.72;c.globalAlpha=fade(0);
@@ -1859,21 +1864,26 @@ function renderCamps(){modBtn();renderHeadBox();
  <div class="row2"><label>Título no encarte<input data-k="titulo" value="${esc(c.titulo)}"></label>
  <label>Fundo<select data-k="tema">${(typeof TEMA_NOMES!=='undefined'?TEMA_NOMES:[['','Cor lisa com listras']]).map(([v,t])=>`<option value="${v}" ${(c.tema||'')===v?'selected':''}>${esc(t)}</option>`).join('')}</select></label></div>
  <label>Foto no cabeçalho <small style="color:var(--mut);font-weight:500">o canto esquerdo fica livre para as logomarcas</small>
- <select data-k="foto"><option value="">Sem foto (só cor)</option>${(typeof FOTO_LIB!=='undefined'?FOTO_LIB:[]).map(f=>`<option value="${f.id}" ${c.foto===f.id?'selected':''}>${esc(f.nome)}</option>`).join('')}${c.foto==='u'?'<option value="u" selected>Minha foto</option>':''}</select></label>
- <div class="bar"><button class="btn sm" id="cfFoto">Usar uma foto minha</button>${c.foto==='u'?'<button class="btn sm ghost" id="cfFotoRm">Tirar a minha foto</button>':''}</div>
+ <select data-k="foto"><option value="">Sem foto (só cor)</option>${(typeof fotoLibTodas==='function'?fotoLibTodas():(typeof FOTO_LIB!=='undefined'?FOTO_LIB:[])).map(f=>`<option value="${esc(f.id)}" ${c.foto===f.id?'selected':''}>${esc(f.nome)}${f.minha?' (minha)':''}</option>`).join('')}${c.foto==='u'?'<option value="u" selected>Minha foto (antiga)</option>':''}</select></label>
+ <div class="bar"><button class="btn sm" id="cfFoto">Subir uma foto minha</button>${String(c.foto||'').slice(0,2)==='u:'?'<button class="btn sm ghost" id="cfFotoRm">Apagar esta foto da biblioteca</button>':(c.foto==='u'?'<button class="btn sm ghost" id="cfFotoRm">Tirar a minha foto</button>':'')}</div>
+ <p class="hint">A foto que você subir fica guardada e pode ser usada em qualquer campanha. Foto da sua loja vale mais que foto de banco de imagem.</p>
  <label>Validade do encarte<select data-k="validPos"><option value="">No cabeçalho, embaixo do título</option><option value="rodape" ${c.validPos==='rodape'?'selected':''}>No rodapé (cabeçalho livre para a arte)</option></select></label>
  <label>Estilo dos produtos<select data-k="estilo"><option value="">Cartões brancos</option><option value="vitrine" ${c.estilo==='vitrine'?'selected':''}>Vitrine: produto solto no fundo, etiqueta de preço (estilo grande rede)</option></select></label>
  <label>Fundo dos produtos em destaque<select data-k="destFundo">${DEST_FUNDOS.map(([v,t])=>`<option value="${v}" ${(c.destFundo||"raios")===v?"selected":""}>${t}</option>`).join("")}</select></label>
+ <label>Letra do preço e do título<select data-k="fonte">${Object.entries(typeof FAM_NOMES!=='undefined'?FAM_NOMES:{padrao:'Padrão'}).map(([k,v])=>`<option value="${k==='padrao'?'':k}" ${(c.fonte||'')===(k==='padrao'?'':k)?'selected':''}>${esc(v)}</option>`).join('')}</select></label>
  <label>Desenhos no fundo<select data-k="motivo">${Object.entries(MOTIF_NOMES).map(([k,v])=>`<option value="${k}" ${(c.motivo||'')===k?'selected':''}>${v}</option>`).join('')}</select></label>
  <div class="colors">${Object.keys(COLOR_LABELS).map(k=>`<label>${COLOR_LABELS[k]}<input type="color" data-c="${k}" value="${c.cores[k]}"></label>`).join('')}</div>
  <p class="hint">Abrindo o app no dia marcado, a campanha já vem selecionada.</p>`;
  $('#cform').querySelectorAll('[data-k]').forEach(i=>i.addEventListener(i.tagName==='SELECT'?'change':'input',()=>{c[i.dataset.k]=i.dataset.k==='dia'?+i.value:i.value;if(i.dataset.k==='nome')renderCampsChipsOnly();changed(false)}));
  {const bf=$('#cfFoto');if(bf)bf.onclick=()=>{const i=document.createElement('input');i.type='file';i.accept='image/*';
-  i.onchange=async()=>{const f=i.files[0];if(!f)return;try{const u0=await fileToURL(f),i0=await loadImg(u0),k=Math.min(1,1400/i0.width),cv=document.createElement('canvas');
-   cv.width=Math.round(i0.width*k);cv.height=Math.round(i0.height*k);cv.getContext('2d').drawImage(i0,0,0,cv.width,cv.height);
-   const u=cv.toDataURL('image/jpeg',0.9),key='foto:'+c.id;await IDB.set(key,u);cloudPutImage&&cloudPutImage(key,u);FOTOC.delete(key);
-   c.foto='u';S._sharedDirty=true;changed();renderCamps();toast('Foto aplicada no cabeçalho desta campanha',4000)}catch(_){toast('Não consegui abrir essa imagem')}};i.click()};
-  const br=$('#cfFotoRm');if(br)br.onclick=()=>{c.foto='';FOTOC.delete('foto:'+c.id);IDB.del&&IDB.del('foto:'+c.id);S._sharedDirty=true;changed();renderCamps()}}
+  i.onchange=async()=>{const f=i.files[0];if(!f)return;
+   const nome=(prompt('Nome desta foto (para você achar depois):','')||'').trim();
+   try{c.foto=await fotoMinhaGuarda(f,nome);changed();renderCamps();toast('Foto guardada na biblioteca e aplicada aqui',4000)}
+   catch(_){toast('Não consegui abrir essa imagem')}};i.click()};
+  const br=$('#cfFotoRm');if(br)br.onclick=()=>{
+   if(String(c.foto||'').slice(0,2)==='u:'){const q=c.foto;if(!confirm('Apagar esta foto da biblioteca? Ela sai de todas as campanhas que usam.'))return;fotoMinhaApaga(q)}
+   else{FOTOC.delete('foto:'+c.id);IDB.del&&IDB.del('foto:'+c.id);c.foto='';S._sharedDirty=true}
+   changed();renderCamps()}}
  $('#cform').querySelectorAll('[data-c]').forEach(i=>i.addEventListener('input',()=>{c.cores[i.dataset.c]=i.value;renderCampsChipsOnly();changed(false)}));renderArt()}
 function renderCampsChipsOnly(){const el=$('#camps');el.querySelectorAll('.chip').forEach(ch=>{const c=S.campaigns.find(x=>x.id===ch.dataset.id);if(!c)return;const d=ch.querySelectorAll('.dot');d[0].style.background=c.cores.fundo;d[1].style.background=c.cores.cabecalho;ch.lastChild.textContent=c.nome})}
 $('#newC').onclick=()=>{let vis='app';
@@ -2038,7 +2048,9 @@ async function saveFile(name,blob,kind){
  if(window.TINO){const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);toast('Arquivo baixado: '+name);return true}
  modal(`<h3>Seu arquivo</h3>${kind==='img'?`<img src="${url}" style="width:100%;border-radius:8px"><p class="hint">Toque e segure a imagem (celular) ou clique com o botão direito para salvar.</p>`:kind==='video'?`<video src="${url}" controls style="width:100%;border-radius:8px"></video><p class="hint">Use o menu do vídeo para baixar.</p>`:'<p class="hint">Aqui o download direto não está disponível. Abra este app pelo claude.ai para baixar o arquivo.</p>'}<div class="mfoot"><button class="btn pri" data-a="x">Fechar</button></div>`,b=>b.querySelector('[data-a=x]').onclick=closeModal);return false}
 const toBlob=(c,t='image/png',q)=>new Promise(r=>c.toBlob(r,t,q));
-async function fontsReady(){try{await Promise.all([document.fonts.load('100px Anton'),document.fonts.load('700 50px Oswald'),document.fonts.load('600 50px Oswald'),document.fonts.load('500 50px Oswald'),document.fonts.load('500 20px Inter')])}catch(e){}}
+async function fontsReady(){try{await Promise.all([document.fonts.load('100px Anton'),document.fonts.load('700 50px Oswald'),document.fonts.load('600 50px Oswald'),document.fonts.load('500 50px Oswald'),document.fonts.load('500 20px Inter'),
+ document.fonts.load('100px "Archivo Black"'),document.fonts.load('100px "Alfa Slab One"'),document.fonts.load('100px "Bebas Neue"'),
+ document.fonts.load('700 50px Archivo'),document.fonts.load('600 50px Archivo'),document.fonts.load('500 50px Archivo')])}catch(e){}}
 
 $('#bPng').onclick=async()=>{
  await fontsReady();const f=FORMATS[S.format],{P,n}=pageInfo();if(!await reviewGate(S.products))return;
@@ -3565,7 +3577,14 @@ const TEMAS={
 };
 const TEMA_NOMES=[['','Cor lisa com listras'],...Object.keys(TEMAS).map(k=>[k,TEMAS[k].nome])];
 /* a cor equivalente do tema entra no lugar de C.fundo, para o resto do app saber se o fundo é claro ou escuro */
-const temaCor=(cp,C)=>{const t=cp&&TEMAS[cp.tema];return t&&t.base?Object.assign({},C,{fundo:t.base}):C};
+/* o tema não é só o fundo: o cartão pega o tom do material (papel de feira, kraft,
+   cimento) e ganha um fio de borda na cor do tema. É isso que faz o tema aparecer
+   no modo Cartões, onde o cartão cobre quase tudo. */
+const TEMA_CARTAO={madeira:['#fff8ea','#c9a063'],kraft:['#f7e9d0','#c2a070'],concreto:['#f1f4f6','#aeb8bf'],papel:['#ffffff','#d9d2c4'],lousa:['#ffffff','#9fb3ad']};
+const temaCor=(cp,C)=>{const k=cp&&cp.tema,t=k&&TEMAS[k];if(!t||!t.base)return C;
+ const o=Object.assign({},C,{fundo:t.base}),ct=TEMA_CARTAO[k];
+ if(ct&&(!C.cartao||C.cartao.toLowerCase()==='#ffffff')){o.cartao=ct[0];o.cartaoBorda=ct[1]}
+ return o};
 
 /* o fundo é desenhado uma vez e guardado: sai igual e não pesa no vídeo */
 const TBG=new Map();
@@ -3634,7 +3653,7 @@ function renderEtiqueta(c,W,H,p,cp,opt){
  const C=cp.cores||{},peq=!!(opt&&opt.peq),cor=(typeof secTint==='function'&&secTint(p))||C.cabecalho||'#15171c';
  /* a cor do preço da campanha pode ser clara demais para papel branco */
  const tinta=(typeof hexLum==='function'&&/^#[0-9a-f]{6}$/i.test(C.preco||'')&&hexLum(C.preco)<=0.62)?C.preco:'#c8141c';
- CUR={W:W*1.6,H,plaq:true};
+ CUR={W:W*1.6,H,plaq:true,fonte:(cp&&cp.fonte)||''};
  c.save();c.fillStyle='#ffffff';c.fillRect(0,0,W,H);
  const bw=Math.max(4,W*0.035);c.fillStyle=cor;c.fillRect(0,0,bw,H);
  c.strokeStyle='#bdbab4';c.lineWidth=Math.max(1,W*0.004);c.strokeRect(c.lineWidth/2,c.lineWidth/2,W-c.lineWidth,H-c.lineWidth);
@@ -3697,6 +3716,40 @@ areaOf=function(W,H,hhO,fhO){const A=_areaOf19(W,H,hhO,fhO);
  const t=CUR&&CUR.tema;if(!t||t==='fogo'||!TEMAS[t])return A;
  const m=W*0.034,g=W*(A.land?0.019:0.024),top=A.hh+m*1.25,bot=H-A.fh-m-notasH(W,H);
  return Object.assign(A,{m,g,top,ax:m,aw:W-m*2,ah:bot-top})};
+
+/* ============ biblioteca de fotos do próprio mercado ============
+   Foto de banco de imagem deixa o encarte com cara de modelo pronto. A foto
+   do SEU açougue, da SUA equipe, é o que nenhuma rede grande tem igual.
+   Por isso o upload não fica preso a uma campanha: entra numa biblioteca e
+   vale para qualquer uma. */
+function fotosMinhas(){return(S.store.fotos||[]).filter(f=>f&&f.id)}
+function fotoLibTodas(){return[...FOTO_LIB,...fotosMinhas().map(f=>({id:'u:'+f.id,nome:f.nome||'Minha foto',minha:true}))]}
+function fotoLibKey(id){return'fotolib:'+id}
+
+async function fotoMinhaGuarda(file,nome){
+ const u0=await fileToURL(file),i0=await loadImg(u0),k=Math.min(1,1400/i0.width),cv=document.createElement('canvas');
+ cv.width=Math.round(i0.width*k);cv.height=Math.round(i0.height*k);
+ cv.getContext('2d').drawImage(i0,0,0,cv.width,cv.height);
+ const u=cv.toDataURL('image/jpeg',0.9),id=Date.now().toString(36),key=fotoLibKey(id);
+ await IDB.set(key,u);try{cloudPutImage&&cloudPutImage(key,u)}catch(e){}
+ S.store.fotos=[...fotosMinhas(),{id,nome:nome||('Minha foto '+(fotosMinhas().length+1))}];
+ FOTOC.delete('u:'+id);S._sharedDirty=true;
+ return'u:'+id}
+
+function fotoMinhaApaga(uid){const id=String(uid).replace(/^u:/,'');
+ S.store.fotos=fotosMinhas().filter(f=>f.id!==id);
+ FOTOC.delete('u:'+id);try{IDB.del&&IDB.del(fotoLibKey(id))}catch(e){}
+ (S.campaigns||[]).forEach(c=>{if(c.foto==='u:'+id)c.foto=''});
+ S._sharedDirty=true}
+
+/* fotoHeadImg agora também entende as fotos da biblioteca ('u:<id>') */
+const _fotoHeadImg19=fotoHeadImg;
+fotoHeadImg=function(cp){const id=cp&&cp.foto;
+ if(!id||String(id).slice(0,2)!=='u:')return _fotoHeadImg19(cp);
+ const key=String(id);let e=FOTOC.get(key);
+ if(!e){e={img:null};FOTOC.set(key,e);
+  IDB.get(fotoLibKey(key.slice(2))).then(async u=>{if(u){try{e.img=await loadImg(u);e.url=u;try{schedule()}catch(_){}}catch(_){}}else FOTOC.delete(key)})}
+ return e.img};
 /* ================= 20 · conferir: o que trava o download e o que só dá para melhorar =================
    Separa os problemas em dois grupos, escreve em palavra do dia a dia e deixa consertar
    de dentro da própria revisão, sem ter que voltar. */
@@ -3776,5 +3829,157 @@ reviewGate0=function(items,viewOnly=false){
     if(fu)return unlock('Baixar com pendência',()=>res(true),()=>res(false));
     modal(`<h3>Baixar assim mesmo?</h3><p>${travas.length===1?'Ainda tem 1 ponto':'Ainda tem '+travas.length+' pontos'} que o cliente vai ver no encarte ou que mexe com o preço.</p><div class="mfoot"><button class="btn pri" data-a="n">Voltar e corrigir</button><button class="btn" data-a="y">Baixar assim mesmo</button></div>`,
      q=>{q.querySelector('[data-a=n]').onclick=()=>{closeModal();res(false);if(inWz()&&WZ===4)wzGo(3)};q.querySelector('[data-a=y]').onclick=()=>{closeModal();res(true)}})}})})};
+/* ================= recorte do fundo da foto do produto =================
+   Foto de fornecedor vem quase sempre com fundo branco chapado. Em cima do
+   encarte colorido isso vira um retângulo branco. Aqui o fundo liso sai e
+   sobra só o produto, com a borda suavizada. Só mexe quando tem certeza:
+   se o fundo não for liso, ou se sobrar produto de menos/demais, desiste e
+   devolve a foto original. */
+
+const RECORTE_V = 1;                 /* sobe quando o algoritmo muda: refaz o cache */
+const recCache = new Map();          /* chave da foto -> {canvas, ok} */
+
+function recorteLigado(){return S.store.recorte!==false}
+
+/* tem transparência de verdade? então já veio recortada e não se mexe */
+function _temAlfa(d,W,H){
+ const n=W*H;let t=0;
+ for(let i=3;i<n*4;i+=4*7){if(d[i]<250){t++;if(t>n/900)return true}}
+ return false}
+
+/* o fundo é liso? olha a moldura de fora e vê se ela toda tem a mesma cor */
+function _fundoLiso(d,W,H){
+ const px=[],passo=Math.max(1,Math.round(Math.min(W,H)/90));
+ for(let x=0;x<W;x+=passo){px.push((x)*4);px.push(((H-1)*W+x)*4)}
+ for(let y=0;y<H;y+=passo){px.push((y*W)*4);px.push((y*W+W-1)*4)}
+ let r=0,g=0,b=0;px.forEach(i=>{r+=d[i];g+=d[i+1];b+=d[i+2]});
+ const n=px.length;r/=n;g/=n;b/=n;
+ let fora=0;px.forEach(i=>{if(Math.abs(d[i]-r)+Math.abs(d[i+1]-g)+Math.abs(d[i+2]-b)>96)fora++});
+ if(fora/n>0.12)return null;                    /* moldura com cena atrás: não é fundo de estúdio */
+ return{r,g,b,claro:(r*0.299+g*0.587+b*0.114)>=170}}
+
+/* distância de cor com peso: o olho perdoa mais variação de verde do que de vermelho/azul */
+function _dist(d,i,r,g,b){const dr=d[i]-r,dg=d[i+1]-g,db=d[i+2]-b;return Math.sqrt(dr*dr*0.9+dg*dg*0.7+db*db*0.9)}
+
+/* suaviza o degrau da borda: média 3x3 só no canal alfa */
+function _suaviza(a,W,H){
+ const o=new Uint8ClampedArray(a);
+ for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const i=y*W+x;
+  if(o[i]===255&&o[i-1]===255&&o[i+1]===255&&o[i-W]===255&&o[i+W]===255)continue;
+  if(!o[i]&&!o[i-1]&&!o[i+1]&&!o[i-W]&&!o[i+W])continue;
+  a[i]=(o[i-W-1]+o[i-W]+o[i-W+1]+o[i-1]+o[i]*4+o[i+1]+o[i+W-1]+o[i+W]+o[i+W+1])/12}
+ return a}
+
+/* o trabalho em si: devolve um canvas recortado, ou null quando não dá para confiar */
+function recortaFundo(img){
+ const W0=img.naturalWidth||img.width,H0=img.naturalHeight||img.height;if(!W0||!H0)return null;
+ const k=Math.min(1,1500/Math.max(W0,H0)),W=Math.round(W0*k),H=Math.round(H0*k);
+ const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+ const cx=cv.getContext('2d',{willReadFrequently:true});cx.drawImage(img,0,0,W,H);
+ let im;try{im=cx.getImageData(0,0,W,H)}catch(e){return null}
+ const d=im.data;
+ if(_temAlfa(d,W,H))return'alfa';   /* já veio sem fundo */
+ const f=_fundoLiso(d,W,H);if(!f)return null;
+ const TOL=f.claro?44:40,SUAVE=TOL*2.1;          /* abaixo de TOL some; entre TOL e SUAVE fica meio transparente */
+ /* o fundo de estúdio é CHAPADO; produto claro (ovo, leite, açúcar) tem sombra e relevo.
+    Só atravesso pixel liso: assim o branco do fundo sai e o branco do ovo fica. */
+ const lum=new Float32Array(W*H);
+ for(let i=0;i<W*H;i++)lum[i]=d[i*4]*0.299+d[i*4+1]*0.587+d[i*4+2]*0.114;
+ const liso=new Uint8Array(W*H);
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x;let mn=1e9,mx=-1e9;
+  for(let dy=-1;dy<=1;dy++){const yy=y+dy;if(yy<0||yy>=H)continue;
+   for(let dx=-1;dx<=1;dx++){const xx=x+dx;if(xx<0||xx>=W)continue;const v=lum[yy*W+xx];if(v<mn)mn=v;if(v>mx)mx=v}}
+  liso[i]=(mx-mn)<13?1:0}
+ const alfa=new Uint8ClampedArray(W*H).fill(255);
+ const vis=new Uint8Array(W*H),fila=new Int32Array(W*H);let topo=0,saiu=0;
+ const poe=(i,esp)=>{if(vis[i])return;const dd=_dist(d,i*4,f.r,f.g,f.b);if(dd>=SUAVE)return;
+  if(!liso[i]&&!esp&&dd>TOL*0.5)return;           /* pixel com relevo e cor já puxando: para aqui */
+  vis[i]=1;if(liso[i])fila[topo++]=i;
+  alfa[i]=dd<=TOL?0:Math.round(255*(dd-TOL)/(SUAVE-TOL));if(alfa[i]<255)saiu++};
+ for(let x=0;x<W;x++){poe(x,1);poe((H-1)*W+x,1)}
+ for(let y=0;y<H;y++){poe(y*W,1);poe(y*W+W-1,1)}
+ while(topo){const i=fila[--topo],x=i%W,y=(i-x)/W;
+  if(x>0)poe(i-1,0);if(x<W-1)poe(i+1,0);if(y>0)poe(i-W,0);if(y<H-1)poe(i+W,0)}
+ const frac=saiu/(W*H);
+ if(frac<0.04||frac>0.93)return null;            /* quase nada ou quase tudo: não era fundo */
+ _suaviza(alfa,W,H);
+ /* a borda é mistura de produto e fundo: desconta o fundo para não sobrar franja branca */
+ const bg=[f.r,f.g,f.b];
+ for(let i=0;i<W*H;i++){const a=alfa[i];if(a===255)continue;const j=i*4;d[j+3]=a;
+  if(a>38){const q=a/255;for(let c=0;c<3;c++)d[j+c]=Math.max(0,Math.min(255,(d[j+c]-bg[c]*(1-q))/q))}}
+ cx.putImageData(im,0,0);
+ return cv}
+
+/* troca a foto do cache pela recortada, sem mexer no arquivo guardado */
+function aplicaRecorte(k,e){
+ if(!e||!e.img||e.rec===RECORTE_V)return e;
+ e.rec=RECORTE_V;
+ if(!recorteLigado()){if(e.orig){e.img=e.orig}return e}
+ let ch=recCache.get(k);
+ if(ch===undefined){try{ch=recortaFundo(e.orig||e.img)}catch(err){ch=null}
+  recCache.set(k,ch);if(recCache.size>120)recCache.delete(recCache.keys().next().value)}
+ if(ch==='alfa'){e.alfa=true;return e}
+ if(ch){e.orig=e.orig||e.img;e.img=ch;e.alfa=true}
+ return e}
+
+const _ensureImg21=ensureImg;
+ensureImg=function(k){const r=_ensureImg21(k);
+ if(r&&typeof r.then==='function')return r.then(e=>e?aplicaRecorte(k,e):e);
+ return r?aplicaRecorte(k,r):r};
+
+/* a foto deste produto está recortada? quem desenha usa isso para deixar transbordar o cartão */
+function fotoRecortada(p){if(!p)return false;
+ const e=imgCache.get(imgKey(p));if(!e)return false;
+ if(e.rec!==RECORTE_V)aplicaRecorte(imgKey(p),e);
+ return!!e.alfa}
+
+/* quando o usuário liga/desliga o recorte, o cache das fotos precisa ser refeito */
+function recorteMudou(){imgCache.forEach((e,k)=>{e.rec=-1;aplicaRecorte(k,e)});
+ try{artCache.clear()}catch(e){}
+ schedule();try{renderList()}catch(e){}}
+
+/* botão na barra de cima, junto com QR code */
+(function(){const cb=$('#cbRec');if(!cb)return;
+ const _rc=renderCmd;renderCmd=function(n){_rc(n);const b=$('#cbRec');if(b)b.checked=recorteLigado()};
+ cb.onchange=e=>{S.store.recorte=e.target.checked;recorteMudou();changed(false);
+  toast(e.target.checked?'Fundo branco das fotos vai sair':'Fotos voltam com o fundo original',3000)}})();
+/* ============ o produto furando a borda do cartão ============
+   Encarte de rede grande não é grade fechada: no destaque o produto sai do
+   quadrado e encosta no fundo. O cartão continua existindo (é ele que
+   organiza a leitura), só que encolhe um pouco por cima e a foto ocupa a
+   altura toda, passando por cima da borda.
+   Só vale com foto recortada: foto com fundo branco vazando viraria um
+   retângulo branco no meio do encarte. */
+
+/* folga entre cartões: é por onde a foto sai sem bater no vizinho */
+function _folga(){const W=CUR&&CUR.W||1080,H=CUR&&CUR.H||1350,land=W>H;
+ const t=CUR&&CUR.tema,tem=t&&t!=='fogo'&&typeof TEMAS==='object'&&TEMAS[t];
+ return W*(tem?(land?0.019:0.024):(land?0.01:0.014))}
+
+function podeTransbordar(p){
+ if(!p||p.vaga||!CUR||CUR.noCards||CUR.plaq||CUR.estilo==='vitrine')return false;
+ if(S.store.transborda===false)return false;
+ if(typeof tierOf!=='function'||tierOf(p)<2)return false;
+ return typeof fotoRecortada==='function'&&fotoRecortada(p)}
+
+let _recuo=0;   /* quanto o cartão encolheu no topo nesta chamada */
+
+const _prodImg22=prodImg;
+prodImg=function(c,p,x,y,w,h,clipR,lim){
+ if(!lim||clipR||!_recuo||!podeTransbordar(p))return _prodImg22(c,p,x,y,w,h,clipR,lim);
+ const pad=Math.max(0,(y-lim.y)/0.7),gg=_folga()*0.85;
+ const oy=_recuo+pad*0.7+gg,ox=pad*0.3+gg;
+ const lim2={x:lim.x-ox,y:lim.y-oy,w:lim.w+ox*2,h:lim.h+oy};
+ return _prodImg22(c,p,x-ox,y-oy,w+ox*2,h+oy,clipR,lim2)};
+
+const _drawCard22=drawCard;
+drawCard=function(c,p,x,y,w,h,C,iss){
+ const ant=_recuo;
+ if(!podeTransbordar(p)){_recuo=0;const r=_drawCard22(c,p,x,y,w,h,C,iss);_recuo=ant;return r}
+ /* o cartão começa mais embaixo; a foto devolve o espaço crescendo para cima */
+ const ins=Math.min(h*0.11,Math.min(w,h)*0.17);
+ _recuo=ins;
+ const r=_drawCard22(c,p,x,y+ins,w,h-ins,C,iss);
+ _recuo=ant;return r};
 
 document.querySelectorAll('[data-wzgo]').forEach(b=>b.addEventListener('click',()=>wzGo(+b.dataset.wzgo)));
