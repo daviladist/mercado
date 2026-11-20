@@ -46,6 +46,10 @@ nx=js.find('\n/* =================',a)
 if b<0 or (nx>=0 and nx<b): raise SystemExit('não achei a linha do primeiro desenho dentro do bloco de início')
 b=js.index('\n',b+1)+1
 js=js[:a]+'function inicio(){\n'+js[a:b]+'}\n'+js[b:]
+# carga de fotos do app do Claude (app/25-carga-fotos.js): lá as fotos viajam junto em fotos/*.webp.
+# No Tino elas vêm do banco de dados do servidor e fotos/ não existe: sem isto, cada aparelho tentaria
+# baixar as 180 e mostraria "180 falharam".
+js=R(js,"setTimeout(()=>{cargaFotos().catch(()=>{})},4000);","if(!window.TINO)setTimeout(()=>{cargaFotos().catch(()=>{})},4000);",False)
 js+="\ndocument.querySelectorAll('[data-wzgo]').forEach(b=>b.addEventListener('click',()=>wzGo(+b.dataset.wzgo)));\n"
 js+='\n/* sempre por último: ver o comentário de início() em tools/to_tino.py */\ninicio();\n'
 assert 'cdn.jsdelivr' not in js and 'cdnjs' not in js, 'sobrou biblioteca de fora'
