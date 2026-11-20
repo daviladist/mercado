@@ -161,19 +161,23 @@
   function movTitulo(m) {
     if (m.tipo === 'venda_staria') return 'Vendas em dinheiro' + movFilial(m);
     if (m.tipo === 'crediario_staria') return 'Crediário em dinheiro' + movFilial(m);
-    if (m.tipo === 'sangria') return m.destino === 'impostos' ? 'Sangria para a gaveta de impostos' : 'Sangria';
+    if (m.tipo === 'sangria') return m.destino === 'impostos' || m.categoria === 'impostos' ? 'Sangria para a gaveta de impostos' : (CAT_TXT[m.categoria] || 'Sangria');
     if (m.tipo === 'gaveta_entrada') return 'Entrada na gaveta';
     if (m.tipo === 'gaveta_saida') return 'Pago com a gaveta';
     return 'Ajuste';
   }
+  // para que saiu a sangria. Só depósito e cheque vão ao banco; pagamento em dinheiro sai do cofre e acaba ali.
+  const CAT_TXT = { deposito: 'Depósito no banco', despesa: 'Pagamento em dinheiro', cheque: 'Cheque', impostos: 'Impostos' };
+  const vaiAoBanco = m => !m.categoria || m.categoria === 'deposito' || m.categoria === 'cheque';
   // sangria lançada pela equipe que o dono ainda não confirmou no banco (a do próprio dono é retirada dele)
-  const semDeposito = m => m.tipo === 'sangria' && !m.depositadoEm && m.destino !== 'impostos' && m.criadoPorRole !== 'admin';
+  const semDeposito = m => m.tipo === 'sangria' && vaiAoBanco(m) && !m.depositadoEm && m.destino !== 'impostos' && m.criadoPorRole !== 'admin';
   // hora em que o lançamento foi feito (horário de Brasília), ex.: 14:32
   const horaBR = s => { const d = new Date(s); return !s || isNaN(d) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }); };
   function movSub(m) {
     if (m.tipo === 'venda_staria' || m.tipo === 'crediario_staria') return dBR(m.data) + ' · sacola conferida';
     const h = horaBR(m.criadoEm);
-    return dBR(m.data) + (h ? ' ' + h : '') + (m.motivo ? ' · ' + esc(m.motivo) : '') + (semDeposito(m) ? (isAdmin() ? ' · <b class="neg">falta confirmar no banco</b>' : ' · <b class="inf">aguardando o ADM confirmar</b>') : '');
+    // o motivo que só repete o título (ex.: "Depósito no banco") não aparece de novo
+    return dBR(m.data) + (h ? ' ' + h : '') + (m.motivo && m.motivo !== movTitulo(m) ? ' · ' + esc(m.motivo) : '') + (semDeposito(m) ? (isAdmin() ? ' · <b class="neg">falta confirmar no banco</b>' : ' · <b class="inf">aguardando o ADM confirmar</b>') : '');
   }
   function sinal(m) { const s = m.tipo === 'sangria' || m.tipo === 'gaveta_saida' || m.valor < 0; return `<span class="${s ? 'neg' : 'pos'}">${s ? '−' : '+'}${money(Math.abs(m.valor))}</span>`; }
   /* uma linha tocável: abre o painel com detalhes e ações (marcar depositado / apagar) */
@@ -195,7 +199,7 @@
         ${m.motivo ? `<div class="kv"><span class="muted">Motivo</span><b style="white-space:normal;text-align:right">${esc(m.motivo)}</b></div>` : ''}
         ${m.criadoPor ? `<div class="kv"><span class="muted">Quem lançou</span><b>${esc(m.criadoPor)}</b></div>` : ''}
         ${m.tipo === 'venda_staria' || m.tipo === 'crediario_staria' ? `<div class="kv"><span class="muted">Período</span><b>${dBR(m.periodoIni)} a ${dBR(m.periodoFim)}</b></div>` : ''}
-        ${m.tipo === 'sangria' && m.destino !== 'impostos' ? `<div class="kv"><span class="muted">Banco</span><b class="${m.depositadoEm ? 'pos' : 'neg'}">${m.depositadoEm ? 'confirmado em ' + dBR(m.depositadoEm) : isAdmin() ? 'você ainda não confirmou' : 'aguardando o ADM confirmar'}</b></div>` : ''}
+        ${m.tipo === 'sangria' && m.destino !== 'impostos' && vaiAoBanco(m) ? `<div class="kv"><span class="muted">Banco</span><b class="${m.depositadoEm ? 'pos' : 'neg'}">${m.depositadoEm ? 'confirmado em ' + dBR(m.depositadoEm) : isAdmin() ? 'você ainda não confirmou' : 'aguardando o ADM confirmar'}</b></div>` : ''}
       </div>
       ${podeDep ? `<p class="small muted">Abra o extrato do banco. Se o depósito está lá, confirme.</p><button class="btn pri lg full" type="button" data-dep="${esc(m.id)}">${ic('bank')} Confirmei no banco</button>` : ''}
       ${podeApagar ? `<button class="btn dan full" type="button" data-delmov="${esc(m.id)}">Apagar este lançamento</button>` : ''}`, () => {
@@ -312,10 +316,21 @@
             <div class="kv"><span>Na matriz (cofre)</span><b>${money(R.naMatriz)}</b></div>
             ${R.nasLojas.total ? `<button type="button" class="kv" data-go="sacolas" style="width:100%;background:none;border:0;padding-left:0;padding-right:0;font:inherit;color:inherit;text-align:left"><span>Nas lojas e a caminho <span class="small muted">(valor do StarIA, ainda não contado)</span></span><b>${money(R.nasLojas.total)}</b></button>
               ${pf.map(([f, x]) => `<div class="kv small muted" style="padding-left:12px"><span>Filial ${esc(f)}</span><span>${money(r2(x.caixasSemSacola + x.naFilial + x.chegouFaltaContar + (x.crediario || 0)))}${x.crediario ? ` <span class="small">(${money(x.crediario)} de crediário)</span>` : ''}</span></div>`).join('')}` : ''}
-            ${R.aCaminhoDoBanco.total ? `<button type="button" class="kv" data-go="extrato" style="width:100%;background:none;border:0;padding-left:0;padding-right:0;font:inherit;color:inherit;text-align:left"><span>Saiu para o banco <span class="small muted">(${plural(R.aCaminhoDoBanco.qtd, 'sangria', 'sangrias')}, falta você confirmar)</span></span><b>${money(R.aCaminhoDoBanco.total)}</b></button>` : ''}
             <button type="button" class="kv" data-go="gaveta" style="width:100%;background:none;border:0;padding-left:0;padding-right:0;font:inherit;color:inherit;text-align:left"><span>Gaveta de impostos</span><b>${money(R.gaveta)}</b></button>
-            <div class="kv tot"><span><b>Total</b></span><b>${money(R.tudo)}</b></div>
+            <div class="kv tot"><span><b>Total em dinheiro</b></span><b>${money(R.tudo)}</b></div>
           </div></section>
+        ${(() => { const sm = R.saidasMes; if (!sm) return '';
+          const linha = (t, v, sub) => `<div class="kv"><span>${t}${sub ? ` <span class="small muted">${sub}</span>` : ''}</span><b>${money(v)}</b></div>`;
+          const falta = R.aCaminhoDoBanco && R.aCaminhoDoBanco.total;
+          return `<section class="card"><div class="sec"><h2>O que saiu do cofre em ${esc(mesTxt(sm.desde).split(' de ')[0])}</h2><button class="lnk" type="button" data-go="extrato">Ver extrato</button></div>
+          <div>
+            ${linha('Depósitos no banco', sm.deposito)}
+            ${linha('Cheques', sm.cheque)}
+            ${linha('Pagamentos em dinheiro', sm.despesa, '(funcionários, compras, contas)')}
+            ${linha('Para a gaveta de impostos', sm.impostos)}
+            <div class="kv tot"><span><b>Total que saiu</b></span><b>${money(r2(sm.deposito + sm.cheque + sm.despesa + sm.impostos))}</b></div>
+            ${falta ? `<button type="button" class="kv" data-go="extrato" style="width:100%;background:none;border:0;padding-left:0;padding-right:0;font:inherit;color:inherit;text-align:left"><span class="neg">Depósitos e cheques para conferir no extrato <span class="small muted">(${plural(R.aCaminhoDoBanco.qtd, 'lançamento', 'lançamentos')}, desde ${dBR(R.aCaminhoDoBanco.desde)})</span></span><b class="neg">${money(falta)}</b></button>` : ''}
+          </div></section>`; })()}
         <section class="card"><div class="sec"><h2>StarIA</h2></div>
           <p class="small muted" style="margin:0 0 10px">${R.stariaAte ? 'Números até ' + dBR(R.stariaAte) + '.' : 'Nenhum número do StarIA ainda.'} ${jobP ? '<b>Pedido feito: falta o Claude processar.</b> Peça no chat: “processar as consultas do StarIA”.' : 'Um dia por vez, igual à tela de Fechamento de Caixa.'}</p>
           ${seletorDia()}</section>
@@ -429,25 +444,35 @@
 
   /* ---------- Sangria: agora é um painel de baixo (era uma aba inteira) ---------- */
   function sheetSangria() {
+    // a gaveta de impostos é assunto do dono e do financeiro: a caixista nem vê essa opção
+    const cats = [['deposito', 'Depósito'], ['despesa', 'Pagamento'], ['cheque', 'Cheque']].concat(isAdmin() || isFin() ? [['impostos', 'Impostos']] : []);
+    const DICA = { deposito: ['Detalhe (opcional)', 'Ex.: Sicoob, envelope 2'], despesa: ['Pagou o quê / a quem', 'Ex.: salário Eder, carvão, aluguel loja 3'], cheque: ['Cheque de quem', 'Ex.: cheque do Sr. João, trocado no caixa'], impostos: ['Detalhe (opcional)', 'Ex.: Simples de novembro'] };
+    let cat = '';
     openSheet(`<div class="tt"><h2>Fazer sangria</h2><button class="x" type="button" id="shxb" aria-label="Fechar">✕</button></div>
-      <p class="muted small">Dinheiro que saiu do cofre.${isAdmin() ? '' : ' Quando for para o banco, o ADM confirma no extrato.'}</p>
+      <p class="muted small">Dinheiro que saiu do cofre.${isAdmin() ? '' : ' Depósito e cheque o ADM confirma no extrato do banco.'}</p>
       <form id="fsg">
         <div class="field"><label for="sgValor">Quanto saiu</label><input type="text" inputmode="decimal" id="sgValor" placeholder="0,00" required></div>
-        <div class="field"><label for="sgMotivo">Para quê</label>
-          <div class="row" style="flex-wrap:wrap;gap:8px;margin-bottom:8px">${['Depósito no banco', 'Pagamento a fornecedor (com nota)', 'Outro: '].map(t => `<button type="button" class="pill mu" data-mot="${esc(t)}" style="border:0;cursor:pointer;min-height:36px">${esc(t.replace(': ', ''))}</button>`).join('')}</div>
-          <input type="text" id="sgMotivo" placeholder="Ex.: depósito no Sicoob" required maxlength="300"></div>
-        ${isAdmin() || isFin() ? `<div class="field"><label for="sgDestino">Para onde vai</label>
-          <select id="sgDestino"><option value="">Retirada normal (para mim / banco)</option><option value="impostos">Gaveta de impostos e financiamentos</option></select></div>` : ''}
+        <div class="field"><label>Para quê</label>
+          <div class="seg vazio" role="group" aria-label="Para quê" id="sgCats"${cats.length === 3 ? ' style="grid-template-columns:repeat(3,1fr)"' : ''}>${cats.map(([k, t]) => `<button type="button" data-cat="${k}" aria-pressed="false">${t}</button>`).join('')}</div></div>
+        <div class="field" id="sgMotivoF"><label for="sgMotivo" id="sgMotivoL">Detalhe</label>
+          <input type="text" id="sgMotivo" placeholder="Escolha acima para quê" maxlength="300"></div>
         <div class="field"><label for="sgData">Dia</label><input type="date" id="sgData" value="${hoje()}" max="${hoje()}"></div>
         <button class="btn pri lg full" type="submit">Lançar sangria</button>
       </form>`, () => {
       $('#shxb').addEventListener('click', closeSheet);
       setTimeout(() => { const v = $('#sgValor'); if (v) v.focus(); }, 50);
-      document.querySelectorAll('#sheet [data-mot]').forEach(b => b.addEventListener('click', () => { const m = $('#sgMotivo'); m.value = b.dataset.mot; m.focus(); }));
+      document.querySelectorAll('#sheet [data-cat]').forEach(b => b.addEventListener('click', () => {
+        cat = b.dataset.cat;
+        document.querySelectorAll('#sheet [data-cat]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); });
+        $('#sgCats').classList.remove('vazio');
+        $('#sgMotivoL').textContent = DICA[cat][0]; $('#sgMotivo').placeholder = DICA[cat][1];
+        $('#sgMotivo').required = cat === 'despesa' || cat === 'cheque';
+      }));
       $('#fsg').addEventListener('submit', e => {
         e.preventDefault();
-        const destino = isAdmin() || isFin() ? $('#sgDestino').value : '';
-        post('/api/caixa/sangria', { valor: $('#sgValor').value, data: $('#sgData').value, motivo: $('#sgMotivo').value, destino: destino || undefined }, destino === 'impostos' ? 'Sangria lançada na gaveta de impostos' : 'Sangria lançada');
+        if (!cat) return toast('Escolha para quê: depósito, pagamento, cheque' + (cats.length > 3 ? ' ou impostos.' : '.'), true);
+        post('/api/caixa/sangria', { valor: $('#sgValor').value, data: $('#sgData').value, motivo: $('#sgMotivo').value, categoria: cat },
+          cat === 'impostos' ? 'Sangria lançada na gaveta de impostos' : CAT_TXT[cat] + ' lançado');
       });
     });
   }
@@ -573,6 +598,7 @@
     const chaves = Object.keys(grupos).sort((a, b) => { const [fa, da] = a.split('|'), [fb, db] = b.split('|'); return fa - fb || (da < db ? -1 : da > db ? 1 : 0); });
     return `<section class="card">
       <div class="sec"><h2>Caixas do StarIA para marcar</h2><span class="badge">${lista.length}</span></div>
+      <div class="grp" style="border-top:0;padding-top:0"><span class="small muted">Todas as filiais, todos os dias</span><button type="button" class="lnk" data-cxtodos="1">Marcar todos</button></div>
       <details class="how ajuda"><summary>Quais devo marcar?</summary>
         <p>Abra no StarIA a tela <b>Fechamento de Caixa (PDV)</b>. Marque aqui só os caixas que lá estão em <b>preto</b> (já conferidos). Os vermelhos ficam sem marcar: continuam aqui e a próxima consulta atualiza o valor.</p></details>
       <div>${[...new Set(chaves.map(k => k.split('|')[0]))].map(f => {
@@ -594,6 +620,7 @@
             : `<div class="grp"><b>${dBR(d)}</b><span data-cxdiaresumo="${esc(k)}" class="small muted"></span><button type="button" class="lnk" data-grupo="${esc(k)}">Marcar todos</button></div>${caixasDoDia(k)}`; };
         return `<details class="crfil cxdia" data-cxfil="${esc(f)}"${cxFilAbertas.has(f) ? ' open' : ''}>
           <summary><span class="tx"><b>Filial ${esc(f)}</b><span class="small muted">${ks.length > 1 ? ks.length + ' dias · ' : dBR(ks[0].split('|')[1]) + ' · '}${plural(todos.length, 'caixa', 'caixas')} · <span data-cxfilresumo="${esc(f)}"></span></span></span><span class="vl">${totF}</span><span class="crfil-seta" aria-hidden="true"></span></summary>
+          ${ks.length > 1 ? `<div class="grp" style="border-top:0;padding-top:0"><span class="small muted">Todos os dias da filial ${esc(f)}</span><button type="button" class="lnk" data-cxfiltodos="${esc(f)}">Marcar todos</button></div>` : ''}
           ${ks.map(dia).join('')}</details>`;
       }).join('')}</div>
       <div class="sbar"><div class="t" id="cxResumo"></div><button class="btn" type="button" id="btnEnviarCx" disabled>Enviar</button></div>
@@ -610,6 +637,8 @@
       if (b) { b.disabled = !sel.length; b.textContent = sel.length ? 'Enviar para a sacola' : 'Enviar'; }
       document.querySelectorAll('[data-cxrow]').forEach(x => x.classList.toggle('on', marcados.has(x.dataset.cxrow)));
       document.querySelectorAll('[data-grupo]').forEach(g => { const ls = lista.filter(l => grupoDe(l) === g.dataset.grupo); g.textContent = ls.every(l => marcados.has(l.id)) ? 'Desmarcar' : 'Marcar todos'; });
+      document.querySelectorAll('[data-cxfiltodos]').forEach(g => { const ls = lista.filter(l => String(l.filial) === g.dataset.cxfiltodos); g.textContent = ls.every(l => marcados.has(l.id)) ? 'Desmarcar' : 'Marcar todos'; });
+      document.querySelectorAll('[data-cxtodos]').forEach(g => { g.textContent = lista.every(l => marcados.has(l.id)) ? 'Desmarcar todos' : 'Marcar todos'; });
       document.querySelectorAll('[data-cxdiaresumo]').forEach(el => { const ls = lista.filter(l => grupoDe(l) === el.dataset.cxdiaresumo), n = ls.filter(l => marcados.has(l.id)).length;
         el.textContent = !n ? 'nenhum marcado' : n === ls.length ? 'todos marcados' : n + ' de ' + ls.length + ' marcados'; el.style.color = n ? 'var(--ok)' : ''; el.style.fontWeight = n ? '700' : ''; });
       document.querySelectorAll('[data-cxfilresumo]').forEach(el => { const ls = lista.filter(l => String(l.filial) === el.dataset.cxfilresumo), n = ls.filter(l => marcados.has(l.id)).length;
@@ -618,12 +647,16 @@
     document.querySelectorAll('[data-cxdia]').forEach(d => d.addEventListener('toggle', () => { if (d.open) cxDiasAbertos.add(d.dataset.cxdia); else cxDiasAbertos.delete(d.dataset.cxdia); }));
     document.querySelectorAll('[data-cxfil]').forEach(d => d.addEventListener('toggle', () => { if (d.open) cxFilAbertas.add(d.dataset.cxfil); else cxFilAbertas.delete(d.dataset.cxfil); }));
     document.querySelectorAll('[data-cx]').forEach(c => c.addEventListener('change', () => { if (c.checked) marcados.add(c.dataset.cx); else marcados.delete(c.dataset.cx); atualiza(); }));
-    document.querySelectorAll('[data-grupo]').forEach(g => g.addEventListener('click', () => {
-      const ls = lista.filter(l => grupoDe(l) === g.dataset.grupo), todos = ls.every(l => marcados.has(l.id));
+    // marcar/desmarcar um grupo de uma vez: um dia de uma filial, a filial toda ou tudo
+    const alterna = ls => {
+      const todos = ls.every(l => marcados.has(l.id));
       ls.forEach(l => { if (todos) marcados.delete(l.id); else marcados.add(l.id); });
       document.querySelectorAll('[data-cx]').forEach(c => { c.checked = marcados.has(c.dataset.cx); });
       atualiza();
-    }));
+    };
+    document.querySelectorAll('[data-grupo]').forEach(g => g.addEventListener('click', () => alterna(lista.filter(l => grupoDe(l) === g.dataset.grupo))));
+    document.querySelectorAll('[data-cxfiltodos]').forEach(g => g.addEventListener('click', () => alterna(lista.filter(l => String(l.filial) === g.dataset.cxfiltodos))));
+    document.querySelectorAll('[data-cxtodos]').forEach(g => g.addEventListener('click', () => alterna(lista)));
     const b = $('#btnEnviarCx');
     if (b) b.addEventListener('click', async () => {
       const sel = lista.filter(l => marcados.has(l.id)), ids = sel.map(l => l.id);
