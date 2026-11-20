@@ -11,7 +11,7 @@ def R(s,a,b,need=True):
 # bibliotecas: a versão nova do app as traz em lib/ (com o CDN de reserva); no Tino ficam em /vendor
 html=R(html,'<script src="lib/jspdf.umd.min.js"></script>','<script src="/vendor/jspdf-2.5.1.umd.min.js"></script>')
 html=R(html,'<script src="lib/qrcode.min.js"></script>','<script src="/vendor/qrcode-generator-1.4.4.js"></script>')
-html=R(html,'<link href="lib/fonts.css" rel="stylesheet">','<link rel="preconnect" href="https://fonts.googleapis.com">\n<link href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">')
+html=R(html,'<link href="lib/fonts.css" rel="stylesheet">','<link rel="preconnect" href="https://fonts.googleapis.com">\n<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Anton&family=Archivo:wght@500;600;700&family=Archivo+Black&family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">')
 html=R(html,'<title>Gerador de Encartes</title>','''<title>Gerador de Encartes</title>
 <meta name="theme-color" content="#16181d">
 <link rel="manifest" href="/equipe.webmanifest">
