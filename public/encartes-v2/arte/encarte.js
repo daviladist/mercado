@@ -11,7 +11,7 @@ export const FORMATOS = {
   a4: { w: 2480, h: 3508, nome: 'A4 para imprimir' },
 };
 
-// pag: { formato, tema: { cores, cabecalho, logosLado, fogo }, logos, produtos, rodape }
+// pag: { formato, tema: { cores, cabecalho, logosLado, logosNaImagem (o Photoshop já traz as logos), fogo }, logos, produtos, rodape }
 export function desenharPagina(c, pag) {
   const F = FORMATOS[pag.formato] || FORMATOS.feed;
   const W = F.w, H = F.h, tema = pag.tema, cores = tema.cores;
@@ -25,7 +25,7 @@ export function desenharPagina(c, pag) {
   const cabH = alturaCabecalho(tema.cabecalho, W, H - topo - base);
   c.save();
   c.translate(0, topo);
-  desenharCabecalho(c, W, cabH, { imagem: tema.cabecalho, logos: pag.logos, logosLado: tema.logosLado }, cores);
+  desenharCabecalho(c, W, cabH, { imagem: tema.cabecalho, logos: tema.logosNaImagem ? [] : pag.logos, logosLado: tema.logosLado }, cores);
   c.restore();
 
   const rodH = Math.round(W * (pag.rodape && pag.rodape.observacao ? 0.08 : 0.06));

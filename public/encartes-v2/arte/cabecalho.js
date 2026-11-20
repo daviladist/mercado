@@ -5,16 +5,20 @@ import { imagemContida } from './util.js';
 // Altura do cabeçalho: a da própria imagem (ela é feita na largura do encarte), no máximo 38% da arte.
 export function alturaCabecalho(img, W, H) {
   if (!img || !img.width) return Math.round(W * 0.26);
-  return Math.round(Math.min(H * 0.25, (W * img.height) / img.width));
+  return Math.round(Math.min(H * 0.32, (W * img.height) / img.width));
 }
 
 // cab: { imagem, logos: [img, img], logosLado: true|false }
 export function desenharCabecalho(c, W, H, cab, cores) {
   c.save();
   if (cab.imagem) {
-    const k = Math.max(W / cab.imagem.width, H / cab.imagem.height);
-    const dw = cab.imagem.width * k, dh = cab.imagem.height * k;
-    c.drawImage(cab.imagem, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    // a imagem entra inteira na largura, presa no topo: nunca corta logo nem título
+    c.save();
+    c.beginPath();
+    c.rect(0, 0, W, H);
+    c.clip();
+    c.drawImage(cab.imagem, 0, 0, W, (W * cab.imagem.height) / cab.imagem.width);
+    c.restore();
   } else {
     c.fillStyle = cores.cabecalho || '#c8161d';
     c.fillRect(0, 0, W, H);
