@@ -40,7 +40,7 @@ with sync_playwright() as pw:
     pg.click('#filtro button[data-d="6"]'); pg.wait_for_timeout(800)
     pg.screenshot(path='/tmp/tela-3-sabado.png')
     pg.click('#filtro button[data-d="2"]'); pg.wait_for_timeout(500)
-    nomes = pg.eval_on_selector_all('.camp .nome', 'e => e.map(x => x.textContent)')
+    nomes = pg.eval_on_selector_all('.camp:not(.pronto) .nome', 'e => e.map(x => x.textContent)')
     print('terça mostra:', nomes)
     assert nomes == ['Segunda e Terça', 'Oferta Relâmpago'], nomes
     pg.click('#abas button[data-tela="modelo"]'); pg.wait_for_timeout(400); pg.screenshot(path='/tmp/tela-4-modelo.png')
