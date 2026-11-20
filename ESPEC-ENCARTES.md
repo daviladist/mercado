@@ -1,3 +1,26 @@
+# A IDEIA DO APP (palavras do Eduardo, 20/11/2026) — tudo é medido por aqui
+
+**Qualquer funcionário monta o encarte no padrão do dono, em 3 ou 4 cliques, sem conseguir deixar feio.**
+É isso que o QR Ofertas não faz: ele dá opções demais e não trava o padrão, então a equipe faz feio
+(logo pequena, sem atenção aos detalhes).
+
+- O dono cadastra **o tema de cada dia da semana** (segunda, terça, quarta, quinta, sexta, sábado) e deixa
+  outros temas soltos como campanhas disponíveis da loja.
+- Cada tema tem a arte do dono: **cabeçalho vindo do Photoshop**, ou a arte inteira, e o app **distribui os
+  itens sozinho no espaço livre** embaixo do cabeçalho, onde couberem. O cabeçalho importado **fica salvo**.
+- O funcionário só segue os 4 passos: campanha → cola a lista → confere → baixa. Logo, cores, tamanhos e
+  diagramação vêm travados do tema.
+- Preço **sem app × com app lado a lado** (o Eduardo achou lindo; é o padrão).
+- **Produtos por página** precisam funcionar sem bug (aumentar e diminuir).
+- Plaquinhas: caixinha para mostrar ou não o preço por litro/quilo; observações; **data de validade
+  diferente por plaquinha** (diferente da data da ação), aparecendo no app quando ela vence; marcar
+  produto perto da validade.
+- Produto ligado ao banco com a foto certa.
+
+Tudo o que não serve a esta ideia fica para depois.
+
+---
+
 # Gerador de Encartes: levantamento do app atual (Fase 1)
 
 Feito em 20/11/2026, a partir do código que está no ar. **Nada foi alterado no app.**
