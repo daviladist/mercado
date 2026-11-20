@@ -44,3 +44,24 @@ test('produtos por página: destaques primeiro e ninguém se perde', () => {
   assert.deepEqual(pags.map(p => p.length), [4, 4, 2]);
   assert.deepEqual(paginar(P(30), 10, 16).map(p => p.length), [10, 16, 4]);
 });
+
+import { validadePadrao, textoValidade, duplicarCampanha } from '../../public/encartes-v2/campanhas.js';
+const sexta = new Date(2026, 10, 20);   // sexta, 20/11/2026
+test('validade: campanha de sábado numa sexta = amanhã', () => {
+  assert.deepEqual(validadePadrao({ dias: [6] }, sexta), { ini: '2026-11-21', fim: '2026-11-21' });
+  assert.equal(textoValidade(validadePadrao({ dias: [6] }, sexta)), 'Ofertas válidas apenas dia 21/11');
+});
+test('validade: segunda e terça vira o bloco de dois dias', () => {
+  assert.deepEqual(validadePadrao({ dias: [1, 2] }, sexta), { ini: '2026-11-23', fim: '2026-11-24' });
+  assert.equal(textoValidade(validadePadrao({ dias: [1, 2] }, sexta)), 'Ofertas válidas de 23/11 a 24/11');
+});
+test('validade: campanha de hoje é hoje; todos os dias é hoje', () => {
+  assert.deepEqual(validadePadrao({ dias: [5] }, sexta), { ini: '2026-11-20', fim: '2026-11-20' });
+  assert.deepEqual(validadePadrao({ dias: [TODOS] }, sexta), { ini: '2026-11-20', fim: '2026-11-20' });
+});
+test('duplicar muda id e nome e não mexe na original', () => {
+  const o = { id: 'a', nome: 'Quarta', dias: [3], cores: { fundo: '#000' } };
+  const d = duplicarCampanha(o);
+  assert.notEqual(d.id, 'a'); assert.equal(d.nome, 'Quarta (cópia)');
+  d.cores.fundo = '#fff'; assert.equal(o.cores.fundo, '#000');
+});

@@ -6,6 +6,7 @@
 export const END = {
   campanhas: 'app/v2-campanhas',   // { lista: [campanha...] }
   logos: 'app/v2-logos',           // { logos: [idDaImagem, ...] }
+  loja: 'app/v2-loja',             // dados da loja (rodapé, QR do app, frases)
 };
 
 const noTino = () => typeof window !== 'undefined' && window.TINO && typeof window.TINO.api === 'function';

@@ -163,6 +163,21 @@ economia de tinta (l), story com área segura (m), recorte do fundo branco da fo
 **Repositório público → privado (o):** quem muda é o Eduardo, no GitHub, conferindo antes se a Vercel
 continua publicando.
 
+
+## 6b. Decisões sobre campanhas (20/11/2026, 15h50)
+
+- **Validade:** automática pela campanha (campanha de um dia = a próxima data desse dia; todos os dias = hoje);
+  o funcionário pode mudar.
+- **SAI:** liberar campanha por funcionário (todo funcionário vê as campanhas do dia);
+  checagem "campanha não combina com os produtos".
+- **QR code:** fica, só para **baixar o app da loja** (o preço forte é "com app"). Link cadastrado pelo dono.
+- **Formatos:** Feed 1080×1350, Story 1080×1920 e A4. **TV fica para depois.**
+- **Frases do produto:** lista fixa cadastrada pelo dono; o funcionário só escolhe dela.
+- **Rodapé:** validade + nomes das lojas + observação fixa + WhatsApp/endereço + faixa de bandeiras de cartão
+  (imagem que o dono sobe) + uma observação pontual daquele encarte (uma linha, opcional).
+- **Extras agora:** só "Duplicar campanha". Repetir última lista, ofertas sugeridas pelo StarIA, resultado da
+  campanha, kit da semana, TV e vídeo com voz: **depois** que o básico estiver rodando na loja.
+
 ## 7. Arquitetura proposta (Fase 2)
 
 ### Onde fica

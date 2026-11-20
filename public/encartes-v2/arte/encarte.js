@@ -1,7 +1,7 @@
 // Junta as partes e desenha UMA página do encarte numa tela (canvas).
 import { desenharFundo } from './fundo.js';
 import { desenharCabecalho, alturaCabecalho, desenharFaixaFina } from './cabecalho.js';
-import { desenharRodape } from './rodape.js';
+import { desenharRodape, alturaRodape } from './rodape.js';
 import { desenharCartao, medirNome } from './cartao.js';
 import { posicionar } from './diagrama.js';
 
@@ -30,7 +30,7 @@ export function desenharPagina(c, pag) {
   else desenharCabecalho(c, W, cabH, { imagem: tema.cabecalho, logos: pag.logos, logosLado: tema.logosLado }, cores);
   c.restore();
 
-  const rodH = Math.round(W * (pag.rodape && pag.rodape.observacao ? 0.08 : 0.06));
+  const rodH = alturaRodape(W, pag.rodape);
   const rodY = H - base - rodH;
   if (base) { c.fillStyle = cores.rodape || cores.etiqueta; c.fillRect(0, H - base, W, base); }
 

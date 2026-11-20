@@ -1,7 +1,7 @@
 // Tela de Campanhas (dono): filtro por dia, lista, e o cadastro com prévia ao vivo.
 import { $, $$, esc, avisar, escolherArquivo } from './comum.js';
-import { estado, salvarCampanhas, imagensDasLogos } from '../estado.js';
-import { DIAS_CURTOS, TODOS, ESTILOS, novaCampanha, campanhasDoDia, oQueFalta, textoDias } from '../campanhas.js';
+import { estado, salvarCampanhas, imagensDasLogos, montarRodape } from '../estado.js';
+import { DIAS_CURTOS, TODOS, ESTILOS, novaCampanha, campanhasDoDia, oQueFalta, textoDias, validadePadrao, textoValidade, duplicarCampanha } from '../campanhas.js';
 import { PALETAS, CAMPOS_COR } from '../cores.js';
 import { subirImagem, enderecoImagem, carregarImagem, arquivoParaDataURL } from '../nuvem.js';
 import { desenharPagina } from '../arte/encarte.js';
@@ -76,7 +76,7 @@ function editar(raiz, c, nova) {
           <div><label class="c">No verso</label><input type="number" id="verso" min="1" max="40" value="${c.porPagina.verso}"></div></div>
           <label class="chk"><input type="checkbox" id="versoFino" ${c.versoFino ? 'checked' : ''}> Verso com faixa fininha (cabe mais produto)</label>
         </div>
-        <div class="pe"><button class="btn pri" id="salvar">Salvar campanha</button>${nova ? '' : '<button class="btn" id="apagar">Apagar</button>'}<span id="falta" class="sub" style="margin:0;align-self:center"></span></div>
+        <div class="pe"><button class="btn pri" id="salvar">Salvar campanha</button>${nova ? '' : '<button class="btn" id="duplicar">Duplicar</button><button class="btn" id="apagar">Apagar</button>'}<span id="falta" class="sub" style="margin:0;align-self:center"></span></div>
       </div>
       <div class="previas"><div class="duas">
         <div><small>Capa (com produtos de exemplo)</small><canvas id="pCapa"></canvas></div>
@@ -146,6 +146,8 @@ function editar(raiz, c, nova) {
       mostrar(raiz);
     } catch (e) { avisar('Não consegui salvar: ' + e.message, 6000); }
   };
+  const dup = $('#duplicar', raiz);
+  if (dup) dup.onclick = () => { editar(raiz, duplicarCampanha(c), true); avisar('Cópia criada. Mude o que quiser e salve.'); };
   const ap = $('#apagar', raiz);
   if (ap) ap.onclick = async () => {
     if (!confirm(`Apagar a campanha "${c.nome}"? A equipe deixa de ver.`)) return;
@@ -160,11 +162,10 @@ function editar(raiz, c, nova) {
     const minha = ++vez;
     const falta = oQueFalta(c);
     $('#falta', raiz).textContent = falta.length ? 'Para liberar falta: ' + falta.join(', ') : 'Pronta para a equipe';
-    const [logos, demo, cab] = await Promise.all([imagensDasLogos(), produtosDemo(), carregarImagem(enderecoImagem(c.cabecalho)).catch(() => null)]);
+    const [logos, demo, cab, rodape] = await Promise.all([imagensDasLogos(), produtosDemo(), carregarImagem(enderecoImagem(c.cabecalho)).catch(() => null), montarRodape(textoValidade(validadePadrao(c)))]);
     if (minha !== vez) return;
     const tema = { ...c, cabecalho: cab };
     const pags = paginar([...demo, ...demo.slice(3).map(p => ({ ...p, destaque: false }))], c.porPagina.capa, c.porPagina.verso);
-    const rodape = { validade: 'Ofertas válidas apenas dia 21/11' };
     desenharPagina($('#pCapa', raiz).getContext('2d'), { formato: 'feed', tema, logos, produtos: pags[0], rodape });
     desenharPagina($('#pVerso', raiz).getContext('2d'), { formato: 'feed', tema, logos, produtos: pags[1] || pags[0], verso: true, rodape });
   }
