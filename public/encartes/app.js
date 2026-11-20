@@ -42,12 +42,12 @@ const FORMATS={
 const DAYS=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 const UNITS=['un','kg','100g','g','L','ml','bandeja','pct','cx','dz','fardo','garrafa','lata','pote','peça','maço','saco','galão','kit','combo','display','rolo','cartela','balde','par','metro','porção','cento'];
 const PRESETS=[
- {id:'ofertas',nome:'Ofertas da Semana',dia:-1,titulo:'Ofertas da Semana',cores:{fundo:'#123a8f',cabecalho:'#d71920',titulo:'#ffffff',preco:'#d71920',precoTexto:'#ffffff',adesivo:'#ffd400',adesivoTexto:'#111111',cartao:'#ffffff'}},
- {id:'terca',nome:'Terça Verde',dia:2,titulo:'Terça Verde',cores:{fundo:'#1f7a32',cabecalho:'#0e4a1c',titulo:'#ffffff',preco:'#6b3a1e',precoTexto:'#ffffff',adesivo:'#ffd400',adesivoTexto:'#111111',cartao:'#ffffff'}},
- {id:'quarta',nome:'Quarta Imbatível',dia:3,titulo:'Quarta Imbatível',cores:{fundo:'#0d2a6e',cabecalho:'#d71920',titulo:'#ffffff',preco:'#d71920',precoTexto:'#ffffff',adesivo:'#ffd400',adesivoTexto:'#111111',cartao:'#ffffff'}},
- {id:'sabado',nome:'Sábado: família fazendo compras',src:'/encartes/modelos/head_sabado.jpg',cores:{fundo:'#d9640f',cabecalho:'#14204f',titulo:'#ffffff',preco:'#d71920',precoTexto:'#ffffff',adesivo:'#14204f',adesivoTexto:'#ffffff',cartao:'#ffffff'}},
- {id:'quinta',nome:'Quinta da Carne',dia:4,titulo:'Quinta da Carne',cores:{fundo:'#4a0b0b',cabecalho:'#b3121b',titulo:'#ffffff',preco:'#ffd400',precoTexto:'#8a0b0b',adesivo:'#ffffff',adesivoTexto:'#b3121b',cartao:'#ffffff'}},
- {id:'sexta',nome:'Sexta Show',dia:5,titulo:'Sexta Show',cores:{fundo:'#d71920',cabecalho:'#0d2a6e',titulo:'#ffd400',preco:'#0d2a6e',precoTexto:'#ffffff',adesivo:'#ffd400',adesivoTexto:'#111111',cartao:'#ffffff'}},
+ {foto:'carrinho',id:'ofertas',nome:'Ofertas da Semana',dia:-1,titulo:'Ofertas da Semana',cores:{fundo:'#123a8f',cabecalho:'#d71920',titulo:'#ffffff',preco:'#d71920',precoTexto:'#ffffff',adesivo:'#ffd400',adesivoTexto:'#111111',cartao:'#ffffff'}},
+ {id:'terca',nome:'Terça Verde',dia:2,titulo:'Terça Verde',cores:{fundo:'#1f7a32',cabecalho:'#0e4a1c',titulo:'#ffffff',preco:'#d71920',precoTexto:'#ffffff',adesivo:'#ffd400',adesivoTexto:'#111111',cartao:'#ffffff'}},
+ {foto:'sacolas',id:'quarta',nome:'Quarta Imbatível',dia:3,titulo:'Quarta Imbatível',cores:{fundo:'#0d2a6e',cabecalho:'#d71920',titulo:'#ffffff',preco:'#d71920',precoTexto:'#ffffff',adesivo:'#ffd400',adesivoTexto:'#111111',cartao:'#ffffff'}},
+ {foto:'familia',id:'sabado',nome:'Sábado: família fazendo compras',src:'/encartes/modelos/head_sabado.jpg',cores:{fundo:'#d9640f',cabecalho:'#14204f',titulo:'#ffffff',preco:'#d71920',precoTexto:'#ffffff',adesivo:'#14204f',adesivoTexto:'#ffffff',cartao:'#ffffff'}},
+ {foto:'acougue',id:'quinta',nome:'Quinta da Carne',dia:4,titulo:'Quinta da Carne',cores:{fundo:'#4a0b0b',cabecalho:'#b3121b',titulo:'#ffffff',preco:'#ffd400',precoTexto:'#8a0b0b',adesivo:'#ffffff',adesivoTexto:'#b3121b',cartao:'#ffffff'}},
+ {foto:'carrinho',id:'sexta',nome:'Sexta Show',dia:5,titulo:'Sexta Show',cores:{fundo:'#d71920',cabecalho:'#0d2a6e',titulo:'#ffd400',preco:'#0d2a6e',precoTexto:'#ffffff',adesivo:'#ffd400',adesivoTexto:'#111111',cartao:'#ffffff'}},
 ];
 const COLOR_LABELS={fundo:'Fundo',cabecalho:'Cabeçalho e rodapé',titulo:'Texto do título',preco:'Retângulo do preço',precoTexto:'Texto do preço',adesivo:'Adesivo / faixa',adesivoTexto:'Texto do adesivo',cartao:'Cartão do produto'};
 /* ---- diagramações: árvore de linhas (R_) e colunas (C_) com espaços de produto (S_) ---- */
@@ -561,7 +561,8 @@ function halftone(c,W,H,C){const lt=hexLum(C.fundo)>0.6,st=Math.max(W,H)*0.017;c
 function bgLight(c,W,H,C){const l=hexLum(C.fundo);if(l>0.97)return;const lt=l>0.6,R=Math.max(W,H);c.save();
  let g=c.createRadialGradient(W*0.5,H*0.42,0,W*0.5,H*0.42,R*0.62);g.addColorStop(0,lt?'rgba(255,255,255,.4)':'rgba(255,255,255,.16)');g.addColorStop(1,'rgba(255,255,255,0)');c.fillStyle=g;c.fillRect(0,0,W,H);
  g=c.createRadialGradient(W*0.5,H*0.5,R*0.3,W*0.5,H*0.5,R*0.8);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,lt?'rgba(0,0,0,.14)':'rgba(0,0,0,.42)');c.fillStyle=g;c.fillRect(0,0,W,H);c.restore()}
-function drawBg(c,W,H,C){if(CUR&&CUR.tema==='fogo'){drawFire(c,W,H,C);if(CUR.motivo)drawMotifs(c,W,H,CUR.motivo,C);return}if(CUR&&CUR.motivo){c.fillStyle=C.fundo;c.fillRect(0,0,W,H);bgLight(c,W,H,C);drawMotifs(c,W,H,CUR.motivo,C);return}c.fillStyle=C.fundo;c.fillRect(0,0,W,H);bgLight(c,W,H,C);halftone(c,W,H,C);c.save();c.strokeStyle='rgba(255,255,255,.035)';const s=Math.max(W,H)*0.04;c.lineWidth=s*0.42;for(let i=-H;i<W+H;i+=s){c.beginPath();c.moveTo(i,0);c.lineTo(i-H,H);c.stroke()}c.restore()}
+function drawBg(c,W,H,C){const tk=CUR&&CUR.tema;
+ if(tk&&typeof temaFundo==='function'&&temaFundo(c,W,H,C,tk)){if(CUR.motivo)drawMotifs(c,W,H,CUR.motivo,C);return}if(CUR&&CUR.motivo){c.fillStyle=C.fundo;c.fillRect(0,0,W,H);bgLight(c,W,H,C);drawMotifs(c,W,H,CUR.motivo,C);return}c.fillStyle=C.fundo;c.fillRect(0,0,W,H);bgLight(c,W,H,C);halftone(c,W,H,C);c.save();c.strokeStyle='rgba(255,255,255,.035)';const s=Math.max(W,H)*0.04;c.lineWidth=s*0.42;for(let i=-H;i<W+H;i+=s){c.beginPath();c.moveTo(i,0);c.lineTo(i-H,H);c.stroke()}c.restore()}
 function fmtD(iso){if(!iso)return'';const[y,m,d]=iso.split('-');return d+'/'+m}
 function validText(){const{ini,fim}=S.val;if(!ini&&!fim)return'';if(!fim||!ini||ini===fim)return'OFERTA VÁLIDA SÓ NO DIA '+fmtD(ini||fim);return'OFERTAS DE '+fmtD(ini)+' A '+fmtD(fim)}
 const logoAsp=i=>logos[i]?logos[i].img.width/logos[i].img.height:1.5;
@@ -630,8 +631,9 @@ function drawHeader(c,W,H,hh,C,cp,parts){
   /* sombra do cabeçalho caindo no fundo, corpo em degradê, luz e raios leves atrás do título */
   c.save();c.translate(0,lw*2.6);c.fillStyle='rgba(0,0,0,.2)';hp();c.fill();c.restore();
   const hg=c.createLinearGradient(0,0,0,hh);hg.addColorStop(0,shade(hc,0.1));hg.addColorStop(0.55,hc);hg.addColorStop(1,shade(hc,-0.22));c.fillStyle=hg;hp();c.fill();
-  c.save();hp();c.clip();const gx=Z.title.x+Z.title.w/2,gy=(hh-sl)*0.46,gR=Math.max(Z.title.w,hh)*0.8,rg=c.createRadialGradient(gx,gy,0,gx,gy,gR);rg.addColorStop(0,'rgba(255,255,255,.22)');rg.addColorStop(1,'rgba(255,255,255,0)');c.fillStyle=rg;c.fillRect(0,0,W,hh);
-  c.fillStyle='rgba(255,255,255,.05)';for(let i=0,n=26;i<n;i+=2){const a0=i/n*Math.PI*2+0.15,a1=(i+1)/n*Math.PI*2+0.15;c.beginPath();c.moveTo(gx,gy);c.lineTo(gx+Math.cos(a0)*W,gy+Math.sin(a0)*W);c.lineTo(gx+Math.cos(a1)*W,gy+Math.sin(a1)*W);c.closePath();c.fill()}
+  const temFoto=typeof headFoto==='function'&&headFoto(c,W,hh,sl,C,cp);
+  c.save();hp();c.clip();if(!temFoto){const gx=Z.title.x+Z.title.w/2,gy=(hh-sl)*0.46,gR=Math.max(Z.title.w,hh)*0.8,rg=c.createRadialGradient(gx,gy,0,gx,gy,gR);rg.addColorStop(0,'rgba(255,255,255,.22)');rg.addColorStop(1,'rgba(255,255,255,0)');c.fillStyle=rg;c.fillRect(0,0,W,hh);
+  c.fillStyle='rgba(255,255,255,.05)';for(let i=0,n=26;i<n;i+=2){const a0=i/n*Math.PI*2+0.15,a1=(i+1)/n*Math.PI*2+0.15;c.beginPath();c.moveTo(gx,gy);c.lineTo(gx+Math.cos(a0)*W,gy+Math.sin(a0)*W);c.lineTo(gx+Math.cos(a1)*W,gy+Math.sin(a1)*W);c.closePath();c.fill()}}
   if(CUR&&CUR.motivo)drawHeroMotif(c,Z.title.x,0,W-Z.title.x,hh,CUR.motivo,C);c.restore();
   c.strokeStyle=shade(hc,-0.55);c.lineWidth=lw*0.7;c.beginPath();c.moveTo(0,hh+lw*1.2);c.lineTo(W,hh-sl+lw*1.2);c.stroke();
   c.strokeStyle=C.adesivo;c.lineWidth=lw;c.beginPath();c.moveTo(0,hh+lw/2);c.lineTo(W,hh-sl+lw/2);c.stroke()}
@@ -901,7 +903,7 @@ function renderFlyer(c,W,H,items,cp,iss,lay,pg){
  const fk=fmtOf(W,H),hf=pg&&pg.hf||{cab:'completo',rod:'completo'},full=hf.cab==='completo'&&hf.rod==='completo';
  /* arte de fundo da campanha (com cabeçalho e rodapé desenhados nela) só entra quando a arte usa os dois completos */
  const art=full&&fk&&artCache.get(artKey(cp.id,fk));const HD=!art&&cp&&hf.cab==='completo'?headOf(cp,W,H):null;
- CUR={W,H,noCards:!!art&&cp.cards===false,tema:cp.tema||'',motivo:cp.motivo||'',estilo:cp.estilo||'',validRod:cp.validPos==='rodape'||!!HD,destFundo:cp.destFundo||''};let C=cp.cores;
+ CUR={W,H,noCards:!!art&&cp.cards===false,tema:cp.tema||'',motivo:cp.motivo||'',estilo:cp.estilo||'',validRod:cp.validPos==='rodape'||!!HD,destFundo:cp.destFundo||''};let C=typeof temaCor==='function'?temaCor(cp,cp.cores):cp.cores;
  const hhX=hf.cab==='faixa'?faixaH(H):hf.cab==='nenhum'?0:(HD?HD.hh:undefined),fhX=hf.rod==='fino'?finoH(H):hf.rod==='nenhum'?0:undefined;
  const A=areaOf(W,H,hhX,fhX);if(S.store.tinta&&!art&&(fk==='a4'||fk==='a4h'))C=Object.assign({},C,{fundo:'#ffffff'});c.save();
  if(art)cover(c,art.img,0,0,W,H);else drawBg(c,W,H,C);
@@ -989,13 +991,19 @@ function renderPlaque(c,W,H,p,cp,fold){
  c.restore()}
 const hasLimitText=p=>p.limit>0;
 /* folha e posição das plaquinhas: vertical (em pé) ou horizontal (deitada), 1 ou 2 por folha A4 */
-function plaqDims(per,ori){ori=ori||(per===2?'h':'v');
+/* per pode ser o tamanho novo ('a3','a4','a5','a6','etq','etqg') ou o jeito antigo (1 ou 2 por folha) */
+function plaqDims(per,ori){if(typeof plaqDimsT==='function')return plaqDimsT(typeof per==='string'?per:(+per===1?'a4':'a5'),ori||(+per===2?'h':'v'));
+ ori=ori||(per===2?'h':'v');
  if(per===1)return ori==='v'?{page:'portrait',w:210,h:297,pos:[[0,0]]}:{page:'landscape',w:297,h:210,pos:[[0,0]]};
  return ori==='h'?{page:'portrait',w:210,h:148.5,pos:[[0,0],[0,148.5]],cut:[0,148.5,210,148.5]}:{page:'landscape',w:148.5,h:210,pos:[[0,0],[148.5,0]],cut:[148.5,0,148.5,210]}}
-function plaqDoc(list,per,ori,cpx){const J=window.jspdf.jsPDF,PX=16,d=plaqDims(per,ori),doc=new J({unit:'mm',format:'a4',orientation:d.page}),n=d.pos.length;
- const mk=p=>{const c=document.createElement('canvas');c.width=Math.round(d.w*PX);c.height=Math.round(d.h*PX);renderPlaque(c.getContext('2d'),c.width,c.height,p,cpx||camp(),30*PX);return c.toDataURL('image/png')};
- for(let i=0;i<list.length;i+=n){if(i)doc.addPage();d.pos.forEach(([x,y],k)=>{const p=list[i+k];if(p)doc.addImage(mk(p),'PNG',x,y,d.w,d.h,undefined,'FAST')});
-  if(d.cut&&list[i+1]){doc.setDrawColor(140);doc.setLineDashPattern([3,2],0);doc.line(...d.cut);doc.setLineDashPattern([],0)}}
+function plaqDoc(list,per,ori,cpx){const J=window.jspdf.jsPDF,d=plaqDims(per,ori),PX=d.etiqueta?10:Math.min(16,Math.round(2400/Math.max(d.w,d.h))),
+ doc=new J({unit:'mm',format:d.fmt||'a4',orientation:d.page}),n=d.pos.length,cp=cpx||camp();
+ const mk=p=>{const c=document.createElement('canvas');c.width=Math.round(d.w*PX);c.height=Math.round(d.h*PX);
+  if(d.etiqueta)renderEtiqueta(c.getContext('2d'),c.width,c.height,p,cp,{peq:d.id==='etq'});else renderPlaque(c.getContext('2d'),c.width,c.height,p,cp,(d.fold||30)*PX);
+  return c.toDataURL('image/png')};
+ const cuts=d.cuts||(d.cut?[d.cut]:[]);
+ for(let i=0;i<list.length;i+=n){if(i)doc.addPage();let usou=0;d.pos.forEach(([x,y],k)=>{const p=list[i+k];if(p){usou++;doc.addImage(mk(p),'PNG',x,y,d.w,d.h,undefined,'FAST')}});
+  if(cuts.length&&usou>1){doc.setDrawColor(150);doc.setLineDashPattern([3,2],0);cuts.forEach(ln=>doc.line(...ln));doc.setLineDashPattern([],0)}}
  return doc.output('blob')}
 
 /* ---------- slides (TV e vídeo) ---------- */
@@ -1037,7 +1045,7 @@ const easeBack=t=>{const s=1.70158;t=t-1;return t*t*((s+1)*t+s)+1};
 function slides(){return[{k:'intro',d:3},...S.products.map(p=>({k:'p',p,d:+S.tvSec||5})),{k:'outro',d:4}]}
 function slideAt(L,t){const tot=L.reduce((a,s)=>a+s.d,0);t=((t%tot)+tot)%tot;for(const s of L){if(t<s.d)return{s,lt:t};t-=s.d}return{s:L[0],lt:0}}
 function drawSlide(c,W,H,s,lt){
- CUR={W,H};const cp=camp(),C=cp.cores,land=W>H;c.save();drawBg(c,W,H,C);
+ const cp=camp();CUR={W,H,tema:cp.tema||'',motivo:cp.motivo||'',destFundo:cp.destFundo||''};const C=typeof temaCor==='function'?temaCor(cp,cp.cores):cp.cores,land=W>H;c.save();drawBg(c,W,H,C);
  const pr=k=>clamp((lt-k)/0.55,0,1),pop=k=>easeBack(pr(k)),fade=k=>clamp((lt-k)/0.35,0,1);
  if(s.k==='intro'){
   const a=pop(0.1);const bw=land?W*0.2:W*0.42,bh=bw*0.72;c.globalAlpha=fade(0);
@@ -1849,7 +1857,10 @@ function renderCamps(){modBtn();renderHeadBox();
  $('#cform').innerHTML=`<div class="row2"><label>Nome da campanha<input data-k="nome" value="${esc(c.nome)}"></label>
  <label>Dia da semana<select data-k="dia"><option value="-1">Qualquer dia</option>${DAYS.map((d,i)=>`<option value="${i}" ${+c.dia===i?'selected':''}>${d}</option>`).join('')}</select></label></div>
  <div class="row2"><label>Título no encarte<input data-k="titulo" value="${esc(c.titulo)}"></label>
- <label>Fundo<select data-k="tema"><option value="">Cor lisa com listras</option><option value="fogo" ${c.tema==='fogo'?'selected':''}>Fogo (Dia D, churrasco)</option></select></label></div>
+ <label>Fundo<select data-k="tema">${(typeof TEMA_NOMES!=='undefined'?TEMA_NOMES:[['','Cor lisa com listras']]).map(([v,t])=>`<option value="${v}" ${(c.tema||'')===v?'selected':''}>${esc(t)}</option>`).join('')}</select></label></div>
+ <label>Foto no cabeçalho <small style="color:var(--mut);font-weight:500">o canto esquerdo fica livre para as logomarcas</small>
+ <select data-k="foto"><option value="">Sem foto (só cor)</option>${(typeof FOTO_LIB!=='undefined'?FOTO_LIB:[]).map(f=>`<option value="${f.id}" ${c.foto===f.id?'selected':''}>${esc(f.nome)}</option>`).join('')}${c.foto==='u'?'<option value="u" selected>Minha foto</option>':''}</select></label>
+ <div class="bar"><button class="btn sm" id="cfFoto">Usar uma foto minha</button>${c.foto==='u'?'<button class="btn sm ghost" id="cfFotoRm">Tirar a minha foto</button>':''}</div>
  <label>Validade do encarte<select data-k="validPos"><option value="">No cabeçalho, embaixo do título</option><option value="rodape" ${c.validPos==='rodape'?'selected':''}>No rodapé (cabeçalho livre para a arte)</option></select></label>
  <label>Estilo dos produtos<select data-k="estilo"><option value="">Cartões brancos</option><option value="vitrine" ${c.estilo==='vitrine'?'selected':''}>Vitrine: produto solto no fundo, etiqueta de preço (estilo grande rede)</option></select></label>
  <label>Fundo dos produtos em destaque<select data-k="destFundo">${DEST_FUNDOS.map(([v,t])=>`<option value="${v}" ${(c.destFundo||"raios")===v?"selected":""}>${t}</option>`).join("")}</select></label>
@@ -1857,6 +1868,12 @@ function renderCamps(){modBtn();renderHeadBox();
  <div class="colors">${Object.keys(COLOR_LABELS).map(k=>`<label>${COLOR_LABELS[k]}<input type="color" data-c="${k}" value="${c.cores[k]}"></label>`).join('')}</div>
  <p class="hint">Abrindo o app no dia marcado, a campanha já vem selecionada.</p>`;
  $('#cform').querySelectorAll('[data-k]').forEach(i=>i.addEventListener(i.tagName==='SELECT'?'change':'input',()=>{c[i.dataset.k]=i.dataset.k==='dia'?+i.value:i.value;if(i.dataset.k==='nome')renderCampsChipsOnly();changed(false)}));
+ {const bf=$('#cfFoto');if(bf)bf.onclick=()=>{const i=document.createElement('input');i.type='file';i.accept='image/*';
+  i.onchange=async()=>{const f=i.files[0];if(!f)return;try{const u0=await fileToURL(f),i0=await loadImg(u0),k=Math.min(1,1400/i0.width),cv=document.createElement('canvas');
+   cv.width=Math.round(i0.width*k);cv.height=Math.round(i0.height*k);cv.getContext('2d').drawImage(i0,0,0,cv.width,cv.height);
+   const u=cv.toDataURL('image/jpeg',0.9),key='foto:'+c.id;await IDB.set(key,u);cloudPutImage&&cloudPutImage(key,u);FOTOC.delete(key);
+   c.foto='u';S._sharedDirty=true;changed();renderCamps();toast('Foto aplicada no cabeçalho desta campanha',4000)}catch(_){toast('Não consegui abrir essa imagem')}};i.click()};
+  const br=$('#cfFotoRm');if(br)br.onclick=()=>{c.foto='';FOTOC.delete('foto:'+c.id);IDB.del&&IDB.del('foto:'+c.id);S._sharedDirty=true;changed();renderCamps()}}
  $('#cform').querySelectorAll('[data-c]').forEach(i=>i.addEventListener('input',()=>{c.cores[i.dataset.c]=i.value;renderCampsChipsOnly();changed(false)}));renderArt()}
 function renderCampsChipsOnly(){const el=$('#camps');el.querySelectorAll('.chip').forEach(ch=>{const c=S.campaigns.find(x=>x.id===ch.dataset.id);if(!c)return;const d=ch.querySelectorAll('.dot');d[0].style.background=c.cores.fundo;d[1].style.background=c.cores.cabecalho;ch.lastChild.textContent=c.nome})}
 $('#newC').onclick=()=>{let vis='app';
@@ -2035,27 +2052,30 @@ $('#bPdf').onclick=async()=>{
  saveFile(fname('pdf',land?'_A4_deitado':'_A4'),doc.output('blob'),'pdf')};
 $('#bPlaq').onclick=()=>{const sel=S.products.filter(p=>p.sel);
  modal(`<h3>Baixar plaquinhas</h3><p><b>${sel.length}</b> de ${S.products.length} produtos marcados. Marque ou desmarque na lista de produtos.</p>
- <div class="row2"><label>Quantas por folha A4?<select id="plqPer"><option value="2" ${S.plaqPer==2?'selected':''}>2 por folha (padrão)</option><option value="1" ${S.plaqPer==1?'selected':''}>1 por folha (grande)</option></select></label>
+ <div class="row2"><label>Tamanho<select id="plqPer">${PLAQ_TAM.map(t=>`<option value="${t.id}" ${plaqTamId()===t.id?'selected':''}>${esc(t.nome)}</option>`).join('')}</select></label>
  <label>Plaquinha<select id="plqOri"><option value="h" ${(S.plaqOri||(S.plaqPer==1?'v':'h'))==='h'?'selected':''}>Deitada (horizontal)</option><option value="v" ${(S.plaqOri||(S.plaqPer==1?'v':'h'))==='v'?'selected':''}>Em pé (vertical)</option></select></label></div>
  <label class="chk2"><input type="checkbox" id="plqKg" ${PLAQKG?'checked':''}> Mostrar o preço por quilo ou litro</label>
  <label class="chk2"><input type="checkbox" id="plqEco" ${S.plaqEco?'checked':''}> Economizar tinta (cabeçalho e preço sem fundo colorido)</label>
- <p class="hint">Cada plaquinha tem uma faixa de 3 cm em cima, com linha tracejada, para dobrar e prender no suporte da gôndola.</p>
+ <p class="hint" id="plqNota"></p>
  <p class="hint" style="margin:6px 0 4px">Prévia da folha A4 como sai na impressora:</p><canvas id="plqPrev" style="width:100%;box-shadow:0 2px 10px #0003"></canvas>
  <div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn" data-a="w" ${sel.length?'':'disabled'}>Compartilhar</button><button class="btn pri" data-a="y" ${sel.length?'':'disabled'}>Baixar PDF</button></div>`,b=>{
-  const prev=async()=>{await fontsReady();const per=+$('#plqPer').value,d=plaqDims(per,$('#plqOri').value),cv=$('#plqPrev'),PX=3,pw=d.page==='portrait'?210:297,ph=d.page==='portrait'?297:210;
+  const prev=async()=>{await fontsReady();const per=$('#plqPer').value,d=plaqDims(per,$('#plqOri').value),cv=$('#plqPrev'),PX=d.fmt==='a3'?2:3,pw=d.fmt==='a3'?(d.page==='portrait'?297:420):(d.page==='portrait'?210:297),ph=d.fmt==='a3'?(d.page==='portrait'?420:297):(d.page==='portrait'?297:210);
+   {const t=plaqTam(per),oi=$('#plqOri').closest('label');if(oi)oi.style.display=t.ori?'':'none';
+    const nt=$('#plqNota');if(nt)nt.textContent=t.etiqueta?'Etiqueta de preço para a gôndola: nome, preço grande e a linha de conferência. Sem fundo colorido, para gastar pouca tinta.':'Cada cartaz tem uma faixa em cima, com linha tracejada, para dobrar e prender no suporte da gôndola.'}
    /* prévia da folha A4 inteira, como sai da impressora */
    cv.width=pw*PX;cv.height=ph*PX;cv.style.width=pw>ph?'100%':'60%';cv.style.display='block';cv.style.margin='0 auto';const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cv.width,cv.height);
    d.pos.forEach(([px,py],k)=>{const p=sel[k];const t=document.createElement('canvas');t.width=Math.round(d.w*PX);t.height=Math.round(d.h*PX);const tx=t.getContext('2d');
-    if(p)renderPlaque(tx,t.width,t.height,p,camp(),30*PX);else{tx.fillStyle='#f6f4ef';tx.fillRect(0,0,t.width,t.height);tx.fillStyle='#999';tx.font='600 22px Inter,sans-serif';tx.textAlign='center';tx.fillText('2ª plaquinha (marque mais um produto)',t.width/2,t.height/2)}
+    if(p){if(d.etiqueta)renderEtiqueta(tx,t.width,t.height,p,camp(),{peq:d.id==='etq'});else renderPlaque(tx,t.width,t.height,p,camp(),(d.fold||30)*PX)}
+    else{tx.fillStyle='#f6f4ef';tx.fillRect(0,0,t.width,t.height);tx.strokeStyle='#ddd';tx.lineWidth=2;tx.strokeRect(1,1,t.width-2,t.height-2);tx.fillStyle='#aaa';tx.font=`600 ${Math.max(10,t.height*0.1)}px Inter,sans-serif`;tx.textAlign='center';tx.textBaseline='middle';tx.fillText('vazio',t.width/2,t.height/2)}
     x.drawImage(t,px*PX,py*PX)});
-   if(d.cut){x.strokeStyle='#888';x.lineWidth=2;x.setLineDash([9,6]);x.beginPath();x.moveTo(d.cut[0]*PX,d.cut[1]*PX);x.lineTo(d.cut[2]*PX,d.cut[3]*PX);x.stroke();x.setLineDash([])}
+   const cu=d.cuts||(d.cut?[d.cut]:[]);if(cu.length){x.strokeStyle='#888';x.lineWidth=2;x.setLineDash([9,6]);cu.forEach(ln=>{x.beginPath();x.moveTo(ln[0]*PX,ln[1]*PX);x.lineTo(ln[2]*PX,ln[3]*PX);x.stroke()});x.setLineDash([])}
    x.strokeStyle='#bbb';x.lineWidth=2;x.strokeRect(1,1,cv.width-2,cv.height-2)};prev();
   $('#plqKg').onchange=e=>{PLAQKG=e.target.checked;persist();prev()};
   $('#plqEco').onchange=e=>{S.plaqEco=e.target.checked;persist();prev()};
-  $('#plqPer').onchange=()=>{S.plaqPer=+$('#plqPer').value;persist();prev()};$('#plqOri').onchange=()=>{S.plaqOri=$('#plqOri').value;persist();prev()};
+  $('#plqPer').onchange=()=>{S.plaqTam=$('#plqPer').value;S.plaqPer=S.plaqTam==='a4'?1:2;persist();prev()};$('#plqOri').onchange=()=>{S.plaqOri=$('#plqOri').value;persist();prev()};
   b.querySelector('[data-a=n]').onclick=closeModal;
   const go=wpp=>async()=>{const J=window.jspdf&&window.jspdf.jsPDF;if(!J){toast('A biblioteca de PDF não carregou');return}
-   const per=+$('#plqPer').value||2,ori=$('#plqOri').value;S.plaqPer=per;S.plaqOri=ori;persist();closeModal();if(!await plaqGate(sel))return;plaqLog(sel,S.val,'encarte');toast('Montando as plaquinhas…');await fontsReady();
+   const per=$('#plqPer').value||'a5',ori=$('#plqOri').value;S.plaqTam=per;S.plaqPer=per==='a4'?1:2;S.plaqOri=ori;persist();closeModal();if(!await plaqGate(sel))return;plaqLog(sel,S.val,'encarte');toast('Montando as plaquinhas…');await fontsReady();
    (wpp?sendWpp:saveFile)(fname('pdf','_plaquinhas'),plaqDoc(sel,per,ori),'pdf')};
   b.querySelector('[data-a=y]').onclick=go(false);b.querySelector('[data-a=w]').onclick=go(true)})};
 
@@ -2285,7 +2305,7 @@ $('#bModo').onclick=()=>{if(usersOn()){userLogout();return}if(isFunc()){askPin('
    b.querySelector('[data-a=n]').onclick=closeModal;b.querySelector('[data-a=y]').onclick=()=>{try{localStorage.setItem(MODOKEY,'func')}catch(e){}closeModal();applyModo()}})}};
 
 /* ================= 5. kit da semana ================= */
-function plaqPdf(list,per){return plaqDoc(list,per,S.plaqOri||(per===1?'v':'h'))}
+function plaqPdf(list,per){const t=typeof plaqTamId==='function'?plaqTamId():(per===1?'a4':'a5');return plaqDoc(list,t,S.plaqOri||'h')}
 function hiRes(fk,pg,k){const f=FORMATS[fk],c=document.createElement('canvas');c.width=Math.round(f.w*k);c.height=Math.round(f.h*k);const x=c.getContext('2d');x.scale(k,k);renderFlyer(x,f.w,f.h,pg.items,camp(),[],pg.lay,pg);return c}
 function a4Pdf(fk){const J=window.jspdf.jsPDF,land=fk==='a4h',f=FORMATS[fk],P=pagesFor(fk),doc=new J({unit:'mm',format:'a4',orientation:land?'landscape':'portrait'});
  P.forEach((pg,i)=>{if(i)doc.addPage();const c=hiRes(fk,pg,1.5);doc.addImage(c.toDataURL('image/jpeg',0.95),'JPEG',0,0,land?297:210,land?210:297,undefined,'SLOW')});return doc.output('blob')}
@@ -2345,32 +2365,32 @@ const PD_MOT={"carne": "steak", "verde": "leaf", "limpeza": "bubble", "imbativel
 const CP=(k,f,cores,m)=>({k,f,m,cores,motivo:PD_MOT[k]||'',estilo:'vitrine'});
 const C8=(fundo,cabecalho,titulo,preco,precoTexto,adesivo,adesivoTexto)=>({fundo,cabecalho,titulo,preco,precoTexto,adesivo,adesivoTexto,cartao:'#ffffff'});
 const PADRAO_DIA=[
- CP('carne','{D} da Carne',C8('#4a0b0b','#b3121b','#ffffff','#ffd400','#8a0b0b','#ffffff','#b3121b')),
- CP('verde','{D} Verde',C8('#1f7a32','#0e4a1c','#ffffff','#6b3a1e','#ffffff','#ffd400','#111111')),
- CP('limpeza','{D} da Limpeza',C8('#0a6f8f','#064a63','#ffffff','#0d2a6e','#ffffff','#7fe3ff','#06324a')),
- CP('imbativel','{D} Imbatível',C8('#0d2a6e','#d71920','#ffffff','#d71920','#ffffff','#ffd400','#111111')),
- CP('show','{D} Show',C8('#d71920','#0d2a6e','#ffd400','#0d2a6e','#ffffff','#ffd400','#111111')),
- CP('precobaixo','{D} do Preço Baixo',C8('#ffd400','#d71920','#ffffff','#d71920','#ffffff','#111111','#ffd400')),
+ Object.assign(CP('carne','{D} da Carne',C8('#4a0b0b','#b3121b','#ffffff','#ffd400','#8a0b0b','#ffffff','#b3121b')),{foto:'acougue'}),
+ Object.assign(CP('verde','{D} Verde',C8('#1f7a32','#0e4a1c','#ffffff','#6b3a1e','#ffffff','#ffd400','#111111')),{tema:'madeira',foto:'sacolas'}),
+ Object.assign(CP('limpeza','{D} da Limpeza',C8('#0a6f8f','#064a63','#ffffff','#0d2a6e','#ffffff','#7fe3ff','#06324a')),{tema:'papel'}),
+ Object.assign(CP('imbativel','{D} Imbatível',C8('#0d2a6e','#d71920','#ffffff','#d71920','#ffffff','#ffd400','#111111')),{foto:'sacolas'}),
+ Object.assign(CP('show','{D} Show',C8('#d71920','#0d2a6e','#ffd400','#0d2a6e','#ffffff','#ffd400','#111111')),{tema:'confete'}),
+ Object.assign(CP('precobaixo','{D} do Preço Baixo',C8('#ffd400','#d71920','#ffffff','#d71920','#ffffff','#111111','#ffd400')),{tema:'concreto'}),
  CP('frango','{D} do Frango',C8('#e8650a','#9c3d00','#ffffff','#9c1b10','#ffffff','#ffd400','#111111')),
  CP('peixe','{D} do Peixe',C8('#0b5ea8','#06315e','#ffffff','#e85d04','#ffffff','#ffffff','#06315e')),
- CP('padaria','{D} da Padaria',C8('#8d5524','#4e2a10','#ffe7b3','#c0392b','#ffffff','#ffe7b3','#4e2a10')),
+ Object.assign(CP('padaria','{D} da Padaria',C8('#8d5524','#4e2a10','#ffe7b3','#c0392b','#ffffff','#ffe7b3','#4e2a10')),{tema:'kraft'}),
  CP('gelada','{D} {G}',C8('#0b3d91','#071f4d','#ffd400','#ffd400','#071f4d','#7fd3ff','#071f4d'),{f:'Gelada',m:'Gelado'}),
  Object.assign(CP('churrasco','{D} do Churrasco',C8('#1b1b1b','#8a0b0b','#ffb000','#d71920','#ffffff','#ffb000','#111111')),{tema:'fogo'}),
  CP('frios','{D} dos Frios',C8('#3f8fd2','#1d4f86','#ffffff','#1d4f86','#ffffff','#ffd400','#111111')),
  CP('beleza','{D} da Beleza',C8('#c2185b','#7a0e3a','#ffffff','#7a0e3a','#ffffff','#ffe0ef','#7a0e3a')),
- CP('cesta','{D} da Cesta Básica',C8('#123a8f','#0b2560','#ffffff','#d71920','#ffffff','#ffd400','#111111')),
+ Object.assign(CP('cesta','{D} da Cesta Básica',C8('#123a8f','#0b2560','#ffffff','#d71920','#ffffff','#ffd400','#111111')),{foto:'carrinho'}),
  CP('pet','{D} Pet',C8('#6a1b9a','#3f0f5c','#ffffff','#ff8f00','#ffffff','#ffd400','#3f0f5c')),
  CP('doce','{D} Doce',C8('#e91e63','#5d2a12','#ffffff','#5d2a12','#ffffff','#ffd1e1','#5d2a12')),
- CP('feira','{D} da Feira',C8('#2e7d32','#d71920','#ffffff','#d71920','#ffffff','#ffd400','#111111')),
- CP('relampago','{D} Relâmpago',C8('#111111','#ffd400','#111111','#d71920','#ffffff','#ffd400','#111111')),
+ Object.assign(CP('feira','{D} da Feira',C8('#2e7d32','#d71920','#ffffff','#d71920','#ffffff','#ffd400','#111111')),{tema:'madeira',foto:'sacolas'}),
+ Object.assign(CP('relampago','{D} Relâmpago',C8('#111111','#ffd400','#111111','#d71920','#ffffff','#ffd400','#111111')),{tema:'concreto'}),
  CP('levemais','{D} do Leve Mais',C8('#00838f','#d71920','#ffffff','#d71920','#ffffff','#ffd400','#111111')),
- CP('cafe','{D} do Café',C8('#4e342e','#2b1b16','#ffd9a0','#c62828','#ffffff','#ffd9a0','#2b1b16')),
+ Object.assign(CP('cafe','{D} do Café',C8('#4e342e','#2b1b16','#ffd9a0','#c62828','#ffffff','#ffd9a0','#2b1b16')),{tema:'kraft'}),
 ];
 const PADRAO_SEM=[
- CP('semana','Ofertas da Semana',C8('#123a8f','#d71920','#ffffff','#d71920','#ffffff','#ffd400','#111111')),
- CP('fds','Fim de Semana de Ofertas',C8('#d71920','#111111','#ffd400','#111111','#ffd400','#ffd400','#111111')),
- CP('feirao','Feirão de Preços',C8('#ffd400','#0d2a6e','#ffffff','#0d2a6e','#ffffff','#d71920','#ffffff')),
- CP('economia','Semana da Economia',C8('#1f7a32','#0d2a6e','#ffffff','#0d2a6e','#ffffff','#ffd400','#111111')),
+ Object.assign(CP('semana','Ofertas da Semana',C8('#123a8f','#d71920','#ffffff','#d71920','#ffffff','#ffd400','#111111')),{foto:'carrinho'}),
+ Object.assign(CP('fds','Fim de Semana de Ofertas',C8('#d71920','#111111','#ffd400','#111111','#ffd400','#ffd400','#111111')),{foto:'familia'}),
+ Object.assign(CP('feirao','Feirão de Preços',C8('#ffd400','#0d2a6e','#ffffff','#0d2a6e','#ffffff','#d71920','#ffffff')),{tema:'confete'}),
+ Object.assign(CP('economia','Semana da Economia',C8('#1f7a32','#0d2a6e','#ffffff','#0d2a6e','#ffffff','#ffd400','#111111')),{foto:'carrinho'}),
  Object.assign(CP('queima','Queima de Estoque',C8('#b3121b','#2a0606','#ffb000','#2a0606','#ffb000','#ffb000','#2a0606')),{tema:'fogo'}),
  Object.assign(CP('diad','Dia D',C8('#4a0705','#1a0202','#ffd400','#d71920','#ffffff','#ffd400','#111111')),{tema:'fogo'}),
 ];
@@ -2379,7 +2399,7 @@ function padNome(t,d){return t.f.replace('{D}',DIA_N[d]).replace('{G}',t.m?(DIA_
 function nextDay(d){const x=new Date();x.setDate(x.getDate()+((d-x.getDay()+7)%7));return ymd(x)}
 let PD_DIA=new Date().getDay();
 function usePadrao(t,sem){const d=PD_DIA,nome=sem?t.f:padNome(t,d),id='pd-'+t.k+(sem?'':'-'+d);
- let c=S.campaigns.find(x=>x.id===id);if(!c){c={id,nome,titulo:nome,dia:sem?-1:d,cores:clone(t.cores),tema:t.tema||'',motivo:t.motivo||'',estilo:t.estilo||'',padrao:true};S.campaigns.push(c);S.padroes=S.padroes||[];S.padroes.push(c);S._sharedDirty=true}
+ let c=S.campaigns.find(x=>x.id===id);if(!c){c={id,nome,titulo:nome,dia:sem?-1:d,cores:clone(t.cores),tema:t.tema||'',motivo:t.motivo||'',estilo:t.estilo||'',foto:t.foto||'',padrao:true};S.campaigns.push(c);S.padroes=S.padroes||[];S.padroes.push(c);S._sharedDirty=true}
  S.campaignId=id;S.val=padVal(t,sem);
  $('#vIni').value=S.val.ini;$('#vFim').value=S.val.fim;closeModal();renderCamps();changed(false);wzGo(2)}
 function openPadrao(){const its=(S.products.length?S.products:sample()).slice(0,9),f=FORMATS.insta;
@@ -2442,22 +2462,23 @@ function avFino(p){const phr=[...new Set([...S.phrases,p.phrase].filter(Boolean)
  <label class="chk2"><input type="checkbox" data-m18 ${p.m18?'checked':''}> Selo +18</label>
  <label class="chk2"><input type="checkbox" data-venc ${p.venc?'checked':''}> Vencimento próximo</label>${p.venc?`<input type="date" data-vd value="${p.vencData||''}" style="width:auto;display:inline-block;margin:0 8px">`:''} <button class="btn sm ghost" data-z="rs">Voltar ao padrão</button></div>`}
 const avOk=p=>(p.desc||'').trim()&&p.price!=null;
-function avPrev(){const L=S.avulsas||[],nOk=L.filter(avOk).length;$('#avN').textContent=`${nOk} plaquinha${nOk===1?'':'s'} pronta${nOk===1?'':'s'}`;const per=S.avPer||2,ori=S.avOri||(per===1?'v':'h'),d=plaqDims(per,ori),cv=$('#avPrev'),PX=3,pw=d.page==='portrait'?210:297,ph=d.page==='portrait'?297:210;
+function avPrev(){const L=S.avulsas||[],nOk=L.filter(avOk).length;$('#avN').textContent=`${nOk} plaquinha${nOk===1?'':'s'} pronta${nOk===1?'':'s'}`;const per=avTamId(),ori=S.avOri||'h',d=plaqDims(per,ori),cv=$('#avPrev'),PX=d.fmt==='a3'?2:3,pw=d.fmt==='a3'?(d.page==='portrait'?297:420):(d.page==='portrait'?210:297),ph=d.fmt==='a3'?(d.page==='portrait'?420:297):(d.page==='portrait'?297:210);
+ {const t=plaqTam(per),oi=$('#avOri')&&$('#avOri').closest('label');if(oi)oi.style.display=t.ori?'':'none'}
  $('#avPer').value=per;$('#avOri').value=ori;{const ec=$('#avEco');if(ec)ec.checked=!!S.plaqEco;const kg=$('#avKg');if(kg)kg.checked=!!PLAQKG}cv.width=pw*PX;cv.height=ph*PX;const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cv.width,cv.height);
  const start=Math.floor(AVSEL/d.pos.length)*d.pos.length;
  withVal(avVal(),()=>d.pos.forEach(([px,py],k)=>{const p=L[start+k];const t=document.createElement('canvas');t.width=Math.round(d.w*PX);t.height=Math.round(d.h*PX);const tx=t.getContext('2d');
-  if(p&&avOk(p))renderPlaque(tx,t.width,t.height,p,avCamp(),30*PX);else{tx.fillStyle='#f6f4ef';tx.fillRect(0,0,t.width,t.height);tx.fillStyle='#999';tx.font='600 20px Inter,sans-serif';tx.textAlign='center';tx.fillText(p?'Preencha nome e preço':'Espaço livre na folha',t.width/2,t.height/2)}
+  if(p&&avOk(p)){if(d.etiqueta)renderEtiqueta(tx,t.width,t.height,p,avCamp(),{peq:d.id==='etq'});else renderPlaque(tx,t.width,t.height,p,avCamp(),(d.fold||30)*PX)}else{tx.fillStyle='#f6f4ef';tx.fillRect(0,0,t.width,t.height);tx.fillStyle='#999';tx.font='600 20px Inter,sans-serif';tx.textAlign='center';tx.fillText(p?'Preencha nome e preço':'Espaço livre na folha',t.width/2,t.height/2)}
   x.drawImage(t,px*PX,py*PX)}));
- if(d.cut){x.strokeStyle='#888';x.lineWidth=2;x.setLineDash([9,6]);x.beginPath();x.moveTo(d.cut[0]*PX,d.cut[1]*PX);x.lineTo(d.cut[2]*PX,d.cut[3]*PX);x.stroke();x.setLineDash([])}
+ {const cu=d.cuts||(d.cut?[d.cut]:[]);if(cu.length){x.strokeStyle='#888';x.lineWidth=2;x.setLineDash([9,6]);cu.forEach(ln=>{x.beginPath();x.moveTo(ln[0]*PX,ln[1]*PX);x.lineTo(ln[2]*PX,ln[3]*PX);x.stroke()});x.setLineDash([])}}
  x.strokeStyle='#bbb';x.lineWidth=2;x.strokeRect(1,1,cv.width-2,cv.height-2)}
 $('#avAdd').onclick=()=>{S.avulsas.push(P({desc:'',price:null}));AVSEL=S.avulsas.length-1;persist();avRender();setTimeout(()=>{const r=document.querySelector(`.avI[data-i="${AVSEL}"] [data-k=desc]`);if(r)r.focus()},50)};
 $('#avPaste').onclick=()=>modal(`<h3>Colar lista</h3><p class="hint">Um produto por linha, com o preço na frente. Dois preços = sem app e com app. "lim 6" vira limite.</p><textarea id="avTx" style="min-height:150px"></textarea><div class="mfoot"><button class="btn" data-a="n">Cancelar</button><button class="btn pri" data-a="y">Adicionar</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=closeModal;setTimeout(()=>$('#avTx').focus(),40);
  b.querySelector('[data-a=y]').onclick=()=>{const L=parseQuick($('#avTx').value);if(!L.length){toast('Não achei produto com preço');return}S.avulsas=S.avulsas.filter(avOk).concat(L);closeModal();persist();loadAllImages();avRender()}});
 $('#avTit').oninput=e=>{S.avTitle=e.target.value;persist();avPrev()};$('#avDate').onchange=e=>{S.avVal=e.target.value;persist();avPrev()};
 {const ec=$('#avEco');if(ec)ec.onchange=e=>{S.plaqEco=e.target.checked;persist();avPrev()};const kg=$('#avKg');if(kg)kg.onchange=e=>{PLAQKG=e.target.checked;avPrev()}}
-$('#avPer').onchange=e=>{S.avPer=+e.target.value;persist();avPrev()};$('#avOri').onchange=e=>{S.avOri=e.target.value;persist();avPrev()};
+$('#avPer').onchange=e=>{S.avTam=e.target.value;S.avPer=e.target.value==='a4'?1:2;persist();avPrev()};$('#avOri').onchange=e=>{S.avOri=e.target.value;persist();avPrev()};
 const avPdf=wpp=>async()=>{const L=(S.avulsas||[]).filter(avOk);if(!L.length){toast('Preencha pelo menos um produto com nome e preço');return}if(!window.jspdf){toast('A biblioteca de PDF não carregou. Recarregue.');return}
- if(!await plaqGate(L))return;toast('Montando as plaquinhas…');await fontsReady();plaqLog(L,avVal(),'avulsa');const per=S.avPer||2,ori=S.avOri||(per===1?'v':'h');const blob=withVal(avVal(),()=>plaqDoc(L,per,ori,avCamp()));(wpp?sendWpp:saveFile)('plaquinhas_'+slug(S.avTitle||'oferta')+'_'+(S.avVal||today())+'.pdf',blob,'pdf')};
+ if(!await plaqGate(L))return;toast('Montando as plaquinhas…');await fontsReady();plaqLog(L,avVal(),'avulsa');const per=avTamId(),ori=S.avOri||'h';const blob=withVal(avVal(),()=>plaqDoc(L,per,ori,avCamp()));(wpp?sendWpp:saveFile)('plaquinhas_'+slug(S.avTitle||'oferta')+'_'+(S.avVal||today())+'.pdf',blob,'pdf')};
 $('#avGo').onclick=avPdf(false);$('#avWpp').onclick=avPdf(true);
 $('#avNew').onclick=()=>modal(`<h3>Começar plaquinhas novas?</h3><p>As ${S.avulsas.length} de agora saem da lista.</p><div class="mfoot"><button class="btn" data-a="n">Não</button><button class="btn pri" data-a="y">Sim, começar de novo</button></div>`,b=>{b.querySelector('[data-a=n]').onclick=closeModal;b.querySelector('[data-a=y]').onclick=()=>{closeModal();S.avulsas=[P({desc:'',price:null})];AVSEL=0;persist();avRender()}});
 $('#homeEnc').onclick=()=>{if(!canDo('encarte'))return toast('Seu usuário não faz encarte');wzGo(1)};$('#homePlq').onclick=()=>{if(!canDo('plaquinha'))return toast('Seu usuário não faz plaquinha');avGo()};$('#avBack').onclick=()=>wzGo(0);
@@ -2997,7 +3018,7 @@ function renderStarBar(){const el=$('#wzStar');if(!el)return;if(!S.products.leng
  const cs=stCodes(),sem=S.products.filter(p=>!p.code&&p.desc).length,j=STJ,pend=j&&j.status==='pendente';let t='';
  if(pend)t=`Pedido enviado ${hm(j.at)} (${(j.codes||[]).length} produtos). ${isFunc()?'Avise o admin para liberar.':window.TINO?'Mande <b>1313</b> para o Claude liberar.':'Abra o app como admin para liberar.'}`;
  else if(j&&j.status==='pronta'&&j.doneAt&&Date.now()-j.doneAt<12*36e5)t=`Conferido no StarIA em ${hm(j.doneAt)}: ${j.ok} produtos${j.falta&&j.falta.length?`, ${j.falta.length} não encontrados`:''}.`;
- el.innerHTML=`<div class="bar" style="align-items:center;flex-wrap:wrap"><button class="btn sm" id="wzStarB"${!cs.length||pend||STBUSY?' disabled':''}>${stLocal()?'Conferir preço e custo no StarIA':'Pedir conferência no StarIA'}</button>${t?`<span class="hint" style="margin:0">${t}</span>`:''}${sem?`<span class="hint" style="margin:0">${sem} sem código: ligue ao banco para conferir.</span>`:''}</div>`;
+ el.innerHTML=`<div class="bar" style="align-items:center;flex-wrap:wrap"><button class="btn sm" id="wzStarB"${!cs.length||pend||STBUSY?' disabled':''}>${stLocal()?'Conferir preço e custo no StarIA':'Pedir conferência no StarIA'}</button>${t?`<span class="hint" style="margin:0">${t}</span>`:''}${sem?`<span class="hint" style="margin:0">${sem} sem código: ligue ao sistema para conferir.</span>`:''}</div>`;
  const b=$('#wzStarB');if(b)b.onclick=starConferir}
 async function starConferir(){const cs=stCodes();if(!cs.length)return toast('Nenhum produto ligado ao banco');
  if(stLocal()){STBUSY=1;renderStarBar();toast(`Conferindo ${cs.length} produtos no StarIA…`,60000);
@@ -3455,5 +3476,305 @@ function aplicaSimples(){document.body.classList.toggle('simples',simplesOn());c
  marcaAvancado();aplicaSimples();
  try{schedule();if(typeof inWz==='function'&&inWz()&&WZ===3)wzCheck()}catch(e){}
 })();
+/* ================= 19 · arte: fundos, foto no cabeçalho, cartazes e etiquetas =================
+   Fundos desenhados no próprio app (sem imagem de fora), foto dentro do cabeçalho com o canto
+   esquerdo livre para as logomarcas, e os tamanhos de cartaz e etiqueta de gôndola. */
+
+/* ---------- sorteio sempre igual: o mesmo fundo sai idêntico toda vez ---------- */
+function _rndF(seed){let s=seed>>>0||1;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296}}
+
+/* ---------- fundos ----------
+   base = cor equivalente do fundo. O resto do app usa ela para decidir texto claro ou escuro. */
+const TEMAS={
+ fogo:{nome:'Fogo (churrasco, Dia D)',base:'#4a0705',paint:(c,W,H,C)=>drawFire(c,W,H,C)},
+
+ madeira:{nome:'Madeira (hortifrúti, feira)',base:'#5d3a1e',paint(c,W,H){
+  const r=_rndF(17),tab=Math.max(H/9,W/7);
+  c.fillStyle='#5d3a1e';c.fillRect(0,0,W,H);
+  for(let y=0,i=0;y<H;y+=tab,i++){const t=0.86+r()*0.3,g=c.createLinearGradient(0,y,0,y+tab);
+   g.addColorStop(0,shade('#6b431f',0.06*t));g.addColorStop(0.5,shade('#5d3a1e',(t-1)*0.5));g.addColorStop(1,shade('#4a2d16',0.02));
+   c.fillStyle=g;c.fillRect(0,y,W,tab);
+   /* veios: linhas finas onduladas no sentido da tábua */
+   c.save();c.beginPath();c.rect(0,y,W,tab);c.clip();
+   for(let k=0;k<9;k++){const yy=y+tab*(0.08+0.1*k+r()*0.04),a=0.05+r()*0.07;
+    c.strokeStyle=`rgba(${r()<0.5?'30,18,8':'140,104,64'},${a.toFixed(3)})`;c.lineWidth=tab*(0.008+r()*0.016);
+    c.beginPath();c.moveTo(-10,yy);for(let x=0;x<=W+10;x+=W/9)c.lineTo(x,yy+Math.sin(x/W*6+k)*tab*0.03);c.stroke()}
+   if(r()<0.55){/* nó da madeira */const kx=r()*W,ky=y+tab*(0.3+r()*0.4),kr=tab*(0.07+r()*0.06);
+    for(let q=3;q>=1;q--){c.strokeStyle=`rgba(40,24,10,${0.1*q})`;c.lineWidth=kr*0.14;c.beginPath();c.ellipse(kx,ky,kr*q*0.5,kr*q*0.32,0.3,0,7);c.stroke()}}
+   c.restore();
+   /* junta entre as tábuas */
+   c.fillStyle='rgba(28,16,6,.5)';c.fillRect(0,y+tab-Math.max(2,tab*0.018),W,Math.max(2,tab*0.018));
+   c.fillStyle='rgba(255,226,190,.07)';c.fillRect(0,y+tab,W,Math.max(1,tab*0.008))}
+ }},
+
+ lousa:{nome:'Lousa (quadro de giz)',base:'#20302b',paint(c,W,H){
+  const r=_rndF(29);c.fillStyle='#20302b';c.fillRect(0,0,W,H);
+  const g=c.createRadialGradient(W*0.5,H*0.42,0,W*0.5,H*0.5,Math.max(W,H)*0.78);
+  g.addColorStop(0,'rgba(255,255,255,.08)');g.addColorStop(1,'rgba(0,0,0,.3)');c.fillStyle=g;c.fillRect(0,0,W,H);
+  /* pó de giz: manchas largas e riscos de apagador */
+  for(let i=0;i<26;i++){const x=r()*W,y=r()*H,rr_=Math.max(W,H)*(0.04+r()*0.13);
+   const sg=c.createRadialGradient(x,y,0,x,y,rr_);sg.addColorStop(0,`rgba(235,245,240,${(0.02+r()*0.035).toFixed(3)})`);sg.addColorStop(1,'rgba(235,245,240,0)');c.fillStyle=sg;c.fillRect(x-rr_,y-rr_,rr_*2,rr_*2)}
+  for(let i=0;i<40;i++){const y=r()*H,w=W*(0.1+r()*0.5),x=r()*(W-w);
+   c.strokeStyle=`rgba(225,240,235,${(0.015+r()*0.03).toFixed(3)})`;c.lineWidth=Math.max(1,H*0.004*(0.5+r()));
+   c.beginPath();c.moveTo(x,y);c.lineTo(x+w,y+(r()-0.5)*H*0.01);c.stroke()}
+  /* moldura de giz */
+  const m=Math.min(W,H)*0.022;c.strokeStyle='rgba(235,245,240,.22)';c.lineWidth=Math.max(2,m*0.1);c.strokeRect(m,m,W-m*2,H-m*2);
+ }},
+
+ kraft:{nome:'Papel pardo (padaria, café)',base:'#a97b4a',paint(c,W,H){
+  const r=_rndF(41);const g=c.createLinearGradient(0,0,W,H);
+  g.addColorStop(0,'#b88a57');g.addColorStop(0.5,'#a97b4a');g.addColorStop(1,'#9a6c3e');c.fillStyle=g;c.fillRect(0,0,W,H);
+  /* fibras do papel */
+  for(let i=0;i<2600;i++){const x=r()*W,y=r()*H,l=Math.max(2,W*0.006*(0.3+r())),a=r()*Math.PI;
+   c.strokeStyle=r()<0.5?`rgba(255,238,210,${(0.03+r()*0.07).toFixed(3)})`:`rgba(92,58,26,${(0.03+r()*0.07).toFixed(3)})`;
+   c.lineWidth=Math.max(1,W*0.0012);c.beginPath();c.moveTo(x,y);c.lineTo(x+Math.cos(a)*l,y+Math.sin(a)*l);c.stroke()}
+  const vg=c.createRadialGradient(W/2,H*0.45,Math.min(W,H)*0.25,W/2,H/2,Math.max(W,H)*0.78);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(60,34,10,.3)');c.fillStyle=vg;c.fillRect(0,0,W,H);
+ }},
+
+ concreto:{nome:'Concreto (preço baixo, relâmpago)',base:'#43474d',paint(c,W,H){
+  const r=_rndF(53);c.fillStyle='#43474d';c.fillRect(0,0,W,H);
+  for(let i=0;i<70;i++){const x=r()*W,y=r()*H,rr_=Math.max(W,H)*(0.05+r()*0.18),cl=r()<0.5?'255,255,255':'0,0,0';
+   const g=c.createRadialGradient(x,y,0,x,y,rr_);g.addColorStop(0,`rgba(${cl},${(0.02+r()*0.05).toFixed(3)})`);g.addColorStop(1,`rgba(${cl},0)`);c.fillStyle=g;c.fillRect(x-rr_,y-rr_,rr_*2,rr_*2)}
+  for(let i=0;i<1800;i++){const x=r()*W,y=r()*H,s=Math.max(1,W*0.0018*(0.4+r()));
+   c.fillStyle=r()<0.5?`rgba(255,255,255,${(0.04+r()*0.07).toFixed(3)})`:`rgba(0,0,0,${(0.04+r()*0.08).toFixed(3)})`;c.fillRect(x,y,s,s)}
+  const vg=c.createRadialGradient(W/2,H*0.45,Math.min(W,H)*0.2,W/2,H/2,Math.max(W,H)*0.8);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.42)');c.fillStyle=vg;c.fillRect(0,0,W,H);
+ }},
+
+ papel:{nome:'Papel claro (economia de tinta)',base:'#f2ede3',paint(c,W,H){
+  const r=_rndF(67);c.fillStyle='#f2ede3';c.fillRect(0,0,W,H);
+  const st=Math.max(3,Math.min(W,H)*0.006);c.strokeStyle='rgba(120,104,80,.045)';c.lineWidth=1;
+  for(let x=0;x<W;x+=st){c.beginPath();c.moveTo(x,0);c.lineTo(x,H);c.stroke()}
+  for(let y=0;y<H;y+=st){c.beginPath();c.moveTo(0,y);c.lineTo(W,y);c.stroke()}
+  for(let i=0;i<900;i++){const x=r()*W,y=r()*H;c.fillStyle=`rgba(150,130,100,${(0.03+r()*0.06).toFixed(3)})`;c.fillRect(x,y,Math.max(1,W*0.0015),Math.max(1,W*0.0015))}
+  const vg=c.createRadialGradient(W/2,H*0.45,Math.min(W,H)*0.3,W/2,H/2,Math.max(W,H)*0.8);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(120,100,70,.14)');c.fillStyle=vg;c.fillRect(0,0,W,H);
+ }},
+
+ confete:{nome:'Confete (aniversário, festa)',base:null,paint(c,W,H,C){
+  const r=_rndF(83);c.fillStyle=C.fundo;c.fillRect(0,0,W,H);
+  const g=c.createRadialGradient(W*0.5,H*0.4,0,W*0.5,H*0.5,Math.max(W,H)*0.7);
+  g.addColorStop(0,'rgba(255,255,255,.16)');g.addColorStop(1,'rgba(0,0,0,.26)');c.fillStyle=g;c.fillRect(0,0,W,H);
+  const cores=[C.adesivo,C.preco,'#ffffff',C.titulo,shade(C.adesivo,0.3)].filter(x=>/^#[0-9a-f]{6}$/i.test(x||''));
+  const n=Math.round(W*H/26000);
+  for(let i=0;i<n;i++){const x=r()*W,y=r()*H,w=Math.max(3,W*0.012*(0.5+r())),h=w*(0.3+r()*0.5);
+   c.save();c.translate(x,y);c.rotate(r()*Math.PI);c.globalAlpha=0.16+r()*0.3;c.fillStyle=cores[(r()*cores.length)|0]||'#ffffff';
+   if(r()<0.25){c.beginPath();c.arc(0,0,w*0.4,0,7);c.fill()}else c.fillRect(-w/2,-h/2,w,h);c.restore()}
+ }},
+};
+const TEMA_NOMES=[['','Cor lisa com listras'],...Object.keys(TEMAS).map(k=>[k,TEMAS[k].nome])];
+/* a cor equivalente do tema entra no lugar de C.fundo, para o resto do app saber se o fundo é claro ou escuro */
+const temaCor=(cp,C)=>{const t=cp&&TEMAS[cp.tema];return t&&t.base?Object.assign({},C,{fundo:t.base}):C};
+
+/* o fundo é desenhado uma vez e guardado: sai igual e não pesa no vídeo */
+const TBG=new Map();
+function temaFundo(c,W,H,C,kind){const t=TEMAS[kind];if(!t)return false;
+ const key=kind+'|'+W+'|'+H+'|'+(t.base||C.fundo)+'|'+C.adesivo+'|'+C.preco+'|'+C.titulo;
+ let cv=TBG.get(key);
+ if(!cv){cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(W));cv.height=Math.max(1,Math.round(H));
+  try{t.paint(cv.getContext('2d'),cv.width,cv.height,C)}catch(e){return false}
+  if(TBG.size>14)TBG.delete(TBG.keys().next().value);TBG.set(key,cv)}
+ c.drawImage(cv,0,0,W,H);return true}
+
+/* ---------- foto dentro do cabeçalho ----------
+   A foto fica à direita. A esquerda continua livre, na cor do cabeçalho, para as logomarcas. */
+const FOTO_LIB=[
+ {id:'acougue',nome:'Açougue: carne no corte',src:'/encartes/modelos/foto_acougue.jpg'},
+ {id:'carrinho',nome:'Carrinho cheio de compras',src:'/encartes/modelos/foto_carrinho.jpg'},
+ {id:'sacolas',nome:'Sacolas de hortifrúti',src:'/encartes/modelos/foto_sacolas.jpg'},
+ {id:'familia',nome:'Família no corredor',src:'/encartes/modelos/foto_familia.jpg'},
+];
+const FOTOC=new Map();
+function fotoKey(cp){return'foto:'+(cp&&cp.id||'')}
+function fotoHeadImg(cp){const id=cp&&cp.foto;if(!id)return null;
+ const it=FOTO_LIB.find(f=>f.id===id),key=it?'lib:'+id:fotoKey(cp);
+ let e=FOTOC.get(key);
+ if(!e){e={img:null};FOTOC.set(key,e);
+  if(it){const im=new Image();im.onload=()=>{e.img=im;try{schedule()}catch(_){}};im.onerror=()=>FOTOC.delete(key);im.src=it.src}
+  else IDB.get(key).then(async u=>{if(u){try{e.img=await loadImg(u);e.url=u;try{schedule()}catch(_){}}catch(_){}}else FOTOC.delete(key)})}
+ return e.img}
+function headFoto(c,W,hh,sl,C,cp){
+ const im=(typeof fotoHeadImg==='function')&&fotoHeadImg(cp);if(!im)return false;
+ c.save();c.beginPath();c.moveTo(0,0);c.lineTo(W,0);c.lineTo(W,hh-sl);c.lineTo(0,hh);c.closePath();c.clip();
+ const bx=W*0.3,bw=W-bx,s=Math.max(bw/im.width,hh/im.height),dw=im.width*s,dh=im.height*s;
+ c.drawImage(im,bx+(bw-dw)/2,(hh-dh)/2,dw,dh);
+ c.fillStyle='rgba(0,0,0,.2)';c.fillRect(bx,0,bw,hh);
+ const g=c.createLinearGradient(0,0,W*0.82,0);
+ g.addColorStop(0,C.cabecalho);g.addColorStop(0.4,C.cabecalho);g.addColorStop(0.62,hexA(C.cabecalho,0.55));g.addColorStop(1,hexA(C.cabecalho,0));
+ c.fillStyle=g;c.fillRect(0,0,W,hh);
+ c.restore();return true}
+
+/* ---------- cartazes e etiquetas de gôndola ---------- */
+/* grade de N colunas por M linhas numa folha, com as linhas de corte */
+function _grade(pw,ph,cols,rows){const w=pw/cols,h=ph/rows,pos=[],cuts=[];
+ for(let r=0;r<rows;r++)for(let k=0;k<cols;k++)pos.push([k*w,r*h]);
+ for(let k=1;k<cols;k++)cuts.push([k*w,0,k*w,ph]);
+ for(let r=1;r<rows;r++)cuts.push([0,r*h,pw,r*h]);
+ return{w,h,pos,cuts}}
+const PLAQ_TAM=[
+ {id:'a3',nome:'Cartaz A3 — 1 por folha A3',fmt:'a3',page:'landscape',cols:1,rows:1,pw:420,ph:297,fold:34,ori:true},
+ {id:'a4',nome:'Cartaz A4 — 1 por folha',fmt:'a4',page:'portrait',cols:1,rows:1,pw:210,ph:297,fold:30,ori:true},
+ {id:'a5',nome:'Cartaz A5 — 2 por folha',fmt:'a4',page:'portrait',cols:1,rows:2,pw:210,ph:297,fold:24,ori:true},
+ {id:'a6',nome:'Cartaz A6 — 4 por folha',fmt:'a4',page:'portrait',cols:2,rows:2,pw:210,ph:297,fold:18},
+ {id:'etqg',nome:'Etiqueta de gôndola grande — 8 por folha',fmt:'a4',page:'portrait',cols:2,rows:4,pw:210,ph:297,etiqueta:true},
+ {id:'etq',nome:'Etiqueta de gôndola — 24 por folha',fmt:'a4',page:'portrait',cols:3,rows:8,pw:210,ph:297,etiqueta:true},
+];
+const plaqTam=id=>PLAQ_TAM.find(t=>t.id===id)||PLAQ_TAM[2];
+/* tamanho guardado: aceita o jeito antigo (1 ou 2 por folha) */
+function plaqTamId(){const t=S.plaqTam;if(t&&PLAQ_TAM.some(x=>x.id===t))return t;return+S.plaqPer===1?'a4':'a5'}
+function plaqDimsT(id,ori){const t=plaqTam(id);
+ if(t.ori&&t.cols===1&&t.rows===1&&ori==='h'&&t.id!=='a3')return Object.assign({},t,{page:'landscape',w:t.ph,h:t.pw,pos:[[0,0]],cuts:[],fold:t.fold});
+ if(t.ori&&t.cols===1&&t.rows===2&&ori==='v'){const g=_grade(297,210,2,1);return Object.assign({},t,{page:'landscape',w:g.w,h:g.h,pos:g.pos,cuts:g.cuts})}
+ const g=_grade(t.pw,t.ph,t.cols,t.rows);return Object.assign({},t,{w:g.w,h:g.h,pos:g.pos,cuts:g.cuts})}
+
+/* etiqueta de gôndola: nome, preço grande e a linha de conferência.
+   Fundo branco e tinta escura, para gastar pouca tinta e ler de longe no corredor. */
+function renderEtiqueta(c,W,H,p,cp,opt){
+ const C=cp.cores||{},peq=!!(opt&&opt.peq),cor=(typeof secTint==='function'&&secTint(p))||C.cabecalho||'#15171c';
+ /* a cor do preço da campanha pode ser clara demais para papel branco */
+ const tinta=(typeof hexLum==='function'&&/^#[0-9a-f]{6}$/i.test(C.preco||'')&&hexLum(C.preco)<=0.62)?C.preco:'#c8141c';
+ CUR={W:W*1.6,H,plaq:true};
+ c.save();c.fillStyle='#ffffff';c.fillRect(0,0,W,H);
+ const bw=Math.max(4,W*0.035);c.fillStyle=cor;c.fillRect(0,0,bw,H);
+ c.strokeStyle='#bdbab4';c.lineWidth=Math.max(1,W*0.004);c.strokeRect(c.lineWidth/2,c.lineWidth/2,W-c.lineWidth,H-c.lineWidth);
+ const m=W*0.03,x0=bw+m*1.2,aw=W-x0-m,app=hasApp(p),eff=app?p.app:p.price;
+ /* faixas: nome em cima, preço no meio, conferência embaixo */
+ const yN=H*0.07,hN=H*(peq?0.3:0.27),yP=yN+hN+H*0.02,hP=H*(peq?0.44:0.45),ySub=H*0.9;
+ const nm=String(p.desc||'').toUpperCase();
+ const rN=fitBlock(c,nm,aw,hN,2,hN*0.56,Math.max(7,W*0.026),z=>O(z,700));
+ c.fillStyle='#15171c';c.font=O(rN.s,700);c.textAlign='left';c.textBaseline='top';
+ rN.lines.forEach((t,i)=>c.fillText(t,x0,yN+i*rN.s*1.05));
+ /* coluna da direita: preço sem app */
+ const semW=app?aw*(peq?0.3:0.27):0,pw=aw-semW-(app?m:0);
+ if(eff!=null&&!isNaN(eff)){const[ri,ce]=splitPrice(eff),ul=unitLabel(p.unit);
+  let z=hP;const med=()=>{c.font=F(z*0.38);const wr=c.measureText('R$').width;c.font=F(z);const wi=c.measureText(ri).width;c.font=F(z*0.5);const wc=c.measureText(','+ce).width;c.font=O(z*0.21,700);const wu=c.measureText(ul).width;
+   return{wr,wi,wc,wu,tot:wr+z*0.05+wi+z*0.03+Math.max(wc,wu)}};
+  let M=med(),g=0;while(M.tot>pw&&z>6&&g++<60){z*=0.94;M=med()}
+  const base=yP+hP*0.9,ox=x0;
+  c.fillStyle=tinta;c.textBaseline='alphabetic';c.textAlign='left';
+  c.font=F(z*0.38);c.fillText('R$',ox,base-z*0.52);
+  c.font=F(z);c.fillText(ri,ox+M.wr+z*0.05,base);
+  const cx=ox+M.wr+z*0.05+M.wi+z*0.03;
+  c.font=F(z*0.5);c.fillText(','+ce,cx,base-z*0.44);
+  c.font=O(z*0.21,700);c.fillStyle='#15171c';c.fillText(ul,cx,base);
+  if(app){const sx=x0+aw,sz=Math.max(7,Math.min(hP*0.2,fitLine(c,brl(p.price),semW,hP*0.26,q=>F(q))));
+   c.textAlign='right';c.fillStyle='#6b6a66';c.font=O(sz*0.62,700);c.fillText('SEM APP',sx,yP+hP*0.3);
+   c.fillStyle='#15171c';c.font=F(sz);c.fillText(brl(p.price),sx,yP+hP*0.62);
+   c.strokeStyle='#9b9893';c.lineWidth=Math.max(1,sz*0.07);const tw=c.measureText(brl(p.price)).width;
+   c.beginPath();c.moveTo(sx-tw-sz*0.1,yP+hP*0.54);c.lineTo(sx+sz*0.08,yP+hP*0.44);c.stroke();
+   c.textAlign='left'}}
+ /* linha de conferência */
+ const ped=[p.code?'cód '+p.code:'',peq?'':(p.ean||''),unitPriceText(p,true,true),peq?'':limitText(p,true),validText()].filter(Boolean).join('  •  ');
+ if(ped){const z=Math.max(peq?6.5:8,fitLine(c,ped,aw,H*0.085,q=>`500 ${q}px Inter, sans-serif`));
+  c.font=`500 ${z}px Inter, sans-serif`;c.fillStyle='#6b6a66';c.textAlign='left';c.textBaseline='middle';c.fillText(ped,x0,ySub)}
+ c.restore()}
+
+/* tamanho guardado das plaquinhas avulsas (aceita o jeito antigo) */
+function avTamId(){const t=S.avTam;if(t&&PLAQ_TAM.some(x=>x.id===t))return t;return+S.avPer===1?'a4':'a5'}
+/* os dois seletores de tamanho (encarte e avulsas) usam a mesma lista */
+function encheTamanhos(){const el=document.getElementById('avPer');if(!el||el.dataset.tam)return;
+ el.dataset.tam='1';el.innerHTML=PLAQ_TAM.map(t=>`<option value="${t.id}">${t.nome}</option>`).join('');
+ try{el.value=avTamId()}catch(e){}}
+try{encheTamanhos()}catch(e){}
+
+/* campanhas que já existem ganham a foto do cabeçalho uma vez só (depois é escolha do dono) */
+(function(){try{if(S.fotoMig)return;S.fotoMig=1;
+ const M={quinta:'acougue',ofertas:'carrinho',quarta:'sacolas',sabado:'familia',sexta:'carrinho',ps11dma3:'carrinho',
+  'pd-carne':'acougue','pd-churrasco':'acougue','pd-cesta':'carrinho','pd-semana':'carrinho','pd-imbativel':'sacolas','pd-verde':'sacolas','pd-feira':'sacolas','pd-economia':'carrinho','pd-fds':'familia'};
+ const T={'pd-verde':'madeira','pd-feira':'madeira','pd-padaria':'kraft','pd-cafe':'kraft','pd-relampago':'concreto','pd-precobaixo':'concreto','pd-show':'confete','pd-feirao':'confete','pd-limpeza':'papel'};
+ let mexeu=false;
+ (S.campaigns||[]).forEach(c=>{if(c.modelo||c.headArt)return;const base=String(c.id||'').replace(/-\d$/,'');
+  if(c.foto==null&&(M[c.id]||M[base])){c.foto=M[c.id]||M[base];mexeu=true}
+  /* preço marrom da Terça sumia no fundo verde: vira vermelho como no resto */
+  if(base==='terca'&&c.cores&&c.cores.preco==='#6b3a1e'){c.cores.preco='#d71920';mexeu=true}
+  if(!c.tema&&T[base]){c.tema=T[base];mexeu=true}});
+ if(mexeu)S._sharedDirty=true;try{persist()}catch(e){}}catch(e){}})();
+
+/* com fundo texturizado, o cartão afasta um pouco mais: senão a madeira/lousa some atrás dos cartões */
+const _areaOf19=areaOf;
+areaOf=function(W,H,hhO,fhO){const A=_areaOf19(W,H,hhO,fhO);
+ const t=CUR&&CUR.tema;if(!t||t==='fogo'||!TEMAS[t])return A;
+ const m=W*0.034,g=W*(A.land?0.019:0.024),top=A.hh+m*1.25,bot=H-A.fh-m-notasH(W,H);
+ return Object.assign(A,{m,g,top,ax:m,aw:W-m*2,ah:bot-top})};
+/* ================= 20 · conferir: o que trava o download e o que só dá para melhorar =================
+   Separa os problemas em dois grupos, escreve em palavra do dia a dia e deixa consertar
+   de dentro da própria revisão, sem ter que voltar. */
+
+/* problemas que travam: o encarte sai errado ou perde dinheiro */
+const TRAVA_TIPOS={foto:1,preco:1,appinv:1,margem:1};
+function travaProb(t,txt){return!!TRAVA_TIPOS[t]||(t==='nome'&&/não cabe/i.test(txt||''))}
+const TRAVA_NOMES={foto:'Sem foto',preco:'Sem preço',appinv:'Preço com app maior que o sem app',margem:'Margem'};
+
+/* texto mais direto nos avisos de cada produto */
+const _prodIssues20=prodIssues;
+prodIssues=function(p){return _prodIssues20(p).map(([t,x])=>[t,
+ t==='banco'?'Não achei no sistema':
+ t==='nomecad'?'Nome do sistema':
+ t==='imgpeq'?'Foto pequena':
+ t==='nome'&&/pequena/i.test(x)?'Nome sai pequeno':x])};
+const _starTag20=typeof starTag==='function'?starTag:null;
+if(_starTag20)starTag=function(p){return _starTag20(p).replace('>sem StarIA<','>sem custo<').replace('Produto sem código e custo do StarIA','Produto sem código e sem custo: ligue ao sistema')};
+
+/* a validade em branco também trava: encarte sem data vira problema no caixa */
+function travasGerais(){return collectIssues(S.products).filter(x=>/^Validade da oferta não preenchida/.test(x))}
+
+/* ---------- resumo da tela Conferir ---------- */
+const _wzCheck20=wzCheck;
+wzCheck=function(){_wzCheck20();
+ const el=$('#wzSum'),lista=$('#wzList');if(!el)return;
+ const L=S.products.map(p=>({p,is:prodIssues(p)})).filter(x=>x.is.length);
+ const comTrava=L.filter(x=>x.is.some(([t,tx])=>travaProb(t,tx)));
+ const soMelhora=L.length-comTrava.length,ger=travasGerais();
+ /* avisos vermelhos só no que trava: o resto fica cinza e não assusta */
+ if(lista)lista.querySelectorAll('.wzP').forEach(row=>{const p=S.products.find(x=>x.id===row.dataset.id);if(!p)return;let t=false;
+  row.querySelectorAll('.flag').forEach(f=>{const b=f.querySelector('.fx');if(!b)return;
+   if(travaProb(b.dataset.fx,f.textContent)){t=true;f.classList.add('r')}else f.classList.remove('r')});
+  row.classList.toggle('bad',t)});
+ /* o 18 insere um aviso de tema antes do resumo: o resumo é sempre o último */
+ const bads=[...el.querySelectorAll('.wzBad')],bad=bads[bads.length-1],good=el.querySelector('.wzGood');
+ bads.slice(0,-1).forEach(d=>d.classList.add('wzOk2'));
+ const nT=comTrava.length+ger.length;
+ if(bad){bad.innerHTML=`${nT?`<b>${nT===1?'1 coisa trava':nT+' coisas travam'} o download.</b> `:''}${soMelhora?`${soMelhora===1?'1 produto dá':soMelhora+' produtos dão'} para melhorar. `:''}${ger.length?'Falta a validade da oferta. ':''}Toque em <b>Ajustar</b> ao lado do problema.
+  <button class="btn sm" id="wzFixAll">Ajustar tudo que dá sozinho</button>`;
+  bad.classList.toggle('wzOk2',!nT);
+  setTimeout(()=>{const fa=$('#wzFixAll');if(fa)fa.onclick=fixAll},0)}
+ if(good&&!nT&&!soMelhora)good.textContent='Tudo certo. Confira o encarte e toque em "Está certo".'};
+
+/* ---------- revisão antes de baixar ---------- */
+function _revLinha(p,t,txt,trava){
+ return`<li class="rv ${trava?'t':''}" data-id="${p.id}" data-fx="${t}"><span>${esc(txt)}${p.desc?`: <b>${esc(p.desc)}</b>`:''}</span><button class="btn sm fx">Ajustar</button></li>`}
+reviewGate0=function(items,viewOnly=false){
+ return new Promise(res=>{
+  const prod=items.map(p=>({p,is:prodIssues(p)})).filter(x=>x.is.length);
+  const travas=[],soft=[];
+  prod.forEach(({p,is})=>is.forEach(([t,tx])=>(travaProb(t,tx)?travas:soft).push(_revLinha(p,t,tx,travaProb(t,tx)))));
+  /* avisos que não são de um produto só (validade, logo, WhatsApp, título x produtos) */
+  const porProd=/^(⛔|⚠ Margem|Sem foto|Sem preço|Preço com app|Descrição cortada|Letra pequena|Custo de )/;
+  const ger=collectIssues(items).filter(x=>!porProd.test(x));
+  const gerT=ger.filter(x=>/^Validade da oferta não preenchida/.test(x)),gerS=ger.filter(x=>!gerT.includes(x));
+  gerT.forEach(x=>travas.push(`<li class="rv t"><span>${esc(x)}</span></li>`));
+  gerS.forEach(x=>soft.push(`<li class="rv"><span>${esc(x)}</span></li>`));
+  if(!travas.length&&!soft.length&&!viewOnly)return res(true);
+  const fu=isFunc(),PP=pagesFor(S.format);
+  const bot=viewOnly?'<button class="btn pri" data-a="no">Entendi</button>'
+   :travas.length?`<button class="btn" data-a="ok">${fu?'Liberar com a senha do admin':'Baixar assim mesmo'}</button><button class="btn pri" data-a="no">Voltar e corrigir</button>`
+   :'<button class="btn" data-a="no">Voltar e corrigir</button><button class="btn pri" data-a="ok">Baixar</button>';
+  modal(`<h3>Revisão antes de baixar</h3><div class="revG"><div class="revP">${PP.map((q,i)=>`<div><small>${PP.length>1?esc(arteNome(i,q)):'Prévia'}</small><canvas data-p="${i}"></canvas></div>`).join('')}</div>
+  <div class="revI">${travas.length?`<p class="rvH t">Precisa resolver <small>trava o download</small></p><ul class="issues rvL">${travas.join('')}</ul>`:''}
+  ${soft.length?`<p class="rvH">Dá para melhorar <small>o encarte sai assim mesmo</small></p><ul class="issues rvL">${soft.join('')}</ul>`:''}
+  ${!travas.length&&!soft.length?'<p>Tudo certo!</p>':'<div class="bar"><button class="btn sm" data-a="fix">Ajustar tudo que dá sozinho</button></div>'}</div></div>
+  <div class="mfoot">${bot}</div>`,b=>{b.classList.add('wide');
+   const f=FORMATS[S.format];b.querySelectorAll('canvas[data-p]').forEach((cv,i)=>{const big=document.createElement('canvas');big.width=f.w;big.height=f.h;renderFlyer(big.getContext('2d'),f.w,f.h,PP[i].items,camp(),[],PP[i].lay,PP[i]);const k=Math.min(1,900/f.w);cv.width=Math.round(f.w*k);cv.height=Math.round(f.h*k);cv.getContext('2d').drawImage(big,0,0,cv.width,cv.height)});
+   b.querySelectorAll('.rv .fx').forEach(x=>x.onclick=()=>{const li=x.closest('.rv'),p=S.products.find(q=>q.id===li.dataset.id);
+    if(!p)return;closeModal();res(false);if(inWz()&&WZ===4)wzGo(3);setTimeout(()=>fixIssue(p,li.dataset.fx),60)});
+   const fx=b.querySelector('[data-a=fix]');if(fx)fx.onclick=()=>{closeModal();res(false);if(inWz()&&WZ===4)wzGo(3);setTimeout(fixAll,60)};
+   b.querySelector('[data-a=no]').onclick=()=>{closeModal();res(false);if(!viewOnly&&inWz()&&WZ===4)wzGo(3)};
+   const ok=b.querySelector('[data-a=ok]');
+   if(ok)ok.onclick=()=>{closeModal();
+    if(!travas.length)return res(true);
+    if(fu)return unlock('Baixar com pendência',()=>res(true),()=>res(false));
+    modal(`<h3>Baixar assim mesmo?</h3><p>${travas.length===1?'Ainda tem 1 ponto':'Ainda tem '+travas.length+' pontos'} que o cliente vai ver no encarte ou que mexe com o preço.</p><div class="mfoot"><button class="btn pri" data-a="n">Voltar e corrigir</button><button class="btn" data-a="y">Baixar assim mesmo</button></div>`,
+     q=>{q.querySelector('[data-a=n]').onclick=()=>{closeModal();res(false);if(inWz()&&WZ===4)wzGo(3)};q.querySelector('[data-a=y]').onclick=()=>{closeModal();res(true)}})}})})};
 
 document.querySelectorAll('[data-wzgo]').forEach(b=>b.addEventListener('click',()=>wzGo(+b.dataset.wzgo)));
